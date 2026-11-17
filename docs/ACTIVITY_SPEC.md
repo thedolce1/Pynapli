@@ -1,7 +1,5 @@
 # Pynapli Activity Spec
 
-Last updated: 2026-05-20
-
 ## Purpose
 
 Activity is Pynapli's interest inbox and FOMO engine.
@@ -18,7 +16,6 @@ It captures lightweight signals that are not full conversations yet:
 - Playing Tonight interactions
 - Repeat interest
 - Boost results
-- Pick expiration
 
 Core rule:
 
@@ -44,15 +41,9 @@ Activity should not:
 
 ## Navigation
 
-Recommended bottom navigation:
-
-- Grid
-- Swipe
-- Activity
-- Messages
-- Store
-
-Activity should be a primary tab because it is both an engagement and monetization surface.
+Activity is a primary bottom tab (Grid, Swipe, Activity, Messages; the Store tab is being replaced by
+paywall sheets, see [DESIGN_SPEC.md](DESIGN_SPEC.md)). It is both an engagement and a monetization
+surface.
 
 ## Ordering
 
@@ -67,24 +58,10 @@ Reason:
 
 ## Activity Screen Structure
 
-Recommended top structure:
-
-- Compact app header
-- Segmented control or tabs
-- Activity list
-- Upgrade/reveal modules where appropriate
-
-Recommended tabs:
-
-- All
-- Views
-- Flirts
-- Likes
-- Matches
-- Albums
-- Invites
-
-Keep tabs horizontally scrollable if needed, but avoid clutter.
+Compact header, tabs, the list, and upgrade/reveal rows where appropriate. Tabs on mobile: **Flirts**
+(default; taps, swipe likes, Pineapple Likes, notes), **Views**, **Matches**, **Requests** (album
+access, partner/Psync/Tonight invites). The server also accepts `all`. The Matches tab is being merged
+into the Messages new-matches rail (`MessagesNewMatchesRail.kt`), which already shows new matches.
 
 ## Activity Row Design
 
@@ -362,21 +339,6 @@ Rules:
 - Do not imply guaranteed matches.
 - Should be visible in Activity and Store/Premium history.
 
-### Pick Expiration
-
-Created when daily/extra Picks are close to expiring.
-
-Examples:
-
-- Today's Picks refresh soon
-- 2 extra Picks expire in 3 hours
-
-Rules:
-
-- Useful for FOMO.
-- Avoid spammy frequency.
-- Do not use explicit language.
-
 ## Free / Social / Select Gating
 
 Activity is a natural premium surface.
@@ -529,57 +491,11 @@ High-sensitivity terms should not appear in push notifications by default.
 
 ## Backend Event Model
 
-Activity should be event-based.
-
-Example:
-
-```kotlin
-enum class ActivityEventType {
-    PROFILE_VIEW,
-    REPEAT_VIEW,
-    FLIRT,
-    SWIPE_LIKE,
-    PINEAPPLE_LIKE,
-    INTRO_NOTE,
-    MATCH,
-    ALBUM_REQUEST,
-    ALBUM_GRANTED,
-    ALBUM_EXPIRING,
-    PARTNER_CHAT_INVITE,
-    PARTNER_LINK_REQUEST,
-    PARTNER_LINK_ACCEPTED,
-    PARTNER_UNLINKED,
-    PSYNC_INVITE,
-    PSYNC_STARTED,
-    PSYNC_TOGETHER_MATCH,
-    PSYNC_RECAP,
-    PSYNC_EXPIRED,
-    PLAYING_TONIGHT_REQUEST,
-    PLAYING_TONIGHT_LIVE,
-    PLAYING_TONIGHT_INTERACTION,
-    PLAYING_TONIGHT_EXPIRING,
-    PLAYING_TONIGHT_ENDED,
-    BOOST_RESULT,
-    PICK_EXPIRING
-}
-
-data class ActivityEvent(
-    val id: String,
-    val recipientUserId: String,
-    val actorUserId: String?,
-    val type: ActivityEventType,
-    val createdAt: Instant,
-    val visibility: ActivityVisibility,
-    val metadata: Map<String, String>
-)
-
-enum class ActivityVisibility {
-    VISIBLE,
-    BLURRED,
-    COUNT_ONLY,
-    HIDDEN
-}
-```
+Activity is event-based: `activity_events` rows with a recipient, an optional actor, a type, a
+timestamp, a visibility (`visible`, `blurred`, `count_only`, `hidden`) and metadata. Types cover views,
+flirts, swipe likes, Pineapple Likes, notes, matches, album requests and grants, partner chat invites,
+partner link events, Psync and Playing Tonight events, and Boost results. Partial unique indexes stop
+duplicate interest, match and invite rows; idempotent swipe retries never duplicate Activity.
 
 ### Event Aggregation
 
@@ -588,7 +504,6 @@ Aggregate where useful:
 - Repeat profile views
 - Multiple likes count
 - Boost results
-- Pick expiration reminders
 
 Do not aggregate:
 
@@ -599,19 +514,11 @@ Do not aggregate:
 
 ## Retention Windows
 
-Recommended product-visible retention:
-
-- Views: 7 days free/plus limited, 30 days premium
-- Repeat views: 7 days
-- Flirts: 30 days
-- Likes You: until actioned, expired, or hidden by policy
-- Matches: persistent unless unmatched/deleted
-- Album requests: until actioned plus history window
-- Partner invites: until actioned/expired
-- Boost results: 90 days
-- Pick expiration: until expired
-
-Internal safety/audit retention may differ and should be defined separately with legal/privacy review.
+Implemented by the Activity retention worker (`ActivityRetentionService`): views and flirts leave
+product-visible Activity after 30 days; likes, notes, album and invite rows after 90 days; matches
+persist unless product state removes them. Staging/prod must set
+`PYNAPLI_ACTIVITY_RETENTION_ENABLED=true` (off by default outside local). Internal safety/audit
+retention is separate and subject to legal/privacy review.
 
 ## Realtime Updates
 
@@ -632,34 +539,6 @@ If socket is unavailable:
 
 - Fetch Activity on tab open.
 - Fetch badge counts periodically with conservative interval.
-
-## Current Implementation
-
-Implemented and verified as of 2026-05-20:
-
-- `GET /v1/activity` returns newest-first Activity with `limit`, `tab`, and signed `cursor` query params.
-- `/v1/activity/stream` emits authenticated Activity deltas for the connected recipient. The Android client consumes those deltas through a resilient WebSocket client and refreshes Activity summary/feed state without marking background-refreshed rows as seen.
-- `GET /v1/activity/summary` returns meaningful badge counts, separate profile-view counts, per-category counts, and the latest badge-worthy timestamp.
-- `POST /v1/activity/seen` marks only the authenticated user's requested Activity event IDs as seen.
-- Feed tabs are server-authoritative: `all`, `views`, `flirts` (unified inbound interest — Grindr taps + swipe-likes + Pineapple likes + Intro Notes; carries the premium reveal/"who's into you" gating), `matches`, and `requests` (album-access + partner/psync/tonight invites). The mobile Activity surface exposes `flirts`, `views`, `matches`, `requests` (Flirts is the default/money surface). Matches also surface in Messages via the new-matches rail. (`likes` was folded into `flirts`.)
-- Cursor tokens are HMAC-signed and scoped to the authenticated viewer plus selected tab, so a cursor from one tab cannot page another tab.
-- Free/Social/Select reveal depth is enforced across pages by the cursor's seen-count state.
-- `POST /v1/activity/{eventId}/dismiss` soft-deletes the recipient's own Activity item without allowing cross-user dismissal.
-- Badge summary counts now use unread semantics for badge-worthy events: seen flirts, likes, matches, pending album requests, and partner invites no longer count in `badgeCount`, while profile views remain separate in-screen Viewed-list counts.
-- SQL recording, feed, and summary filtering now enforce Viewed-list privacy in both directions: incognito/hidden actors do not appear in others' Viewed lists, and users who disable Viewed lists do not receive new product-visible profile-view rows, notifications, or counts.
-- Swipe actions now create Activity events for `swipe_like`, `pineapple_like`, `intro_note`, and two-sided `match` rows after the server-authoritative action succeeds. Idempotent action retries do not duplicate Activity rows.
-- Linked-partner chat invites now create `partner_chat_invite` Activity rows for the invited partner after the invite is accepted by the messaging engine.
-- Activity feed rows expose deep-link metadata where needed: `matchId` for match rows and `conversationId` for partner-chat invites.
-- Database-level partial unique indexes protect Swipe interest, match, and partner-chat invite Activity rows from duplicate writes.
-- Repository and service coverage proves tab filtering, cursor paging, entitlement reveal depth, invalid cursor rejection, block/risk filtering, and dismiss behavior.
-- Compose Activity UI calls the real tab API instead of local-only filtering, supports cursor-based `Load more`, consumes the real summary API for the bottom-nav Activity badge, marks only loaded visible Activity rows as seen, exposes per-row dismiss, visually distinguishes unseen badge-worthy rows with a restrained `New` state, and has row CTAs for match messaging, partner-chat invite opening, and album request review/grant/deny.
-- Activity premium reveal now has an intentional Select upgrade row instead of a plain gated-count strip.
-- In-app Activity notification banners route to the matching Activity tab when tapped.
-- OS push notifications carry app-level deep-link payloads for Activity or Messages. Activity notifications open the matching Activity tab and focus the row when an `activityEventId` is present; grouped/aggregated notifications fall back to the correct tab.
-- Product-visible Activity retention exists as a Ktor background worker: views/flirts expire from product-visible Activity after 30 days, old like/intro/album/invite rows after 90 days, and matches remain persistent unless removed by product state.
-- `scripts/activity-api-load-test.ps1` seeds dense Activity feeds and reports p50/p95 latency for summary, all-feed, likes, flirts, and invites scenarios.
-- Desktop UI interaction coverage proves Activity tab selection, cursor load-more, premium reveal row, unread row state, row dismiss, match Message CTA, partner invite Open invite CTA, and album request Review -> Grant through the rendered screen.
-- Connected Android Activity QA exists at `scripts/android-activity-qa.ps1`. It seeds deterministic Activity rows, runs the installed Android app through login -> Grid -> Activity, captures screenshots/XML for All and each Activity tab, asserts structural golden text/signatures, and verifies loaded badge rows are marked seen in the backend.
 
 ## Badge Counts
 
@@ -718,39 +597,12 @@ Messages:
 
 Do not turn flirts or intro notes into chat threads until match/chat eligibility is satisfied.
 
-## Activity And Grid Boundary
+## Activity, Grid and Swipe Boundaries
 
-Grid:
-
-- Live nearby discovery
-- Open messaging
-- Profile view action
-
-Activity:
-
-- Records views/flirts generated from grid
-- Lets users respond to signals
-- Creates FOMO and premium reveals
-
-Grid card impressions should not be Activity views.
-
-## Activity And Swipe Boundary
-
-Swipe:
-
-- Like/pass decision
-- Match creation moment
-- Top Picks
-- Boosted card exposure
-
-Activity:
-
-- Likes You
-- Matches history
-- Intro Notes
-- Pineapple Likes
-- Pick expiration
-- Boost results
+Grid and Swipe are where people act (view, message, like, pass, match). Activity records the signals
+those actions create (views from full profile opens, flirts, likes, Pineapple Likes, notes, matches,
+Boost results) so people can respond, and hosts premium reveals. **Grid impressions and swipe card
+appearances never count as profile views.**
 
 ## Empty States
 
@@ -785,8 +637,8 @@ Avoid:
 - [x] Flirts appear in Activity, not Messages.
 - [x] Likes You appears in Activity.
 - [x] Pineapple Likes appear in Activity.
-- [x] Intro Notes appear in Activity, not Messages.
-- [x] Matches appear in Activity for both matched users.
+- [x] Intro Notes appear in Activity, not Messages (Intro Notes being merged into Pineapple Like).
+- [x] Matches appear in Activity for both matched users (Matches tab being merged into the Messages new-matches rail).
 - [x] Match Activity rows can open the message path.
 - [x] Partner chat invites appear in invited partner Activity.
 - [x] Partner chat invites require explicit action.

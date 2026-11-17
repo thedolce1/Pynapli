@@ -1,269 +1,63 @@
-# Pynapli DevOps And Infrastructure Setup Spec
+# Pynapli DevOps and Infrastructure Spec
 
-Last updated: 2026-04-24
+Rules for CI, Docker, Firebase, Google Cloud, secrets and environments. Step-by-step GCP commands are
+in [../infra/cloud-run/README.md](../infra/cloud-run/README.md); the founder's ordered path and the
+current cloud state are in [PATH_TO_TESTERS.md](PATH_TO_TESTERS.md). Toolchain and dependency
+baseline: [PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md](PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md).
 
-## Purpose
+## Naming
 
-This document defines what should be set up before and during implementation: GitHub, local tooling, CI/CD, Docker, Firebase, Google Cloud, secrets, environments, and ownership.
+| Thing | Name |
+| --- | --- |
+| Repository | `thedolce1/Pynapli` (GitHub org `pynapli` planned; fallbacks `pynapli-app`, `pynapli-social`, `pynaplihq`) |
+| Branches | `main`, `develop`, feature branches |
+| GCP/Firebase projects (planned) | `pynapli-dev`, `pynapli-staging`, `pynapli-prod`. Only `pynapli` exists today (see PATH_TO_TESTERS). |
+| Package id | `com.pynapli.app` |
+| Cloud Run services | `pynapli-api`, `pynapli-worker` (later) |
+| Domain | `pynapli.com` |
+| Email aliases | `support@`, `privacy@`, `security@`, `legal@`, `moderation@`, `admin@`, `no-reply@` (`pynapli.com`) |
 
-Core rule:
+Founder-owned accounts (business-controlled identity with recovery, never a throwaway email): GitHub,
+Google Cloud billing, Firebase/GCP projects, Apple Developer Program, Google Play Console, domain
+registrar, support email provider.
 
-> Do not create irreversible cloud complexity before the app skeleton exists. Do create the accounts, naming plan, and security boundaries early.
+## Environments
 
-## What We Need From Founder
+| Env | Purpose | Data |
+| --- | --- | --- |
+| Dev / local | Developer testing | Fake/test only |
+| Staging | Production-like QA | Test accounts only |
+| Production | Real users | Strict access control, backups, audit logs |
 
-Founder decisions locked:
+Never put real user data in dev or staging.
 
-- Domain name: `pynapli.com`
-- Google Cloud billing owner: Sebastien Mayeras
-- Apple Developer account owner: Sebastien Mayeras / founder-controlled business account
-- Google Play Console owner: Sebastien Mayeras / founder-controlled business account
+## Local development
 
-Engineering naming decisions locked:
+Tools: Git, GitHub CLI, JDK (version per the project-structure spec), Android Studio, Xcode on a Mac
+for iOS, Docker Desktop, Firebase CLI, Google Cloud CLI. `docker compose up -d` starts PostgreSQL +
+PostGIS and Redis from `docker-compose.yml`. Run/seed steps are the `local-dev` skill.
 
-- GitHub org name: `pynapli`
-- Main repository name: `pynapli`
-- Firebase/GCP project names:
-  - `pynapli-dev`
-  - `pynapli-staging`
-  - `pynapli-prod`
-- Primary package ID: `com.pynapli.app`
-- Backend service name: `pynapli-api`
-- Worker service name: `pynapli-worker`
+## CI
 
-Founder should create email aliases:
+`.github/workflows/ci.yml` runs on pushes to `main`/`develop` and on every PR:
 
-- `support@pynapli.com`
-- `privacy@pynapli.com`
-- `security@pynapli.com`
-- `legal@pynapli.com`
-- `moderation@pynapli.com`
-- `admin@pynapli.com`
-- `no-reply@pynapli.com`
+- **Format (Spotless)**: `spotlessCheck` with `ratchetFrom = "origin/main"` (needs `fetch-depth: 0`
+  plus an explicit `git fetch origin main`). ktlint via Spotless; detekt deferred until a
+  Kotlin-2.3-compatible stable release exists.
+- **Verify (tests + assemble)**: `:shared:jvmTest`, `:server:test`, `:composeApp:desktopTest`,
+  `:desktopApp:desktopTest`, `:androidApp:assembleDebug`, then release lint + minified release assemble. Server integration tests manage
+  Postgres/Redis through Testcontainers.
+- **Web (Wasm compile)**: brand and Compose token checks, then the wasm compile.
+- **Docker Smoke (Cloud Run image)**: builds `:server:installDist` and `infra/server.Dockerfile`, starts
+  Postgres/PostGIS and Redis, runs the API container, and requires `/health` and `/health/deep` to
+  return `200`.
 
-Do not share secrets in chat.
+The local `pre-push` hook (`scripts/hooks/pre-push`) is the enforced gate until branch protection is
+on.
 
-## Recommended Naming
+### Branch protection
 
-Repository:
-
-```text
-pynapli
-```
-
-GitHub organization:
-
-```text
-pynapli
-```
-
-Branches:
-
-```text
-main
-develop
-codex/*
-```
-
-GCP/Firebase projects:
-
-```text
-pynapli-dev
-pynapli-staging
-pynapli-prod
-```
-
-Package IDs:
-
-```text
-com.pynapli.app
-```
-
-Cloud Run services:
-
-```text
-pynapli-api
-pynapli-worker
-```
-
-Domains/emails:
-
-```text
-pynapli.com
-support@pynapli.com
-privacy@pynapli.com
-security@pynapli.com
-legal@pynapli.com
-moderation@pynapli.com
-admin@pynapli.com
-no-reply@pynapli.com
-```
-
-## Setup Timing
-
-### Do Now
-
-Useful to set up now:
-
-- GitHub repo
-- GitHub branch protections
-- Domain purchase
-- Email aliases
-- Apple Developer account
-- Google Play Console account
-- Google Cloud billing account
-- Firebase/GCP project naming reserved
-- Local Docker Desktop
-- GitHub CLI
-- Java/Kotlin tooling
-
-### Do When Code Skeleton Exists
-
-Set up after the repo has real Gradle/Ktor modules:
-
-- CI workflows
-- Docker Compose
-- Local Postgres/PostGIS
-- Local Redis
-- Ktor health checks
-- Testcontainers
-- Firebase app registration
-- FCM token plumbing
-- Crashlytics/Analytics integration
-
-### Do When Backend Deploys
-
-Set up when staging backend is ready:
-
-- Cloud Run or equivalent
-- Cloud SQL PostgreSQL + PostGIS
-- Memorystore Redis
-- Artifact Registry
-- Secret Manager
-- Cloud Build/GitHub Actions deploy
-- Staging domain
-- Monitoring/alerts
-
-### Do Before Beta
-
-Required before real users:
-
-- Production project
-- Backups
-- Moderation/admin console
-- Support inbox
-- Privacy policy
-- Terms
-- Community guidelines URL
-- Incident response contact
-- FCM production config
-- Crash reporting
-- Billing test environment
-- Age gate
-- Report/block tested
-
-## Local Development
-
-Required tools:
-
-- Git
-- GitHub CLI
-- JDK 21 or repo-selected LTS
-- Android Studio
-- Xcode on Mac for iOS builds
-- Docker Desktop
-- Postgres client
-- Firebase CLI
-- Google Cloud CLI
-
-The repo-selected toolchain and dependency baseline are defined in [PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md](PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md).
-
-Local services:
-
-```text
-PostgreSQL + PostGIS
-Redis
-Ktor server
-Optional local object storage emulator
-```
-
-Recommended local command later:
-
-```powershell
-docker compose up -d
-```
-
-## GitHub Setup
-
-Repository settings:
-
-- Private during build
-- Branch protection on `main`
-- Require pull request before merge
-- Require status checks
-- Require signed commits if desired
-- Enable Dependabot
-- Enable secret scanning
-- Enable code scanning
-
-Suggested labels:
-
-- `area:grid`
-- `area:swipe`
-- `area:messages`
-- `area:backend`
-- `area:mobile`
-- `area:safety`
-- `area:monetization`
-- `type:bug`
-- `type:feature`
-- `type:infra`
-- `priority:p0`
-- `priority:p1`
-- `priority:p2`
-
-## CI/CD
-
-Initial GitHub Actions:
-
-- Build shared Kotlin
-- Build Ktor server
-- Run unit tests
-- Run Spotless/ktlint format check (detekt deferred — see `OFFICIAL_TECH_REFERENCE_GUIDE.md`)
-- Run backend integration tests
-- Build Android debug
-
-Later:
-
-- iOS build
-- Maestro E2E
-- k6 load tests
-- Docker image build
-- Deploy staging
-- Database migration dry run
-
-### Current state (2026-05-31)
-
-`.github/workflows/ci.yml` runs two jobs on every push to `main`/`develop` and on every PR:
-
-- **Format (Spotless)** — `./gradlew spotlessCheck`. Uses `fetch-depth: 0` + an explicit
-  `git fetch origin main` so the Spotless `ratchetFrom = "origin/main"` ratchet can diff changed
-  files. (ktlint via Spotless; detekt deferred — see `OFFICIAL_TECH_REFERENCE_GUIDE.md`.)
-- **Verify (tests + assemble)** — `:shared:jvmTest :server:test
-  :composeApp:desktopTest :androidApp:assembleDebug`. Server
-  integration tests self-manage Postgres/Redis via Testcontainers (Docker is present on
-  `ubuntu-latest`), so no GitHub service containers are needed. Uploads test reports (always) and
-  the debug APK (on success) as artifacts.
-- **Docker Smoke (Cloud Run image)** — builds `:server:installDist`, builds
-  `infra/server.Dockerfile`, starts PostgreSQL/PostGIS and Redis with Docker Compose, runs the API
-  container on the same Docker network, and requires both `/health` and `/health/deep` to return
-  `200`. This proves the Cloud Run image boots against real dependencies, not just that the server
-  compiles.
-
-### Branch protection (apply once, founder action)
-
-Not yet applied. Run these with an admin token to require both checks and a passing PR before merge
-to `main` (job names are the status-check contexts):
+Not applied yet (founder action, admin token). Job names are the status-check contexts:
 
 ```bash
 gh api -X PUT repos/thedolce1/Pynapli/branches/main/protection \
@@ -271,6 +65,7 @@ gh api -X PUT repos/thedolce1/Pynapli/branches/main/protection \
   -f 'required_status_checks[strict]=true' \
   -f 'required_status_checks[contexts][]=Format (Spotless)' \
   -f 'required_status_checks[contexts][]=Verify (tests + assemble)' \
+  -f 'required_status_checks[contexts][]=Web (Wasm compile)' \
   -f 'required_status_checks[contexts][]=Docker Smoke (Cloud Run image)' \
   -f 'enforce_admins=true' \
   -f 'required_pull_request_reviews[required_approving_review_count]=1' \
@@ -279,270 +74,112 @@ gh api -X PUT repos/thedolce1/Pynapli/branches/main/protection \
   -f 'allow_deletions=false'
 ```
 
-After enabling, direct pushes to `main` are blocked; merge via PR once both checks are green.
+After this, direct pushes to `main` are blocked; merge by PR once checks are green. Also enable
+Dependabot, secret scanning and code scanning.
 
-## Docker
+## Docker and deploy scripts
 
-Initial `docker-compose.yml` should include:
+- `docker-compose.yml`: local `postgres` (PostGIS) and `redis` only. Don't containerize mobile builds.
+- `infra/server.Dockerfile`: Cloud Run runtime image for the Ktor API.
+- `scripts/docker-server-build.ps1` (`:server:installDist` + image), `scripts/docker-server-run.ps1`
+  (runs it against Compose dependencies).
+- `scripts/gcp-server-image-push.ps1` (Artifact Registry), `scripts/gcp-cloud-run-deploy.ps1`
+  (explicit project, region, Cloud SQL, Redis, App Check and Secret Manager parameters).
+- `.github/workflows/staging-backend.yml` (manual staging deploy) and
+  `.github/workflows/staging-tester-apk.yml` (manual staging APK, optional App Distribution);
+  `scripts/android-staging-apk.ps1` builds the staging APK locally.
 
-- `postgres` with PostGIS
-- `redis`
-- optional `minio`
+**Startup validation** fails fast for `staging`, `prod` and `production` when local defaults or unsafe
+toggles are present. Production-like environments must provide non-local Postgres/Redis, cryptographic
+App Check config, GCS media storage with signing credentials, Firebase/FCM config, strong
+admin/cursor/deck secrets, and no dev-only purchase or media auto-approval paths.
 
-Do not containerize mobile builds early unless CI needs it.
+## Firebase
 
-### Current state (2026-06-16)
+Firebase is used for FCM, Crashlytics, Analytics, Remote Config, App Check, Hosting (website), and
+optionally Auth as an identity provider. Rules:
 
-Local dependencies remain in `docker-compose.yml` (`postgres` with PostGIS and `redis`). The Ktor
-API now has a Cloud Run-ready runtime image at `infra/server.Dockerfile`, plus repeatable scripts:
+- No authoritative profile, discovery or chat data in Firestore. Firestore is never the discovery
+  database.
+- No sensitive lifestyle labels in Analytics; no private album URLs in Crashlytics.
+- Ktor decides notifications; FCM only delivers.
 
-- `scripts/docker-server-build.ps1` — runs `:server:installDist` and builds the `pynapli-api` image.
-- `scripts/docker-server-run.ps1` — runs the image locally against Docker Compose dependencies.
-- `scripts/gcp-server-image-push.ps1` — builds/tags/pushes to Artifact Registry.
-- `scripts/gcp-cloud-run-deploy.ps1` — deploys the pushed image to Cloud Run with explicit project,
-  region, Cloud SQL, Redis, App Check, and Secret Manager parameters.
-- `.github/workflows/staging-backend.yml` — manual staging deploy lane for Cloud Run.
-- `.github/workflows/staging-tester-apk.yml` — manual Firebase-enabled staging APK lane with optional Firebase App Distribution upload.
-- `scripts/android-staging-apk.ps1` — local staging APK builder for already deployed staging APIs.
+### FCM enablement
 
-Deployment notes live in `infra/cloud-run/README.md`; tester-lane details live in
-`docs/STAGING_TESTER_LANE.md`. Production remains blocked until final project naming, billing alerts,
-secrets, backups, and branch protections are confirmed.
-
-Startup validation now fails fast for `staging`, `prod`, and `production` when local defaults or
-unsafe toggles are present. Production-like environments must provide non-local Postgres/Redis,
-cryptographic App Check config, GCS media storage and signing credentials, Firebase/FCM project
-config, strong admin/cursor/deck secrets, and no dev-only purchase or media auto-approval paths.
-
-## Firebase Setup
-
-Use Firebase for:
-
-- FCM
-- Crashlytics
-- Analytics
-- Remote Config
-- App Check
-- Optional Auth
-
-Projects:
-
-- dev
-- staging
-- prod
-
-Rules:
-
-- Do not put authoritative profile/discovery/chat data in Firestore by default.
-- Do not send sensitive lifestyle labels to Analytics.
-- Do not include private album URLs in Crashlytics.
-- Ktor decides notifications; FCM delivers.
-
-### FCM backend enablement (production)
-
-The server notification pipeline is **code-complete**: device registration (`POST /v1/notifications/devices`) → outbox enqueue on events (message, match, flirt, album request, partner/psync/tonight invites) → gated dispatch worker → FCM send, with quiet hours, per-category preferences, dead-token pruning, and privacy-safe delivery metrics. To turn it on in a deployed environment, set:
+The server pipeline is code-complete: device registration (`POST /v1/notifications/devices`) → outbox
+on events → gated dispatch worker → FCM, with quiet hours, per-category preferences, dead-token
+pruning and privacy-safe delivery metrics. To turn it on:
 
 | Env var | Value | Why |
 | --- | --- | --- |
-| `PYNAPLI_NOTIFICATION_PUSH_PROVIDER` | `firebase` | Selects the FCM sender (default `local` only logs). |
-| `PYNAPLI_NOTIFICATION_DISPATCH_ENABLED` | `true` | Starts the dispatch worker (defaults on only in `local`). |
-| `PYNAPLI_FIREBASE_PROJECT_ID` | `pynapli` | Routes FCM under the keyless ADC path. |
+| `PYNAPLI_NOTIFICATION_PUSH_PROVIDER` | `firebase` | Selects the FCM sender (default `local` only logs) |
+| `PYNAPLI_NOTIFICATION_DISPATCH_ENABLED` | `true` | Starts the dispatch worker (on by default only in `local`) |
+| `PYNAPLI_FIREBASE_PROJECT_ID` | `pynapli` | Routes FCM under the keyless ADC path |
 
-Credentials — **no JSON key needed** (the GCP org policy blocks key creation; `resolveFirebaseCredentials` falls back to Application Default Credentials):
+Credentials use Application Default Credentials; **no JSON key** (the org policy blocks key creation):
 
-- **Local:** `gcloud auth application-default login` then `gcloud auth application-default set-quota-project pynapli`.
-- **Cloud Run:** attach the service account on deploy (`--service-account firebase-adminsdk-fbsvc@pynapli.iam.gserviceaccount.com`); ADC comes from the metadata server.
-- Explicit `PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON` / `_PATH` still override ADC if ever required.
+- Local: `gcloud auth application-default login`, then
+  `gcloud auth application-default set-quota-project pynapli`.
+- Cloud Run: attach the runtime service account on deploy; ADC comes from the metadata server.
+- `PYNAPLI_FIREBASE_SERVICE_ACCOUNT_JSON` / `_PATH` still override ADC if ever needed.
 
-Client: `androidApp/google-services.json` (gitignored, package `com.pynapli.app`) drives FCM token registration.
-
-**Verify live:** register a device from the app, trigger an event to that user (e.g. a message), and confirm a `SENT` count in `GET /v1/admin/metrics/notifications` (admin-token gated).
+Client: `androidApp/google-services.json` (gitignored) drives token registration. Verify live by
+triggering an event to a registered device and checking a `SENT` count in
+`GET /v1/admin/metrics/notifications` (admin-token gated).
 
 ### App Check enablement
 
-The App Check code path is now built on both sides:
+- Android debug builds use the App Check debug provider; release builds use Play Integrity.
+- The shared Ktor client sends `X-Firebase-AppCheck` when Firebase returns a token.
+- Ktor verifies it when `PYNAPLI_APP_CHECK_ENFORCED=true`; with `PYNAPLI_APP_CHECK_PROJECT_NUMBER`
+  (the project **number**, not id) set, verification is cryptographic against Google's App Check JWKS.
 
-- Android debug builds install Firebase App Check's debug provider.
-- Android release builds install Firebase App Check's Play Integrity provider.
-- The shared Ktor client attaches `X-Firebase-AppCheck` when Firebase returns a non-blank token.
-- Ktor verifies the token when `PYNAPLI_APP_CHECK_ENFORCED=true`; with
-  `PYNAPLI_APP_CHECK_PROJECT_NUMBER` set, verification is cryptographic against Google's App Check
-  JWKS for that Firebase project number.
+Before enforcing: register `com.pynapli.app` for App Check; allowlist debug tokens from logcat for
+emulator QA; validate on staging, then production. App Check reduces non-genuine traffic but does not
+replace auth, object ownership checks, rate limits or abuse scoring.
 
-Founder/ops steps before turning enforcement on:
+## Google Cloud
 
-- Register the Android app (`com.pynapli.app`) for App Check in Firebase.
-- For emulator/dev QA, copy the debug token from logcat and allowlist it in Firebase App Check.
-- For production/staging Ktor, set:
+Cloud Run (API), Cloud SQL PostgreSQL + PostGIS, Memorystore Redis, Secret Manager, Artifact Registry,
+Cloud Storage (media), Cloud CDN, Cloud Logging/Monitoring; Pub/Sub or Cloud Tasks later. Don't
+create production resources before the deploy pipeline, secrets plan and cost alerts exist.
 
-| Env var | Value | Why |
-| --- | --- | --- |
-| `PYNAPLI_APP_CHECK_ENFORCED` | `true` | Requires attested app traffic for state-changing API requests. |
-| `PYNAPLI_APP_CHECK_PROJECT_NUMBER` | Firebase project number, not project id | Binds JWT issuer/audience checks to the correct Firebase project. |
+## Secrets
 
-Rollout rule: validate App Check on dev/staging first, then production. App Check reduces non-genuine
-client traffic but does not replace auth, object ownership checks, rate limits, or abuse scoring.
+GitHub Actions secrets for CI, Google Secret Manager at runtime, a local `.env` ignored by git
+(`.env.example` lists every variable). Never commit or paste into chat:
 
-## Google Cloud Setup
+- Firebase/service-account JSON, `google-services.json`, `GoogleService-Info.plist`.
+- Database passwords.
+- Server signing secrets: `PYNAPLI_DISCOVERY_CURSOR_SECRET`, `PYNAPLI_ACTIVITY_CURSOR_SECRET`,
+  `PYNAPLI_SWIPE_DECK_TOKEN_SECRET`, admin token and MFA secrets. (Auth tokens are opaque and hashed;
+  there is no JWT signing key.)
+- Store API credentials, Apple/Google billing keys, age-verification provider keys.
 
-Recommended services:
+## Cost controls
 
-- Cloud Run for Ktor API
-- Cloud SQL PostgreSQL + PostGIS
-- Memorystore Redis
-- Secret Manager
-- Artifact Registry
-- Cloud Storage for media
-- Cloud CDN, if using Google stack
-- Cloud Logging/Monitoring
-- Pub/Sub or Cloud Tasks later
+Before staging/prod: billing and daily spend alerts, Cloud SQL size limits, logging retention caps,
+storage lifecycle policies, CDN budget monitoring.
 
-Do not create production resources until:
+## Domain and public pages
 
-- schema exists
-- deploy pipeline exists
-- secrets plan exists
-- cost alerts exist
+DNS on a stable provider; SPF/DKIM/DMARC for the email domain. Public pages needed before launch:
+Privacy Policy, Terms, Community Guidelines, Safety Center, Support, security contact.
 
-## Secrets Management
+## Open items
 
-Use:
+- [ ] Branch protection on `main`.
+- [ ] Email aliases.
+- [ ] Final project naming; separate production project.
+- [ ] Apple Developer and Google Play Console accounts.
+- [ ] Cost alerts before any cloud deploy.
+- [x] Domain purchased; GitHub repo; Docker image and deploy scripts; App Check client code; no
+  secrets committed.
 
-- GitHub Actions secrets for CI bootstrap
-- Google Secret Manager for cloud runtime
-- Local `.env` ignored by git
+## Do not
 
-Never commit:
-
-- Firebase service account JSON
-- DB passwords
-- Server signing secrets (`PYNAPLI_DISCOVERY_CURSOR_SECRET`, `PYNAPLI_ACTIVITY_CURSOR_SECRET`, `PYNAPLI_SWIPE_DECK_TOKEN_SECRET`, admin token/MFA secrets). Auth tokens are opaque and hashed, so there is no JWT signing key.
-- Store API credentials
-- Apple/Google billing keys
-- Age verification provider keys
-
-## Environments
-
-### Dev
-
-Purpose:
-
-- Local and developer testing.
-
-Data:
-
-- Fake/test only.
-
-### Staging
-
-Purpose:
-
-- Production-like QA.
-
-Data:
-
-- Test accounts only.
-
-### Production
-
-Purpose:
-
-- Real users.
-
-Data:
-
-- Strict access control, backups, audit logs.
-
-## Cost Controls
-
-Set up before staging/prod:
-
-- Billing alerts
-- Daily spend alerts
-- Cloud SQL size limits
-- Logging retention caps
-- Storage lifecycle policies
-- CDN budget monitoring
-
-## Domain And Email
-
-Recommended:
-
-- Buy `pynapli.com`
-- Configure DNS through a stable provider
-- Set up email aliases
-- Add SPF/DKIM/DMARC
-
-Public pages needed:
-
-- Privacy Policy
-- Terms
-- Community Guidelines
-- Safety Center
-- Support
-- Security contact
-
-## Accounts To Create
-
-Founder-owned:
-
-- GitHub org/account: `pynapli`
-- Google Cloud billing account
-- Firebase/GCP projects: `pynapli-dev`, `pynapli-staging`, `pynapli-prod`
-- Apple Developer Program
-- Google Play Console
-- Domain registrar for `pynapli.com`
-- Support email provider
-
-Do not create with a personal throwaway email. Use a founder/business-controlled identity with recovery enabled.
-
-## Founder Setup Checklist
-
-Sebastien should set up:
-
-- [x] Confirm `pynapli.com` DNS access.
-- [ ] Create `support@pynapli.com`.
-- [ ] Create `privacy@pynapli.com`.
-- [ ] Create `security@pynapli.com`.
-- [ ] Create `legal@pynapli.com`.
-- [ ] Create `moderation@pynapli.com`.
-- [ ] Create `admin@pynapli.com`.
-- [ ] Create `no-reply@pynapli.com`.
-- [ ] Create GitHub organization `pynapli`, if available.
-- [ ] Partial: GitHub repository exists at `thedolce1/Pynapli`; GitHub org/private repo decision remains.
-- [ ] Partial: Google Cloud/Firebase workspace exists; billing/project naming still needs final confirmation.
-- [ ] Partial: Firebase/GCP project creation has started; `pynapli-dev`, `pynapli-staging`, and `pynapli-prod` are not confirmed.
-- [ ] Create Apple Developer account.
-- [ ] Create Google Play Console account.
-
-If `pynapli` is unavailable as a GitHub org, fallback options:
-
-- `pynapli-app`
-- `pynapli-social`
-- `pynaplihq`
-
-## Implementation Checklist
-
-- [x] GitHub repo created.
-- [ ] Branch protections configured.
-- [x] Domain purchased.
-- [ ] Email aliases reserved.
-- [ ] Partial: GCP billing/project setup started; final production naming/cost controls are not confirmed.
-- [ ] Partial: Firebase project setup started; final dev/staging/prod names are not confirmed.
-- [x] Android App Check client code path exists for debug and release builds.
-- [ ] Apple Developer account exists.
-- [ ] Google Play Console exists.
-- [x] Docker Desktop installed.
-- [x] Cloud Run-ready Ktor runtime Dockerfile and build/deploy scripts exist.
-- [x] GitHub CLI installed.
-- [x] No secrets committed.
-- [ ] Cost alerts planned before cloud deploy.
-
-## Do Not Implement
-
-- Do not create production cloud resources before CI/deploy plan.
-- Do not share secrets in chat.
-- Do not put real user data in dev/staging.
-- Do not use Firestore as primary discovery database.
-- Do not skip branch protection.
-- Do not launch without billing alerts.
+- Create production cloud resources before the deploy pipeline and cost alerts exist.
+- Share secrets in chat.
+- Put real user data in dev or staging.
+- Use Firestore as the discovery database.
+- Skip branch protection or launch without billing alerts.

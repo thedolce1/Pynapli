@@ -1,16 +1,8 @@
 # Pynapli Trust And Safety Spec
 
-Last updated: 2026-04-24
-
 ## Purpose
 
-This document defines Pynapli's trust, anti-spam, anti-bot, abuse prevention, moderation, and risk-based friction model.
-
-It incorporates ideas from the existing internal security notes:
-
-- `C:/Users/Smaye/Pynapli-Project/.pynapli-rules/Security/anti-bot-spec.md`
-- `C:/Users/Smaye/Pynapli-Project/.pynapli-rules/Security/security-spec.md`
-- `C:/Users/Smaye/Pynapli-Project/.pynapli-rules/Security/testing-strategy-spec.md`
+Pynapli's trust, anti-spam, anti-bot, abuse-prevention and risk-based friction model.
 
 Core rule:
 
@@ -494,106 +486,26 @@ Do not expose:
 - Device fingerprint details.
 - Moderator-only signals.
 
-## Moderation Dashboard Requirements
+## Implementation Notes
 
-Moderators need:
-
-- Account risk tier
-- Risk reasons
-- Recent reports
-- Message samples flagged for review
-- Album request history
-- Flirt/message velocity
-- Swipe velocity
-- Device/account-farm signals
-- Prior moderation actions
-- Appeal history
-- Linked partner/subscription abuse indicators
-
-Actions:
-
-- Clear risk
-- Lower risk
-- Increase risk
-- Require verification
-- Release held messages
-- Delete held messages
-- Lock account
-- Ban account
-- Escalate severe case
-
-## Ktor Implementation Notes
-
-Risk controls should live in Ktor middleware and domain services.
-
-Suggested components:
-
-```text
-RiskScoringService
-RiskPolicyService
-RateLimitService
-MessageReviewQueue
-ModerationQueue
-DeviceSignalService
-AppealService
-```
-
-Middleware responsibilities:
-
-- Load user risk state.
-- Apply endpoint-specific limits.
-- Emit risk events.
-- Block or throttle high-risk actions.
-- Avoid duplicating risk logic in clients.
-
-Ktor must remain authoritative.
-
-## Redis / Database Notes
-
-Redis:
-
-- Rate-limit counters
-- Temporary risk counters
-- Presence
-- Queue visibility markers
-
-PostgreSQL:
-
-- Authoritative risk state
-- Risk events
-- Moderation cases
-- Appeals
-- Bans
-- Device/account-farm hashes
-- Audit trail
-
-Do not keep only ephemeral risk state in Redis.
+- Ktor stays authoritative; clients never make risk decisions. Risk enforcement lives in the domain
+  services (routes stay thin): outbound social mutations consult
+  `RiskPolicyService.isSocialActionRestricted` (quarantine/terminate → `RISK_RESTRICTED`, 403).
+- Redis holds rate-limit counters and short-window risk counters only. Authoritative risk state, risk
+  events, appeals, bans, device-link hashes and the audit trail live in Postgres. Never keep risk
+  state only in Redis.
+- Device ids are hashed server-side (SHA-256) before storage (`account_device_links`); raw device ids
+  are never stored.
+- Admin queue actions are specified in [ADMIN_MODERATION_CONSOLE_SPEC.md](ADMIN_MODERATION_CONSOLE_SPEC.md).
 
 ## Testing Requirements
 
-Adopt ideas from the existing testing strategy.
-
-Required tests:
-
-- Mass first-message bot is throttled.
-- Duplicate-message spam enters review queue.
-- Album request spam is blocked.
-- Swipe automation is rate-limited.
-- Profile scraping velocity is throttled.
-- Quarantined user is hidden from discovery.
-- Blocked users disappear from Activity.
-- False-positive verified user recovers.
-- Partner subscription cycling triggers cooldown.
-- Banned device/account-farm signal raises risk.
-- Severe trigger locks account immediately.
-- Appeal flow can restore account.
-
-Performance tests:
-
-- Risk middleware does not materially slow clean users.
-- Grid query latency remains within target.
-- Swipe action latency remains within target.
-- Message review queue does not delay clean messages.
+Mass first-message bots are throttled; duplicate-message spam enters review; album-request spam is
+blocked; swipe automation and profile scraping are rate-limited; quarantined users are hidden from
+discovery; blocked users disappear from Activity; a false-positive verified user recovers; partner
+subscription cycling triggers a cooldown; a device/account-farm signal raises risk; a severe trigger
+locks the account immediately; an appeal can restore an account. Risk checks must not materially slow
+clean users, and the review queue must never delay clean messages.
 
 ## Metrics
 
@@ -617,46 +529,12 @@ Important:
 - High false-positive rate means the system is too aggressive.
 - High spam reports means the system is too weak.
 
-## Adopted From Existing Notes
-
-Keep:
-
-- Continuous score-based detection.
-- Tiered response model.
-- Device/account-farm signals.
-- Message duplicate detection.
-- Request timing analysis.
-- Location spoofing detection.
-- Manual rescue process.
-- User appeal path.
-- Score recovery through verification and normal behavior.
-- Redis-backed rate limits.
-- Ktor middleware injection point.
-- Moderation dashboard.
-- False-positive tracking.
-- E2E/performance test mindset.
-
-Modify:
-
-- Use `RiskScore` rather than only "Bot Confidence Score" because not all abuse is bot abuse.
-- Use targeted friction rather than whole-app degradation.
-- Use honest internal delivery/payment states.
-- Use transparent limits for likely real users.
-
-Reject:
-
-- Fake push notifications.
-- Fake matches.
-- Fake profile pools presented as real users.
-- Payment flows that appear to work but are not processed.
-- Any deceptive commerce behavior.
-
 ## Implementation Checklist
 
 - [x] Risk score model exists.
 - [x] Risk event table exists.
 - [x] Redis-backed rate limits exist.
-- [x] Risk enforcement across the Ktor surface: by architecture this lives in the domain services, not a route plugin (routes stay thin; services own product rules). Outbound social mutations consult `RiskPolicyService.isSocialActionRestricted` (quarantine/terminate -> `RISK_RESTRICTED`, HTTP 403): flirts, album requests, partner-chat invites (ActivityService), first/ongoing messages (MessagingService), swipe actions + rewind (SwipeService), Playing Tonight propose/approve (TonightSessionService), Psync create/accept (PsyncSessionService), and partner-link invitations (ProfileLinkService). Discovery hides restricted tiers (grid/profile/passive activity). Declining/ending/blocking/reporting are never restricted. Coverage proven storage-untouched in `SocialActionRiskCoverageTest`.
+- [x] Risk enforcement across the Ktor surface.
 - [x] Tier policies exist.
 - [x] Domain risk gates restrict quarantined/terminated social actions.
 - [x] Quarantined/terminated accounts are suppressed from discovery-facing surfaces.
@@ -671,15 +549,15 @@ Reject:
 - [x] Album request throttles exist.
 - [x] Swipe velocity detection exists.
 - [x] Profile view velocity detection exists.
-- [x] Device/account-farm hash signals exist. **Server (A4 slice 1, 2026-06-15):** durable `account_device_links` ledger (V78) keyed by a server-side SHA-256 of the client device id (raw id never stored, per "hash before storage"); `AuthService` signup records the device→account link and raises a `device.account_farm` risk event (+30) once one device hash is behind >=4 distinct accounts within 24h. Signal-only — never blocks signup; fails open. **Android client (A4 slice 2, 2026-06-15):** the app now sends a stable per-install id (`stableInstallId`: a persisted random UUID in app-private prefs — NOT a hardware identifier, Play-policy-compliant; resets on reinstall) threaded as `deviceId` through `AuthStateHolder` → `AuthRepository` signup/login, so the signal is live. Covered by `AuthServiceTest`, `DeviceFarmRepositoryIntegrationTest`, and `AuthRepositoryTest` (deviceId forwarding).
-- [x] Reporting someone takes them out of the reporter's discovery. (`ReportService` also hides the reported user for the reporter, so Grid, Swipe, Top Picks and live Psync decks drop them; it's undoable from the hidden list. The profile sheet confirms the report and removes the card when it closes.)
-- [x] Travel mode abuse controls exist. Every tier is capped at 6 Travel mode destination switches per rolling 24 hours (`TRAVEL_SWITCH_LIMITED`, 429); reaching the cap records a +10 `location.repeated_travel_switching` risk event once (count only, never destinations). Accounts at the friction risk tier or above can't turn Travel mode on (`RISK_RESTRICTED`); turning it off is never blocked. An account that reaches friction or above, from a risk signal or an admin action (set-tier, lock, ban), also has its active trip ended (`TravelRiskEnforcement`), so it stops appearing as "visiting" elsewhere. Admins disable Travel mode for an account by setting its tier to friction or above.
-- [x] Location spoofing signals exist: impossible-travel detection on device-fix location updates (>=100 km at >=1,000 km/h vs the previous gps/network fix; travel/manual sources excluded as legitimate jumps) publishes a +25 risk event with coarse facts only (distance/elapsed/speed, never coordinates). Signal-only: the location update always proceeds and risk-path failures never break it.
+- [x] Device/account-farm hash signals exist.
+- [x] Reporting someone takes them out of the reporter's discovery.
+- [x] Travel mode abuse controls exist. Every tier is capped at 6 Travel mode destination switches per rolling 24 hours.
+- [x] Location spoofing signals exist.
 - [x] Partner subscription abuse cooldown exists.
 - [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; the account score stays floored at 0.
-- [ ] Partial: appeal review flow exists; support review workflow, account notices, roles/MFA, and senior-review separation remain.
+- [ ] Partial: appeal review flow, admin roles and step-up MFA exist; support review workflow, account notices and senior-review separation remain.
 - [x] Moderator dashboard requirements are tracked.
-- [x] False-positive metrics exist: `RiskFalsePositiveMetrics` counts every admin appeal decision by outcome (in-process, low-cardinality labels only — never user identifiers or appeal content, mirroring `NotificationMetrics`), so the enforcement overturn rate (restored+reduced vs decided) is observable; hooked into `AdminAppealService.decideAppeal`. A metrics exporter/scrape endpoint remains future work alongside the push-metrics exporter.
+- [x] False-positive metrics exist.
 - [x] Severe hard-ban triggers exist.
 - [x] Fake/deceptive degradation is not implemented.
 
@@ -697,3 +575,4 @@ Reject:
 - Do not store raw device identifiers unnecessarily.
 - Do not trust client-side risk decisions.
 - Do not block safety actions due to risk tier.
+- Do not build payment flows that appear to work but are not processed, or any deceptive commerce behavior.

@@ -11,7 +11,6 @@ The app is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyl
 | Doc | What it covers |
 | --- | --- |
 | [PYNAPLI_PRODUCT_SPEC.md](PYNAPLI_PRODUCT_SPEC.md) | Top-level product vision, scope, and core experience. |
-| [LAUNCH_STRATEGY_SPEC.md](LAUNCH_STRATEGY_SPEC.md) | Go-to-market and launch readiness. |
 
 ## Architecture & engineering
 
@@ -46,9 +45,7 @@ The app is a Kotlin Multiplatform + Compose Multiplatform + Ktor social lifestyl
 
 | Doc | What it covers |
 | --- | --- |
-| [DESIGN_AND_NAVIGATION_SPEC.md](DESIGN_AND_NAVIGATION_SPEC.md) | Navigation model and screen structure. |
-| [FRONTEND_DESIGN_DIRECTION_SPEC.md](FRONTEND_DESIGN_DIRECTION_SPEC.md) | Visual design direction and principles. |
-| [DESIGN_TOKENS.md](DESIGN_TOKENS.md) | Color, type, and spacing tokens. |
+| [DESIGN_SPEC.md](DESIGN_SPEC.md) | Visual direction, navigation, token and sheet rules. |
 | [LANGUAGE_AND_TAXONOMY_SPEC.md](LANGUAGE_AND_TAXONOMY_SPEC.md) | Product vocabulary and taxonomy. |
 
 ## Trust, safety & moderation
@@ -75,9 +72,7 @@ Runbooks and current cloud state. See also `../web/HOSTING.md` for the pynapli.c
 | Doc | What it covers |
 | --- | --- |
 | [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md) | Local/CI/cloud infra, Firebase & GCP setup plan, secrets, environments. |
-| [CLOUD_STATUS.md](CLOUD_STATUS.md) | One-page Firebase/GCP snapshot — what's live vs. coded-but-not-provisioned. |
-| [GCP_PROVISIONING_CHECKLIST.md](GCP_PROVISIONING_CHECKLIST.md) | Step-by-step runbook to stand up the backend on GCP, then PWA + site. |
-| [STAGING_TESTER_LANE.md](STAGING_TESTER_LANE.md) | Firebase-enabled staging APK → Cloud Run staging API lane. |
+| [../infra/cloud-run/README.md](../infra/cloud-run/README.md) | Step-by-step GCP provisioning and Cloud Run deploy. |
 | [WEB_BROWSER_QA_CHECKLIST.md](WEB_BROWSER_QA_CHECKLIST.md) | Manual browser QA checklist for the Wasm PWA. |
 | [THIRD_PARTY_DATA.md](THIRD_PARTY_DATA.md) | Bundled datasets, licenses, and attribution obligations (e.g. GeoNames CC BY 4.0). |
 
@@ -88,12 +83,9 @@ Working documents that track intent and progress — not fixed specs.
 | Doc | What it covers |
 | --- | --- |
 | [IMPLEMENTATION_AUDIT.md](IMPLEMENTATION_AUDIT.md) | Current status per area: built, open gaps, owning spec. History is in [archive/IMPLEMENTATION_HISTORY.md](archive/IMPLEMENTATION_HISTORY.md). |
-| [PATH_TO_TESTERS.md](PATH_TO_TESTERS.md) | Founder checklist from today to the first external testers. |
+| [PATH_TO_TESTERS.md](PATH_TO_TESTERS.md) | Ordered founder path to testers, current cloud state, staging tester lane. |
 | [IOS_BRINGUP_PLAN.md](IOS_BRINGUP_PLAN.md) | Steps to stand up the iOS shell (needs a Mac). |
-| [reviews/CODEBASE_REVIEW_2026-11.md](reviews/CODEBASE_REVIEW_2026-11.md) | 2026-11 codebase review: findings, tiers, and which slices have shipped. |
-| [ANDROID_PRODUCTION_GAMEPLAN.md](ANDROID_PRODUCTION_GAMEPLAN.md) | Phased plan to take Android to production grade. |
-| [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md) | Compose-for-Web Wasm PWA plan (W0–W6). |
-| [FRONTEND_POLISH_PASS.md](FRONTEND_POLISH_PASS.md) | Phased enterprise-grade frontend polish pass. |
+| [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md) | Web PWA architecture, adapters and the window-size contract. |
 
 ## Legal & policy
 
@@ -108,7 +100,9 @@ Superseded docs, kept for history. Don't treat them as current guidance.
 
 | Doc | Was |
 |---|---|
-| [archive/DATABASE_MIGRATION_PLAN.md](archive/DATABASE_MIGRATION_PLAN.md) | Flyway migration strategy and conventions. |
-| [archive/OPENAPI_HANDOFF_PLAN.md](archive/OPENAPI_HANDOFF_PLAN.md) | Plan for OpenAPI generation and client handoff. |
-| [archive/MVP_ROADMAP.md](archive/MVP_ROADMAP.md) | Phased MVP plan and delivery sequencing. |
-| [archive/LEGACY_RULES_IMPORT_REVIEW.md](archive/LEGACY_RULES_IMPORT_REVIEW.md) | Review of legacy rules carried into the current product. |
+| [archive/IMPLEMENTATION_HISTORY.md](archive/IMPLEMENTATION_HISTORY.md) | Shipped-slice changelog. |
+| [archive/ANDROID_PRODUCTION_GAMEPLAN.md](archive/ANDROID_PRODUCTION_GAMEPLAN.md) | Android production plan (Track A complete). Cited by `scripts/android-qa-matrix.ps1` for API-level coverage. |
+| [archive/FRONTEND_POLISH_PASS.md](archive/FRONTEND_POLISH_PASS.md) | Frontend polish pass, phases 0–4 (complete). |
+| [archive/LAUNCH_STRATEGY_SPEC.md](archive/LAUNCH_STRATEGY_SPEC.md) | Go-to-market and launch strategy. |
+| [archive/CODEBASE_REVIEW_2026-11.md](archive/CODEBASE_REVIEW_2026-11.md) | 2026-11 codebase review (all tiers merged). |
+| [archive/WEB_PWA_PHASE_LOG.md](archive/WEB_PWA_PHASE_LOG.md) | Web PWA phases W0–W8; code comments cite its slice numbers. |

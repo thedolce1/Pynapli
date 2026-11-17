@@ -1,7 +1,5 @@
 # Pynapli Language And Taxonomy Spec
 
-Last updated: 2026-04-24
-
 ## Purpose
 
 Pynapli needs a language system, not decorative slang.
@@ -269,244 +267,15 @@ Do not write definitions with jokes, innuendo, or moralizing.
 
 ## Glossary Definitions
 
-Initial recommended definitions:
-
-### Lifestyle
-
-A broad term for consensual adult social and non-monogamous communities.
-
-### ENM
-
-Ethical non-monogamy; a relationship style where people have or are open to multiple romantic or intimate connections with everyone's knowledge and consent.
-
-### Consensual Non-Monogamy
-
-An umbrella term for relationship styles where partners agree that connections outside one relationship are allowed.
-
-### Open Relationship
-
-A relationship where partners agree that one or both people may connect with others outside the relationship.
-
-### Swinging
-
-A lifestyle where people, often couples, consensually socialize or connect with others outside their primary relationship.
-
-### Soft Swap
-
-Open to some shared intimacy, with limits agreed beforehand.
-
-### Full Swap
-
-Open to partner exchange when everyone involved consents.
-
-### Same-Room
-
-Prefer experiences where partners stay in the same room.
-
-### Separate-Room
-
-Open to partners being in separate spaces.
-
-### New To Lifestyle
-
-Still learning or early in the lifestyle community.
-
-### Experienced
-
-Comfortable with lifestyle spaces, norms, and communication.
-
-### Unicorn
-
-A single person, often a woman, who is open to meeting a couple.
-
-### Stag
-
-A partnered man who enjoys or supports his partner receiving outside attention.
-
-### Vixen
-
-A partnered woman who enjoys outside attention with her partner's knowledge and support.
-
-### Hotwife
-
-A partnered woman whose outside connections are known and supported by her partner.
-
-### Bull
-
-A man who connects with a partnered woman or couple in a mutually agreed dynamic.
-
-### Bi
-
-Attracted to more than one gender.
-
-### Bicurious
-
-Curious about attraction or connection with more than one gender.
-
-### Kink-Friendly
-
-Open to respectful conversations about kink, boundaries, and consent.
-
-### Vanilla/Social
-
-Interested in conventional social connection or lower-intensity lifestyle interaction.
-
-### Meet & Greet
-
-A social introduction, usually in a public or low-pressure setting.
-
-### Host
-
-Able or willing to host a meetup.
-
-### Travel
-
-Open to meeting outside one's immediate area or while visiting another location.
-
-### Vetting
-
-Taking time to confirm compatibility, safety, and mutual expectations before meeting.
-
-### Boundaries
-
-Personal limits or preferences that should be discussed and respected.
-
-### Consent
-
-Clear, voluntary agreement. Consent can be changed or withdrawn at any time.
-
-### Hard Limits
-
-Boundaries that are not open to negotiation.
-
-### Soft Limits
-
-Boundaries that may be discussed but still require clear agreement.
-
-### Discretion
-
-Respecting privacy and not sharing someone's identity, photos, or details without permission.
-
-## Profile Taxonomy
-
-Profile setup should ask for precise but non-overwhelming information.
-
-### Relationship Context
-
-Options:
-
-- Single
-- Partnered
-- Linked partner
-- Open relationship
-- ENM
-- Prefer not to say
-
-### Discovery Style
-
-Options:
-
-- Dating solo
-- Looking together
-- Open to both
-- Social only
-- Events only
-- Ask in chat
-
-### Interested In
-
-Options:
-
-- Singles
-- Linked people
-- Couples
-- Groups/social circles
-- Events
-- Everyone
-
-### Lifestyle Experience
-
-Options:
-
-- New to lifestyle
-- Exploring
-- Experienced
-- Events/club focused
-- Prefer not to say
-
-### Lifestyle Preferences
-
-Optional tags:
-
-- Soft swap
-- Full swap
-- Same-room
-- Separate-room
-- Social first
-- Meet in public first
-- Kink-friendly
-- Vanilla/social
-- Host
-- Travel
-
-Do not require users to choose explicit preference tags during onboarding. Let them complete a basic profile first and add detail later.
-
-## Filter Taxonomy
-
-Use concise labels.
-
-### Grid Filters
-
-Who:
-
-- Singles
-- Linked
-- Partnered
-- Everyone
-
-Intent:
-
-- Social
-- Solo
-- Together
-- Events
-- Tonight
-
-Lifestyle:
-
-- Soft swap
-- Full swap
-- Same-room
-- Separate-room
-- New
-- Experienced
-
-Logistics:
-
-- Hosts
-- Travels
-- Public meet first
-- Club/event only
-
-Trust:
-
-- Verified
-- Face photo
-- Partner visible
-- Private album
-
-### Swipe Filters
-
-Use fewer labels:
-
-- Who
-- Age
-- Distance
-- Intent
-- Verified
-- Dealbreakers
-
-Swipe filters should not expose the full lifestyle taxonomy unless the user opens advanced settings.
+The in-app glossary copy lives in `grid/GridLifestyleGlossaryDialog.kt`. Definitions are short and
+neutral: no jokes, innuendo or moralizing.
+
+## Profile and Filter Taxonomy
+
+The taxonomy is code: `shared/src/commonMain/kotlin/com/pynapli/shared/profile/ProfileTaxonomies.kt` (profile fields: relationship context,
+discovery style, interested in, experience, lifestyle and logistics tags, intents) and
+`shared/src/commonMain/kotlin/com/pynapli/shared/profile/DiscoveryTaxonomies.kt` (filter options). The server validates every key against the
+same lists. Grid and Swipe filter behavior: [FILTERS_SPEC.md](FILTERS_SPEC.md).
 
 ## Chat And Activity Language
 
@@ -695,35 +464,10 @@ Avoid assuming:
 
 ## Taxonomy Governance
 
-The taxonomy should be versioned and reviewed.
-
-Each term should have:
-
-- Internal key
-- Display label
-- Short definition
-- Category
-- App-store sensitivity level
-- Whether it can be used in public copy
-- Whether it can be used in push notifications
-- Whether it is self-label only
-- Whether it is filterable
-
-Example:
-
-```kotlin
-data class LifestyleTerm(
-    val key: String,
-    val label: String,
-    val definition: String,
-    val category: TermCategory,
-    val sensitivity: Sensitivity,
-    val publicCopyAllowed: Boolean,
-    val pushAllowed: Boolean,
-    val selfLabelOnly: Boolean,
-    val filterable: Boolean
-)
-```
+Each term has: internal key, display label, short definition, category, sensitivity level, and
+whether it may appear in public copy, in push notifications, as a self-label only, or as a filter.
+Changes to keys are reviewed, because profiles, saved filters and the server allow-lists depend on
+them.
 
 ## Initial Sensitivity Levels
 
@@ -763,14 +507,6 @@ High:
 
 High-sensitivity terms should generally be in-app only, behind age-gated onboarding, and not used in public metadata or push notifications by default.
 
-## Research References
-
-- Feeld glossary support: https://support.feeld.co/hc/en-gb/articles/18822038569884-Desires-Relationship-Types-Sexualities-and-Genders-on-Feeld-Profiles-Explained
-- Feeld glossary: https://feeld.co/glossary
-- SDC swingers terms: https://www.sdc.com/swingers-terms/
-- SDC soft swap vs full swap: https://www.sdc.com/swinger/soft-swap-vs-full-swap-what-is-the-difference/
-- Swinging terminology overview: https://en.wikipedia.org/wiki/Swinging_%28sexual_practice%29
-
 ## Do Not Forget
 
 - Language is a UX feature.
@@ -783,4 +519,3 @@ High-sensitivity terms should generally be in-app only, behind age-gated onboard
 - Never make private album copy sound explicit or voyeuristic.
 - Never make Activity or notification copy feel invasive.
 - Let users self-label loaded terms.
-

@@ -1,6 +1,6 @@
 # Web PWA — Browser QA Checklist (v1)
 
-Last updated: 2026-07-04. Companion to `WEB_PWA_GAMEPLAN.md` W6.3.
+Last updated: 2026-07-04. Companion to [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md); slice W6.3 is in [archive/WEB_PWA_PHASE_LOG.md](archive/WEB_PWA_PHASE_LOG.md).
 
 **Automated pass first: `.\scripts\web-qa.ps1`** (local server running; Chrome + Node 22+).
 It builds the production bundle and drives it in headless Chrome at desktop, tablet and phone
@@ -67,7 +67,7 @@ message is a candidate follow-up if analytics show it matters.
 
 ## Known/accepted v1 limitations
 
-- Wasm bundle size: see the budget note in `WEB_PWA_GAMEPLAN.md` W6.2.
+- Wasm bundle size: see the budget note in [archive/WEB_PWA_PHASE_LOG.md](archive/WEB_PWA_PHASE_LOG.md) W6.2.
 - No Web Push (post-v1), no Playing Tonight / Psync surfaces (v1.x), Store is
   read-only (founder-locked).
 - Service worker registers only off-localhost, so install/offline behaviors need the

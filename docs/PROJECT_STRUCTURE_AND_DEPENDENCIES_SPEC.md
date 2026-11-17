@@ -74,33 +74,25 @@ JDK:
 
 ## Repository Shape
 
-Recommended repository:
-
 ```text
-pynapli/
-  .github/
-    workflows/
-    dependabot.yml
-  .run/
-  build-logic/
-  config/
-  docs/
-  gradle/
-    libs.versions.toml
-  composeApp/
-  androidApp/
-  shared/
-  server/
-  admin/
-  iosApp/
-  infra/
-  scripts/
-  docker-compose.yml
-  settings.gradle.kts
-  build.gradle.kts
-  gradle.properties
-  README.md
+.github/workflows/   CI and staging lanes
+gradle/              libs.versions.toml (every external version)
+shared/              KMP product logic, DTOs, Ktor client, SQLDelight
+composeApp/          shared Compose UI + feature state holders
+androidApp/          Android shell (manifest, Application, Activity, resources)
+webApp/              Wasm PWA shell (app.pynapli.com)
+desktopApp/          dev-only JVM shell, never shipped
+iosApp/              Xcode project (not a Gradle module; not created yet)
+server/              Ktor API, Flyway migrations
+infra/               Dockerfile, Cloud Run runbook
+scripts/             verify gates, QA harnesses, load tests, seeds
+web/                 Astro marketing site (pynapli.com)
+docs/                specs
 ```
+
+There is no `admin/` module (no console UI is planned; see
+[ADMIN_MODERATION_CONSOLE_SPEC.md](ADMIN_MODERATION_CONSOLE_SPEC.md)) and no `build-logic/`
+convention plugins; module build files use catalog aliases directly.
 
 ## Module Ownership
 
@@ -216,40 +208,6 @@ Contains:
 - Activity generation.
 - Migrations.
 - Backend tests.
-
-### `admin`
-
-Owns the internal admin/moderation console.
-
-Initial recommendation:
-
-- Keep admin as a separate web app or server-rendered admin module once backend exists.
-- Do not mix moderation console UI into the mobile app modules.
-- Do not build admin first unless moderation tooling blocks beta.
-
-### `infra`
-
-Owns infrastructure-as-code and deployment definitions.
-
-Contains:
-
-- Dockerfiles.
-- Cloud Run config.
-- Terraform/OpenTofu later if needed.
-- Environment templates.
-- Local service config.
-
-### `build-logic`
-
-Owns Gradle convention plugins.
-
-Use this to keep module build files short:
-
-- `pynapli.kotlin.multiplatform`
-- `pynapli.compose.app`
-- `pynapli.android.application`
-- `pynapli.ktor.server`
-- `pynapli.testing`
 
 ## Shared Module Structure
 
@@ -538,31 +496,14 @@ Database access decision:
 
 ## Compatibility Notes
 
-Current checks from primary sources:
+Check these against official sources before any upgrade (the catalog is the current baseline):
 
-- Compose Multiplatform 1.10.3 supports Android API 21+ and iOS 13+, but Pynapli should use Android minSdk 23 because Firebase 34.x pushes several Firebase libraries to API 23+.
-- Compose Multiplatform releases separately from Kotlin and Jetpack Compose. Keep Compose and Kotlin compatibility checked before upgrades.
-- Android Gradle Plugin 9.2.0 lists Gradle 9.4.1 and JDK 17 in its compatibility table.
-- Gradle 9.4.1 runs on JVM 17 through 26, but Android builds should stay conservative.
-- Ktor 3.4.3 is the current stable Ktor release checked on 2026-04-24.
-- Firebase Android BoM 34.12.0 and Firebase Apple SDK 12.12.1 were current at the time of this spec.
-- Google Play Billing 8.3.0 was current at the time of this spec.
-
-## Scaffolding Acceptance Checklist
-
-The initial repo scaffold is acceptable when:
-
-- `gradle/libs.versions.toml` contains the approved baseline.
-- Android app builds from CLI.
-- iOS app opens in Xcode and links the Kotlin framework.
-- `shared` has common, Android, and iOS source sets.
-- `server` starts a Ktor health endpoint.
-- Docker Compose starts PostgreSQL/PostGIS and Redis.
-- A first SQL migration runs locally.
-- Common tests run.
-- Server tests run.
-- No Firebase secrets are committed.
-- No product rule lives only in UI.
+- Android `minSdk = 23` is driven by Firebase 34.x, not Compose.
+- Compose Multiplatform must stay ≥ 1.11.0: 1.10.3's wasm target dropped clicks inside scrollable
+  containers. Compose Multiplatform releases separately from Kotlin and Jetpack Compose; check
+  compatibility on every bump. Its web (Wasm) target is still Beta (founder-approved exception).
+- AGP 9.2.x requires Gradle 9.4.1+ and JDK 17.
+- No `iosX64` target: Compose Multiplatform 1.11 stopped publishing Intel-simulator artifacts.
 
 ## Source References
 

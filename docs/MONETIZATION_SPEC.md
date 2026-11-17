@@ -1,7 +1,5 @@
 # Pynapli Monetization Spec
 
-Last updated: 2026-05-21
-
 ## Purpose
 
 This document defines Pynapli's launch monetization model: subscriptions, microtransactions, feature gates, linked-partner benefits, and anti-abuse rules.
@@ -22,7 +20,7 @@ Locked launch structure:
 
 Launch monthly pricing:
 
-- Free: $0 with ads
+- Free: $0
 - Social: $4.99/month
 - Select: $9.99/month
 
@@ -54,22 +52,6 @@ Avoid:
 - Ripe
 - Naughty
 - Any pineapple-pun-heavy tier name
-
-## Market Reference
-
-Public monetization patterns:
-
-- Tinder uses Free, Plus, Gold, Platinum. Paid features include unlimited Likes, Rewind, Passport, no ads, Incognito, See Who Likes You, Super Likes, Boost, Message before Matching, and Prioritized Likes.
-- Grindr uses XTRA and Unlimited. Paid features include expanded grid volume, more filters, Incognito, Viewed Me access, chat translation, unsend, read receipts, expiring photos, and Boosts.
-- Bumble uses Boost, Premium, and Premium+. Paid features include unlimited likes, SuperSwipes, Spotlight, Backtrack, Extend, Rematch, and See Who Likes You.
-- Feeld uses Majestic, including premium discovery/privacy features and seeing likes.
-
-Sources:
-
-- Tinder subscription tiers: https://tinder.com/feature/subscription-tiers/
-- Grindr Unlimited: https://help.grindr.com/hc/en-us/articles/1500008656741-Grindr-Unlimited
-- Bumble paid plans: https://support.bumble.com/hc/en-us/articles/32668790872733-Understanding-Bumble-s-paid-features-and-subscription-plans
-- Feeld Majestic: https://support.feeld.co/hc/en-gb/articles/9406793654556-Majestic-Membership-explained
 
 ## Monetization Principles
 
@@ -109,7 +91,6 @@ Never paywall:
 Price:
 
 - $0/month
-- Ad-supported
 
 Purpose:
 
@@ -136,7 +117,6 @@ Included:
 - Block/report
 - Safety center
 - Basic privacy settings
-- Ads
 
 Free limits:
 
@@ -150,7 +130,7 @@ Free limits:
 - No advanced filters
 - No incognito
 - No travel mode
-- No Intro Notes except possibly promo inventory
+- No Pineapple Like notes except possibly promo inventory
 
 ## Pynapli Social
 
@@ -165,13 +145,12 @@ Positioning:
 Purpose:
 
 - The affordable mainstream paid tier.
-- Remove friction and ads.
+- Remove friction.
 - Give enough extra control to feel worth it.
 
 Included:
 
 - Everything in Free
-- No ads
 - Expanded grid volume
 - More swipe likes, or unlimited likes if launch economics allow
 - Rewind
@@ -191,7 +170,6 @@ Suggested monthly inventory:
 
 - 1 Pineapple Like per week
 - Discounted Boosts
-- Optional 1 limited Intro Note per month as experiment
 
 Do not overload Social. It should be clearly better than Free but leave premium FOMO for Select.
 
@@ -223,7 +201,7 @@ Included:
 - Priority Likes
 - Weekly Pineapple Likes
 - Monthly Boost
-- Intro Notes
+- Pineapple Like notes (Intro Notes, being merged)
 - Full read receipts
 - Typing status
 - Message unsend
@@ -238,8 +216,7 @@ Suggested monthly inventory:
 
 - 5 Pineapple Likes per week
 - 1 Boost per month
-- 3 Intro Notes per month
-- Daily curated Picks
+- Pineapple Like notes (Intro Notes, being merged)
 
 Inventory should expire if unused at renewal or refresh windows, depending feature. Expiring inventory creates urgency but must be clearly disclosed.
 
@@ -341,34 +318,14 @@ Rules:
 
 ### Intro Note
 
-Purpose:
-
-- Message before match from Swipe.
-
-Recommended:
-
-- Mostly Select.
-- A la carte packs possible.
-- 140 character limit.
-
-Rules:
-
-- Does not become chat until accepted/matched.
-- Recipient can disable or restrict.
-- Delivery not guaranteed.
-- Must be rate-limited.
+Being merged into Pineapple Like as an optional note (2026-11-17); the `intro_notes_three` Play SKU
+must be retired in Play Console when that ships. Rules that carry over to the note: message before
+match from Swipe only; it doesn't become a chat until matched; the recipient can disable or restrict
+it; delivery is not guaranteed; 140-character limit; rate-limited.
 
 ### Extra Picks
 
-Purpose:
-
-- More curated daily swipe recommendations.
-
-Recommended:
-
-- Sell as small packs.
-- Expire at daily refresh.
-- Included daily in Select.
+Top Picks is frozen (2026-11-17): don't sell Picks packs or list daily Picks as a Select perk.
 
 ### Event Spotlight
 
@@ -405,31 +362,11 @@ Avoid:
 
 ## Ads
 
-Free tier can include ads, but ads must be tasteful and privacy-conscious.
-
-Rules:
-
-- No ads inside private albums.
-- No ads inside safety/reporting flows.
-- No ads that imply explicit sexual services.
-- No ads that expose user lifestyle context.
-- Avoid hyper-personalized sensitive targeting.
-- Avoid jarring full-screen ads during message/profile safety flows.
-
-Best placements:
-
-- Between grid pages
-- Between swipe deck batches
-- Store tab
-- Non-sensitive empty states
-
-Avoid placements:
-
-- Private album viewer
-- Chat thread
-- Partner invite flow
-- Report/block flow
-- Verification flow
+**No ads (2026-11-17).** No ad network exists, so the fake "Sponsored" slot, the "ad-supported" Free
+tier and the paid "No ads" perk are being removed. If ads are ever reconsidered, check store policy
+for an adult app first, and keep these rules: no ads in private albums, chat threads, partner invite,
+report/block, verification or safety flows; no ads implying sexual services or exposing lifestyle
+context; no sensitive targeting.
 
 ## Paywall Placement
 
@@ -459,7 +396,6 @@ Bad paywall moments:
 
 | Feature | Free | Social | Select |
 |---|---:|---:|---:|
-| Ads | Yes | No | No |
 | Basic profile | Yes | Yes | Yes |
 | Basic grid | Yes | Yes | Yes |
 | Expanded grid | 60-profile nearby depth | 600-profile nearby depth | Largest uncapped nearby depth |
@@ -474,7 +410,7 @@ Bad paywall moments:
 | Incognito | No | No/Maybe | Yes |
 | Travel mode | No | Preview | Yes |
 | Pineapple Likes | Limited/promo | Weekly | More weekly |
-| Intro Notes | No/promo | Limited/experiment | Yes |
+| Pineapple Like notes (Intro Notes, being merged) | No/promo | Limited | Yes |
 | Monthly Boost | No | Discounted | Included |
 | Private album basics | Yes | Yes | Yes |
 | Timed album access | Basic | Yes | Advanced |
@@ -548,7 +484,7 @@ Avoid tracking sensitive lifestyle terms in analytics unless privacy-reviewed an
 Safe experiments:
 
 - Social includes unlimited likes vs high daily cap.
-- Select includes 3 vs 5 Intro Notes/month.
+- Select includes 3 vs 5 Pineapple Like notes/month.
 - Select includes 1 monthly Boost vs discounted Boost.
 - Activity reveal count for Free users.
 - Social Activity reveal depth.
@@ -582,8 +518,8 @@ Do not experiment with:
 - [x] Rewind is gated to Social/Select for latest eligible Like/Pass.
 - [x] Boost inventory exists.
 - [x] Pineapple Like inventory exists.
-- [x] Intro Note inventory exists.
-- [x] Ads are excluded from sensitive surfaces.
+- [x] Intro Note inventory exists (being merged into Pineapple Like).
+- [ ] Fake ad slot and "ad-supported"/"No ads" claims removed (in progress).
 - [x] Safety features remain free.
 - [x] Paywall copy uses Social/Select naming.
 

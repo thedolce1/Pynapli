@@ -1,7 +1,5 @@
 # Pynapli Swipe Implementation Spec
 
-Last updated: 2026-05-18 (Swipe API load proof extended for Boost, Top Picks, Travel, 500-concurrent core runs, Android visual/gesture QA, and Android queue QA)
-
 ## Purpose
 
 This document captures how Pynapli should implement its Tinder-inspired swipe system so it stays intentional, match-gated, monetizable, smooth, and distinct from the grid.
@@ -31,42 +29,6 @@ The swipe experience should feel:
 - More deliberate than browsing
 
 Users cannot freely message from swipe unless there is a mutual match, except for tightly capped premium/a la carte intro notes.
-
-## Public Research Signals
-
-Tinder publicly documents the following mechanics:
-
-- Swipe Right means Like; if the other person Likes back, it is a Match.
-- Discovery settings include sexual orientation, age, and distance.
-- Tinder may show profiles outside age/distance preferences when recommendations run low unless those preferences are set as Dealbreakers.
-- Discovery can be turned off while existing matches remain available.
-- Plus includes unlimited Likes, unlimited Rewinds, Passport, hide ads, and Incognito.
-- Gold adds See Who Likes You, daily Top Picks, weekly Super Likes, and sometimes a monthly Boost depending on plan/testing.
-- Platinum adds Message before Matching, Prioritized Likes, and viewing Likes sent in the last 7 days.
-- Super Like prioritizes the sender's profile to the recipient.
-- First Impressions allow a short message before match, capped at 140 characters, and do not guarantee delivery.
-- Top Picks refresh every 24 hours; extra purchased Picks also expire within the refresh window.
-- Boost makes a user one of the top profiles in their area for 30 minutes, with up to 10x more views.
-- Super Boost is tested for subscribers and can provide up to 100x more views.
-- Passport lets users virtually discover in one selected city at a time; people liked there may still see the profile up to 24 hours after location changes.
-- Likes You lets Gold/Platinum users see who liked them before swiping.
-- Photo Verified Chat lets verified users receive messages only from other verified users.
-
-Sources:
-
-- Tinder Subscription Tiers: https://tinder.com/feature/subscription-tiers/
-- Tinder Discovery Settings: https://www.help.tinder.com/hc/en-us/articles/115003340963-Discovery-Settings
-- Tinder Super Like: https://www.help.tinder.com/hc/en-us/articles/115004493543-Super-Like
-- Tinder First Impressions: https://www.help.tinder.com/hc/en-us/articles/360046358932-Message-Before-Matching-with-Super-Like
-- Tinder Platinum: https://tinder.com/feature/platinum/
-- Tinder Top Picks: https://www.help.tinder.com/hc/en-us/articles/360005039092-Top-Picks
-- Tinder Boost: https://www.help.tinder.com/hc/pt/articles/115004506186-Boost
-- Tinder Super Boost: https://www.help.tinder.com/hc/en-us/articles/360029087891-Super-Boost
-- Tinder Likes You: https://www.help.tinder.com/hc/ja/articles/115005246123-Likes-You
-- Tinder Passport: https://www.help.tinder.com/hc/en-us/articles/115004490423-Passport-Mode
-- Tinder Photo Verified Chat: https://www.help.tinder.com/hc/en-us/articles/4408385774989-Photo-Verified-Chat
-
-Tinder does not publicly document its exact recommendation/ranking algorithm. Any ranking details below are Pynapli architecture decisions, not claims about Tinder internals.
 
 ## Non-Negotiable UX Rules
 
@@ -217,25 +179,12 @@ Rules:
 
 ## Intro Notes
 
-Pynapli's Tinder-style message-before-match feature should be tightly controlled.
+Being merged into Pineapple Like as an optional note (founder decision 2026-11-17). Until then, and
+for the merged note:
 
-Possible names:
-
-- First Note
-- Intro Note
-- Pineapple Note
-
-Rules:
-
-- 140 character max.
-- Requires target user to be eligible to receive intro notes.
-- Cannot be sent to users who fail age/verification requirements.
-- Does not guarantee delivery.
-- Should count against a weekly/purchased allowance.
-- Should create a Like/Super Like style action with attached note.
-- Recipient can accept by liking/matching or dismiss.
-
-This preserves swipe's social contract while allowing monetized high-intent exceptions.
+- 140 characters max; requires the recipient to be eligible (privacy setting, age/verification).
+- Delivery is not guaranteed; it spends a weekly or purchased allowance.
+- It is a high-intent like with an attached note; the recipient accepts by liking back or dismisses.
 
 ## Super Like / Pineapple Like
 
@@ -275,7 +224,7 @@ Current MVP implementation:
 - Social and Select users can server-rewind the latest eligible Like or Pass.
 - The server soft-rewinds the previous action, keeps history, and issues a fresh deck session/card token for the restored card.
 - Local queued swipes can be undone before sync.
-- Pineapple Like rewind remains intentionally incomplete until inventory refund semantics are defined.
+- Rewinding a Pineapple Like refunds the exact inventory row it consumed, in the same transaction.
 
 ## Likes You
 
@@ -292,25 +241,9 @@ Pynapli should place Likes You primarily in Activity, with entry points from Swi
 
 ## Top Picks / Curated Picks
 
-Pynapli should use a daily curated set similar to Tinder's Top Picks, adapted for lifestyle intent.
-
-Possible names:
-
-- Picks
-- Top Picks
-- Tonight's Picks
-- Lifestyle Picks
-
-Rules:
-
-- All users receive one free Pick per day.
-- Premium users receive a daily set.
-- Picks refresh every 24 hours.
-- Purchased extra Picks expire at refresh.
-- Picks can be scoped by Passport/Travel location.
-- Picks should be high quality: verified, active, aligned intent, good standing.
-
-Picks should not be a replacement for swipe. They are a premium shortcut into the swipe engine.
+**Frozen** (2026-11-17): not part of the product definition. The code (`GET /v1/swipe/picks`,
+`top_pick_sessions`, one free Pick per day, a daily set for paid tiers, 24h refresh) stays but gets no
+further investment, and it should not be advertised as a paid perk.
 
 ## Boost / Super Boost
 
@@ -442,38 +375,17 @@ Ranking should avoid:
 
 ## Default Deck / Never-Empty
 
-A fresh deck must never feel dead because the viewer left filters at their defaults or sits in a
-sparse area. Two layers guarantee this:
+A fresh deck never feels dead because filters were left at defaults or the area is sparse:
 
-1. **Default = all nearby, ranked.** With no filters selected, candidate generation applies only the
-   non-negotiable exclusions (privacy/block/safety, discovery visibility, prior-action cooldowns) and
-   then ranks everyone in radius. An empty structured filter set adds no `WHERE` predicate — the
-   cardinality gate (`cardinality(?::text[]) = 0 OR ...`) short-circuits empty filters to "match
-   everyone", so leaving filters blank never narrows the deck.
-2. **Relaxation when the pool runs low** (`SwipeDeckRelaxation`, FILTERS_SPEC L373/L403-409). When a
-   freshly generated deck falls below the low-water mark (`lowWaterMark(limit) = (limit/3).coerceAtLeast(3)`),
-   the server re-generates with:
-   - **Soft filters dropped** (`relaxFilters`): non-dealbreaker preferences (lifestyle, logistics,
-     relationship contexts, verified-preferred, etc.) are cleared so they stop narrowing the pool.
-   - **Radius doubled** (`relaxRadius`): `radius * 2` capped at the max, unless `distance` is a
-     dealbreaker.
+1. **Default = all nearby, ranked.** With no filters, only non-negotiable exclusions apply
+   (privacy/block/safety, visibility, prior-action cooldowns). Empty filter sets add no predicate.
+2. **Relaxation when the pool runs low** (`SwipeDeckRelaxation`). Below the low-water mark
+   (`(limit/3).coerceAtLeast(3)`) the server regenerates with soft filters dropped and the radius
+   doubled (capped; not if `distance` is a dealbreaker).
 
-What relaxation never touches:
-
-- **Dealbreakers** (`SwipeDealbreakerKey`: `age`, `distance`, `verified`, `discoveryStyles`,
-  `intents`, `linkedOnly`) stay hard. A viewer who marked one means it — relaxation will leave the
-  deck small rather than violate it.
-- **Identity filters** (gender, orientation) are also kept hard through relaxation: a relaxed deck
-  must not start showing men to a viewer who filtered for women. These behave like always-on
-  dealbreakers for relaxation purposes.
-
-So the **no-filter** deck is always full when anyone is reachable within the max radius; a deck that
-stays small after relaxation is an honest reflection of explicit hard constraints (dealbreakers /
-identity filters), shown with the spec's empty-state copy rather than a silent blank.
-
-This is the Swipe analogue of the Grid's widen-on-empty fallback (see GRID_IMPLEMENTATION_SPEC
-"Default Deck / Never-Empty"); both relax distance to keep the surface populated while honoring
-explicit hard filters.
+Relaxation never touches dealbreakers or identity filters (gender, orientation): a relaxed deck must
+never show people the viewer explicitly excluded. A deck that stays small after relaxation shows the
+empty-state copy rather than a silent blank. This mirrors the Grid's widen-on-empty fallback.
 
 ## Deck Session
 
@@ -546,86 +458,17 @@ Current MVP implementation:
 
 ## Compose Swipe Implementation
 
-Recommended Kotlin client stack:
+`SwipeStateHolder` exposes `StateFlow` deck state; `SwipeCardStack` uses `pointerInput` drag detection
+and `Animatable` offset/rotation (custom gestures, not `anchoredDraggable`).
 
-- Compose Multiplatform
-- Pointer input / drag gestures
-- `Animatable` for offset/rotation
-- `StateFlow` for deck state
-- `SharedFlow` for one-off events
-- Ktor Client
-- Coil 3 or Kamel for image loading
-
-Official Compose docs support low-level drag detection using `pointerInput` and `detectDragGestures`; newer anchored swipe components use `anchoredDraggable`, while custom Tinder-like cards often need lower-level gesture control.
-
-Sources:
-
-- Compose drag/swipe/fling: https://developer.android.com/develop/ui/compose/touch-input/pointer-input/drag-swipe-fling
-- Compose pointer input: https://developer.android.com/jetpack/compose/gestures
-- StateFlow/SharedFlow: https://developer.android.com/kotlin/flow/stateflow-and-sharedflow
-
-### Swipe Card Stack
-
-Render only a small stack:
-
-- Active top card
-- Next card
-- Third card for depth/preload
-
-Do not render the entire deck.
-
-Recommended stack:
-
-```text
-top card: fully interactive
-second card: slight scale/offset
-third card: preloaded image, minimal composition
-```
-
-### Gesture Behavior
-
-Top card should support:
-
-- Horizontal drag
-- Slight vertical tolerance
-- Rotation proportional to drag distance
-- Like/pass label reveal
-- Velocity-aware release
-- Spring back if below threshold
-- Fly out if beyond threshold or fling velocity
-
-Thresholds:
-
-- Like: drag right beyond threshold
-- Pass: drag left beyond threshold
-- Super Like/Pineapple Like: button action, not necessarily vertical swipe
-
-Keep vertical gestures available for photo/profile scroll if the card expands.
-
-### Pseudocode
-
-```kotlin
-@Composable
-fun SwipeDeck(
-    state: SwipeDeckState,
-    onAction: (SwipeAction) -> Unit
-) {
-    val visibleCards = state.cards.take(3)
-
-    Box(Modifier.fillMaxSize()) {
-        visibleCards.asReversed().forEachIndexed { index, card ->
-            val isTop = index == visibleCards.lastIndex
-            SwipeCardLayer(
-                card = card,
-                interactive = isTop,
-                onAction = onAction
-            )
-        }
-    }
-}
-```
-
-Use stable `cardToken` keys for each visible card.
+- Render only the top card (interactive), the next card (slight scale/offset) and a third (image
+  preloaded, minimal composition). Never render the whole deck. Key cards by `cardToken`.
+- Top card: horizontal drag with slight vertical tolerance, rotation proportional to drag, like/pass
+  label reveal, velocity-aware release, spring back below threshold, fly out beyond threshold or on
+  fling. Pineapple Like is a button, not a vertical swipe; vertical gestures stay free for photo
+  scroll.
+- On wide panes the deck is a centered stage with arrow-key shortcuts (see
+  [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md)).
 
 ## Image Loading
 
@@ -672,41 +515,10 @@ Current implementation note:
 
 ## Subscription Gating
 
-Free:
-
-- Limited likes
-- Limited rewinds or no rewind
-- One free daily Pick
-- Basic filters
-- Swipe match chat
-
-Plus:
-
-- Unlimited likes
-- Rewind
-- Passport/travel mode
-- Hide ads
-- Incognito
-- Expanded filters
-
-Premium:
-
-- See who liked you
-- Daily curated Picks
-- Weekly Pineapple Likes
-- Monthly Boost
-- Intro Notes
-- Priority Likes
-- Sent Likes history
-- Linked partner included
-
-A la carte:
-
-- Pineapple Likes
-- Intro Notes
-- Boost
-- Super Boost
-- Extra Picks
+Tiers are Free, Social and Select; the per-tier like limits, Rewind, Travel, Likes You reveal,
+Pineapple Likes and Boost allowances live in [MONETIZATION_SPEC.md](MONETIZATION_SPEC.md) and
+`subscriptions/SubscriptionPolicy.kt`. Swipe never gates block/report, basic intent clarity, or
+safety. The free tier is not "ad-supported": the ad slot and "No ads" perk are being removed.
 
 ## Safety And Consent
 
@@ -747,38 +559,35 @@ Network:
 - Server authoritative reconciliation.
 - Cap unsynced actions.
 
-Current API proof:
-
-- `scripts/swipe-api-load-test.ps1` exercises real Ktor endpoints over a 5,000-candidate dense dataset with mixed Free/Social/Select viewers.
-- 2026-05-18 extended run passed 100 concurrent users with Boost, Top Picks, Travel activation, Travel deck, filtered deck, relaxed deck, page two, Like/Pass, Rewind, and presence inside local p95 budgets: `artifacts/swipe-api-load/20260518-210752`.
-- 2026-05-18 500-concurrent warm core run passed local p95 budgets: `artifacts/swipe-api-load/20260518-210836`.
-- 2026-05-18 Ktor-restarted true-cold 500-concurrent core run passed local p95 budgets: `artifacts/swipe-api-load/20260518-211103`.
-- 2026-05-18 connected Android visual/gesture/golden QA passed on emulator: `artifacts/android-swipe-qa/20260518-214507`.
-- 2026-05-18 connected Android queue QA passed on emulator: `artifacts/android-swipe-queue-qa/20260518-212037`.
+Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
 
 ## Implementation Checklist
 
-- [x] Swipe card DTO exists.
-- [x] Deck query endpoint returns signed persisted deck sessions/card tokens and action endpoint validates dealt-card state.
-- [x] Like/pass/Pineapple Like/Intro Note action endpoint exists.
-- [x] Match creation is server-authoritative.
-- [x] Cursor pagination continues a persisted deck session without duplicate returned cards. Client auto-loads the next page when the visible stack drops below the threshold, deduping against current cards and pending action targets.
-- [x] Rewind is server-aware for the latest eligible Like/Pass/Pineapple Like and local queued actions. Pineapple Like inventory is refunded atomically with the rewind: `swipe_actions.consumed_inventory_id` (V48) records the `premium_inventory.id` decremented when the action was submitted, and `JdbcSwipeRepository.rewindSwipeAction` increments that exact row's quantity in the same transaction as the `rewound_at` update. Coverage in `SwipeServiceTest.paidRewindOfPineappleLikeRefundsConsumedInventoryRow` and `GridAndSwipeRepositoryIntegrationTest` "swipe rewind atomically refunds the consumed Pineapple Like inventory row".
-- [x] Intro Note inventory and delivery rules exist.
+- [x] Swipe card DTO; signed persisted deck sessions and card tokens; the action endpoint validates
+  dealt-card state.
+- [x] Like / Pass / Pineapple Like / Intro Note actions; server-authoritative match creation.
+- [x] Cursor pagination continues a deck session without duplicates; the client auto-loads the next
+  page below a threshold, deduping against pending actions.
+- [x] Rewind is server-aware for the latest eligible Like/Pass/Pineapple Like and local queued
+  actions. **Pineapple Like inventory is refunded atomically** with the rewind
+  (`swipe_actions.consumed_inventory_id`, same transaction).
 - [x] Likes You is represented in Activity.
-- [x] Top Picks/Picks daily refresh exists. `top_pick_sessions` (V49) stores one curated set per viewer per 24h window; subsequent reads inside the window return the same `sessionId` and same raw card tokens (deterministically reissued via `SwipeDeckTokenCodec`). Generation runs through the existing swipe ranker with `verifiedPreferred=true` for the quality bias (spec L311). Free tier gets 1 pick/day, paid tier gets 10. A backing `swipe_deck_sessions` row is upserted alongside the Pick session so the existing `submitAction` flow accepts Pick targets without changes — Picks are a shortcut into the swipe engine per spec L313. Client: Top Picks is a deck filter that loads the picks into the main deck (#91); the earlier horizontal `TopPicksRow` above the deck was removed (#92). Endpoint `GET /v1/swipe/picks`. Coverage in `TopPicksServiceTest` (tier limits, session reuse, refresh after expiry, LOCATION_REQUIRED, verifiedPreferred bias) and `GridAndSwipeRepositoryIntegrationTest` "top picks generates and reuses a daily session backed by a real deck session".
-- [x] Boost affects swipe ranking without violating filters.
-- [ ] Partial: Passport/travel mode core shipped 2026-05-17. V50 `travel_locations` table per DATA_MODEL_SPEC L286-301 (one active row per user enforced by partial unique index on `user_id WHERE status='active' AND active_until IS NULL`; cleared rows retained for the 24h Like tail rule a later slice will read). `TravelLocationService` (Select unlimited; Social preview one activation per 30 days), endpoints `GET/POST/DELETE /v1/location/travel` per API_CONTRACT L163-169. Discovery override: `JdbcGridRepository.queryNearby` and all four `viewer_location` CTEs in `JdbcSwipeRepository` (deck rank, action precondition, target eligibility, rewind candidate) LEFT-JOIN `travel_locations` and COALESCE `tl.geom` over `ul.geom` so an active travel row redirects every discovery query. Top Picks inherits via `queryDeck`. Constraint: travel requires the viewer to also have a base `user_locations` row (the LEFT JOIN keeps the single-? bind ergonomics; realistic for Select-tier users). Client `TravelLocationStateHolder` + `TravelModeSheet` with a hardcoded 10-city preset list (NYC, LA, SF, Miami, Toronto, London, Berlin, Paris, Tokyo, Sydney) and an entry chip in `SwipeHeader`. Coverage in `TravelLocationServiceTest` (entitlement gates, validation, supersede-on-set, clear semantics) and `GridAndSwipeRepositoryIntegrationTest` "grid and swipe discovery follows active travel_locations row when present" (viewer in SF physical, travel to NYC, grid+swipe return NYC profiles only). 24h post-leave Like persistence (L347, L353) shipped 2026-05-17: V51 adds `swipe_actions.travel_location_id UUID NULL REFERENCES travel_locations(id) ON DELETE SET NULL` (mirroring the `consumed_inventory_id` pattern from the Pineapple Like rewind slice). `SwipeService.act` looks up the actor's active travel row before recording, threads the id into `recordSwipeAction`. The `targetLikedActor` match query in `JdbcSwipeRepository.recordSwipeAction` LEFT JOINs `travel_locations` and enforces: `sa.travel_location_id IS NULL OR tl.active_until IS NULL OR tl.active_until > now() - INTERVAL '24 hours'`. Coverage in `GridAndSwipeRepositoryIntegrationTest` "travel-mode Like still creates a match when reciprocated within the 24h tail" and "...becomes inert when reciprocated outside the 24h tail" (cleared 36h ago → no match). The same LEFT JOIN + predicate should apply to the future Likes You activity query once that lands. Target-side travel override + visiting badge (L344-348) shipped 2026-05-17: `JdbcSwipeRepository.queryDeckRank` now LEFT JOINs `travel_locations` as `target_travel` and broadens the spatial filter to `ST_DWithin(v.geom, ul.geom, ?) OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))`, so targets in travel mode appear in destination decks the same way they appear in their own home city. Distance display and KNN ordering use `COALESCE(target_travel.geom, ul.geom)` so the viewer sees the target where they look. `SwipeCardRecord.visiting` / `SwipeCardDto.visiting` reflects `target_travel.id IS NOT NULL`. Client renders a small "Visiting" pill next to the verified badge on the swipe card (Top Picks cards included, since picks now load into the deck). Coverage in `GridAndSwipeRepositoryIntegrationTest` "deck cards expose visiting flag when target has active travel_locations row" (viewer in NYC, target physically in SF with active travel to NYC, deck returns target with `visiting=true`). The KNN index optimization on the ORDER BY is traded for an in-memory sort over the (already-filtered) candidate set; both ST_DWithin halves remain index-driven. Grid target-side override shipped 2026-05-17: `JdbcGridRepository.queryNearby` mirrors the Swipe deck — same LEFT JOIN to `target_travel`, same OR'd `ST_DWithin` (an OR across two tables can't use either GiST index on its own, so since 2026-11-09 a `nearby_ids` CTE first gathers candidates via a UNION of two index lookups; EXPLAIN on 106k users: seq scan → index scans, rural viewer ~300 → ~16 ms), `ST_Distance` and `distance_bucket_meters` use `COALESCE(target_travel.geom, ul.geom)`, `visiting` propagates through `base_candidates` → `paged_candidates` → final SELECT. `GridCardRecord.visiting` / `GridCardDto.visiting` → `GridProfileCardUi.visiting` → small "Visiting" pill on Grid card overlay (same wording + tone as Swipe). Coverage in `GridAndSwipeRepositoryIntegrationTest` "grid cards expose visiting flag and surface travel-mode targets in destination grids". Region verification gate (L349) mechanism shipped 2026-05-17: `TravelRegionPolicy` `fun interface` returns a `TravelRegionRequirement` (None | AgeVerified) per destination. `TravelLocationService.set` consults the policy after the entitlement check and, when AgeVerified is required, calls `GridViewerTrustRepository.isAgeVerified(viewer)` (reusing the same trust check as `SavedGridFilterService`); throws the existing `AGE_VERIFICATION_REQUIRED` code so the client routes to the existing verification UI. Production default is `EmptyTravelRegionPolicy` — no destination requires extra verification — so the gate ships as mechanism only; ops swaps the policy via DI when the regional safety review is in place, avoiding political/regional safety calls baked into source. Coverage in `TravelLocationServiceTest` (gated-region unverified → error, gated-region verified → success, unflagged region unverified → success). Social-tier basic preview (MONETIZATION_SPEC L186) shipped 2026-05-17: `TravelLocationService.requireTravelTier` now allows Social with a rate limit (`SOCIAL_PREVIEW_ACTIVATIONS_PER_WINDOW = 1` per `SOCIAL_PREVIEW_WINDOW = 30d`). New repo method `countActivationsSince(userId, since)` powers the check via the existing `idx_travel_locations_user_active_from` index; second activation inside the window returns `TRAVEL_PREVIEW_RATE_LIMITED` (mapped to 429 in StatusPages). `clear()` bypasses the rate limit so Social viewers can always exit travel mode. Select tier still has no cap. Coverage in `TravelLocationServiceTest` (Social activates once, Social second activation rate-limited, Social can clear without hitting limit, Select bypasses limit). "Visible while traveling" privacy toggle (PROFILE_SETTINGS_SPEC L221-245) shipped 2026-05-17: V52 adds `discovery_settings.visible_while_traveling BOOLEAN NOT NULL DEFAULT true`. Grid and Swipe deck SQL gain `AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)` — when a target has an active travel_locations row AND opted out, they're hidden from every discovery surface (Grid, Swipe, Top Picks via `queryDeck`) for the duration of the session. Default true preserves the documented passport behavior; opt-out is the privacy-strict alternative. Read/write API: `DiscoverySettingsDto.visibleWhileTraveling` exposed via `/v1/me` and `UpdateDiscoverySettingsRequestDto.visibleWhileTraveling` settable via the existing discovery-settings update path. Coverage in `GridAndSwipeRepositoryIntegrationTest` "visible_while_traveling=false hides travel-mode targets from every discovery surface". Client settings toggle for `visibleWhileTraveling` shipped 2026-05-17: `ProfileHubScreen` "Discovery visibility" section gains a "Visible while traveling" row beside the Grid/Swipe toggles; round-trips through `PrivacySettingsDraft.visibleWhileTraveling`, `DiscoverySettingsDto.toPrivacyDraft`, and `PrivacySettingsDraft.toRequest`. Action-precondition/target-eligibility checks (`JdbcSwipeActionEligibilitySql`) and the rewind candidate query (`JdbcSwipeRewindSql`, 2026-06-09) now mirror the deck's target-side travel override (same `target_travel` LEFT JOIN, OR'd `ST_DWithin`, COALESCE'd display distance, `visible_while_traveling` predicate), so dealt visiting cards stay actionable and rewindable; coverage in `GridAndSwipeRepositoryIntegrationTest` "travel-mode target dealt in destination deck remains actionable" and "travel-mode target liked in destination deck remains rewindable". Free-text destination picker shipped 2026-06-09 (founder UX decision: type a city or ZIP/postal code instead of a preset list — e.g. a Toronto user typing "Las Vegas" or "89101" before a weekend trip). `travel_places` (V70) is bulk-loaded at startup by `TravelPlaceDatasetLoader` from the packaged GeoNames-derived resource (`travel/travel_places.tsv.gz`: ~34k world cities with admin1 region names + ~41k US ZIPs + ~1.7k CA forward-sortation areas; regenerate via `scripts/generate-travel-places.sh`; CC BY 4.0 attribution tracked in `docs/THIRD_PARTY_DATA.md`), versioned so unchanged restarts skip the reload. `TravelPlaceSearchService` routes US-ZIP-shaped queries (3-5 digits) and CA-postal-shaped queries (FSA prefix of e.g. "M5V 2T6") to postal rows and everything else to case-insensitive city prefix search ordered by population, rate-limited per user (`travel_search`, 600/h), exposed as `GET /v1/location/travel/search?q=`. Client: `TravelModeSheet` replaces the 10-city preset chips with a debounced search field + server-resolved suggestion rows; picking one feeds the existing `POST /v1/location/travel` contract (`TravelLocationStateHolder.updateSearchQuery`/`runSearch`/`setActive(place)`; `TravelCityPresets` deleted). Coverage in `TravelPlaceSearchServiceTest` (query routing, min/max length, rate limit), `TravelPlaceRepositoryIntegrationTest` (versioned load skip, prefix + population ordering, real packaged dataset resolves Las Vegas/89101/M5V), and `TravelLocationStateHolderTest` (search→pick→set round-trip, sub-minimum skip, quiet failure). Psync travel context shipped 2026-11-11 (PSYNC_SPEC: the session records the initiator's travel destination, both partners see it, the deck is dealt only while it still matches, Select-only, delivered likes carry the travel row). Configurable region policy shipped 2026-11-11: `ConfiguredTravelRegionPolicy` reads `PYNAPLI_TRAVEL_REGION_POLICY` (`CC=blocked` or `CC=age_verified`, comma-separated; malformed values fail startup) and is applied to the destination's real country, resolved server-side from the coordinates via the nearest GeoNames city (`TravelPlaceRepository.nearestCountryCode`), never from the client's label. Blocked destinations return `TRAVEL_REGION_UNAVAILABLE` and are left out of destination search. GeoNames attribution is shown under Travel mode search results and in Settings > Legal (2026-11-11). **Deferred to follow-up slices:** an optional map-pin picker.
-- [x] Dealbreaker settings exist. Server-side validation against the `SwipeDealbreakerKey` allow-list (`age`, `distance`, `verified`, `discoveryStyles`, `intents`, `linkedOnly`) honors them as hard gates and skips them from B3 relaxation. Client `SwipeFiltersSheet` exposes a per-section `Lock` chip that toggles each key; clearing the underlying filter auto-drops the lock (no orphaned hard gates). Coverage in `SwipeServiceTest` (relaxation policy) and `SwipeFiltersSheetInteractionTest` (UX reversibility).
-- [x] Default deck / never-empty: a no-filter deck applies only non-negotiable exclusions and ranks everyone in radius (empty filter sets short-circuit to "match everyone" via the cardinality gate). `SwipeDeckRelaxation` re-generates a below-low-water deck with soft filters dropped (`relaxFilters`) and radius doubled (`relaxRadius`, capped at max), while dealbreakers (`SwipeDealbreakerKey`) and identity filters (gender/orientation) stay hard so relaxation never violates an explicit constraint. Mirrors the Grid widen-on-empty fallback. Coverage in `SwipeServiceTest` (relaxation policy) and `GridAndSwipeRepositoryIntegrationTest`.
-- [x] Compose card stack renders only 2-3 cards.
-- [x] Swipe gestures use physics/thresholds.
-- [x] Card image preloading exists for the active/near-next Swipe stack.
-- [x] Swipe API load proof exists for the current MVP backend shape. The harness validates deck/session authority, filtered and relaxed decks, page-two cursor path, Like/Pass, Rewind, presence, and optional Boost/Top Picks/Travel scenarios; 100-concurrent extended and 500-concurrent core runs passed on 2026-05-18.
-- [x] Connected Android Swipe visual/gesture/golden QA exists. `scripts/android-swipe-qa.ps1` builds/installs the debug app, logs in, opens the real Swipe screen, verifies structural golden screenshots/XML for initial deck, filters, travel mode, Top Picks deck (Top-Picks-as-filter mode with the gold daily-refresh caption), linked deck, linked partner preview, and Intro Note dialog, then proves left/right gestures advance the deck. Goldens regenerated 2026-06-09 for the slim-header layout (#93-96: title/subtitle block and TopPicksRow texts removed, Top Picks chip added). Latest emulator artifact with golden assertions enforced: `artifacts/android-swipe-qa/20260609-185148`.
-- [ ] Partial: offline action cap exists with stable action IDs and SQLDelight persistence on both mobile platforms. `SqlDelightSwipeActionQueueStore` in `composeApp` commonMain runs against `PynapliDatabase` on Android (via `AndroidPynapliDatabaseFactory`) and iOS (via `IosPynapliDatabaseFactory`). `composeApp:iosMain` exposes `IosSwipeFactory.createSwipeActionQueueStore(database)` / `createSwipeStateHolder(repository, database)` so the Swift shell wires the queue with one call once it exists. Android connected QA now proves a recoverable failed Like stays pending across force-stop/relaunch and clears on retry (`scripts/android-swipe-queue-qa.ps1`, latest artifact `artifacts/android-swipe-queue-qa/20260518-212037`). Process-death device QA on a real iPhone is still pending — Windows CI cross-compiles via Kotlin/Native but can't drive an iOS simulator.
-- [x] Block/report available from card.
-- [x] Linked partner preview does not turn into couple card.
+- [x] Top Picks exists (frozen).
+- [x] Boost affects ranking without violating filters.
+- [x] Travel mode for Swipe and Grid (`travel_locations`, `TravelLocationService`; Select unlimited,
+  Social one activation per 30 days); planned trips and "Visiting soon" (`travel_trips`).
+- [x] Dealbreakers (`SwipeDealbreakerKey`: `age`, `distance`, `verified`, `discoveryStyles`,
+  `intents`, `linkedOnly`) are hard gates and never relaxed; the filters sheet has a per-section lock.
+- [x] Never-empty deck: `SwipeDeckRelaxation` drops soft filters and doubles the radius (capped) when
+  a deck is below low water; dealbreakers and identity filters (gender/orientation) stay hard.
+- [x] Compose stack renders only 2–3 cards; physics-based gestures; image preloading.
+- [x] API load proof (`scripts/swipe-api-load-test.ps1`, 5,000 candidates, 100- and 500-concurrent).
+- [x] Connected Android visual/gesture QA (`scripts/android-swipe-qa.ps1`) and queue QA
+  (`scripts/android-swipe-queue-qa.ps1`).
+- [ ] Partial: offline action queue with a cap, stable action ids and SQLDelight persistence on
+  Android and iOS (`SqlDelightSwipeActionQueueStore`); iPhone process-death QA needs a Mac.
+- [x] Block/report from the card; linked-partner preview never becomes a couple card.
+- [ ] Optional map-pin destination picker for Travel.
 
 ## Do Not Implement
 

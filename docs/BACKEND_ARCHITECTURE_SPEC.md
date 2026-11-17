@@ -1,851 +1,194 @@
 # Pynapli Backend Architecture Spec
 
-Last updated: 2026-05-19
+How Ktor and Firebase divide the work, and the server rules each domain must keep. Module layout and
+dependency baseline: [PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md](PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md).
+Schema rules: [DATA_MODEL_SPEC.md](DATA_MODEL_SPEC.md). HTTP conventions:
+[API_CONTRACT_SPEC.md](API_CONTRACT_SPEC.md). Infra: [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md).
 
-## Purpose
+> **Ktor is the product authority. Firebase is supporting infrastructure where it gives leverage.**
 
-This document defines how Pynapli should use Ktor and Firebase together without letting Firebase become the whole backend.
+## Who owns what
 
-Core rule:
+**Ktor owns:** the public API; auth sessions and authorization; account risk scoring and trust policy;
+the profile model; Grid discovery; Swipe decks and ranking; partner linking; Activity generation;
+notification orchestration; age verification and moderation workflows; chat membership; private
+album grants and revocations; subscription entitlement and the linked-partner benefit; Boost and
+premium inventory; rate limiting and quarantine; admin APIs; WebSocket events.
 
-> Ktor is the product authority. Firebase is supporting infrastructure where it gives leverage.
+**Firebase supports:** FCM delivery, Crashlytics, Analytics, Remote Config, App Check, Hosting for the
+website, and optionally Firebase Auth as an identity provider.
 
-For concrete server module/folder layout and dependency baselines, use [PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md](PROJECT_STRUCTURE_AND_DEPENDENCIES_SPEC.md) alongside this document.
+**Firebase is never the source of truth for:** discovery ranking, location eligibility, subscription
+entitlements, partner link state, private album permissions, chat membership, moderation decisions or
+safety exclusions. Firebase security rules are never the only authorization layer.
 
-For production scale, security, performance, observability, and release gates, use [PRODUCTION_READINESS_AND_QUALITY_SPEC.md](PRODUCTION_READINESS_AND_QUALITY_SPEC.md) alongside this document.
+## Stack
 
-Pynapli needs a server-authoritative backend because it handles:
+Ktor (Netty) · PostgreSQL + PostGIS (authoritative; Flyway migrations; HikariCP; explicit SQL, with
+PostGIS never hidden behind a weak abstraction) · Redis (cache, presence, rate limits, realtime
+relay) · GCS for media with short-lived signed URLs, Cloud CDN for public thumbnails · FCM ·
+Google Play Developer API + RTDN for purchase validation (StoreKit 2 not built yet). Background
+workers run in the API process and take a Postgres advisory lock (`db/JobLock.kt`). Don't split
+services before the product needs it.
 
-- Location discovery
-- Swipe ranking
-- Partner linking
-- Chat permissions
-- Private album access
-- Subscriptions and linked-partner entitlements
-- Activity visibility
-- Trust and safety
-- Moderation
-- Rate limiting
-- Privacy controls
-
-These should not be left entirely to client-side Firebase rules.
-
-## Backend Responsibilities
-
-### Ktor Owns
-
-Ktor should own:
-
-- Public API
-- Authentication session exchange and authorization
-- Account risk scoring and trust policy
-- User/profile domain model
-- Grid discovery
-- Swipe recommendations
-- Partner linking
-- Activity event generation
-- Notification orchestration
-- Age verification state and moderation workflows
-- Chat membership rules
-- Private album grants/revocations
-- Subscription entitlement validation
-- Linked-partner subscription benefit
-- Boost and premium inventory
-- Trust/safety policy enforcement
-- Risk-based rate limiting and quarantine
-- Moderation workflows
-- Admin tooling APIs
-- WebSocket realtime events
-- Rate limits and anti-abuse
-
-### Firebase Supports
-
-Firebase can support:
-
-- Push notifications via Firebase Cloud Messaging
-- Crashlytics
-- Analytics
-- Remote Config
-- App Check
-- Optional Firebase Auth as identity provider
-- Optional Cloud Messaging topic delivery for coarse notifications
-
-Firebase should not be the source of truth for:
-
-- Discovery ranking
-- Location eligibility
-- Subscription entitlements
-- Partner link state
-- Private album permissions
-- Chat membership authority
-- Moderation decisions
-- Safety exclusions
-
-## Recommended Stack
-
-Core:
-
-- Ktor server
-- PostgreSQL
-- PostGIS
-- Redis
-- Object storage, such as S3 or GCS
-- CDN for images/thumbnails
-- Firebase Cloud Messaging
-- Firebase Crashlytics
-- Firebase Analytics
-- Firebase Remote Config
-- StoreKit / Google Play Billing server validation
-
-Optional:
-
-- Firebase Auth
-- Firebase App Check
-- Cloud Tasks / queue system
-- OpenSearch or Meilisearch for admin/profile search
-- Kafka/PubSub later if event volume justifies it
-
-## High-Level Architecture
-
-```text
-Mobile App (KMP + Compose)
-    |
-    | Ktor Client / WebSocket
-    v
-Ktor API
-    |
-    |-- PostgreSQL + PostGIS: authoritative relational/location data
-    |-- Redis: cache, presence, rate limits, queues
-    |-- Object Storage: media originals/private assets
-    |-- CDN: public thumbnails
-    |-- Firebase FCM: push notifications
-    |-- Firebase Analytics/Crashlytics/Remote Config
-    |-- StoreKit/Google Play: purchase validation
-```
-
-## Domain Boundaries
-
-### Profiles
-
-Ktor owns profile CRUD and visibility.
-
-Stored in PostgreSQL:
-
-- User account
-- Profile fields
-- Discovery settings
-- Intent settings
-- Lifestyle tags
-- Linked partner visibility
-- Verification state
-- Privacy settings
-- Moderation status
-
-Firebase should not directly expose profile writes to clients.
+## Domain rules
 
 ### Location
 
-Ktor owns location ingestion and grid eligibility.
-
-PostGIS stores:
-
-- Last known eligible location
-- Rounded/fuzzed location where needed
-- Geospatial indexes
-- City/neighborhood bucket
-- Travel/passport location
-
-Redis stores:
-
-- Hot presence/location buckets
-- Nearby candidate cache
-- Boost queues
-
-Rules:
-
-- Use while-in-use location on client.
-- Use last known location for quick render.
-- Send updates only after movement/time thresholds.
-- Round/fuzz distance based on privacy settings.
-- Never rely on client-calculated distance for authority.
+- Clients use while-in-use location only and send updates after movement/time thresholds. Background
+  GPS is never a default dependency.
+- The server computes distance; **never trust client-calculated distance or client location for
+  ranking without server validation.** Distance shown to others is rounded per privacy settings.
+- **Current location is never echoed back to clients.**
 
 ### Grid
 
-Ktor owns grid results.
-
-Grid endpoint:
-
-```http
-POST /v1/grid/query
-```
-
-Responsibilities:
-
-- Apply privacy exclusions
-- Apply blocks/hides
-- Apply location radius
-- Apply hard filters
-- Apply tier volume gates: Free page 60 / depth 60, Social page 90 / depth 600, Select page 120 / uncapped depth.
-- Apply ranking
-- Return lightweight card DTOs
-- Return stable cursor
-
-Do not fetch full profile data in grid query.
+- `POST /v1/grid/query` applies privacy exclusions, blocks and hides, radius, hard filters, tier
+  volume gates (page size and result depth come from `subscriptions/SubscriptionPolicy.kt`), ranking,
+  and returns lightweight card DTOs with a stable cursor. No full profile data in grid queries.
+- Cursor pagination only; never offset pagination for the live grid.
 
 ### Swipe
 
-Ktor owns deck generation and swipe actions.
+Deck generation, dealbreakers, ranking, like limits, match creation, Pineapple Like (Intro Notes are
+being merged into it as an optional note), Boost priority and Activity events are server-side. Swipe
+actions are server-authoritative; deck cards carry server-issued tokens.
 
-Endpoints:
+### Partner links
 
-```http
-POST /v1/swipe/deck/query
-POST /v1/swipe/actions
-POST /v1/swipe/rewind
-```
-
-Responsibilities:
-
-- Generate deck session
-- Apply dealbreakers
-- Rank candidates
-- Enforce like limits
-- Create matches
-- Validate Intro Notes
-- Apply Boost/Super Like priority
-- Queue Activity events
-
-Swipe actions are server-authoritative.
-
-### Partner Links
-
-Ktor owns partner link lifecycle.
-
-Endpoints:
-
-```http
-POST /v1/partner-links/request
-POST /v1/partner-links/{id}/accept
-POST /v1/partner-links/{id}/deny
-POST /v1/partner-links/{id}/unlink
-PATCH /v1/partner-links/{id}/visibility
-```
-
-Rules:
-
-- Both users consent to link.
-- Either user can unlink.
-- Link does not merge accounts.
-- Link does not grant media/chat access.
-- Link can grant subscription entitlement if active and eligible.
-- Link visibility is user-controlled.
+Both users consent to a link; either can unlink. A link never merges accounts and **never grants
+media or chat access**. It can grant the subscription benefit if active and eligible. Link visibility
+is user-controlled.
 
 ### Messages
 
-Ktor owns chat membership and permissions.
-
-Realtime can use Ktor WebSockets.
-
-Database stores:
-
-- Chat threads
-- Participants
-- Messages
-- Message media references
-- Read receipts
-- Typing indicators, optionally ephemeral in Redis
-- Partner invite state
-
-Rules:
-
-- Grid-originated chat can start without match if recipient settings allow.
-- Swipe-originated chat requires match except Intro Note flow.
-- Partner invite requires explicit acceptance.
-- Private album grants are separate from chat membership.
+- Ktor owns membership and permissions.
+- Grid-originated chat can start without a match if the recipient's settings allow; Swipe-originated
+  chat requires a match (Pineapple Like note is the exception).
+- A partner joins a chat only with explicit acceptance from everyone involved.
+- Album grants are separate from chat membership.
 
 ### Activity
 
-Ktor owns Activity event generation and visibility.
-
-Endpoint:
-
-```http
-GET  /v1/activity
-POST /v1/activity/{eventId}/dismiss
-```
-
-Ktor applies:
-
-- Tier gating
-- Signed viewer/tab-scoped cursor pagination
-- Privacy settings
-- Incognito effects
-- Block exclusions
-- Linked partner separation
-- Retention windows
-
-Firebase can deliver push notifications for Activity, but Ktor decides what event exists and what copy/detail is allowed.
+Ktor decides which events exist and what detail is allowed: tier gating, signed viewer/tab-scoped
+cursors, privacy and incognito settings, block exclusions, linked-partner separation, retention.
 
 ### Notifications
 
-Ktor owns notification eligibility, copy/detail level, deep links, quiet-hour handling, and rate limits. Firebase Cloud Messaging only delivers notifications after Ktor decides they are allowed.
+Ktor owns eligibility, copy and detail level, deep links, quiet hours and rate limits; FCM only
+delivers after Ktor allows it. Detail levels: Private (generic only), Standard (names for messages
+and matches), Detailed (names and activity types). **No explicit lifestyle terms in push by default.**
 
-Push notifications must avoid explicit lifestyle terms by default.
+### Trust, safety, moderation, age verification
 
-### Moderation And Age Verification
+Ktor owns risk scoring, risk-tier limits, holding suspicious messages for review, throttling flirts,
+album requests, profile views and swipes, suppressing high-risk accounts from discovery, requiring
+verification for risky accounts, preserving severe-abuse evidence, report and appeal intake, and age
+verification state. Public profile content stays hidden until moderation allows it; private content
+remains reportable and subject to legally required scanning.
 
-Ktor owns age-gate state, market-driven verification requirements, moderation queues, report intake, appeal intake, and enforcement decisions.
+### Private albums
 
-Public profile content should not become visible until moderation allows it. Private content remains reportable and subject to legally required safety scanning.
-
-### Trust And Safety
-
-Ktor owns account risk scoring and enforcement.
-
-Core responsibilities:
-
-- Compute account risk score from behavior signals.
-- Apply risk-tier limits.
-- Hold suspicious messages for review.
-- Throttle spammy flirts, album requests, profile views, and swipe actions.
-- Suppress high-risk accounts from discovery.
-- Require verification for risky accounts.
-- Preserve severe abuse evidence.
-- Support moderation review and appeals.
-
-Firebase should not decide whether a user is trusted, banned, quarantined, or visible in discovery.
-
-### Private Albums
-
-Ktor owns album metadata and access grants.
-
-Object storage owns media bytes.
-
-Database stores:
-
-- Album
-- Media item metadata
-- Grant recipient
-- Grant scope
-- Expiration
-- Revocation
-- Audit trail
-
-Rules:
-
-- Public photos are moderation-first.
-- Private album access is explicit.
-- Linked partner access is not automatic.
-- Grants can be revoked anytime.
-- Timed grants expire server-side.
-- Signed URLs should be short-lived.
+Album metadata and grants live in Postgres, bytes in object storage (private by default). Access is
+explicit; a linked partner gets none automatically; grants are revocable any time; timed grants
+expire server-side; signed URLs are short-lived. Private media is never a public CDN asset.
 
 ### Subscriptions
 
-Ktor owns entitlements.
-
-StoreKit/Google Play validate purchases. Ktor stores normalized entitlements.
-
-Database stores:
-
-- Purchase records
-- Subscription state
-- Entitlement tier
-- Expiration
-- Renewal status
-- Linked partner beneficiary
-- Fraud/abuse flags
-
-Rules:
-
-- Never trust client-reported premium state.
-- Validate receipts/server notifications.
-- Linked partner benefit is computed server-side.
-- One active beneficiary link at a time.
-- Cooldowns prevent subscription-link abuse.
-
-## Firebase Usage Details
-
-### Firebase Cloud Messaging
-
-Use FCM for:
-
-- New message notification
-- New match notification
-- Partner chat invite
-- Album request
-- Generic Activity notification
-- Safety/moderation notices
-
-Ktor should produce notification jobs and decide:
-
-- Recipient
-- Notification type
-- Privacy level
-- Copy
-- Deep link
-- Whether notification is allowed
-
-Notification detail levels:
-
-- Private: generic only
-- Standard: names for messages/matches
-- Detailed: names and activity types
-
-Do not send explicit lifestyle terms by default.
-
-### Firebase Analytics
-
-Use Firebase Analytics for product metrics, but avoid sending sensitive lifestyle labels where possible.
-
-Track:
-
-- Screen views
-- Funnel steps
-- Subscription conversion
-- Feature usage counts
-- Crash-free engagement
-- Onboarding completion
-
-Avoid sending:
-
-- Explicit lifestyle preferences
-- Private album actions with sensitive labels
-- Detailed sexual/lifestyle terms
-- Exact location
-- Message contents
-
-Use coarse, privacy-safe event names.
-
-### Firebase Crashlytics
-
-Use for client crash diagnostics.
-
-Do not log:
-
-- Message contents
-- Private album URLs
-- Exact location
-- Full profile data
-- Sensitive tags
-
-### Firebase Remote Config
-
-Use for:
-
-- Feature flags
-- Rollout percentages
-- Paywall copy variants
-- Filter defaults
-- Onboarding experiments
-- Notification detail defaults
-
-Do not use Remote Config to bypass server authority.
-
-Example safe flags:
-
-```text
-grid_default_radius_km
-activity_free_visible_count
-swipe_daily_free_likes
-enable_intro_notes
-enable_partner_chat_invites
-```
-
-Server must still validate all limits.
-
-### Firebase Auth
-
-Firebase Auth is optional.
-
-If used:
-
-- Client signs in with Firebase.
-- Client sends Firebase ID token to Ktor.
-- Ktor verifies token.
-- Ktor creates/updates internal user account.
-- Ktor issues or manages its own session/JWT if desired.
-
-Ktor still owns authorization.
-
-Do not use Firebase Auth UID as the only domain model boundary. Maintain internal user IDs.
-
-### Firebase App Check
-
-Consider App Check to reduce API abuse from non-genuine clients.
-
-Ktor can verify App Check tokens on sensitive endpoints.
-
-Do not treat App Check as complete bot protection.
-
-Implementation note (2026-06-16):
-
-- Server boundary exists in `AppCheckPlugin`: when `PYNAPLI_APP_CHECK_ENFORCED=true`,
-  state-changing HTTP requests require `X-Firebase-AppCheck`.
-- With `PYNAPLI_APP_CHECK_PROJECT_NUMBER` set, tokens are cryptographically verified against
-  Firebase App Check JWKS for the configured project number.
-- Android client wiring exists: debug builds use Firebase App Check debug provider, release builds
-  use Play Integrity, and the shared Ktor client attaches a non-blank App Check token as
-  `X-Firebase-AppCheck` when Firebase can provide one.
-- Remaining ops: register Android App Check in Firebase, allowlist debug tokens for emulator/dev
-  builds, set the production project number on Ktor, then enable enforcement after staged QA.
-
-## Database Model Sketch
-
-Core tables:
-
-```text
-users
-profiles
-profile_photos
-profile_settings
-locations
-partner_links
-blocks
-hides
-swipe_actions
-matches
-chat_threads
-chat_participants
-messages
-activity_events
-albums
-album_media
-album_grants
-subscriptions
-entitlements
-boosts
-moderation_cases
-reports
-account_risk_states
-risk_events
-moderation_appeals
-notification_events
-age_verifications
-playing_tonight_sessions
-psync_sessions
-```
-
-PostGIS:
-
-```text
-locations.geom geography(Point, 4326)
-```
-
-Indexes:
-
-- `locations.geom` GiST
-- `activity_events.recipient_user_id, created_at`
-- `messages.thread_id, created_at`
-- `swipe_actions.actor_user_id, target_user_id`
-- `partner_links.user_a_id, user_b_id`
-- `album_grants.owner_user_id, recipient_user_id`
-- `blocks.blocker_user_id, blocked_user_id`
-- `account_risk_states.user_id`
-- `risk_events.user_id, created_at`
-
-## Redis Model Sketch
-
-Keys:
-
-```text
-presence:user:{userId}
-presence:cell:{cellId}
-grid:candidates:{filterHash}:{cellId}
-rate:first_message:{userId}
-rate:album_request:{userId}
-rate:flirt:{userId}
-rate:first_message:{userId}
-rate:profile_view:{userId}
-risk:short_window:{userId}
-boost:active:{regionId}
-ws:sessions:{userId}
-entitlement:cache:{userId}
-```
-
-Use TTLs aggressively for ephemeral state.
-
-Redis is cache/ephemeral state, not authoritative records. Candidate ID caching remains evidence-gated; the current implementation uses Redis for presence and rate limits while PostGIS remains authoritative for Grid eligibility.
-
-## API Shape
-
-Recommended API groups:
-
-```text
-/v1/auth
-/v1/me
-/v1/profiles
-/v1/grid
-/v1/swipe
-/v1/activity
-/v1/messages
-/v1/partner-links
-/v1/albums
-/v1/subscriptions
-/v1/boosts
-/v1/reports
-/v1/settings
-```
-
-Use `kotlinx.serialization` for DTOs.
-
-Use consistent:
-
-- Request IDs
-- Idempotency keys for purchase/action endpoints
-- Cursor pagination
-- Error codes
-- Rate-limit headers where useful
-
-## WebSocket Architecture
-
-Ktor WebSocket channel:
-
-```http
-GET /v1/presence/stream
-GET /v1/activity/stream
-GET /v1/messages/stream
-```
-
-Realtime events:
-
-- Message created/deleted
-- Conversation updated
-- Typing status
-- Read receipt
-- Presence delta
-- Activity delta
-- Partner invite
-- Album grant update
-- Match created
-
-Rules:
-
-- WebSocket is convenience/realtime, not sole authority.
-- Client should refetch canonical state after reconnect.
-- Use heartbeat/ping.
-- Store session mapping in Redis.
-- Do not stream full grid reorders.
-
-## Queues And Workers
-
-Use background workers for:
-
-- Image moderation
-- Thumbnail generation
-- Push notifications
-- Subscription webhook processing
-- Activity aggregation
-- Expiring album grants
-- Expiring Picks
-- Boost result summaries
-- Abuse detection
-
-At small scale:
-
-- Ktor worker module + Redis queue can work.
-
-At larger scale:
-
-- Cloud Tasks, Pub/Sub, Kafka, or managed queue.
+Store purchases are validated server-side (receipts and server notifications) and normalized into
+entitlements. **Never trust client-reported premium state.** The linked-partner benefit is computed
+server-side, one beneficiary at a time, with cooldowns against link abuse.
+
+## Firebase usage rules
+
+- **Analytics:** coarse, privacy-safe event names only. Never send lifestyle preferences, sensitive
+  tags, private album actions with sensitive labels, exact location, or message contents.
+- **Crashlytics:** never log message contents, private album URLs, exact location, full profile data,
+  or sensitive tags.
+- **Remote Config:** feature flags, rollout percentages, copy variants, defaults. It never bypasses
+  server authority; the server validates every limit it might influence.
+- **Firebase Auth (optional):** Ktor verifies the ID token, maps it to an internal user id, and issues
+  its own opaque session. Firebase UID is never the domain boundary.
+- **App Check:** `AppCheckPlugin` requires `X-Firebase-AppCheck` on state-changing requests when
+  `PYNAPLI_APP_CHECK_ENFORCED=true`, verified against the App Check JWKS for
+  `PYNAPLI_APP_CHECK_PROJECT_NUMBER`. It is not complete bot protection. Rollout steps:
+  [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md#app-check-enablement).
+- Review Firebase data-residency implications before launch; keep sensitive authoritative data out
+  of Firebase.
+
+## Realtime
+
+WebSocket streams: `/v1/presence/stream`, `/v1/activity/stream`, `/v1/messages/stream`,
+`/v1/psync/stream`. Events: message created/deleted, conversation updated, typing, read receipt,
+presence delta, Activity delta, partner invite, album grant update, match created, Psync session
+changes.
+
+- **WebSockets are convenience, never the sole authority.** Clients refetch canonical HTTP state on
+  reconnect.
+- Auth is a header, or a single `StreamAuthFrameDto` first frame within 5s for browsers. Never a URL
+  query token (it would land in access logs).
+- Deltas relay across replicas over Redis with per-socket backpressure; session revocation closes
+  open sockets on every replica.
+- Don't stream full grid reorders.
 
 ## Security
 
-Requirements:
-
-- Server-side authorization on every endpoint.
-- Object storage private by default.
-- Signed URLs for private media.
-- Short-lived signed URLs.
-- Rate limits on messaging, album requests, flirts, login, reports.
-- App Check or equivalent client attestation where useful.
-- Audit logs for moderation/admin actions.
-- Strong block enforcement.
-- No client-trusted premium state.
-- No client-trusted location distance.
+- Server-side authorization on every endpoint, including object ownership.
+- Rate limits on login, messaging, album requests, flirts, reports and swipes; a request body cap.
+- Audit logs for admin and moderation actions.
+- Blocks enforced across Grid, Swipe, Activity and Messages, and on every new discovery surface.
+- No client-trusted premium state or distance.
+- Idempotency keys for purchase and action endpoints; never retry a non-idempotent mutation without one.
 
 ## Privacy
 
-Sensitive data:
+Sensitive data: location, sexual/lifestyle preferences, linked-partner state, private albums,
+messages, Activity views, verification data. Minimize analytics payloads; no exact location,
+message bodies, private media URLs or sensitive tags in logs or crash reports (guarded by
+`SensitiveLoggingGuardTest`); privacy-safe notification copy; support account deletion and data
+export.
 
-- Location
-- Sexual/lifestyle preferences
-- Linked partner state
-- Private albums
-- Messages
-- Activity views
-- Verification data
+## Server implementation rules
 
-Rules:
-
-- Minimize analytics payloads.
-- Avoid exact location in logs.
-- Avoid sensitive tags in crash reports.
-- Keep notification copy privacy-safe.
-- Support account deletion.
-- Support data export where required.
-- Review Firebase data residency implications before launch.
-
-Firebase privacy note:
-
-- Firebase can process/store data in Google-managed locations depending on service. Avoid placing sensitive authoritative lifestyle data in Firebase unless reviewed.
-
-## Performance Targets
-
-Grid:
-
-- Minimal card DTOs.
-- First grid render fast from cached/last known state.
-- PostGIS + Redis for candidate generation.
-- CDN thumbnails.
-
-Swipe:
-
-- Deck sessions of 10-20 cards.
-- Render 2-3 cards client-side.
-- Optimistic action queue.
-
-Messages:
-
-- WebSocket realtime.
-- Paginated history.
-- Media lazy-loaded.
-
-Activity:
-
-- Event query indexed by recipient + createdAt.
-- Aggregated counts cached.
-
-## Deployment Shape
-
-Early stage:
-
-- One Ktor API service
-- One Ktor worker service
-- PostgreSQL + PostGIS
-- Redis
-- Object storage
-- Firebase integrations
-
-Later:
-
-- Split discovery/ranking service
-- Split chat service
-- Split moderation worker
-- Split billing worker
-- Add event bus
-- Add search/admin service
-
-Do not over-split before product fit.
-
-## Kotlin Implementation Notes
-
-Recommended libraries/patterns:
-
-- Ktor server with Netty/CIO
-- Ktor client in KMP app
-- `kotlinx.serialization`
-- Coroutines
-- `StateFlow`/`SharedFlow` on client
-- Exposed, jOOQ, or SQLDelight-style explicit SQL for DB
-- Flyway/Liquibase migrations
-- HikariCP for JDBC pooling
-- OpenTelemetry for tracing
-- Structured logging
-
-Current local Ktor database pool configuration is environment-driven:
-
-```text
-PYNAPLI_DATABASE_MAX_POOL_SIZE
-PYNAPLI_DATABASE_MIN_IDLE
-PYNAPLI_DATABASE_CONNECTION_TIMEOUT_MS
-PYNAPLI_DATABASE_CLOUD_SQL_INSTANCE
-PYNAPLI_DATABASE_CLOUD_SQL_UNIX_SOCKET_PATH
-PYNAPLI_DATABASE_CLOUD_SQL_REFRESH_STRATEGY
-PYNAPLI_API_PROFILING_ENABLED
-PYNAPLI_API_PROFILING_HEADER_REQUIRED
-PYNAPLI_API_PROFILING_SLOW_SPAN_MS
-```
-
-Defaults are intentionally conservative for local development: max pool 10, min idle 1, connection timeout 5000ms, API profiling off. Load-test runs can increase the pool and enable profiling, but pool tuning is not a substitute for query and endpoint optimization.
-
-Cloud SQL connector settings are staging/production-only. Local development should continue using
-the direct Docker Compose PostgreSQL URL.
-
-Startup validation runs before the server opens database/Redis connections. Local/test/dev keep
-developer defaults; `staging`, `prod`, and `production` fail fast if they still use local DB/Redis,
-local media storage, default cursor/deck secrets, missing cryptographic App Check settings, missing
-admin runtime token, missing Firebase project id for FCM, missing GCS media signing credentials, or
-dev-only store/media toggles.
-
-When API profiling is enabled and the request includes `X-Pynapli-Profile: true`, Grid/profile/presence responses include timing headers for route, service, DB, Redis, and Hikari pool snapshots. Keep this local/staging-only until a production observability system replaces it.
-
-Client-side structured concurrency does not mean server handlers should fan out unbounded JDBC work. On the Ktor side:
-
-- Prefer one well-shaped SQL query or a bounded small set of queries over many parallel database calls.
-- Parallelize only independent non-authoritative side work when the Hikari pool, Redis latency, and endpoint budgets have been profiled.
-- Keep mutations that affect safety, billing, inventory, match state, moderation, blocks, or partner consent transactional and ordered.
-- Treat Hikari wait time and p95 route timing as the evidence for whether concurrency helped or just moved the bottleneck.
-
-For geospatial queries, prefer explicit SQL over hiding PostGIS behind a weak abstraction.
+- Prefer one well-shaped SQL query, or a small bounded set, over many parallel JDBC calls. Parallelize
+  only independent, non-authoritative side work, and only with profiling evidence (Hikari wait time,
+  p95 route timing).
+- **Keep mutations that affect safety, billing, inventory, match state, moderation, blocks or partner
+  consent transactional and ordered.**
+- Pool settings are environment-driven (`PYNAPLI_DATABASE_MAX_POOL_SIZE`, `PYNAPLI_DATABASE_MIN_IDLE`,
+  `PYNAPLI_DATABASE_CONNECTION_TIMEOUT_MS`; local defaults 10 / 1 / 5000ms). Pool tuning is not a
+  substitute for query optimization.
+- Request profiling (`PYNAPLI_API_PROFILING_ENABLED`, `_HEADER_REQUIRED`, `_SLOW_SPAN_MS`) adds timing
+  headers when a request sends `X-Pynapli-Profile: true`. Local/staging only.
+- **Startup validation** runs before any connection opens. `staging`, `prod` and `production` fail
+  fast on local DB/Redis, local media storage, default cursor/deck secrets, missing cryptographic App
+  Check settings, missing admin token, missing Firebase project id, missing GCS signing credentials,
+  or dev-only store/media toggles. Cloud SQL connector settings are staging/prod only.
 
 ## Observability
 
-Track server metrics:
+JSON logs with request ids, token-gated Prometheus `/metrics`, `/health` and `/health/deep`. Server
+metrics to watch: Grid and deck latency, message send latency, WebSocket connections, FCM
+success/failure and outbox lag, purchase validation latency, moderation queue size, rate-limit hits,
+error rates by endpoint. Product metrics: [ANALYTICS_AND_METRICS_SPEC.md](ANALYTICS_AND_METRICS_SPEC.md).
 
-- Grid query latency
-- Swipe deck latency
-- Message send latency
-- WebSocket connection count
-- FCM success/failure
-- Purchase validation latency
-- Moderation queue size
-- Rate-limit hits
-- Error rates by endpoint
+## Open items
 
-Track product metrics:
+- [ ] Production bucket/CDN and live GCS/Cloud Vision validation (needs founder credentials).
+- [ ] StoreKit 2 server validation; real Play credentials.
+- [ ] Privacy-safe client Analytics events; Crashlytics redaction validation.
+- [ ] Production App Check rollout and real-device validation.
+- [ ] Two-replica load run on real infrastructure.
 
-- Grid opens
-- Profile views
-- Grid messages sent
-- Swipe likes/passes
-- Match rate
-- Activity opens
-- Album requests/grants
-- Partner links created/unlinked
-- Subscription conversion
-- Boost purchases/results
+## Do not
 
-Keep sensitive payloads out of logs.
-
-## Implementation Checklist
-
-- [ ] Partial: Ktor is authoritative for implemented product rules; grid/swipe cursor/session hardening and production safety gaps remain.
-- [ ] Partial: Firebase role is limited to support infrastructure. FCM is server-routed through Ktor, Crashlytics is Android-wired, and App Check has server verification plus Android token attachment. Remaining Firebase work: production App Check console rollout/real-device validation, privacy-safe Analytics event wiring, and Crashlytics redaction validation.
-- [x] PostgreSQL/PostGIS selected for location.
-- [x] Redis selected for presence/cache/rate limits.
-- [ ] Partial: object-storage-style upload contracts, GCS V4 signed upload/download URLs, and CDN signed delivery exist; production bucket/CDN provisioning validation remains.
-- [x] FCM notification pipeline goes through Ktor.
-- [ ] Analytics avoids sensitive lifestyle payloads.
-- [ ] Partial: Google Play subscription validation is server-side; StoreKit and real production credential validation remain.
-- [x] Linked partner entitlement is server-side.
-- [ ] Partial: private album upload/download access is signed and server-gated; live GCS/CDN validation, bucket lifecycle/IAM, and production credentials remain.
-- [ ] Partial: Grid presence, Activity, and Messages have reconnecting WebSocket clients that keep HTTP state authoritative; remaining realtime surfaces still need implementation.
-- [x] Rate limits exist for messaging/flirts/album requests.
-- [x] Blocks are enforced across grid/swipe/activity/messages.
-- [x] User appeal submission/status and admin appeal decisions are server-owned.
-- [ ] Location is not trusted from client for ranking without server validation.
-- [ ] Sensitive logs are redacted.
-
-## Do Not Implement
-
-- Do not make Firestore the primary database for discovery.
-- Do not put exact location streams into Firebase Analytics.
-- Do not trust client-side premium flags.
-- Do not store private album media as public CDN assets.
-- Do not let Firebase security rules be the only authorization layer.
-- Do not let Remote Config change server-enforced limits without validation.
-- Do not expose sensitive lifestyle terms in push notifications by default.
-- Do not use offset pagination for live grid.
-- Do not make background GPS a default dependency.
-- Do not over-split services before the MVP needs it.
+- Make Firestore the primary database for discovery.
+- Put exact location into Firebase Analytics.
+- Trust client-side premium flags.
+- Store private album media as public CDN assets.
+- Let Firebase security rules be the only authorization layer.
+- Let Remote Config change server-enforced limits without validation.
+- Expose sensitive lifestyle terms in push notifications by default.
+- Use offset pagination for the live grid.
+- Make background GPS a default dependency.
+- Over-split services before the product needs it.
