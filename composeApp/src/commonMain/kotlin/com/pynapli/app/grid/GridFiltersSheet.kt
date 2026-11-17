@@ -20,7 +20,7 @@ import com.pynapli.app.design.handCursor
 internal fun GridFiltersSheet(
     initial: GridFilters,
     savedState: SavedGridFiltersUiState = SavedGridFiltersUiState(),
-    tonightState: TonightAvailabilityUiState = TonightAvailabilityUiState(),
+    tonightSessionActive: Boolean = false,
     lifestyleFiltersAllowed: Boolean = true,
     onDismiss: () -> Unit,
     onApply: (GridFilters) -> Unit,
@@ -28,8 +28,7 @@ internal fun GridFiltersSheet(
     onSavePreset: (name: String, GridFilters) -> Unit = { _, _ -> },
     onApplySavedPreset: (com.pynapli.shared.network.dto.SavedGridFilterDto) -> Unit = {},
     onDeleteSavedPreset: (id: String) -> Unit = {},
-    onSetTonightAvailable: () -> Unit = {},
-    onClearTonightAvailable: () -> Unit = {},
+    onOpenTonight: () -> Unit = {},
 ) {
     val initialDraft =
         remember(initial, lifestyleFiltersAllowed) {
@@ -87,10 +86,9 @@ internal fun GridFiltersSheet(
                 onRecentlyJoinedToggle = { draft = draft.copy(recentlyJoined = !draft.recentlyJoined) },
                 onTravelingHereToggle = { draft = draft.copy(travelingHere = !draft.travelingHere) },
             )
-            TonightAvailabilityRow(
-                state = tonightState,
-                onSet = onSetTonightAvailable,
-                onClear = onClearTonightAvailable,
+            TonightSessionEntryRow(
+                sessionActive = tonightSessionActive,
+                onOpenTonight = onOpenTonight,
             )
 
             SectionTitle("Who")

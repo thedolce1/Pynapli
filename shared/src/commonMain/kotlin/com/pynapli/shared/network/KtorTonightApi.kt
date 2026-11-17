@@ -3,8 +3,6 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
-import com.pynapli.shared.network.dto.SetTonightAvailableRequestDto
-import com.pynapli.shared.network.dto.TonightAvailabilityDto
 import com.pynapli.shared.network.dto.TonightFeedResponseDto
 import com.pynapli.shared.network.dto.TonightSessionDto
 import io.ktor.client.request.get
@@ -15,12 +13,6 @@ import io.ktor.http.HttpMethod
 internal class KtorTonightApi(
     private val support: KtorApiSupport,
 ) : TonightApi {
-    override suspend fun getTonightAvailability(): AppResult<TonightAvailabilityDto> = support.authGet("/v1/me/availability/tonight")
-
-    override suspend fun setTonightAvailability(request: SetTonightAvailableRequestDto): AppResult<TonightAvailabilityDto> = support.authSend(HttpMethod.Post, "/v1/me/availability/tonight", request)
-
-    override suspend fun clearTonightAvailability(): AppResult<TonightAvailabilityDto> = support.authDelete("/v1/me/availability/tonight")
-
     override suspend fun getTonightFeed(
         radiusMeters: Int,
         intent: String?,

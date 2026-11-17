@@ -13,7 +13,6 @@ import com.pynapli.server.messaging.MessagingException
 import com.pynapli.server.moderation.ModerationException
 import com.pynapli.server.notifications.NotificationException
 import com.pynapli.server.profile.ProfileException
-import com.pynapli.server.profile.TonightAvailabilityException
 import com.pynapli.server.profilelink.ProfileLinkException
 import com.pynapli.server.psync.PsyncException
 import com.pynapli.server.safety.AppCheckException
@@ -152,18 +151,6 @@ fun Application.configureStatusPages() {
         exception<TravelLocationException> { call, cause ->
             call.respond(
                 status = travelLocationStatusFor(cause.code),
-                message =
-                    ApiErrorDto(
-                        code = cause.code,
-                        message = userSafeMessage(cause.code),
-                        requestId = call.requestIdOrUnknown(),
-                    ),
-            )
-        }
-
-        exception<TonightAvailabilityException> { call, cause ->
-            call.respond(
-                status = tonightAvailabilityStatusFor(cause.code),
                 message =
                     ApiErrorDto(
                         code = cause.code,

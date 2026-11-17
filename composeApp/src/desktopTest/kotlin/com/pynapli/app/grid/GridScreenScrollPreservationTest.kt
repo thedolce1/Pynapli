@@ -109,6 +109,32 @@ class GridScreenScrollPreservationTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun filtersSheetTonightEntryOpensPlayingTonightAndClosesSheet() =
+        runComposeUiTest {
+            val gridStateHolder = GridStateHolder(StaticGridFeedRepository(emptyList()))
+            var tonightOpened = 0
+
+            setContent {
+                GridScreen(
+                    stateHolder = gridStateHolder,
+                    profileDetailStateHolder = ProfileDetailStateHolder(SamplePublicProfileRepository()),
+                    conversationStateHolder = ConversationStateHolder(SampleConversationRepository()),
+                    onOpenTonight = { tonightOpened += 1 },
+                )
+            }
+            waitForIdle()
+
+            onNodeWithTag(GridFilterTags.HEADER_OPEN_SHEET).performClick()
+            waitForIdle()
+            onNodeWithTag(GridFilterTags.OPEN_TONIGHT).performScrollTo().performClick()
+            waitForIdle()
+
+            assertEquals(1, tonightOpened, "The sheet's Tonight entry must open the Playing Tonight flow")
+            onNodeWithTag(GridFilterTags.SHEET).assertDoesNotExist()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun filterChangeWithSameFeedKeepsScrollPosition() =
         runComposeUiTest {
             val cards =

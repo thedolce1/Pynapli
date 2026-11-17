@@ -167,20 +167,21 @@ class GridFilterDiscoveryTest :
             }
         }
 
-        "grid query with tonightAvailableOnly excludes profiles whose availability is null or expired" {
+        "grid Tonight badge and filter come only from sessions, never the legacy availability column" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000f01")
-                val activeTonight = UUID.fromString("00000000-0000-0000-0000-000000000f02")
-                val expiredTonight = UUID.fromString("00000000-0000-0000-0000-000000000f03")
+                val session = UUID.fromString("00000000-0000-0000-0000-000000000f02")
+                val legacyOnly = UUID.fromString("00000000-0000-0000-0000-000000000f03")
                 val noTonight = UUID.fromString("00000000-0000-0000-0000-000000000f04")
                 dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
-                dataSource.insertDiscoverableUser(activeTonight, "Tonight", age = 30, longitude = -122.0836, latitude = 37.4226)
-                dataSource.insertDiscoverableUser(expiredTonight, "Was", age = 31, longitude = -122.0838, latitude = 37.4228)
+                dataSource.insertDiscoverableUser(session, "Tonight", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(legacyOnly, "Legacy", age = 31, longitude = -122.0838, latitude = 37.4228)
                 dataSource.insertDiscoverableUser(noTonight, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
-                dataSource.setTonightAvailableUntil(activeTonight, hoursFromNow = 6)
-                dataSource.setTonightAvailableUntil(expiredTonight, hoursFromNow = -1)
+                dataSource.insertActiveTonightSession(session)
+                // The retired "Available tonight" toggle wrote this column; it must no longer count.
+                dataSource.setTonightAvailableUntil(legacyOnly, hoursFromNow = 6)
 
-                val repository = JdbcGridRepository(dataSource)
+                val repository = JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
                 val tonightOnly =
                     repository
                         .queryNearby(
@@ -190,9 +191,13 @@ class GridFilterDiscoveryTest :
                             filters = DiscoveryFilters(tonightAvailableOnly = true),
                         ).cards
                 val unfiltered = repository.queryNearby(viewer, radiusMeters = 100_000, limit = 10).cards
+                val byId = unfiltered.associateBy { it.userId }
 
-                assertEquals(listOf(activeTonight), tonightOnly.map { it.userId })
-                assertEquals(setOf(activeTonight, expiredTonight, noTonight), unfiltered.map { it.userId }.toSet())
+                assertEquals(listOf(session), tonightOnly.map { it.userId })
+                assertEquals(setOf(session, legacyOnly, noTonight), byId.keys)
+                assertEquals(true, byId[session]?.tonightActive, "Active session must show the Tonight badge")
+                assertEquals(false, byId[legacyOnly]?.tonightActive, "Legacy column alone must not show the Tonight badge")
+                assertEquals(false, byId[noTonight]?.tonightActive)
             }
         }
 

@@ -125,4 +125,5 @@ internal object GridFilterTags {
     const val SHEET: String = "grid-filters-sheet"
     const val APPLY: String = "grid-filters-apply"
     const val CLEAR_ALL: String = "grid-filters-clear-all"
+    const val OPEN_TONIGHT: String = "grid-filters-open-tonight"
 }

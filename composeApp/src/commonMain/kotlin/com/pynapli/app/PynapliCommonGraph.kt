@@ -9,13 +9,11 @@ import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.ApiGridFeedRepository
 import com.pynapli.app.grid.ApiSavedGridFilterRepository
-import com.pynapli.app.grid.ApiTonightAvailabilityRepository
 import com.pynapli.app.grid.GridPresenceStreamCoordinator
 import com.pynapli.app.grid.GridSnapshotStore
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.NoOpGridSnapshotStore
 import com.pynapli.app.grid.SavedGridFilterStateHolder
-import com.pynapli.app.grid.TonightAvailabilityStateHolder
 import com.pynapli.app.location.ApiLocationUpdateRepository
 import com.pynapli.app.location.ApiTravelLocationRepository
 import com.pynapli.app.location.LocationStateHolder
@@ -112,8 +110,6 @@ class PynapliCommonGraph(
     val savedSwipeFilterStateHolder = SavedSwipeFilterStateHolder(ApiSavedSwipeFilterRepository(apiClient))
 
     val travelLocationStateHolder = TravelLocationStateHolder(ApiTravelLocationRepository(apiClient))
-
-    val tonightAvailabilityStateHolder = TonightAvailabilityStateHolder(ApiTonightAvailabilityRepository(apiClient))
 
     val playingTonightStateHolder = PlayingTonightStateHolder(ApiTonightRepository(apiClient))
 
@@ -230,7 +226,6 @@ class PynapliCommonGraph(
             savedGridFilterStateHolder = savedGridFilterStateHolder,
             savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
             travelLocationStateHolder = travelLocationStateHolder,
-            tonightAvailabilityStateHolder = tonightAvailabilityStateHolder,
             playingTonightStateHolder = playingTonightStateHolder,
             psyncRepository = psyncRepository,
             psyncStreamClient = psyncStreamClient,

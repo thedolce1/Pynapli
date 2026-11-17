@@ -140,9 +140,9 @@ internal fun Connection.queryGridRank(
               AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
               AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
               AND (
-                  -- PLAYING_TONIGHT_SPEC: "playing tonight" means a live session OR the
-                  -- legacy availability flag (transitional). Only evaluated when the
-                  -- filter is on; the leading boolean short-circuits the default path.
+                  -- PLAYING_TONIGHT_SPEC: "playing tonight" means a live session (the legacy
+                  -- profiles.tonight_available_until column is no longer read). Only evaluated
+                  -- when the filter is on; the leading boolean short-circuits the default path.
                   ?::boolean = false
                   OR EXISTS (
                       SELECT 1
@@ -153,7 +153,6 @@ internal fun Connection.queryGridRank(
                         AND ts.paused_at IS NULL
                         AND ts.expires_at > now()
                   )
-                  OR (p.tonight_available_until IS NOT NULL AND p.tonight_available_until > now())
               )
               AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
               -- Structured identity filters: hard match against the profile's stored gender /

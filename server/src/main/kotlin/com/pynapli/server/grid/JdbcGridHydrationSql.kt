@@ -23,25 +23,16 @@ internal fun Connection.hydrateGridCards(
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
-               (
-                   -- PLAYING_TONIGHT_SPEC: live session OR the legacy availability flag
-                   -- (transitional until the legacy flag is retired). Per-tile signal only.
-                   EXISTS (
-                       SELECT 1
-                       FROM tonight_session_participants tsp
-                       JOIN tonight_sessions ts ON ts.id = tsp.session_id
-                       WHERE tsp.user_id = pc.user_id
-                         AND ts.status = 'active'
-                         AND ts.paused_at IS NULL
-                         AND ts.expires_at > now()
-                   )
-                   OR EXISTS (
-                       SELECT 1
-                       FROM profiles ptp
-                       WHERE ptp.user_id = pc.user_id
-                         AND ptp.tonight_available_until IS NOT NULL
-                         AND ptp.tonight_available_until > now()
-                   )
+               -- PLAYING_TONIGHT_SPEC: a live session is the only Tonight signal (the legacy
+               -- profiles.tonight_available_until column is no longer read). Per-tile signal only.
+               EXISTS (
+                   SELECT 1
+                   FROM tonight_session_participants tsp
+                   JOIN tonight_sessions ts ON ts.id = tsp.session_id
+                   WHERE tsp.user_id = pc.user_id
+                     AND ts.status = 'active'
+                     AND ts.paused_at IS NULL
+                     AND ts.expires_at > now()
                ) AS tonight_active
         FROM unnest(?::uuid[]) AS pc(user_id)
         LEFT JOIN LATERAL (

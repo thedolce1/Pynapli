@@ -100,6 +100,12 @@ class PlayingTonightStateHolder(
         }
     }
 
+    /** Quietly refetch only the viewer's own session (the Grid's Tonight entry shows Start vs View). */
+    suspend fun refreshCurrentSession() {
+        val result = repository.loadCurrentSession()
+        if (result is AppResult.Success) _state.update { it.copy(currentSession = result.value) }
+    }
+
     suspend fun refreshIfOnScreen() {
         if (isOnScreen) refreshSilently()
     }

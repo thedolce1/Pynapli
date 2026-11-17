@@ -9,7 +9,6 @@ import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
-import com.pynapli.app.grid.TonightAvailabilityStateHolder
 import com.pynapli.app.location.LocationStateHolder
 import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.media.MediaAlbumKindUi
@@ -61,7 +60,6 @@ class PynapliAppGraph(
     val savedGridFilterStateHolder: SavedGridFilterStateHolder? = null,
     val savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     val travelLocationStateHolder: TravelLocationStateHolder? = null,
-    val tonightAvailabilityStateHolder: TonightAvailabilityStateHolder? = null,
     val playingTonightStateHolder: PlayingTonightStateHolder? = null,
     val psyncRepository: PsyncRepository? = null,
     val psyncStreamClient: PsyncStreamClient? = null,

@@ -121,13 +121,6 @@ internal fun savedSwipeFilterStatusFor(code: String): HttpStatusCode =
         else -> HttpStatusCode.BadRequest
     }
 
-internal fun tonightAvailabilityStatusFor(code: String): HttpStatusCode =
-    when (code) {
-        "INVALID_TONIGHT_DURATION" -> HttpStatusCode.BadRequest
-        "PROFILE_NOT_FOUND" -> HttpStatusCode.NotFound
-        else -> HttpStatusCode.BadRequest
-    }
-
 internal fun tonightSessionStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RISK_RESTRICTED" -> HttpStatusCode.Forbidden
