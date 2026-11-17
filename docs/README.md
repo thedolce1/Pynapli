@@ -108,7 +108,4 @@ Superseded docs, kept for history. Don't treat them as current guidance.
 
 | Doc | Was |
 |---|---|
-| [archive/DATABASE_MIGRATION_PLAN.md](archive/DATABASE_MIGRATION_PLAN.md) | Flyway migration strategy and conventions. |
-| [archive/OPENAPI_HANDOFF_PLAN.md](archive/OPENAPI_HANDOFF_PLAN.md) | Plan for OpenAPI generation and client handoff. |
-| [archive/MVP_ROADMAP.md](archive/MVP_ROADMAP.md) | Phased MVP plan and delivery sequencing. |
-| [archive/LEGACY_RULES_IMPORT_REVIEW.md](archive/LEGACY_RULES_IMPORT_REVIEW.md) | Review of legacy rules carried into the current product. |
+| [archive/IMPLEMENTATION_HISTORY.md](archive/IMPLEMENTATION_HISTORY.md) | Shipped-slice changelog. |
