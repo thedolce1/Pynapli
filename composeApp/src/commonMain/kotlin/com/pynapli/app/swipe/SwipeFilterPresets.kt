@@ -17,10 +17,11 @@ enum class SwipeFilterType {
     Age,
 }
 
+// Top Picks is frozen: its chip is not offered, so no one can switch the deck to it. The picks mode,
+// its server route and tables stay in place until the feature is either finished or removed.
 internal val defaultSwipeFilters =
     listOf(
         SwipeFilterUi(SwipeFilterType.ForYou, "For You", active = true),
-        SwipeFilterUi(SwipeFilterType.TopPicks, "Top Picks", active = false),
         SwipeFilterUi(SwipeFilterType.Linked, "Linked", active = false),
         SwipeFilterUi(SwipeFilterType.Age, "Age", active = false),
     )

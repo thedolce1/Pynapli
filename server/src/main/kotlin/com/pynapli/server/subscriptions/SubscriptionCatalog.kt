@@ -69,7 +69,6 @@ internal object SubscriptionCatalog {
                         "Intro Notes",
                         "Weekly Pineapple Likes",
                         "Monthly Boost",
-                        "Daily curated Picks",
                     ),
             ),
         )

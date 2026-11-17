@@ -333,7 +333,7 @@ function Tap-FirstAvailableText {
 }
 
 <#
-    Tap a Swipe deck tab (For You / Top Picks / Linked) by anchoring to the tab row rather than
+    Tap a Swipe deck tab (For You / Linked / Age) by anchoring to the tab row rather than
     trusting the first substring match anywhere on screen.
 
     "Linked" also renders as a badge on linked-partner cards further down the deck, so a plain
@@ -342,7 +342,7 @@ function Tap-FirstAvailableText {
     opening an unrelated surface, and the run died on "Timed out waiting for one of: Maya, Alex,
     Jules, Rae".
 
-    "Top Picks" appears only in the tab row, so it defines where that row is; the requested tab is
+    "For You" appears only in the tab row, so it defines where that row is; the requested tab is
     then matched on the same line. This is also a real wait — it polls until the tab row exists,
     which the old `Wait-ForAnyText @("For You", "Like")` never did, both strings being permanently
     on screen.
@@ -358,7 +358,7 @@ function Tap-DeckTab {
     $xml = $null
     do {
         $xml = Dump-Ui "deck_tab_wait"
-        $anchor = Find-NodeByExactText $xml "Top Picks"
+        $anchor = Find-NodeByExactText $xml "For You"
         if ($null -ne $anchor) {
             $anchorY = (Get-Bounds $anchor).CenterY
             foreach ($node in Get-UiTextNodes $xml) {

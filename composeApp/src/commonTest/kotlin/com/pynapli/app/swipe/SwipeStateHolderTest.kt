@@ -234,38 +234,26 @@ class SwipeStateHolderTest {
         }
 
     @Test
-    fun selectingTopPicksLoadsPicksDeckAndForYouReturnsToNormalDeck() =
+    fun topPicksIsNotOfferedAndCannotBeSelected() =
         runTest {
             val normalCard = swipeCard(userId = "normal-1")
-            val pickCard = swipeCard(userId = "pick-1")
             val repository =
                 FakeSwipeRepository(
                     deck = SwipeDeckUi(cards = listOf(normalCard), deckSessionId = "deck-1"),
-                    topPicksDeck = SwipeDeckUi(cards = listOf(pickCard), deckSessionId = "picks-1"),
+                    topPicksDeck = SwipeDeckUi(cards = listOf(swipeCard(userId = "pick-1")), deckSessionId = "picks-1"),
                 )
             val stateHolder = SwipeStateHolder(repository)
 
             stateHolder.load()
-            assertEquals(
-                listOf("normal-1"),
-                stateHolder.state.value.cards
-                    .map { it.userId },
+            assertTrue(
+                stateHolder.state.value.filters
+                    .none { it.type == SwipeFilterType.TopPicks },
             )
-            assertEquals(false, stateHolder.state.value.topPicksMode)
 
             stateHolder.selectFilter(SwipeFilterType.TopPicks)
-            assertEquals(true, stateHolder.state.value.topPicksMode)
-            assertEquals(1, repository.topPicksLoadCount)
-            assertEquals(
-                listOf("pick-1"),
-                stateHolder.state.value.cards
-                    .map { it.userId },
-            )
-            assertEquals("picks-1", stateHolder.state.value.deckSessionId)
-            assertEquals(null, stateHolder.state.value.nextCursor)
 
-            stateHolder.selectFilter(SwipeFilterType.ForYou)
             assertEquals(false, stateHolder.state.value.topPicksMode)
+            assertEquals(0, repository.topPicksLoadCount)
             assertEquals(
                 listOf("normal-1"),
                 stateHolder.state.value.cards

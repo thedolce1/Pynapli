@@ -222,7 +222,7 @@ Write-Host "[login] OK"
 $gridXml = Invoke-Stage -Stage "grid" -NavText "Grid" -Expect @("Filters", "Current location")
 
 # --- Stage 3: Swipe (navigate + perform a gesture, then re-assert) ---
-$swipeXml = Invoke-Stage -Stage "swipe" -NavText "Swipe" -Expect @("For You", "Top Picks", "Filters")
+$swipeXml = Invoke-Stage -Stage "swipe" -NavText "Swipe" -Expect @("For You", "Linked", "Filters")
 # A left swipe advances the deck (pass); the deck must still render afterwards.
 Invoke-Adb @("shell", "input", "swipe", "820", "1100", "200", "1100", "250") | Out-Null
 Start-Sleep -Seconds 2
