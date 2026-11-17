@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.math.min
@@ -64,6 +65,13 @@ class NotificationDispatchService(
             repository
                 .getPreferences(notification.recipientUserId)
                 ?.quietHoursRelease(notification.kind, clock.instant())
+        if (quietHoursRelease != null && notification.kind in TIME_SENSITIVE_KINDS) {
+            // "Playing tonight" and live Psync invites are about the next hour or two: held until
+            // morning they would point at a session that is long over, so they are dropped instead.
+            repository.markNotificationSkipped(notification.notificationId, QUIET_HOURS_STALE)
+            metrics.record(NotificationMetrics.Outcome.SKIPPED, notification.kind)
+            return DispatchOutcome.Skipped
+        }
         if (quietHoursRelease != null) {
             repository.markNotificationRetry(
                 notificationId = notification.notificationId,
@@ -156,9 +164,10 @@ class NotificationDispatchService(
             } else {
                 localNow.toLocalDate().plusDays(1)
             }
-        return releaseDate
-            .atStartOfDay(zone)
-            .plusMinutes(quietHoursEndMinute.toLong())
+        // The local wall-clock end time on that date. (Start of day + N minutes is an hour off on a
+        // daylight-saving change day; a nonexistent local time moves forward past the gap.)
+        return ZonedDateTime
+            .of(releaseDate, LocalTime.of(quietHoursEndMinute / 60, quietHoursEndMinute % 60), zone)
             .toInstant()
     }
 
@@ -175,6 +184,16 @@ class NotificationDispatchService(
         private const val PROCESSING_STALE_SECONDS = 10L * 60L
         private const val NO_ACTIVE_DEVICES = "NO_ACTIVE_PUSH_DEVICES"
         private const val QUIET_HOURS_ACTIVE = "QUIET_HOURS_ACTIVE"
+        private const val QUIET_HOURS_STALE = "QUIET_HOURS_STALE"
+        private val TIME_SENSITIVE_KINDS =
+            setOf(
+                NotificationKind.TONIGHT_INVITE,
+                NotificationKind.TONIGHT_REMINDER,
+                NotificationKind.TONIGHT_ACCEPTED,
+                NotificationKind.TONIGHT_DECLINED,
+                NotificationKind.TONIGHT_ENDED,
+                NotificationKind.PSYNC_INVITE,
+            )
     }
 }
 

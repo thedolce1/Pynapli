@@ -154,6 +154,76 @@ class NotificationDispatchServiceTest {
         }
 
     @Test
+    fun quietHoursEndAtTheLocalWallClockTimeOnADaylightSavingChangeDay() =
+        runBlocking {
+            // 2026-03-29 is the EU spring-forward day: 01:00 UTC jumps 02:00 -> 03:00 in Paris.
+            // Quiet 22:00-08:00 must release at 08:00 Paris (06:00 UTC), not start-of-day + 8h.
+            val recipient = uuid(32)
+            val notification = notification(recipientUserId = recipient, attemptCount = 1)
+            val repository =
+                DispatchRepository(
+                    claimed = mutableListOf(notification),
+                    preferencesByUser =
+                        mapOf(
+                            recipient to
+                                preferences(
+                                    userId = recipient,
+                                    quietHoursEnabled = true,
+                                    quietHoursStartMinute = 22 * 60,
+                                    quietHoursEndMinute = 8 * 60,
+                                    quietHoursTimezone = "Europe/Paris",
+                                ),
+                        ),
+                    targetsByUser = mapOf(recipient to listOf(target(recipient))),
+                )
+            val service =
+                NotificationDispatchService(
+                    repository = repository,
+                    sender = StaticPushSender(PushSendResult.accepted()),
+                    clock = Clock.fixed(Instant.parse("2026-03-28T23:30:00Z"), ZoneOffset.UTC),
+                )
+
+            service.dispatchPending(limit = 10)
+
+            assertEquals(Instant.parse("2026-03-29T06:00:00Z"), repository.retried.single().retryAt)
+        }
+
+    @Test
+    fun aTonightPushDuringQuietHoursIsDroppedNotHeldUntilMorning() =
+        runBlocking {
+            val recipient = uuid(33)
+            val notification = notification(recipientUserId = recipient, attemptCount = 1, kind = NotificationKind.TONIGHT_INVITE)
+            val repository =
+                DispatchRepository(
+                    claimed = mutableListOf(notification),
+                    preferencesByUser =
+                        mapOf(
+                            recipient to
+                                preferences(
+                                    userId = recipient,
+                                    quietHoursEnabled = true,
+                                    quietHoursStartMinute = 22 * 60,
+                                    quietHoursEndMinute = 8 * 60,
+                                    quietHoursTimezone = "UTC",
+                                ),
+                        ),
+                    targetsByUser = mapOf(recipient to listOf(target(recipient))),
+                )
+            val service =
+                NotificationDispatchService(
+                    repository = repository,
+                    sender = StaticPushSender(PushSendResult.accepted()),
+                    clock = fixedClock,
+                )
+
+            val summary = service.dispatchPending(limit = 10)
+
+            assertEquals(NotificationDispatchSummary(claimed = 1, sent = 0, skipped = 1, retried = 0, failed = 0), summary)
+            assertEquals(listOf(notification.notificationId to "QUIET_HOURS_STALE"), repository.skipped)
+            assertEquals(emptyList(), repository.retried)
+        }
+
+    @Test
     fun dispatchPendingSendsSystemSafetyNotificationDuringQuietHours() =
         runBlocking {
             val recipient = uuid(31)
