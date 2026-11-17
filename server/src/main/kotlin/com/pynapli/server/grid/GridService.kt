@@ -123,7 +123,12 @@ class GridService(
 
         val initial =
             profile("grid.repository") {
-                repository.queryNearby(viewerUserId, radiusMeters, fetchLimit, filters, cursor)
+                if (request.visitingSoonOnly) {
+                    // One page, soonest trips first; blocks, hides and presence apply below as usual.
+                    repository.queryVisitingSoon(viewerUserId, radiusMeters, fetchLimit)
+                } else {
+                    repository.queryNearby(viewerUserId, radiusMeters, fetchLimit, filters, cursor)
+                }
             }
         if (!initial.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
 
@@ -133,7 +138,7 @@ class GridService(
         // the Swipe deck's radius relaxation (SwipeDeckRelaxation.relaxRadius). Edge-fill only:
         // a widened page does not paginate (nextCursor stays null), so the wide radius never
         // leaks into the narrow-radius cursor scope on a follow-up page request.
-        val widened = cursor == null && initial.cards.isEmpty() && radiusMeters < MAX_RADIUS_METERS
+        val widened = !request.visitingSoonOnly && cursor == null && initial.cards.isEmpty() && radiusMeters < MAX_RADIUS_METERS
         val result =
             if (widened) {
                 profile("grid.repositoryWiden") {
@@ -250,6 +255,8 @@ class GridService(
         GridCardDto(
             userId = userId.toString(),
             displayName = displayName,
+            visitingFrom = visitingFrom?.toString(),
+            visitingUntil = visitingUntil?.toString(),
             thumbnailUrl = thumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
             online = userId in onlineUserIds,
             distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,

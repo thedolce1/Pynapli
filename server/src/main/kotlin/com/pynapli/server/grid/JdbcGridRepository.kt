@@ -97,6 +97,59 @@ internal class JdbcGridRepository(
             }
         }
 
+    override suspend fun queryVisitingSoon(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+    ): GridQueryResult =
+        withContext(Dispatchers.IO) {
+            dataSource.connection.use { connection ->
+                val rows =
+                    connection.prepareStatement(VISITING_SOON_QUERY).use { statement ->
+                        statement.setObject(1, viewerUserId)
+                        statement.setInt(2, radiusMeters)
+                        statement.setObject(3, viewerUserId)
+                        statement.setInt(4, limit)
+                        statement.executeQuery().use { rs ->
+                            buildList {
+                                while (rs.next()) {
+                                    add(
+                                        Triple(
+                                            rs.getObject("user_id", UUID::class.java) to rs.getString("display_name"),
+                                            rs.getDate("starts_on").toLocalDate(),
+                                            rs.getDate("ends_on").toLocalDate(),
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                val located = connection.findGridViewerLocationCacheKey(viewerUserId) != null
+                if (rows.isEmpty()) return@withContext GridQueryResult(viewerHadLocation = located, cards = emptyList())
+                val hydration = connection.hydrateGridCards(viewerUserId = viewerUserId, userIds = rows.map { it.first.first })
+                GridQueryResult(
+                    viewerHadLocation = true,
+                    cards =
+                        rows.map { (who, from, until) ->
+                            val h = hydration[who.first]
+                            GridCardRecord(
+                                userId = who.first,
+                                displayName = who.second,
+                                thumbnailMediaAssetId = h?.thumbnailMediaAssetId,
+                                // They aren't here yet: no distance to show.
+                                showDistance = false,
+                                distanceMeters = 0.0,
+                                linkedPartnerUserId = h?.linkedPartnerUserId,
+                                linkedPartnerDisplayName = h?.linkedPartnerDisplayName,
+                                linkedPartnerThumbnailMediaAssetId = h?.linkedPartnerThumbnailMediaAssetId,
+                                visitingFrom = from,
+                                visitingUntil = until,
+                            )
+                        },
+                )
+            }
+        }
+
     /**
      * Returns a [GridRankPage]: the keyset-sliced page of [limit] ranked rows plus
      * whether more rows follow (drives the next cursor). Mirrors Swipe's
@@ -220,3 +273,42 @@ private fun UUID.compareUnsigned(other: UUID): Int {
     if (hi != 0) return hi
     return java.lang.Long.compareUnsigned(leastSignificantBits, other.leastSignificantBits)
 }
+
+/**
+ * Announced planned trips (opt-in per trip) whose destination is within the radius of where the
+ * viewer is browsing and which start in the next 14 days. Same visibility rules as the Grid: a live,
+ * visible, non-incognito, Grid-visible account that isn't quarantined. Blocks and hides are removed
+ * afterwards by GridService, exactly as for nearby results.
+ */
+private val VISITING_SOON_QUERY =
+    """
+    WITH viewer_location AS (
+        SELECT COALESCE(tl.geom, ul.geom) AS geom
+        FROM user_locations ul
+        LEFT JOIN travel_locations tl
+          ON tl.user_id = ul.user_id
+         AND tl.status = 'active'
+         AND tl.active_until IS NULL
+        WHERE ul.user_id = ?
+    )
+    SELECT DISTINCT ON (u.id)
+           u.id AS user_id,
+           COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+           t.starts_on,
+           t.ends_on
+    FROM viewer_location v
+    JOIN travel_trips t
+      ON t.status = 'planned'
+     AND t.announce_to_locals = true
+     AND t.ends_on >= current_date
+     AND t.starts_on <= current_date + 14
+     AND ST_DWithin(v.geom, ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography, ?)
+    JOIN users u ON u.id = t.user_id AND u.status = 'active' AND u.deleted_at IS NULL
+    JOIN profiles p ON p.user_id = u.id AND p.visibility_status = 'visible'
+    JOIN discovery_settings ds ON ds.user_id = u.id AND ds.grid_visible = true AND ds.incognito = false
+    LEFT JOIN account_risk_states ars ON ars.user_id = u.id
+    WHERE u.id <> ?
+      AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
+    ORDER BY u.id, t.starts_on
+    LIMIT ?
+    """.trimIndent()

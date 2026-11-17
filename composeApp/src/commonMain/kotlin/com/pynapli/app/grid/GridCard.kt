@@ -165,11 +165,11 @@ internal fun GridProfileTile(
                 modifier = Modifier.weight(1f, fill = false),
             )
 
-            if (card.visiting) {
+            if (card.visiting || card.visitingDates != null) {
                 // SWIPE_IMPLEMENTATION_SPEC L348: target is here via passport,
                 // not physically local. Same wording + tone as the Swipe pill.
                 Text(
-                    text = "Visiting",
+                    text = card.visitingDates ?: "Visiting",
                     color = PynapliColors.OnPhotoPrimary,
                     fontSize = GridTileTokens.MetaTextSize,
                     fontWeight = FontWeight.SemiBold,

@@ -79,6 +79,8 @@ internal fun GridFiltersSheet(
                 activeToday = draft.activeToday,
                 recentlyJoined = draft.recentlyJoined,
                 travelingHere = draft.travelingHere,
+                visitingSoon = draft.visitingSoon,
+                onVisitingSoonToggle = { draft = draft.copy(visitingSoon = !draft.visitingSoon) },
                 onOnlineToggle = { draft = draft.copy(online = !draft.online) },
                 onTonightToggle = { draft = draft.copy(tonightAvailable = !draft.tonightAvailable) },
                 onActiveTodayToggle = { draft = draft.copy(activeToday = !draft.activeToday) },

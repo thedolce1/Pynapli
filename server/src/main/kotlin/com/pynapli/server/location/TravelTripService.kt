@@ -69,8 +69,8 @@ class TravelTripService(
                 connection
                     .prepareStatement(
                         """
-                        INSERT INTO travel_trips (id, user_id, city, region, country, latitude, longitude, starts_on, ends_on, timezone)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO travel_trips (id, user_id, city, region, country, latitude, longitude, starts_on, ends_on, timezone, announce_to_locals)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """.trimIndent(),
                     ).use { statement ->
                         statement.setObject(1, id)
@@ -83,6 +83,7 @@ class TravelTripService(
                         statement.setDate(8, Date.valueOf(startsOn))
                         statement.setDate(9, Date.valueOf(endsOn))
                         statement.setString(10, zone.id)
+                        statement.setBoolean(11, request.announce)
                         statement.executeUpdate()
                     }
             }
@@ -204,8 +205,9 @@ class TravelTripService(
         val timezone: String,
         val status: String,
         val travelLocationId: UUID?,
+        val announce: Boolean,
     ) {
-        fun toDto() = TravelTripDto(id.toString(), city, region, country, startsOn.toString(), endsOn.toString(), status)
+        fun toDto() = TravelTripDto(id.toString(), city, region, country, startsOn.toString(), endsOn.toString(), status, announce)
     }
 
     private fun ResultSet.toTrip() =
@@ -222,6 +224,7 @@ class TravelTripService(
             timezone = getString("timezone"),
             status = getString("status"),
             travelLocationId = getObject("travel_location_id", UUID::class.java),
+            announce = getBoolean("announce_to_locals"),
         )
 
     companion object {

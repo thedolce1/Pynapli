@@ -16,12 +16,12 @@ data class UpdateCurrentLocationRequestDto(
 @Serializable
 data class CurrentLocationDto(
     val updatedAt: String,
-    val accuracyMeters: Int?,
+    val accuracyMeters: Int? = null,
     val source: String,
-    val geohash: String?,
-    val city: String?,
-    val region: String?,
-    val country: String?,
+    val geohash: String? = null,
+    val city: String? = null,
+    val region: String? = null,
+    val country: String? = null,
 )
 
 // Passport/travel mode (DATA_MODEL_SPEC L286-301, SWIPE_IMPLEMENTATION_SPEC L339-354).
@@ -40,8 +40,8 @@ data class SetTravelLocationRequestDto(
 @Serializable
 data class TravelLocationDto(
     val city: String,
-    val region: String?,
-    val country: String?,
+    val region: String? = null,
+    val country: String? = null,
     val latitude: Double,
     val longitude: Double,
     val activeFrom: String,
@@ -60,6 +60,8 @@ data class PlanTravelTripRequestDto(
     val startsOn: String, // yyyy-MM-dd
     val endsOn: String, // yyyy-MM-dd, inclusive
     val timezone: String, // the planner's IANA zone, e.g. "America/Toronto"
+    // Opt-in: people near the destination may see "Visiting 14-17 Nov" before the trip starts.
+    val announce: Boolean = false,
 )
 
 @Serializable
@@ -71,6 +73,7 @@ data class TravelTripDto(
     val startsOn: String,
     val endsOn: String,
     val status: String, // planned | active
+    val announce: Boolean = false,
 )
 
 @Serializable

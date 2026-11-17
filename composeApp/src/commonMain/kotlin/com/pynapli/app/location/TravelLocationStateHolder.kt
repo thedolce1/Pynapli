@@ -137,6 +137,7 @@ class TravelLocationStateHolder(
         startsOn: String,
         endsOn: String,
         timezone: String,
+        announce: Boolean = false,
     ): Boolean {
         _state.update { it.copy(isSaving = true, errorCode = null, errorMessage = null) }
         val request =
@@ -149,6 +150,7 @@ class TravelLocationStateHolder(
                 startsOn = startsOn,
                 endsOn = endsOn,
                 timezone = timezone,
+                announce = announce,
             )
         return when (val result = repository.planTrip(request)) {
             is AppResult.Success -> {

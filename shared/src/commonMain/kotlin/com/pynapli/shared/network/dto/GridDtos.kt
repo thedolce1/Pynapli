@@ -22,6 +22,8 @@ data class GridQueryRequestDto(
     val activeTodayOnly: Boolean = false,
     val recentlyJoinedOnly: Boolean = false,
     val travelingHereOnly: Boolean = false,
+    // People whose announced planned trip brings them to the viewer's area in the next 14 days.
+    val visitingSoonOnly: Boolean = false,
     val withPhotosOnly: Boolean = false,
     val hasPrivateAlbumOnly: Boolean = false,
     val intents: List<String> = emptyList(),
@@ -45,7 +47,7 @@ data class GridCardDto(
     val displayName: String,
     val thumbnailUrl: String? = null,
     val online: Boolean,
-    val distanceLabel: String?,
+    val distanceLabel: String? = null,
     val distanceMeters: Int? = null,
     val linkedPartner: LinkedPartnerMiniDto? = null,
     val rankToken: String,
@@ -55,6 +57,9 @@ data class GridCardDto(
     // PLAYING_TONIGHT_SPEC: this individual has a live Playing Tonight session.
     // A subtle per-tile indicator only — never a couple card.
     val tonightActive: Boolean = false,
+    // "Visiting soon": the dates of an announced planned trip bringing them here (yyyy-MM-dd).
+    val visitingFrom: String? = null,
+    val visitingUntil: String? = null,
 )
 
 @Serializable
@@ -92,5 +97,5 @@ data class SetTonightAvailableRequestDto(
 
 @Serializable
 data class TonightAvailabilityDto(
-    val availableUntil: String?,
+    val availableUntil: String? = null,
 )
