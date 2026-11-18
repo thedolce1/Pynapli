@@ -529,7 +529,9 @@ When a mutual match occurs:
 
 - Both people get the full-screen "It's a match" moment (`MatchCelebrationScreen`, app-wide, not a
   sheet): both photos, gold title, "Send a message", "Keep swiping", success haptic; it swallows
-  input so the deck underneath cannot move; Esc / back close it.
+  input so the deck underneath cannot move; Esc / back close it. Sheets render in their own window,
+  so it waits (unseen, no haptic) while the chat sheet or a profile peek is open, and the wide-pane
+  Swipe stage takes keyboard focus back when it closes.
 - Exactly once per person per match across devices: the server records who has seen it
   (`match_celebrations`, V108; existing matches backfilled as seen). The swiper gets it from the
   swipe response; the other person from `GET /v1/matches/celebrations` on sign-in, on foreground,

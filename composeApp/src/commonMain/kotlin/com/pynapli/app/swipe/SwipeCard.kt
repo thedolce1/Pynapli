@@ -218,72 +218,80 @@ internal fun SwipeCard(
             Modifier
         }
 
+    // Gestures sit outside the moving layer, so drag deltas and the grab point are in screen space
+    // (not rotated or shifted by the card's own transform).
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    if (isTop) {
-                        val offset = dragState.offset.value
-                        translationX = offset.x
-                        translationY = offset.y
-                        val rotationSign = if (dragState.grabbedTopHalf) 1f else -1f
-                        rotationZ =
-                            (offset.x / widthPx * MAX_ROTATION_DEGREES * rotationSign)
-                                .coerceIn(-MAX_ROTATION_DEGREES, MAX_ROTATION_DEGREES)
-                        transformOrigin = TransformOrigin(0.5f, if (dragState.grabbedTopHalf) 1f else 0f)
-                    } else {
-                        // The card underneath rises into place as the top card leaves.
-                        val effectiveDepth = (depth - dragState.progress(widthPx, heightPx)).coerceAtLeast(0f)
-                        val scale = 1f - BACK_CARD_SCALE_STEP * effectiveDepth
-                        scaleX = scale
-                        scaleY = scale
-                        translationY = BACK_CARD_LIFT_DP.dp.toPx() * effectiveDepth
-                        alpha = (1f - BACK_CARD_FADE_STEP * effectiveDepth).coerceIn(0f, 1f)
-                    }
-                }.testTag(if (isTop) SwipeTestTags.TOP_CARD else "${SwipeTestTags.CARD_PREFIX}${card.userId}")
+                .testTag(if (isTop) SwipeTestTags.TOP_CARD else "${SwipeTestTags.CARD_PREFIX}${card.userId}")
                 .then(dragModifier)
-                .then(tapModifier)
-                .clip(SwipeCardTokens.Shape)
-                .background(tone)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), SwipeCardTokens.Shape),
+                .then(tapModifier),
     ) {
-        SwipeCardPhotos(
-            isTop = isTop,
-            resolvedPhotos = resolvedPhotos,
-            photoIndex = photoIndex,
-            displayName = card.displayName,
-        )
-        val linkedPartner = card.linkedPartner
-        if (linkedPartner != null) {
-            SwipeLinkedPartnerBadge(
-                thumbnailUrl = linkedPartner.thumbnailUrl,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 22.dp, end = 18.dp)
-                        // Out of the way while a stamp is showing.
-                        .graphicsLayer {
-                            alpha = if (isTop) 1f - (dragState.progress(widthPx, heightPx) * 3f).coerceIn(0f, 1f) else 1f
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        if (isTop) {
+                            val offset = dragState.offset.value
+                            translationX = offset.x
+                            translationY = offset.y
+                            val rotationSign = if (dragState.grabbedTopHalf) 1f else -1f
+                            rotationZ =
+                                (offset.x / widthPx * MAX_ROTATION_DEGREES * rotationSign)
+                                    .coerceIn(-MAX_ROTATION_DEGREES, MAX_ROTATION_DEGREES)
+                            transformOrigin = TransformOrigin(0.5f, if (dragState.grabbedTopHalf) 1f else 0f)
+                        } else {
+                            // The card underneath rises into place as the top card leaves.
+                            val effectiveDepth = (depth - dragState.progress(widthPx, heightPx)).coerceAtLeast(0f)
+                            val scale = 1f - BACK_CARD_SCALE_STEP * effectiveDepth
+                            scaleX = scale
+                            scaleY = scale
+                            translationY = BACK_CARD_LIFT_DP.dp.toPx() * effectiveDepth
+                            alpha = (1f - BACK_CARD_FADE_STEP * effectiveDepth).coerceIn(0f, 1f)
+                        }
+                    }.clip(SwipeCardTokens.Shape)
+                    .background(tone)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), SwipeCardTokens.Shape),
+        ) {
+            SwipeCardPhotos(
+                isTop = isTop,
+                resolvedPhotos = resolvedPhotos,
+                photoIndex = photoIndex,
+                displayName = card.displayName,
+            )
+            val linkedPartner = card.linkedPartner
+            if (linkedPartner != null) {
+                SwipeLinkedPartnerBadge(
+                    thumbnailUrl = linkedPartner.thumbnailUrl,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 22.dp, end = 18.dp)
+                            // Out of the way while a stamp is showing.
+                            .graphicsLayer {
+                                alpha = if (isTop) 1f - (dragState.progress(widthPx, heightPx) * 3f).coerceIn(0f, 1f) else 1f
+                            },
+                    enabled = isTop && enabled,
+                    coupleVerified = card.coupleVerified,
+                    onClick =
+                        if (isTop) {
+                            { onLinkedPartnerTap(card) }
+                        } else {
+                            null
                         },
-                enabled = isTop && enabled,
-                coupleVerified = card.coupleVerified,
-                onClick =
-                    if (isTop) {
-                        { onLinkedPartnerTap(card) }
-                    } else {
-                        null
-                    },
+                )
+            }
+            if (isTop) {
+                SwipeStamps(dragState = dragState, physics = physics)
+            }
+            SwipeCardFooter(
+                card = card,
+                distanceLabel = distanceLabel,
+                onOpenProfile = if (isTop && enabled) ({ onOpenProfile(card) }) else null,
             )
         }
-        if (isTop) {
-            SwipeStamps(dragState = dragState, physics = physics)
-        }
-        SwipeCardFooter(
-            card = card,
-            distanceLabel = distanceLabel,
-            onOpenProfile = if (isTop && enabled) ({ onOpenProfile(card) }) else null,
-        )
     }
 }
 

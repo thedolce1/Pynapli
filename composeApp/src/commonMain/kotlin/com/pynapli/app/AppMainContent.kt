@@ -104,6 +104,8 @@ internal fun ColumnScope.PynapliMainContent(
     onPickVerificationSelfie: (() -> Unit)?,
     onSetDiscreetIcon: (Boolean) -> Unit,
     discreetIconSupported: Boolean = true,
+    // The app-wide match moment is on screen over the tabs.
+    swipeDeckCovered: Boolean = false,
 ) {
     // Pure dispatcher: it reads no state, so a state change only recomposes the child that reads it.
     // (A `when` branch is not its own recomposition scope; a composable function is.)
@@ -206,6 +208,7 @@ internal fun ColumnScope.PynapliMainContent(
                         onOpenAgeVerification = onOpenAgeVerification,
                         onOpenPsync = onOpenPsync,
                         profileLinksStateHolder = profileLinksStateHolder,
+                        deckCovered = swipeDeckCovered,
                     )
             }
     }
@@ -599,6 +602,7 @@ private fun ColumnScope.SwipeTabContent(
     onOpenAgeVerification: () -> Unit,
     onOpenPsync: (() -> Unit)?,
     profileLinksStateHolder: ProfileLinksStateHolder? = null,
+    deckCovered: Boolean = false,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -619,5 +623,6 @@ private fun ColumnScope.SwipeTabContent(
         savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
         travelLocationStateHolder = travelLocationStateHolder,
         profileLinksStateHolder = profileLinksStateHolder,
+        deckCovered = deckCovered,
     )
 }

@@ -40,6 +40,8 @@ fun SwipeScreen(
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
     modifier: Modifier = Modifier,
     profileLinksStateHolder: com.pynapli.app.profilelink.ProfileLinksStateHolder? = null,
+    // The app-wide match moment is over the deck.
+    deckCovered: Boolean = false,
 ) {
     val state by stateHolder.state.collectAsState()
     val profileLinksState by profileLinksStateHolder?.state?.collectAsState()
@@ -147,6 +149,15 @@ fun SwipeScreen(
         },
         onLike = { requestedAction = SwipeAction.LIKE },
         modifier = modifier,
+        deckCovered =
+            deckCovered ||
+                (matchNotificationsEnabled && state.pendingMatch != null) ||
+                profileState.visible ||
+                pineappleSheetCard != null ||
+                state.noteRefusedCard != null ||
+                linkedPartnerPreviewCard != null ||
+                filtersSheetVisible ||
+                travelSheetVisible,
     )
 
     // Only when the app has no app-wide match moment wired (SwipeStateHolder without onMatch, e.g. a

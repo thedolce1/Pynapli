@@ -135,6 +135,26 @@ internal fun Connection.findLatestRewindableAction(
                   WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
                      OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
               )
+              -- Owner-controlled partner visibility, as on the dealt card (JdbcSwipeDeckHydrationSql);
+              -- the viewer is the actor. 'hidden' falls through to no row.
+              AND (
+                  ds.partner_visibility = 'public'
+                  OR (
+                      ds.partner_visibility = 'verified_only'
+                      AND EXISTS (
+                          SELECT 1 FROM profiles vp
+                          WHERE vp.user_id = sa.actor_user_id AND vp.verified_at IS NOT NULL
+                      )
+                  )
+                  OR (
+                      ds.partner_visibility = 'matches_only'
+                      AND EXISTS (
+                          SELECT 1 FROM matches mm
+                          WHERE LEAST(mm.user_a, mm.user_b) = LEAST(sa.actor_user_id, u.id)
+                            AND GREATEST(mm.user_a, mm.user_b) = GREATEST(sa.actor_user_id, u.id)
+                      )
+                  )
+              )
             ORDER BY upl.accepted_at DESC NULLS LAST, upl.created_at DESC, upl.id ASC
             LIMIT 1
         ) linked_partner ON true

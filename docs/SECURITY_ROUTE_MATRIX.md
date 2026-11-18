@@ -47,6 +47,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `AppealRoutes.kt` | User-authenticated | Appeals are owner-scoped. |
 | `SafetyRoutes.kt` | User-authenticated | Blocks, hidden profiles, reports, and support contact are token-derived. Reports are rate-limited. |
 | `SubscriptionRoutes.kt` | User/admin/webhook mixed | User store/entitlement routes require bearer token and mutation rate limits; admin subscription routes require admin token; Play RTDN requires configured token or Google OIDC. |
+| `MatchCelebrationRoutes.kt` | User-authenticated | Token-derived; lists and marks only the caller's own matches (unseen list hides blocked, hidden and gone profiles); marking is idempotent. |
 | `SavedSwipeFilterRoutes.kt` | User-authenticated | Saved filters are owner-scoped and entitlement-gated. |
 | `SwipeRoutes.kt` | User-authenticated | Deck/action/rewind/like-back are token-derived; actions require server-dealt card/session tokens and are rate-limited/idempotent. |
 | `TopPicksRoutes.kt` | User-authenticated | Picks are token-derived and backed by persisted swipe deck sessions. |

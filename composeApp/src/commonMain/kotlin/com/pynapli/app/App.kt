@@ -318,6 +318,12 @@ fun PynapliApp(
                 onPickVerificationSelfie = platform.onPickVerificationSelfie,
                 onSetDiscreetIcon = platform.onSetDiscreetIcon,
                 discreetIconSupported = platform.discreetIconSupported,
+                swipeDeckCovered =
+                    graph.matchCelebrationStateHolder
+                        ?.state
+                        ?.collectAsState()
+                        ?.value
+                        ?.current != null,
             )
         }
 

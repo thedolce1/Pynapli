@@ -65,6 +65,9 @@ internal fun SwipeScreenContent(
     onPineappleLike: () -> Unit,
     onLike: () -> Unit,
     modifier: Modifier = Modifier,
+    // Something covers the deck (the match moment, a sheet): keys stay with it, and the stage takes
+    // focus back when it closes so the arrow keys keep working without a click.
+    deckCovered: Boolean = false,
 ) {
     // Desktop stage (WEB_PWA_GAMEPLAN.md W4): wide panes center the deck at a card-
     // comfortable width instead of stretching one hero card across a monitor, and the
@@ -77,14 +80,14 @@ internal fun SwipeScreenContent(
                 .background(MaterialTheme.colorScheme.background),
     ) {
         val wideStage = maxWidth >= WideStageMinPaneWidth
-        val keyActionsEnabled = state.hasMore && !state.actionQueueFull && !state.isSubmitting
+        val keyActionsEnabled = state.hasMore && !state.actionQueueFull && !state.isSubmitting && !deckCovered
         val stageFocus = remember { FocusRequester() }
         // Which side each card left by, so Rewind brings it back in from there.
         val exitMemory = remember { SwipeExitMemory() }
         // Keys need focus; grab it whenever the wide stage (re)appears so arrows work
         // immediately. Compact never requests — the phone flow has no keyboard.
-        LaunchedEffect(wideStage) {
-            if (wideStage) runCatching { stageFocus.requestFocus() }
+        LaunchedEffect(wideStage, deckCovered) {
+            if (wideStage && !deckCovered) runCatching { stageFocus.requestFocus() }
         }
 
         Column(
@@ -129,7 +132,7 @@ internal fun SwipeScreenContent(
                     // Space / Enter open the top card's profile. onKeyEvent, not preview, so a focused
                     // button (a filter chip, an action) still gets its own Space / Enter first.
                     .onKeyEvent { event ->
-                        if (!wideStage || event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        if (!wideStage || deckCovered || event.type != KeyEventType.KeyDown) return@onKeyEvent false
                         val top = state.topCard ?: return@onKeyEvent false
                         when (event.key) {
                             Key.Spacebar, Key.Enter, Key.NumPadEnter -> {

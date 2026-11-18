@@ -266,11 +266,13 @@ internal fun PynapliOverlays(
         )
     }
 
-    // Last, so it sits over every tab, sheet and overlay: the "It's a match" moment for whichever
-    // side of the match this person is on.
+    // Last, so it sits over every tab and full-screen overlay: the "It's a match" moment for whichever
+    // side of the match this person is on. Sheets render in their own window above it, so the moment
+    // waits (unseen, no haptic) while the chat sheet or a profile peek is open.
     matchCelebrationStateHolder?.let { holder ->
         MatchCelebrationOverlay(
             holder = holder,
+            deferred = (conversationState.visible && !conversationShownInline) || profileDetailState.visible,
             matchAlertsOn = appSettingsState.settings.matchNotifications,
             showNames = appSettingsState.settings.notificationDetail == AppSettings.NOTIFICATION_STANDARD,
             onSendMessage = { celebration ->
@@ -287,6 +289,7 @@ internal fun PynapliOverlays(
 @Composable
 private fun MatchCelebrationOverlay(
     holder: MatchCelebrationStateHolder,
+    deferred: Boolean,
     matchAlertsOn: Boolean,
     showNames: Boolean,
     onSendMessage: (MatchCelebrationUi) -> Unit,
@@ -296,9 +299,10 @@ private fun MatchCelebrationOverlay(
         holder.state
             .collectAsState()
             .value.current ?: return
+    if (deferred) return
     // Shown (or deliberately not shown, with match alerts off): either way it is seen, once.
     // The mark runs in the app scope, so closing the moment quickly never cancels it.
-    LaunchedEffect(celebration.primaryMatchId) {
+    LaunchedEffect(celebration.primaryMatchId, matchAlertsOn) {
         scope.launch { holder.markShown(celebration) }
         if (!matchAlertsOn) holder.dismiss()
     }
