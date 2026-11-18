@@ -294,6 +294,8 @@ internal object ProfileDetailTags {
     const val FAVORITE = "profile-detail-favorite"
     const val LAST_SEEN = "profile-detail-last-seen"
     const val LIKE_BACK = "profile-detail-like-back"
+    const val LIFESTYLE = "profile-detail-lifestyle"
+    const val PARTNER_SUMMARY = "profile-detail-partner-summary"
 }
 
 /** Private Favorites star (GRID_IMPLEMENTATION_SPEC "Favorites"): the other person is never told. */

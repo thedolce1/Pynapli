@@ -138,11 +138,6 @@ private fun selfDescribableLabel(
         key.toDisplayLabel()
     }
 
-internal object ProfileDetailTags {
-    const val LIFESTYLE = "profile-detail-lifestyle"
-    const val PARTNER_SUMMARY = "profile-detail-partner-summary"
-}
-
 /** One labeled row of the profile's "Lifestyle" block (e.g. "Swap" -> ["Soft swap"]). */
 internal data class LifestyleFactRow(
     val label: String,
