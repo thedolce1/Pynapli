@@ -8,6 +8,7 @@ internal object SwipeTestTags {
     const val VERIFIED_BADGE = "swipe-card-verified-badge"
     const val VISITING_PILL = "swipe-card-visiting-pill"
     const val LINKED_PARTNER_BADGE = "swipe-card-linked-partner-badge"
+    const val COUPLE_VERIFIED_BADGE = "swipe-card-couple-verified-badge"
     const val LINKED_PARTNER_PREVIEW_DIALOG = "swipe-linked-partner-preview-dialog"
     const val LINKED_PARTNER_PREVIEW_VIEW_PROFILE = "swipe-linked-partner-preview-view-profile"
     const val LINKED_PARTNER_PREVIEW_ONLINE = "swipe-linked-partner-preview-online"

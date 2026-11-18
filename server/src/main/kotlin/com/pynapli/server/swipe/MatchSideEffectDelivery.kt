@@ -52,7 +52,9 @@ class MatchSideEffectDelivery(
             matchConversationOpener?.openForMatch(effect.actorUserId, effect.targetUserId)
         }
         profile("swipe.action.notify") {
-            notificationPublisher?.enqueue(
+            // The strict enqueue: a failed push write throws, so this effect stays in the outbox and
+            // the drainer retries it instead of the push being silently lost.
+            notificationPublisher?.enqueueOrThrow(
                 NotificationEventDraft(
                     recipientUserId = effect.targetUserId,
                     actorUserId = effect.actorUserId,

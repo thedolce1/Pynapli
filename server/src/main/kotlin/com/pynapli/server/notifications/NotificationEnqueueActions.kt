@@ -7,7 +7,10 @@ internal class NotificationEnqueueActions(
     private val repository: NotificationRepository,
     private val clock: Clock,
 ) {
-    suspend fun enqueue(notification: NotificationEventDraft): NotificationOutboxRecord? {
+    suspend fun enqueue(
+        notification: NotificationEventDraft,
+        propagateWriteFailure: Boolean = false,
+    ): NotificationOutboxRecord? {
         if (notification.actorUserId == notification.recipientUserId) return null
         val kind = notification.kind.trim().lowercase()
         if (kind !in NOTIFICATION_KINDS) throw NotificationException("INVALID_NOTIFICATION_KIND")
@@ -36,6 +39,7 @@ internal class NotificationEnqueueActions(
         // A push is a courtesy on top of the action that caused it (a message, an invite, an
         // approval). Failing to queue one must never fail that action, so a write error is logged
         // and dropped. NotificationOutboxKindsIntegrationTest guards the known cause (kind check).
+        // A caller with its own retry (the match side-effect outbox) asks for the error instead.
         return try {
             repository.insertOutboxNotification(
                 notification =
@@ -55,6 +59,7 @@ internal class NotificationEnqueueActions(
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
         } catch (error: Exception) {
+            if (propagateWriteFailure) throw error
             // Kind and error type only: never recipients, payloads or bodies (logging rule).
             logger.warn("Notification outbox write failed for kind {}: {}", kind, error.javaClass.simpleName)
             null

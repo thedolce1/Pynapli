@@ -54,6 +54,7 @@ internal class SwipeDtoMapper(
             shortBio = card.bio.toShortBio(),
             tags = card.tags.toVisibleTags(),
             verified = card.verified,
+            coupleVerified = card.verified && card.linkedPartnerUserId != null && card.linkedPartnerVerified,
             visiting = card.visiting,
         )
     }

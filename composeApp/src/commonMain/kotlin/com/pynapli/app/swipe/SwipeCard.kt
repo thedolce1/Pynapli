@@ -205,6 +205,7 @@ internal fun SwipeCard(
                         .align(Alignment.TopEnd)
                         .padding(18.dp),
                 enabled = isTop && enabled,
+                coupleVerified = card.coupleVerified,
                 onClick =
                     if (isTop) {
                         { onLinkedPartnerTap(card) }

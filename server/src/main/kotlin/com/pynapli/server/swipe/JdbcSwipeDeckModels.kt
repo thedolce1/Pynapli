@@ -28,6 +28,8 @@ internal data class DeckHydration(
     val linkedPartnerUserId: UUID?,
     val linkedPartnerDisplayName: String?,
     val linkedPartnerThumbnailMediaAssetId: UUID?,
+    /** The visible linked partner is photo-verified (false without a visible partner). */
+    val linkedPartnerVerified: Boolean = false,
 )
 
 /** The viewer's location cell (CoarseLocation.cellKey): hundredths of a degree. */

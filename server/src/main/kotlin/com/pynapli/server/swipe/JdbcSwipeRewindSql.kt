@@ -38,6 +38,7 @@ internal fun Connection.findLatestRewindableAction(
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
+               COALESCE(linked_partner.linked_partner_verified, false) AS linked_partner_verified,
                ds.show_distance,
                -- Cell-to-cell distance from the target's effective location, as on the dealt card;
                -- the card shows none when the owner hides it.
@@ -89,7 +90,8 @@ internal fun Connection.findLatestRewindableAction(
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
                    COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
-                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id
+                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
+                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified
             FROM user_profile_links upl
             JOIN users linked_user
               ON linked_user.id = upl.linked_user_id
@@ -215,6 +217,7 @@ internal fun Connection.findLatestRewindableAction(
                             bio = rs.getString("bio"),
                             tags = rs.readStringArray("profile_tags"),
                             verified = rs.getBoolean("verified"),
+                            linkedPartnerVerified = rs.getBoolean("linked_partner_verified"),
                             visiting = rs.getBoolean("visiting"),
                         ),
                 )

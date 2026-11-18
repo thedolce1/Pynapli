@@ -6,6 +6,9 @@ import com.pynapli.server.media.LocalMediaAssetUrlResolver
 import com.pynapli.server.media.MediaVerificationSelfieGateway
 import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.profile.JdbcProfileRepository
+import com.pynapli.server.swipe.SwipeCardRecord
+import com.pynapli.server.swipe.SwipeDtoMapper
+import com.pynapli.server.swipe.hydrateDeckCards
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.CreatePhotoVerificationUploadRequestDto
 import com.pynapli.shared.network.dto.SubmitPhotoVerificationRequestDto
@@ -88,6 +91,30 @@ class CoupleVerificationIntegrationTest {
         }
 
     @Test
+    fun swipeCardIsCoupleVerifiedOnlyWhenBothAreVerifiedAndThePartnerIsVisible() =
+        runBlocking {
+            val (viewer, owner, partner) = threeUsers()
+            dataSource.linkPartners(owner, partner)
+            val service = service()
+
+            service.verify(partner)
+            // The partner alone being verified is not a verified couple.
+            assertEquals(false, swipeCard(viewer, owner).coupleVerified)
+
+            service.verify(owner)
+            val card = swipeCard(viewer, owner)
+            assertEquals(true, card.verified)
+            assertEquals(true, card.coupleVerified)
+
+            // A hidden partner is not revealed through the couple badge either.
+            dataSource.setPartnerVisibility(owner, "hidden")
+            val hidden = swipeCard(viewer, owner)
+            assertNull(hidden.linkedPartner)
+            assertEquals(false, hidden.coupleVerified)
+            assertEquals(true, hidden.verified)
+        }
+
+    @Test
     fun verifiedOnlyPartnerVisibilityOpensOnceTheViewerIsVerified() =
         runBlocking {
             val (viewer, owner, partner) = threeUsers()
@@ -119,6 +146,38 @@ class CoupleVerificationIntegrationTest {
     ): GridVerification {
         val hydration = assertNotNull(dataSource.connection.use { it.hydrateGridCards(viewer, listOf(owner)) }[owner])
         return GridVerification(verified = hydration.verified, coupleVerified = hydration.coupleVerified)
+    }
+
+    /** The Swipe card the deck would deal: the hydration query plus the card mapper. */
+    private fun swipeCard(
+        viewer: UUID,
+        owner: UUID,
+    ): com.pynapli.shared.network.dto.SwipeCardDto {
+        val hydration = assertNotNull(dataSource.connection.use { it.hydrateDeckCards(viewer, listOf(owner)) }[owner])
+        val verified =
+            dataSource.connection.use { connection ->
+                connection.prepareStatement("SELECT verified_at IS NOT NULL FROM profiles WHERE user_id = ?").use { statement ->
+                    statement.setObject(1, owner)
+                    statement.executeQuery().use { rs ->
+                        rs.next()
+                        rs.getBoolean(1)
+                    }
+                }
+            }
+        val record =
+            SwipeCardRecord(
+                userId = owner,
+                displayName = "Owner",
+                displayAge = null,
+                thumbnailMediaAssetId = hydration.thumbnailMediaAssetId,
+                showDistance = false,
+                distanceMeters = 0.0,
+                linkedPartnerUserId = hydration.linkedPartnerUserId,
+                linkedPartnerDisplayName = hydration.linkedPartnerDisplayName,
+                linkedPartnerVerified = hydration.linkedPartnerVerified,
+                verified = verified,
+            )
+        return SwipeDtoMapper(mediaAssetUrlResolver = null).cardToDto(record, rankToken = "t", online = false, onlineUserIds = emptySet())
     }
 
     private fun gridPartner(
