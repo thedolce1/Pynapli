@@ -31,7 +31,10 @@ import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
 import com.pynapli.server.location.TravelPlaceSearchService
+import com.pynapli.server.admin.AdminMediaReviewService
+import com.pynapli.server.admin.JdbcAdminMediaReviewRepository
 import com.pynapli.server.media.JdbcMediaCleanupRepository
+import com.pynapli.server.media.JdbcMediaRepository
 import com.pynapli.server.media.LocalMediaUploadStorage
 import com.pynapli.server.media.MediaCleanupService
 import com.pynapli.server.media.MediaCleanupWorker
@@ -102,6 +105,7 @@ class ServerDependencies(
     val adminPartnerLinkReviewService: AdminPartnerLinkReviewService,
     val adminSubscriptionSupportService: AdminSubscriptionSupportService,
     val adminDashboardService: AdminDashboardService,
+    val adminMediaReviewService: AdminMediaReviewService,
     val adminRequestAuditRecorder: AdminRequestAuditRecorder?,
     val locationService: LocationService,
     val travelLocationService: TravelLocationService,
@@ -318,6 +322,13 @@ class ServerDependencies(
                 AdminDashboardService(
                     repository = JdbcAdminDashboardRepository(database.dataSource),
                 )
+            val adminMediaReviewService =
+                AdminMediaReviewService(
+                    repository = JdbcAdminMediaReviewRepository(database.dataSource),
+                    mediaRepository = JdbcMediaRepository(database.dataSource),
+                    mediaAssetUrlResolver = media.mediaAssetUrlResolver,
+                    notificationPublisher = core.notificationService,
+                )
             val adminRequestAuditRecorder =
                 config.adminApiToken?.let { JdbcAdminRequestAuditRecorder(database.dataSource) }
             val grid =
@@ -431,6 +442,7 @@ class ServerDependencies(
                 adminPartnerLinkReviewService = adminPartnerLinkReviewService,
                 adminSubscriptionSupportService = adminSubscriptionSupportService,
                 adminDashboardService = adminDashboardService,
+                adminMediaReviewService = adminMediaReviewService,
                 adminRequestAuditRecorder = adminRequestAuditRecorder,
                 locationService = core.locationService,
                 travelLocationService = commerceTravel.travelLocationService,

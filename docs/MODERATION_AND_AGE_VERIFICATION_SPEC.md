@@ -190,6 +190,7 @@ Avoid:
 - [x] Market-driven enhanced verification flags: server-side `AgeVerificationMarketPolicy` seam (baseline default flags nothing; ops/legal swaps a real policy via DI, mirroring `TravelRegionPolicy`). In a flagged market with a provider configured, `requirements` reports `enhancedRequired` and accepts only the provider method, and `start` rejects manual review with `ENHANCED_VERIFICATION_REQUIRED`; without a provider the flag fails open to manual review so misconfiguration cannot strand users. Which markets to flag (and the provider choice) remains an ops/legal decision.
 - [x] Verification data minimization.
 - [x] Public/profile media moderation is enforced before discovery visibility.
+- [x] Held profile photos (manual-review scanner, or a Cloud Vision "possible" result) have an admin queue: `GET /v1/admin/media/pending` (oldest first, paged), approve (ready/approved) or reject with a reason (removed, owner notified by a system-safety push). Operator-level, audited.
 - [x] Private album grants and report flow exist; consent-gated private media stays hidden from non-grantees, removed media is filtered, and severe scanner decisions remove the asset before escalating.
 - [x] Report categories implemented.
 - [ ] Partial: reports/risk/message/appeal review queues and actions exist; full moderator console, roles, MFA, senior-review separation, and production admin separation are not complete.
