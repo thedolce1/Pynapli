@@ -85,7 +85,6 @@ internal object JdbcActivitySummarySql {
                            'swipe_like',
                            'pineapple_like',
                            'intro_note',
-                           'match',
                            'partner_chat_invite'
                        )
                        OR (

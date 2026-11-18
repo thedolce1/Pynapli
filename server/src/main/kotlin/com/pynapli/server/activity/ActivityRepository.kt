@@ -136,6 +136,8 @@ data class ActivitySummaryRecord(
     val partnerInviteCount: Int,
     val latestBadgeOccurredAt: Instant?,
 ) {
+    // Matches are not in the badge: Activity has no Matches tab (they live in the Messages
+    // new-matches rail), so no client loads a match row to mark it seen and it would never clear.
     val badgeCount: Int
-        get() = flirtCount + likeCount + matchCount + albumRequestCount + partnerInviteCount
+        get() = flirtCount + likeCount + albumRequestCount + partnerInviteCount
 }

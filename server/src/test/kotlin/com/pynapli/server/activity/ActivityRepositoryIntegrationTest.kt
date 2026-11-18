@@ -286,7 +286,8 @@ class ActivityRepositoryIntegrationTest {
             assertEquals(1, summary.matchCount)
             assertEquals(1, summary.albumRequestCount)
             assertEquals(1, summary.partnerInviteCount)
-            assertEquals(6, summary.badgeCount)
+            // flirt + 2 likes + pending album request + partner invite; the visible match is not in it.
+            assertEquals(5, summary.badgeCount)
             assertEquals(Instant.parse("2026-05-18T14:06:00Z"), summary.latestBadgeOccurredAt)
         }
 
@@ -314,7 +315,7 @@ class ActivityRepositoryIntegrationTest {
                 eventId = secondEventId,
                 recipientUserId = recipient,
                 actorUserId = secondActor,
-                eventType = "match",
+                eventType = "swipe_like",
                 occurredAt = Instant.parse("2026-05-18T15:01:00Z"),
             )
             dataSource.insertActivityEvent(
@@ -335,10 +336,92 @@ class ActivityRepositoryIntegrationTest {
             assertEquals(true, feed.single { it.eventId == firstEventId }.seen)
             assertEquals(false, feed.single { it.eventId == secondEventId }.seen)
             assertEquals(0, recipientSummary.flirtCount)
-            assertEquals(1, recipientSummary.matchCount)
+            assertEquals(1, recipientSummary.likeCount)
             assertEquals(1, recipientSummary.badgeCount)
             assertEquals(1, otherSummary.flirtCount)
             assertEquals(1, otherSummary.badgeCount)
+        }
+
+    @Test
+    fun getActivitySummaryLeavesMatchesOutOfBadgeAndLatestBadgeTime() =
+        runBlocking {
+            val recipient = UUID.fromString("00000000-0000-0000-0000-000000002201")
+            val flirtActor = UUID.fromString("00000000-0000-0000-0000-000000002202")
+            val matchActor = UUID.fromString("00000000-0000-0000-0000-000000002203")
+            listOf(recipient, flirtActor, matchActor).forEach { userId -> dataSource.insertUserWithDiscovery(userId) }
+            val repository = JdbcActivityRepository(dataSource)
+
+            // An unseen match alone: Activity has no Matches tab, so nothing could ever clear it.
+            dataSource.insertActivityEvent(
+                eventId = UUID.fromString("00000000-0000-0000-0000-000000002211"),
+                recipientUserId = recipient,
+                actorUserId = matchActor,
+                eventType = "match",
+                occurredAt = Instant.parse("2026-05-18T16:05:00Z"),
+            )
+            val matchOnly = repository.getActivitySummary(recipient)
+            assertEquals(0, matchOnly.badgeCount)
+            assertEquals(null, matchOnly.latestBadgeOccurredAt)
+
+            // An older unseen flirt counts; the newer match neither counts nor moves the badge time.
+            dataSource.insertActivityEvent(
+                eventId = UUID.fromString("00000000-0000-0000-0000-000000002212"),
+                recipientUserId = recipient,
+                actorUserId = flirtActor,
+                eventType = "flirt",
+                occurredAt = Instant.parse("2026-05-18T16:00:00Z"),
+            )
+            val withFlirt = repository.getActivitySummary(recipient)
+            assertEquals(1, withFlirt.flirtCount)
+            assertEquals(1, withFlirt.badgeCount)
+            assertEquals(Instant.parse("2026-05-18T16:00:00Z"), withFlirt.latestBadgeOccurredAt)
+        }
+
+    @Test
+    fun flirtsLikesAndRequestsRaiseBadgeAndMarkingThemSeenClearsItBesideAnUnseenMatch() =
+        runBlocking {
+            val recipient = UUID.fromString("00000000-0000-0000-0000-000000002301")
+            val flirtActor = UUID.fromString("00000000-0000-0000-0000-000000002302")
+            val likeActor = UUID.fromString("00000000-0000-0000-0000-000000002303")
+            val albumActor = UUID.fromString("00000000-0000-0000-0000-000000002304")
+            val inviteActor = UUID.fromString("00000000-0000-0000-0000-000000002305")
+            val viewActor = UUID.fromString("00000000-0000-0000-0000-000000002306")
+            val matchActor = UUID.fromString("00000000-0000-0000-0000-000000002307")
+            listOf(recipient, flirtActor, likeActor, albumActor, inviteActor, viewActor, matchActor)
+                .forEach { userId -> dataSource.insertUserWithDiscovery(userId) }
+            dataSource.insertPrivateAlbumAccessRequest(recipient, albumActor, "pending")
+            val flirtId = UUID.fromString("00000000-0000-0000-0000-000000002311")
+            val likeId = UUID.fromString("00000000-0000-0000-0000-000000002312")
+            val albumId = UUID.fromString("00000000-0000-0000-0000-000000002313")
+            val inviteId = UUID.fromString("00000000-0000-0000-0000-000000002314")
+            val viewId = UUID.fromString("00000000-0000-0000-0000-000000002315")
+            val matchId = UUID.fromString("00000000-0000-0000-0000-000000002316")
+            dataSource.insertActivityEvent(flirtId, recipient, flirtActor, "flirt", Instant.parse("2026-05-18T17:00:00Z"))
+            dataSource.insertActivityEvent(likeId, recipient, likeActor, "swipe_like", Instant.parse("2026-05-18T17:01:00Z"))
+            dataSource.insertActivityEvent(albumId, recipient, albumActor, "album_request", Instant.parse("2026-05-18T17:02:00Z"))
+            dataSource.insertActivityEvent(inviteId, recipient, inviteActor, "partner_chat_invite", Instant.parse("2026-05-18T17:03:00Z"))
+            dataSource.insertActivityEvent(viewId, recipient, viewActor, "profile_view", Instant.parse("2026-05-18T17:04:00Z"))
+            dataSource.insertActivityEvent(matchId, recipient, matchActor, "match", Instant.parse("2026-05-18T17:05:00Z"))
+            val repository = JdbcActivityRepository(dataSource)
+
+            val before = repository.getActivitySummary(recipient)
+            // Views are counted for the Views tab but have never been in the badge.
+            assertEquals(1, before.profileViewCount)
+            assertEquals(4, before.badgeCount)
+            assertEquals(Instant.parse("2026-05-18T17:03:00Z"), before.latestBadgeOccurredAt)
+
+            // What the Flirts and Requests tabs mark seen when they load: the badge drops to zero
+            // even though the match row is still unseen.
+            assertEquals(4, repository.markActivityEventsSeen(recipient, setOf(flirtId, likeId, albumId, inviteId)))
+            val after = repository.getActivitySummary(recipient)
+            assertEquals(0, after.badgeCount)
+            assertEquals(null, after.latestBadgeOccurredAt)
+            assertFalse(
+                repository
+                    .listActivity(ActivityFeedQuery(recipient, setOf("match"), 10, null))
+                    .single()
+                    .seen,
+            )
         }
 
     @Test

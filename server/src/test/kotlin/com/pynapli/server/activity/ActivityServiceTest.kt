@@ -745,7 +745,8 @@ class ActivityServiceTest {
 
             val response = service.getActivitySummary(UUID.randomUUID())
 
-            assertEquals(8, response.badgeCount)
+            // flirts 2 + likes 3 + album requests 1 + partner invites 1; matches are not in the badge.
+            assertEquals(7, response.badgeCount)
             assertEquals(12, response.profileViewCount)
             assertEquals(2, response.flirtCount)
             assertEquals(3, response.likeCount)
