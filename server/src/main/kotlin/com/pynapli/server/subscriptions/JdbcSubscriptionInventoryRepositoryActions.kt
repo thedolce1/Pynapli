@@ -74,6 +74,9 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
                 // With no Boost running, the FOR UPDATE below has no row to lock, so a double tap
                 // would let both requests spend and start one. Serialise activations per user.
                 lockForTransaction(BOOST_ACTIVATION_LOCK_NAMESPACE, userId.toString())
+                // A Boost that ran out still says 'active' until something moves it; move it now so
+                // the one-active-Boost index (V101) admits the next one.
+                expireLapsedBoostActivations(userId, now)
                 findActiveBoostActivation(userId, now)?.let { active ->
                     return@inTransaction BoostActivationResult(
                         activation = active,
