@@ -1,14 +1,17 @@
 package com.pynapli.server.messaging
 
 import com.pynapli.server.moderation.JdbcMessageModerationRepository
+import com.pynapli.server.safety.JdbcBlockRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -193,6 +196,153 @@ class MessagingRepositoryIntegrationTest {
 
             val created = assertNotNull(conversation)
             assertEquals("grid", created.origin)
+        }
+
+    @Test
+    fun gridOriginConversationUnderVerifiedOnlyRefusesAnUnverifiedSenderLikeMatchesOnly() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008d1")
+            val verifiedOnlyTarget = UUID.fromString("00000000-0000-0000-0000-0000000008d2")
+            val matchesOnlyTarget = UUID.fromString("00000000-0000-0000-0000-0000000008d3")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(verifiedOnlyTarget, "Verified only")
+            dataSource.insertUserWithProfile(matchesOnlyTarget, "Matches only")
+            dataSource.setGridMessagePolicy(verifiedOnlyTarget, allowGridMessages = true, policy = "verified_only")
+            dataSource.setGridMessagePolicy(matchesOnlyTarget, allowGridMessages = true, policy = "matches_only")
+            val repository = JdbcMessagingRepository(dataSource)
+            val service = MessagingService(repository)
+
+            assertNull(repository.getOrCreateDirectConversation(viewer, verifiedOnlyTarget, origin = "grid"))
+
+            // Same refusal (code, and so status and message) as an excluded sender under matches_only.
+            val verifiedOnlyRefusal =
+                assertFailsWith<MessagingException> {
+                    service.createDirectConversation(
+                        viewer,
+                        CreateDirectConversationRequestDto(targetUserId = verifiedOnlyTarget.toString(), origin = "grid"),
+                    )
+                }
+            val matchesOnlyRefusal =
+                assertFailsWith<MessagingException> {
+                    service.createDirectConversation(
+                        viewer,
+                        CreateDirectConversationRequestDto(targetUserId = matchesOnlyTarget.toString(), origin = "grid"),
+                    )
+                }
+            assertEquals("MESSAGING_NOT_ALLOWED", verifiedOnlyRefusal.code)
+            assertEquals(matchesOnlyRefusal.code, verifiedOnlyRefusal.code)
+        }
+
+    @Test
+    fun gridOriginConversationUnderVerifiedOnlyAllowsAPhotoVerifiedSender() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008d4")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000008d5")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "verified_only")
+            dataSource.setPhotoVerified(viewer)
+            val repository = JdbcMessagingRepository(dataSource)
+
+            val created = assertNotNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
+            assertEquals("grid", created.origin)
+        }
+
+    @Test
+    fun gridOriginConversationUnderVerifiedOnlyIgnoresTheRecipientsOwnVerification() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008d6")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000008d7")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "verified_only")
+            dataSource.setPhotoVerified(target)
+            val repository = JdbcMessagingRepository(dataSource)
+
+            // Only the sender's verification counts.
+            assertNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
+        }
+
+    @Test
+    fun gridOriginConversationUnderVerifiedOnlyStillRespectsTheMasterSwitch() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008d8")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000008d9")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.setGridMessagePolicy(target, allowGridMessages = false, policy = "verified_only")
+            dataSource.setPhotoVerified(viewer)
+            val repository = JdbcMessagingRepository(dataSource)
+
+            assertNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
+        }
+
+    @Test
+    fun blockRefusesAVerifiedSenderUnderVerifiedOnly() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008da")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000008db")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "verified_only")
+            dataSource.setPhotoVerified(viewer)
+            val blockRepository = JdbcBlockRepository(dataSource)
+            blockRepository.block(target, viewer, null) { UUID.randomUUID() }
+            val service = MessagingService(JdbcMessagingRepository(dataSource), blockRepository = blockRepository)
+
+            val error =
+                assertFailsWith<MessagingException> {
+                    service.createDirectConversation(
+                        viewer,
+                        CreateDirectConversationRequestDto(targetUserId = target.toString(), origin = "grid"),
+                    )
+                }
+            assertEquals("MESSAGING_NOT_ALLOWED", error.code)
+        }
+
+    @Test
+    fun swipeMatchConversationIsNeverGatedByTheGridMessagePolicy() =
+        runBlocking {
+            val repository = JdbcMessagingRepository(dataSource)
+            listOf("verified_only", "matches_only", "no_one").forEachIndexed { index, policy ->
+                val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008e${index * 2 + 1}")
+                val target = UUID.fromString("00000000-0000-0000-0000-0000000008e${index * 2 + 2}")
+                // Both unverified; the target has turned Grid first messages down to this policy.
+                dataSource.insertUserWithProfile(viewer, "Viewer $policy")
+                dataSource.insertUserWithProfile(target, "Target $policy")
+                dataSource.setGridMessagePolicy(target, allowGridMessages = policy != "no_one", policy = policy)
+                dataSource.insertMatch(viewer, target)
+
+                val created =
+                    assertNotNull(
+                        repository.getOrCreateDirectConversation(viewer, target, origin = "swipe"),
+                        "a match chat must open under $policy",
+                    )
+                assertEquals("swipe", created.origin)
+            }
+        }
+
+    @Test
+    fun existingGridConversationKeepsWorkingAfterTheRecipientSwitchesToVerifiedOnly() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008dc")
+            val target = UUID.fromString("00000000-0000-0000-0000-0000000008dd")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcMessagingRepository(dataSource)
+            val conversation = assertNotNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
+            assertNotNull(repository.sendMessage(viewer, conversation.conversationId, "hello"))
+
+            dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "verified_only")
+
+            // The thread stays: both sides can read it and keep sending.
+            assertNotNull(repository.sendMessage(viewer, conversation.conversationId, "still here"))
+            assertNotNull(repository.sendMessage(target, conversation.conversationId, "hi back"))
+            assertEquals(3, repository.getConversationDetail(viewer, conversation.conversationId, limit = 10)?.messages?.size)
+            // Opening it again from the Grid is gated, exactly as under matches_only.
+            assertNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
+            dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "matches_only")
+            assertNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
         }
 
     @Test
@@ -895,6 +1045,18 @@ class MessagingRepositoryIntegrationTest {
                     statement.setBoolean(1, allowGridMessages)
                     statement.setString(2, policy)
                     statement.setObject(3, userId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
+    // Approved selfie photo verification writes profiles.verified_at (V103).
+    private fun DataSource.setPhotoVerified(userId: UUID) {
+        connection.use { connection ->
+            connection
+                .prepareStatement("UPDATE profiles SET face_photo_verified_at = now(), verified_at = now() WHERE user_id = ?")
+                .use { statement ->
+                    statement.setObject(1, userId)
                     statement.executeUpdate()
                 }
         }

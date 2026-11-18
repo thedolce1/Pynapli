@@ -56,6 +56,64 @@ class ProfileRepositoryIntegrationTest {
         }
 
     @Test
+    fun updateDiscoverySettingsPersistsVerifiedOnlyGridMessagePolicy() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000771")
+            dataSource.insertUserWithProfile(userId, "Vera")
+            val repository = JdbcProfileRepository(dataSource)
+
+            repository.updateDiscoverySettings(
+                userId = userId,
+                update = verifiedOnlyGridMessagesUpdate(),
+            )
+
+            // Read back through a fresh read: the V3 CHECK accepts the value and it is stored.
+            val settings = requireNotNull(repository.getMe(userId)).discoverySettings
+            assertEquals(true, settings.allowGridMessages)
+            assertEquals("verified_only", settings.gridMessagePolicy)
+        }
+
+    @Test
+    fun publicProfileAllowsGridMessagesUnderVerifiedOnlyOnlyForAVerifiedViewer() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000781")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000782")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Target")
+            val repository = JdbcProfileRepository(dataSource)
+            repository.updateDiscoverySettings(userId = target, update = verifiedOnlyGridMessagesUpdate())
+
+            // Unverified viewer: the message button signal is off, even with a match.
+            assertEquals(false, requireNotNull(repository.getPublicProfile(viewer, target)).allowGridMessages)
+            dataSource.insertMatch(viewer, target)
+            assertEquals(false, requireNotNull(repository.getPublicProfile(viewer, target)).allowGridMessages)
+
+            // Photo-verified viewer (profiles.verified_at): the signal turns on.
+            dataSource.setVerified(viewer)
+            requireNotNull(repository.getPublicProfile(viewer, target)).let {
+                assertEquals(true, it.allowGridMessages)
+                // The bind shift left the other viewer-bound columns intact.
+                assertEquals(target, it.userId)
+                assertEquals("none", it.privateAlbumAccessStatus)
+            }
+        }
+
+    private fun verifiedOnlyGridMessagesUpdate() =
+        DiscoverySettingsUpdate(
+            gridVisible = null,
+            swipeVisible = null,
+            showDistance = null,
+            showInViewedLists = null,
+            allowGridMessages = true,
+            gridMessagePolicy = "verified_only",
+            allowFlirts = null,
+            allowIntroNotes = null,
+            allowAlbumRequests = null,
+            visibleWhileTraveling = null,
+            sharePsyncSoloMatches = null,
+        )
+
+    @Test
     fun publicProfileHidesQuarantinedTarget() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000711")

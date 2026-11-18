@@ -175,11 +175,29 @@ class ProfileServiceTest {
                 assertFailsWith<ProfileException> {
                     service.updateDiscoverySettings(
                         userId,
-                        UpdateDiscoverySettingsRequestDto(gridMessagePolicy = "verified_only"),
+                        // A cut option (2026-11-18) stays unknown to the server.
+                        UpdateDiscoverySettingsRequestDto(gridMessagePolicy = "nearby_only"),
                     )
                 }
 
             assertEquals("INVALID_GRID_MESSAGE_POLICY", error.code)
+        }
+
+    @Test
+    fun updateDiscoverySettingsAcceptsVerifiedOnlyGridMessagePolicy() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId), clock)
+
+            val me =
+                service.updateDiscoverySettings(
+                    userId,
+                    UpdateDiscoverySettingsRequestDto(allowGridMessages = true, gridMessagePolicy = "Verified_Only"),
+                )
+
+            assertEquals(true, me.discoverySettings.allowGridMessages)
+            assertEquals("verified_only", me.discoverySettings.gridMessagePolicy)
+            assertEquals("verified_only", service.getMe(userId).discoverySettings.gridMessagePolicy)
         }
 
     @Test
