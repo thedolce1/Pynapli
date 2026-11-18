@@ -2,12 +2,14 @@ package com.pynapli.server.realtime
 
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
+import io.ktor.server.request.path
 import io.ktor.server.routing.Route
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
 import io.ktor.websocket.send
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.Channel
@@ -29,6 +31,9 @@ internal val streamJson =
 
 /** How often an open stream re-checks that its session is still valid. */
 const val STREAM_SESSION_RECHECK_MS: Long = 60_000L
+
+/** Open sockets one account may hold on one stream, per replica. */
+const val MAX_STREAMS_PER_USER: Int = 5
 
 /**
  * Authenticates a realtime socket: the Authorization header for native clients, or a first
@@ -57,6 +62,16 @@ suspend fun DefaultWebSocketServerSession.authenticateStream(
             close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
             return null
         }
+    // At most MAX_STREAMS_PER_USER sockets per account per stream: the oldest goes (StreamConnectionLimiter).
+    val stream = call.request.path()
+    StreamConnectionLimiter.register(stream, viewerId, this, MAX_STREAMS_PER_USER)?.let(StreamConnectionLimiter::evict)
+    launch {
+        try {
+            awaitCancellation()
+        } finally {
+            StreamConnectionLimiter.unregister(stream, viewerId, this@authenticateStream)
+        }
+    }
     // An account-wide revocation (ban, lock, sign out everywhere) re-checks at once, on any replica.
     val recheckNow = Channel<Unit>(Channel.CONFLATED)
     launch { authService.sessionRevocations.collect { userId -> if (userId == viewerId) recheckNow.trySend(Unit) } }

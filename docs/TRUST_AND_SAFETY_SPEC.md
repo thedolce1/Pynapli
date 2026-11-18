@@ -464,6 +464,11 @@ Rules that must hold (implemented; numbers live in `RateLimitService.POLICIES`):
   caller's own data (`/v1/me*`, settings, blocks, hidden, reports, appeals, sessions, entitlement,
   activity, exports), or are membership-checked by an unguessable id (message threads, Psync
   sessions, export downloads), so walking ids reveals nothing.
+- **Realtime sockets.** Frames over 64 KiB close the socket (1009); the pre-auth token frame is
+  refused unparsed over 4 KiB. One account may hold 5 sockets per stream per replica: a sixth closes
+  the *oldest* (`TOO_MANY_STREAMS`), because refusing the newest would lock out a user whose old
+  socket is still half-open after a network change. Sockets re-check their session at once when the
+  account's sessions are revoked (ban, lock, sign out everywhere), on every replica.
 - **Auth keeps working when Redis is down.** Sign-up, sign-in, refresh and password reset/change
   limits fall back to bounded in-process counters (`RateLimitOutageFallback`: 50,000 keys, LRU,
   per replica) only while Redis fails; a warning is logged when it takes over and an info line when
