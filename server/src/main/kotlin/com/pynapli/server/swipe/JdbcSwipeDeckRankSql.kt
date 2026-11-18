@@ -61,18 +61,24 @@ internal fun Connection.queryDeckRank(
         WITH viewer_location AS (
             -- Passport/travel mode (SWIPE_IMPLEMENTATION_SPEC L339-354): an active travel point
             -- overrides GPS. Snapped to the viewer's cell (L-10/L-14).
-            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
+            -- The order seed is built here once, not per candidate.
+            SELECT cell.geom,
+                   'deck:' || ST_AsText(cell.geom::geometry) AS order_seed
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
              AND tl.status = 'active'
              AND tl.active_until IS NULL
+            CROSS JOIN LATERAL (SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom) cell
             WHERE ul.user_id = ?
         ),
         candidate_ids AS (
 $candidateSource
         ),
-        candidates AS (
+        -- MATERIALIZED, and the distance behind an OFFSET 0 fence: the coarse distance is a spheroid
+        -- ST_Distance and the costliest thing here. Left to the planner it is inlined into the
+        -- radius test, the output column and the order key, and so computed three times a candidate.
+        candidates AS MATERIALIZED (
             SELECT u.id AS user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                    p.display_age,
@@ -82,7 +88,7 @@ $candidateSource
                    ds.show_distance,
                    -- Cell-to-cell distance from the target's EFFECTIVE location: never a raw GPS
                    -- distance, never a traveller's home.
-                   pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+                   coarse.distance_meters,
                    EXISTS (
                        SELECT 1
                        FROM boost_activations ba
@@ -105,6 +111,10 @@ $candidateSource
               ON target_travel.user_id = u.id
              AND target_travel.status = 'active'
              AND target_travel.active_until IS NULL
+            CROSS JOIN LATERAL (
+                SELECT pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters
+                OFFSET 0
+            ) coarse
             WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
               AND u.status = 'active'
               AND u.deleted_at IS NULL
@@ -115,7 +125,7 @@ $candidateSource
               AND (target_travel.id IS NULL OR ds.visible_while_traveling = true)
               AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
               -- Radius membership (L-09): the effective location's cell within the radius step.
-              AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= ?
+              AND coarse.distance_meters <= ?
               AND (?::integer IS NULL OR p.display_age >= ?::integer)
               AND (?::integer IS NULL OR p.display_age <= ?::integer)
               AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
@@ -223,8 +233,8 @@ $candidateSource
             SELECT c.*,
                    -- L-08 order key: whole-km coarse bucket (distance-independent when hidden) and a
                    -- stable pseudo-random tiebreak seeded by the viewer's cell.
-                   pynapli_order_bucket_m(c.show_distance, c.distance_meters, ?, 'deck:' || ST_AsText(v.geom::geometry), c.user_id) AS order_bucket,
-                   pynapli_order_tiebreak('deck:' || ST_AsText(v.geom::geometry), c.user_id) AS order_tiebreak
+                   pynapli_order_bucket_m(c.show_distance, c.distance_meters, ?, v.order_seed, c.user_id) AS order_bucket,
+                   pynapli_order_tiebreak(v.order_seed, c.user_id) AS order_tiebreak
             FROM candidates c
             CROSS JOIN viewer_location v
         ),
