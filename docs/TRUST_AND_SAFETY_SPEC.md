@@ -540,7 +540,13 @@ Implemented (`safety/RiskDecayPolicy.kt`, `JdbcRiskRepository`, migration V109):
 - Points recorded before V109 were not backfilled: they stay non-decaying.
 - Photo verification reduces score: an approved selfie verification records `verification.photo_verified`
   (-20, the same as age verification; the spec gives no amount) at most once per account, so a revoke
-  and re-approval never subtracts twice. Couple verification has no approval path of its own (it is
+  and re-approval never subtracts twice. Migration V110 backfilled the same reduction (same source,
+  reason and delta, metadata `{"backfill":"V110"}`) for accounts that were photo-verified before it
+  existed, applied the way a live approval applies it (decayable part first, floored at 0, tier
+  recomputed; verified accounts with no risk row get a 0/clean row and the ledger row, as live does).
+  It skipped any account with an `admin_review.set_*` or `admin_enforcement.*` event: whether
+  verification may lower an admin-set score or tier is an open founder question (the live age and
+  photo paths still do lower it today). Couple verification has no approval path of its own (it is
   derived from both partners' photo verification) and gets no separate reduction.
 
 Support signal:
