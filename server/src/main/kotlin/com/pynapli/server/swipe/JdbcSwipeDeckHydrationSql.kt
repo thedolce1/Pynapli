@@ -15,7 +15,9 @@ internal fun Connection.hydrateDeckCards(
                profile_photos.media_asset_ids AS profile_photo_ids,
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
-               linked_partner.linked_partner_thumbnail_media_asset_id
+               linked_partner.linked_partner_thumbnail_media_asset_id,
+               -- Couple badge (TRUST_AND_SAFETY_SPEC): only a visible linked partner counts.
+               COALESCE(linked_partner.linked_partner_verified, false) AS linked_partner_verified
         FROM users u
         LEFT JOIN LATERAL (
             SELECT (array_agg(media_asset_id ORDER BY rn))[1] AS thumbnail_media_asset_id,
@@ -46,7 +48,8 @@ internal fun Connection.hydrateDeckCards(
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
                    COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
-                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id
+                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
+                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified
             FROM user_profile_links upl
             JOIN users linked_user
               ON linked_user.id = upl.linked_user_id
@@ -144,6 +147,7 @@ internal fun Connection.hydrateDeckCards(
                                     "linked_partner_thumbnail_media_asset_id",
                                     UUID::class.java,
                                 ),
+                            linkedPartnerVerified = rs.getBoolean("linked_partner_verified"),
                         ),
                     )
                 }

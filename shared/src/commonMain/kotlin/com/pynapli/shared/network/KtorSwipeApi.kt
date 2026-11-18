@@ -1,6 +1,9 @@
 package com.pynapli.shared.network
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.MarkMatchesCelebratedRequestDto
+import com.pynapli.shared.network.dto.MarkMatchesCelebratedResponseDto
+import com.pynapli.shared.network.dto.MatchCelebrationsResponseDto
 import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeActionResponseDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
@@ -26,4 +29,8 @@ internal class KtorSwipeApi(
             com.pynapli.shared.network.dto
                 .LikeBackRequestDto(targetUserId),
         )
+
+    override suspend fun getMatchCelebrations(): AppResult<MatchCelebrationsResponseDto> = support.authGet("/v1/matches/celebrations")
+
+    override suspend fun markMatchesCelebrated(matchIds: List<String>): AppResult<MarkMatchesCelebratedResponseDto> = support.authSend(HttpMethod.Post, "/v1/matches/celebrations/seen", MarkMatchesCelebratedRequestDto(matchIds))
 }

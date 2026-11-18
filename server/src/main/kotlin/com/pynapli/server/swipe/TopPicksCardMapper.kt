@@ -62,6 +62,7 @@ internal class TopPicksCardMapper(
                     ?.take(TOP_PICKS_MAX_SHORT_BIO_CHARS),
             tags = record.tags.take(TOP_PICKS_MAX_VISIBLE_TAGS),
             verified = record.verified,
+            coupleVerified = record.verified && record.linkedPartnerUserId != null && record.linkedPartnerVerified,
             visiting = record.visiting,
         )
     }

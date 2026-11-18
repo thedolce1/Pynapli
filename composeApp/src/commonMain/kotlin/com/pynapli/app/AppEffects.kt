@@ -47,6 +47,7 @@ internal fun PynapliAppEffects(
     // /store and any store deep link: the plans/store sheet (there is no Store tab).
     onOpenStore: () -> Unit,
     onOpenActivityProfile: (com.pynapli.shared.network.dto.ActivityEventDto) -> Unit = {},
+    matchCelebrationStateHolder: com.pynapli.app.match.MatchCelebrationStateHolder? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -82,6 +83,14 @@ internal fun PynapliAppEffects(
             activityStateHolder.reset()
             profileHubStateHolder.reset()
             profileLinksStateHolder.reset()
+            matchCelebrationStateHolder?.reset()
+        }
+    }
+
+    // A match made while signed out or on another device shows its moment once, now.
+    LaunchedEffect(authState.authenticated, matchCelebrationStateHolder) {
+        if (authState.authenticated) {
+            matchCelebrationStateHolder?.refresh()
         }
     }
 
@@ -267,7 +276,11 @@ internal fun PynapliAppEffects(
         }
 
         if (appSettingsState.settings.activityNotifications) {
-            val newEvent = activityState.items.firstOrNull { item -> item.eventId !in previousIds }
+            // A match has its own full-screen moment; a banner on top of it would say it twice.
+            val newEvent =
+                activityState.items.firstOrNull { item ->
+                    item.eventId !in previousIds && !(matchCelebrationStateHolder != null && item.type == "match")
+                }
             if (newEvent != null) {
                 onNotification(newEvent.toActivityNotification(appSettingsState.settings))
             }

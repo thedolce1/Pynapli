@@ -1,8 +1,15 @@
 package com.pynapli.app.swipe
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onRoot
@@ -70,6 +77,95 @@ class SwipeStageKeyTest {
             assertEquals(1, passes, "Left arrow passes")
             assertEquals(1, likes, "Right arrow likes")
             assertEquals(1, pineapples, "Up arrow pineapples")
+        }
+
+    @Test
+    fun wideStageSpaceAndEnterOpenTheTopProfile() =
+        runComposeUiTest {
+            val opened = mutableListOf<String>()
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 900.dp, height = 800.dp)) {
+                        SwipeScreenContent(
+                            state = SwipeUiState(cards = listOf(sampleCard("a"), sampleCard("b"))),
+                            travelCityName = null,
+                            requestedAction = null,
+                            distanceUnit = "metric",
+                            onOpenFilters = {},
+                            onOpenTravel = {},
+                            onOpenStore = {},
+                            onFilterSelected = {},
+                            onRetryDeck = {},
+                            onActionConsumed = {},
+                            onOpenProfile = { opened += it.userId },
+                            onLinkedPartnerTap = {},
+                            onSwiped = { _, _ -> },
+                            onRetryPendingActions = {},
+                            onRewind = {},
+                            onPass = {},
+                            onPineappleLike = {},
+                            onLike = {},
+                        )
+                    }
+                }
+            }
+
+            onRoot().performKeyInput { pressKey(Key.Spacebar) }
+            onRoot().performKeyInput { pressKey(Key.Enter) }
+
+            assertEquals(listOf("a", "a"), opened)
+        }
+
+    @Test
+    fun arrowKeysWorkAgainOnceTheMatchMomentCloses() =
+        runComposeUiTest {
+            var likes = 0
+            var covered by mutableStateOf(false)
+            val overlayFocus = FocusRequester()
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 900.dp, height = 800.dp)) {
+                        SwipeScreenContent(
+                            state = SwipeUiState(cards = listOf(sampleCard("a"), sampleCard("b"))),
+                            travelCityName = null,
+                            requestedAction = null,
+                            distanceUnit = "metric",
+                            onOpenFilters = {},
+                            onOpenTravel = {},
+                            onOpenStore = {},
+                            onFilterSelected = {},
+                            onRetryDeck = {},
+                            onActionConsumed = {},
+                            onOpenProfile = {},
+                            onLinkedPartnerTap = {},
+                            onSwiped = { _, _ -> },
+                            onRetryPendingActions = {},
+                            onRewind = {},
+                            onPass = {},
+                            onPineappleLike = {},
+                            onLike = { likes += 1 },
+                            deckCovered = covered,
+                        )
+                        // Stands in for the takeover, which takes focus while it is up.
+                        if (covered) {
+                            Box(Modifier.size(10.dp).focusRequester(overlayFocus).focusable())
+                            LaunchedEffect(Unit) { overlayFocus.requestFocus() }
+                        }
+                    }
+                }
+            }
+
+            covered = true
+            waitForIdle()
+            onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            assertEquals(0, likes, "the deck ignores keys under the match moment")
+
+            covered = false
+            waitForIdle()
+            onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            assertEquals(1, likes, "the stage takes focus back when the moment closes")
         }
 
     @Test

@@ -51,6 +51,7 @@ import com.pynapli.server.safety.configureSafetyRoutes
 import com.pynapli.server.subscriptions.configurePlayStoreRtdnRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionAdminRoutes
 import com.pynapli.server.subscriptions.configureSubscriptionRoutes
+import com.pynapli.server.swipe.configureMatchCelebrationRoutes
 import com.pynapli.server.swipe.configureSavedSwipeFilterRoutes
 import com.pynapli.server.swipe.configureSwipeRoutes
 import com.pynapli.server.swipe.configureTopPicksRoutes
@@ -215,6 +216,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         requestProfilerFactory = dependencies.requestProfilerFactory,
     )
     configureSavedSwipeFilterRoutes(dependencies.authService, dependencies.savedSwipeFilterService)
+    dependencies.matchCelebrationService?.let { configureMatchCelebrationRoutes(dependencies.authService, it) }
     configureTopPicksRoutes(
         authService = dependencies.authService,
         topPicksService = dependencies.topPicksService,

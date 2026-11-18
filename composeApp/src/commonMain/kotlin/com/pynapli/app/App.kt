@@ -102,6 +102,7 @@ fun PynapliApp(
             profileHubStateHolder = graph.profileHubStateHolder,
             profileLinksStateHolder = graph.profileLinksStateHolder,
             deepLinkStateHolder = graph.deepLinkStateHolder,
+            matchCelebrationStateHolder = graph.matchCelebrationStateHolder,
             activeNotification = activeNotification,
             onNotification = { activeNotification = it },
             onSelectTab = { selectedTab = it },
@@ -340,6 +341,12 @@ fun PynapliApp(
                 onPickVerificationSelfie = platform.onPickVerificationSelfie,
                 onSetDiscreetIcon = platform.onSetDiscreetIcon,
                 discreetIconSupported = platform.discreetIconSupported,
+                swipeDeckCovered =
+                    graph.matchCelebrationStateHolder
+                        ?.state
+                        ?.collectAsState()
+                        ?.value
+                        ?.current != null,
             )
         }
 
@@ -434,6 +441,7 @@ fun PynapliApp(
             conversationActions = conversationActions,
             onPickConversationPhoto = platform.onPickConversationPhoto,
             scope = scope,
+            matchCelebrationStateHolder = graph.matchCelebrationStateHolder,
         )
 
         storePaywallFocus?.let { focus ->

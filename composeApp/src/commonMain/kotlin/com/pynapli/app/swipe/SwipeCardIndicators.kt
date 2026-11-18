@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -29,30 +30,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.VerifiedBadge
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.CheckCircle
 import com.pynapli.app.design.icons.filled.Person
-
-@Composable
-internal fun SwipeTagChip(label: String) {
-    Box(
-        modifier =
-            Modifier
-                .clip(PynapliShape.PillShape)
-                .background(PynapliColors.OnPhotoChipFill)
-                .border(1.dp, PynapliColors.OnPhotoChipStroke, PynapliShape.PillShape)
-                .padding(horizontal = 8.dp, vertical = 3.dp),
-    ) {
-        Text(
-            text = label,
-            color = PynapliColors.OnPhotoPrimary,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
 
 @Composable
 internal fun PhotoCarouselIndicators(
@@ -132,10 +114,36 @@ internal fun SwipeLinkedPartnerBadge(
     thumbnailUrl: String?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    coupleVerified: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
+    // The couple badge rides on the partner mini, as on the Grid: both partners photo-verified.
+    Box(modifier = modifier) {
+        SwipeLinkedPartnerCircle(thumbnailUrl = thumbnailUrl, enabled = enabled, onClick = onClick)
+        if (coupleVerified) {
+            VerifiedBadge(
+                size = 14.dp,
+                contentDescription = "Verified couple",
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 3.dp, y = 3.dp)
+                        .testTag(SwipeTestTags.COUPLE_VERIFIED_BADGE)
+                        .clip(CircleShape)
+                        .background(PynapliColors.OnPhotoBadgeFill),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SwipeLinkedPartnerCircle(
+    thumbnailUrl: String?,
+    enabled: Boolean,
+    onClick: (() -> Unit)?,
+) {
     val baseModifier =
-        modifier
+        Modifier
             .testTag(SwipeTestTags.LINKED_PARTNER_BADGE)
             .size(34.dp)
             .clip(CircleShape)

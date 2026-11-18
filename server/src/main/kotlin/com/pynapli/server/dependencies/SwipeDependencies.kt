@@ -39,6 +39,7 @@ internal class SwipeDependencies(
     val psyncSessionService: PsyncSessionService,
     val psyncSessionExpiryWorker: PsyncSessionExpiryWorker,
     val topPicksService: TopPicksService,
+    val matchCelebrationService: com.pynapli.server.swipe.MatchCelebrationService,
     val matchSideEffectDrainWorker: MatchSideEffectDrainWorker,
 )
 
@@ -109,6 +110,13 @@ internal fun buildSwipeDependencies(
         // their likes are still delivered. Requests do the same sweep, so 5 minutes is plenty.
         psyncSessionExpiryWorker = PsyncSessionExpiryWorker(psyncSessionService, intervalMillis = 5 * 60 * 1000L),
         topPicksService = topPicksService,
+        matchCelebrationService =
+            com.pynapli.server.swipe.MatchCelebrationService(
+                repository =
+                    com.pynapli.server.swipe
+                        .JdbcMatchCelebrationRepository(dataSource),
+                mediaAssetUrlResolver = mediaAssetUrlResolver,
+            ),
         // Delivers match side effects (Activity rows, match conversation, match push) whose request
         // died between its commit and its fast-path delivery. One replica per tick.
         matchSideEffectDrainWorker =

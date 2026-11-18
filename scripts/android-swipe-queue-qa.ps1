@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$PackageName = "com.pynapli.app",
     [string]$LaunchActivity = ".DefaultLauncherAlias",
@@ -185,14 +185,14 @@ function Complete-LoginIfNeeded {
 
 function Open-SwipeTab {
     Tap-BottomNavText "Swipe"
-    Wait-ForAnyText @("For You", "No more profiles nearby") 45 | Out-Null
+    Wait-ForAnyText @("For You", "You've seen everyone nearby") 45 | Out-Null
     Start-Sleep -Milliseconds 900
     $xml = Dump-Ui "swipe_ready"
     Assert-NoAppErrorText $xml "Swipe ready"
     Assert-TextPresent $xml "For You" "Swipe ready"
     Assert-TextPresent $xml "Like" "Swipe ready"
     Assert-TextPresent $xml "Pass" "Swipe ready"
-    Assert-TextAbsent $xml "No more profiles nearby" "Swipe ready"
+    Assert-TextAbsent $xml "You've seen everyone nearby" "Swipe ready"
     return $xml
 }
 

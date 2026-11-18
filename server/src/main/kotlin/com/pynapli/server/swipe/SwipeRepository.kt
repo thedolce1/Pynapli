@@ -264,6 +264,8 @@ data class SwipeCardRecord(
     val tags: List<String> = emptyList(),
     val thumbnailMediaAssetIds: List<UUID> = emptyList(),
     val verified: Boolean = false,
+    /** The visible linked partner is photo-verified; with [verified] it makes the couple badge. */
+    val linkedPartnerVerified: Boolean = false,
     /**
      * Target has an active travel_locations row. Surfaced as a "Visiting" pill
      * on the swipe card (SWIPE_IMPLEMENTATION_SPEC L348) so the viewer knows

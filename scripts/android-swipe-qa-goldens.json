@@ -22,8 +22,8 @@
         "Illegal input",
         "NETWORK_ERROR",
         "Request failed",
-        "No more profiles nearby",
-        "No more recommendations match your filters",
+        "You've seen everyone nearby",
+        "No one else matches your filters",
         "1 pending"
       ],
       "image": {
@@ -97,8 +97,8 @@
         "Illegal input",
         "NETWORK_ERROR",
         "Request failed",
-        "No more profiles nearby",
-        "No more recommendations match your filters",
+        "You've seen everyone nearby",
+        "No one else matches your filters",
         "1 pending"
       ],
       "image": {

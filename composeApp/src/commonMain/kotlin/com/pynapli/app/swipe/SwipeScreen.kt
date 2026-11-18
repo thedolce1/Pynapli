@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.profileLinkActionFor
 import com.pynapli.app.grid.toUi
+import com.pynapli.app.match.MatchCelebrationScreen
+import com.pynapli.app.match.MatchCelebrationUi
 import com.pynapli.app.profile.ProfileDetailActionMode
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
@@ -38,6 +40,8 @@ fun SwipeScreen(
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
     modifier: Modifier = Modifier,
     profileLinksStateHolder: com.pynapli.app.profilelink.ProfileLinksStateHolder? = null,
+    // The app-wide match moment is over the deck.
+    deckCovered: Boolean = false,
 ) {
     val state by stateHolder.state.collectAsState()
     val profileLinksState by profileLinksStateHolder?.state?.collectAsState()
@@ -145,15 +149,34 @@ fun SwipeScreen(
         },
         onLike = { requestedAction = SwipeAction.LIKE },
         modifier = modifier,
+        deckCovered =
+            deckCovered ||
+                (matchNotificationsEnabled && state.pendingMatch != null) ||
+                profileState.visible ||
+                pineappleSheetCard != null ||
+                state.noteRefusedCard != null ||
+                linkedPartnerPreviewCard != null ||
+                filtersSheetVisible ||
+                travelSheetVisible,
     )
 
+    // Only when the app has no app-wide match moment wired (SwipeStateHolder without onMatch, e.g. a
+    // standalone screen): the app-level MatchCelebrationScreen covers both people otherwise.
     if (matchNotificationsEnabled) {
         state.pendingMatch?.let { match ->
-            MatchOverlay(
-                match = match,
-                showDetails = notificationDetail == AppSettings.NOTIFICATION_STANDARD,
-                onDismiss = stateHolder::dismissMatch,
-                onMessage = {
+            MatchCelebrationScreen(
+                celebration =
+                    MatchCelebrationUi(
+                        matchIds = listOf(match.matchId),
+                        matchedUserId = match.matchedUserId,
+                        matchedDisplayName = match.matchedDisplayName,
+                        matchedPhotoUrl = match.matchedPhotoUrl,
+                        viewerPhotoUrl = null,
+                        createdAt = match.createdAt,
+                    ),
+                showNames = notificationDetail == AppSettings.NOTIFICATION_STANDARD,
+                onKeepSwiping = stateHolder::dismissMatch,
+                onSendMessage = {
                     stateHolder.dismissMatch()
                     scope.launch {
                         conversationStateHolder.openSwipeMatch(

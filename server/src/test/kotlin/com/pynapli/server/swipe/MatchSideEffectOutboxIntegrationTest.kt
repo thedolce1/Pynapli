@@ -5,12 +5,17 @@ import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.grid.insertDiscoverableUser
 import com.pynapli.server.messaging.JdbcMessagingRepository
 import com.pynapli.server.messaging.MessagingService
+import com.pynapli.server.notifications.JdbcNotificationRepository
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
+import com.pynapli.server.notifications.NotificationOutboxInsert
 import com.pynapli.server.notifications.NotificationOutboxRecord
 import com.pynapli.server.notifications.NotificationPublisher
+import com.pynapli.server.notifications.NotificationRepository
+import com.pynapli.server.notifications.NotificationService
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.LikeBackRequestDto
+import com.pynapli.shared.network.dto.RegisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.SwipeAction
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
@@ -157,6 +162,44 @@ class MatchSideEffectOutboxIntegrationTest :
             }
         }
 
+        "a failed match push write stays in the outbox and the drainer retries it" {
+            runBlocking {
+                val (a, b) = seedPair()
+                val notifications = OutboxWriteFailingNotificationRepository(JdbcNotificationRepository(dataSource))
+                val notificationService = NotificationService(notifications)
+                // b needs a push device, or the enqueue skips before ever writing.
+                notificationService.registerPushDevice(b, RegisterPushDeviceRequestDto(platform = "android", deviceToken = "fcm-test-token-for-b"))
+                val activity = ActivityService(JdbcActivityRepository(dataSource))
+                val messaging = MessagingService(JdbcMessagingRepository(dataSource))
+                val delivery = MatchSideEffectDelivery(activity, notificationService, messaging.matchConversationOpener)
+                val service =
+                    SwipeService(
+                        repository = JdbcSwipeRepository(dataSource),
+                        notificationPublisher = notificationService,
+                        activityService = activity,
+                        matchConversationOpener = messaging.matchConversationOpener,
+                    )
+
+                service.submitAction(b, service.dealtRequest(b, a, SwipeAction.LIKE, UUID.randomUUID()))
+                notifications.failWrites = true
+                assertNotNull(service.submitAction(a, service.dealtRequest(a, b, SwipeAction.LIKE, UUID.randomUUID())).match)
+
+                // The swipe and the match stand; only the match announcement waits for a retry.
+                assertEquals(1, dataSource.pendingSideEffects())
+                assertEquals(0, dataSource.matchPushesTo(b))
+                assertEquals(1, MatchSideEffectDrainer(dataSource, delivery, later).drainOnce().failed)
+                assertEquals(1, dataSource.pendingSideEffects())
+
+                notifications.failWrites = false
+                val retried = MatchSideEffectDrainer(dataSource, delivery, Clock.offset(Clock.systemUTC(), Duration.ofHours(2))).drainOnce()
+
+                assertEquals(1, retried.delivered)
+                assertEquals(0, dataSource.pendingSideEffects())
+                assertEquals(1, dataSource.matchPushesTo(b))
+                assertEquals(1, dataSource.activityRows(recipient = b, actor = a, eventType = "match"))
+            }
+        }
+
         "a like-back through the service delivers once and leaves nothing for the drainer" {
             runBlocking {
                 val harness = Harness()
@@ -213,6 +256,32 @@ private fun DataSource.matchConversationsBetween(
                     rs.getInt(1)
                 }
             }
+    }
+
+/** The real notification store, with outbox writes that can be made to fail like a database error. */
+private class OutboxWriteFailingNotificationRepository(
+    private val delegate: NotificationRepository,
+) : NotificationRepository by delegate {
+    @Volatile var failWrites = false
+
+    override suspend fun insertOutboxNotification(
+        notification: NotificationOutboxInsert,
+        notificationIdFactory: () -> UUID,
+    ): NotificationOutboxRecord? {
+        if (failWrites) throw java.sql.SQLException("simulated outbox write failure")
+        return delegate.insertOutboxNotification(notification, notificationIdFactory)
+    }
+}
+
+private fun DataSource.matchPushesTo(recipient: UUID): Int =
+    connection.use { c ->
+        c.prepareStatement("SELECT COUNT(*) FROM notification_outbox WHERE recipient_user_id = ? AND kind = 'match'").use { s ->
+            s.setObject(1, recipient)
+            s.executeQuery().use { rs ->
+                rs.next()
+                rs.getInt(1)
+            }
+        }
     }
 
 private fun DataSource.pendingSideEffects(): Int =

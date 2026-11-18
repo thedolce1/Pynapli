@@ -38,6 +38,7 @@ internal fun Connection.findLatestRewindableAction(
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
+               COALESCE(linked_partner.linked_partner_verified, false) AS linked_partner_verified,
                ds.show_distance,
                -- Cell-to-cell distance from the target's effective location, as on the dealt card;
                -- the card shows none when the owner hides it.
@@ -89,7 +90,8 @@ internal fun Connection.findLatestRewindableAction(
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
                    COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
-                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id
+                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
+                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified
             FROM user_profile_links upl
             JOIN users linked_user
               ON linked_user.id = upl.linked_user_id
@@ -132,6 +134,26 @@ internal fun Connection.findLatestRewindableAction(
                   FROM user_blocks ub
                   WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
                      OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
+              )
+              -- Owner-controlled partner visibility, as on the dealt card (JdbcSwipeDeckHydrationSql);
+              -- the viewer is the actor. 'hidden' falls through to no row.
+              AND (
+                  ds.partner_visibility = 'public'
+                  OR (
+                      ds.partner_visibility = 'verified_only'
+                      AND EXISTS (
+                          SELECT 1 FROM profiles vp
+                          WHERE vp.user_id = sa.actor_user_id AND vp.verified_at IS NOT NULL
+                      )
+                  )
+                  OR (
+                      ds.partner_visibility = 'matches_only'
+                      AND EXISTS (
+                          SELECT 1 FROM matches mm
+                          WHERE LEAST(mm.user_a, mm.user_b) = LEAST(sa.actor_user_id, u.id)
+                            AND GREATEST(mm.user_a, mm.user_b) = GREATEST(sa.actor_user_id, u.id)
+                      )
+                  )
               )
             ORDER BY upl.accepted_at DESC NULLS LAST, upl.created_at DESC, upl.id ASC
             LIMIT 1
@@ -215,6 +237,7 @@ internal fun Connection.findLatestRewindableAction(
                             bio = rs.getString("bio"),
                             tags = rs.readStringArray("profile_tags"),
                             verified = rs.getBoolean("verified"),
+                            linkedPartnerVerified = rs.getBoolean("linked_partner_verified"),
                             visiting = rs.getBoolean("visiting"),
                         ),
                 )

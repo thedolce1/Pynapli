@@ -9,7 +9,15 @@ import java.time.Clock
 import java.util.UUID
 
 interface NotificationPublisher {
+    /** Queues a push; a failed outbox write is logged and dropped (a push never fails its action). */
     suspend fun enqueue(notification: NotificationEventDraft): NotificationOutboxRecord?
+
+    /**
+     * Same as [enqueue], but a failed outbox write throws instead of being dropped. For callers that
+     * own their own retry, such as the match side-effect outbox: its drainer can only retry a push
+     * enqueue it knows failed. Safe to repeat: the outbox write is idempotent per idempotency key.
+     */
+    suspend fun enqueueOrThrow(notification: NotificationEventDraft): NotificationOutboxRecord? = enqueue(notification)
 }
 
 class NotificationService(
@@ -57,4 +65,6 @@ class NotificationService(
     }
 
     override suspend fun enqueue(notification: NotificationEventDraft): NotificationOutboxRecord? = enqueueActions.enqueue(notification)
+
+    override suspend fun enqueueOrThrow(notification: NotificationEventDraft): NotificationOutboxRecord? = enqueueActions.enqueue(notification, propagateWriteFailure = true)
 }

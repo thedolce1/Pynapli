@@ -88,6 +88,7 @@ internal class JdbcSwipeDeckQueryActions(
                                 tags = row.tags,
                                 thumbnailMediaAssetIds = h?.thumbnailMediaAssetIds.orEmpty(),
                                 verified = row.verified,
+                                linkedPartnerVerified = h?.linkedPartnerVerified ?: false,
                                 visiting = row.visiting,
                             )
                         }.map { card ->
@@ -96,6 +97,7 @@ internal class JdbcSwipeDeckQueryActions(
                                     linkedPartnerUserId = null,
                                     linkedPartnerDisplayName = null,
                                     linkedPartnerThumbnailMediaAssetId = null,
+                                    linkedPartnerVerified = false,
                                 )
                             } else {
                                 card
