@@ -52,6 +52,8 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `TonightFeedRoutes.kt` | User-authenticated | Feed is token-derived and discovery-scoped. |
 | `TonightSessionRoutes.kt` | User-authenticated | Session lifecycle is token-derived and participant-scoped. |
 | `AgeVerificationRoutes.kt` | User/admin mixed | Requirements/status/start require bearer token; start is rate-limited; review requires admin auth. The provider callback is authenticated only by an HMAC-SHA256 signature with its own secret (`PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET`, 5-minute timestamp window) and is not served without one; the admin token is not accepted there. |
+| `PhotoVerificationRoutes.kt` | User-authenticated | Selfie photo verification status/challenge/upload/submit act only on the token-derived user; challenge (10/hour), upload slot (media upload limit) and submit (5/day) are rate-limited. The selfie is a private `verification` media asset: never in an album, never ready/approved, never returned to other users. |
+| `AdminPhotoVerificationRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Queue, approve, reject and revoke all need `requireAdminActor` plus a senior admin and step-up MFA (`X-Admin-MFA`): they reveal selfies and change trust status. The queue needs `X-Admin-Reason` and writes a `photo_verification.queue_view` audit row; decisions write `photo_verification.approve/reject/revoke` audit rows with the reviewer id. Selfie URLs are short-lived signed URLs. |
 
 ## Current Security Coverage
 

@@ -77,6 +77,9 @@ import com.pynapli.server.tonight.TonightSessionExpiryWorker
 import com.pynapli.server.tonight.TonightSessionService
 import com.pynapli.server.verification.AgeVerificationService
 import com.pynapli.server.verification.JdbcAgeVerificationRepository
+import com.pynapli.server.verification.JdbcPhotoVerificationRepository
+import com.pynapli.server.verification.PhotoVerificationRetentionWorker
+import com.pynapli.server.verification.PhotoVerificationService
 import com.pynapli.server.verification.RedirectAgeVerificationProvider
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
@@ -147,6 +150,8 @@ class ServerDependencies(
     val psyncSessionExpiryWorker: PsyncSessionExpiryWorker? = null,
     val psyncPresenceWatcher: com.pynapli.server.psync.PsyncPresenceWatcher? = null,
     val ageVerificationService: AgeVerificationService,
+    val photoVerificationService: PhotoVerificationService,
+    val photoVerificationRetentionWorker: PhotoVerificationRetentionWorker? = null,
     val accountLifecycleService: AccountLifecycleService,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     private val profileActivityScope: CoroutineScope,
@@ -160,6 +165,7 @@ class ServerDependencies(
         runCatching { activityRetentionWorker?.close() }
         runCatching { dataRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
+        runCatching { photoVerificationRetentionWorker?.close() }
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
         runCatching { psyncSessionExpiryWorker?.close() }
@@ -360,6 +366,25 @@ class ServerDependencies(
                     // Successful verification lowers account risk (TRUST_AND_SAFETY_SPEC).
                     verificationRiskSignals = core.riskService,
                 )
+            val photoVerificationService =
+                PhotoVerificationService(
+                    repository = JdbcPhotoVerificationRepository(database.dataSource),
+                    selfieMedia = media.selfieMediaGateway,
+                    faceDetector = media.selfieFaceDetector,
+                    rateLimitService = core.rateLimitService,
+                    notificationPublisher = core.notificationService,
+                )
+            // Selfie retention runs with the media cleanup sweep (same switch and interval).
+            val photoVerificationRetentionWorker =
+                if (config.mediaCleanupEnabled) {
+                    PhotoVerificationRetentionWorker(
+                        service = photoVerificationService,
+                        intervalMillis = config.mediaCleanupIntervalMillis,
+                        jobLock = PostgresJobLock(database.dataSource),
+                    )
+                } else {
+                    null
+                }
             val messaging =
                 buildMessagingDependencies(
                     dataSource = database.dataSource,
@@ -463,6 +488,8 @@ class ServerDependencies(
                         broadcaster = core.psyncBroadcaster,
                     ),
                 ageVerificationService = ageVerificationService,
+                photoVerificationService = photoVerificationService,
+                photoVerificationRetentionWorker = photoVerificationRetentionWorker,
                 accountLifecycleService = core.accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
                 profileActivityScope = profileActivityScope,

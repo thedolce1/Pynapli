@@ -112,6 +112,28 @@ Signals that reduce risk:
 - Successful appeal/moderation review
 - No rate-limit hits over time
 
+## Photo Verification
+
+Selfie photo verification, in the Bumble/Tinder style, is what the verified badge and the "Verified
+only" filters mean. Server-owned end to end (erification/PhotoVerificationService.kt):
+
+- The user asks to verify. The server picks a random pose from a fixed server-side list
+  (PhotoVerificationPoses), valid for 10 minutes. Challenges are rate-limited (10/hour) and
+  submissions too (5/day).
+- The user uploads one selfie through the normal media upload path. It is a private
+  erification asset: never in an album, never ready/approved, never returned to other users, never
+  logged. Only the owner (upload URL) and senior admins (short-lived signed review URL) reach it.
+- When Cloud Vision is configured, face detection runs on submit: zero faces or more than one face is
+  rejected automatically (10-minute retry). One face still waits for a human. There is no automatic
+  face matching against profile photos (Vision has no comparison API); approval is always a person.
+- A senior admin with step-up MFA approves or rejects with a reason the user sees (24-hour retry).
+  Approval writes profiles.face_photo_verified_at and erified_at; an admin revoke clears both.
+- Decisions, reviewer id and timestamps stay in photo_verifications and dmin_audit_log. The selfie
+  object and asset row are deleted 7 days after the decision (1 hour if never submitted) by the
+  retention worker under JobLock.
+- **Founder decision (defaulted):** replacing all profile photos does **not** remove verification. The
+  spec was silent; an admin revoke is the tool when photos no longer match the person.
+
 ## Suspicious Signals
 
 Signals that increase risk:
@@ -593,6 +615,7 @@ Important:
 - [x] Travel mode abuse controls exist. Every tier is capped at 6 Travel mode destination switches per rolling 24 hours.
 - [x] Location spoofing signals exist.
 - [x] Partner subscription abuse cooldown exists.
+- [x] Selfie photo verification: server pose challenge, private selfie, optional face-count check, senior-admin decision with audit, revoke, rate limits and selfie retention.
 - [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; the account score stays floored at 0.
 - [ ] Partial: appeal review flow, admin roles and step-up MFA exist; support review workflow, account notices and senior-review separation remain.
 - [x] Moderator dashboard requirements are tracked.

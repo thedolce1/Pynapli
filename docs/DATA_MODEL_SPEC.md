@@ -67,9 +67,12 @@ every change must keep.
 - **Bio is never a filter source.** Everything filterable is a structured, indexed column or tag.
 - Saved filter presets may be JSON; live filterable profile data may not.
 - Public photos need moderation approval before public visibility. The Grid uses thumbnails only.
-- `profiles.verified_at` / `face_photo_verified_at` are read by filters and badges but **nothing writes
-  them yet**, so "verified only" filters return nobody in production. Only `age_verified_at` is
-  written (by age verification).
+- `profiles.verified_at` / `face_photo_verified_at` are written only by an admin approving a selfie
+  photo verification (`photo_verifications`, V103) and cleared by an admin revoke. Filters, badges and
+  `partner_visibility = 'verified_only'` read them. `age_verified_at` is written by age verification.
+- `photo_verifications` keeps each attempt (pose, status, decision, reviewer id, reason, timestamps)
+  for audit. The selfie is a `media_assets` row with `intended_album_kind = 'verification'`, never in
+  an album and never ready/approved; it is deleted 7 days after the decision (1 hour if never submitted).
 
 ### Location
 

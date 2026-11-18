@@ -141,6 +141,10 @@ class RateLimitService(
                 // Type-ahead: every debounced keystroke is a query, so the budget is generous.
                 RateLimitPolicy(action = RateLimitedAction.TRAVEL_SEARCH, limit = 600, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AGE_VERIFICATION_START, limit = 5, windowSeconds = ONE_HOUR_SECONDS),
+                // Selfie verification: a new pose each challenge, so cap re-rolling for an easy pose.
+                RateLimitPolicy(action = RateLimitedAction.PHOTO_VERIFICATION_CHALLENGE, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
+                // Each submission costs a reviewer's time; a handful a day covers honest retries.
+                RateLimitPolicy(action = RateLimitedAction.PHOTO_VERIFICATION_SUBMIT, limit = 5, windowSeconds = ONE_DAY_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.STORE_PURCHASE, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.BOOST_ACTIVATE, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 // PSYNC_SPEC PS-4: nudge cooldown — one nudge per minute per user (≈one live session).
@@ -207,6 +211,8 @@ object RateLimitedAction {
     const val MEDIA_UPLOAD = "media_upload"
     const val TRAVEL_SEARCH = "travel_search"
     const val AGE_VERIFICATION_START = "age_verification_start"
+    const val PHOTO_VERIFICATION_CHALLENGE = "photo_verification_challenge"
+    const val PHOTO_VERIFICATION_SUBMIT = "photo_verification_submit"
     const val STORE_PURCHASE = "store_purchase"
     const val BOOST_ACTIVATE = "boost_activate"
     const val PSYNC_NUDGE = "psync_nudge"

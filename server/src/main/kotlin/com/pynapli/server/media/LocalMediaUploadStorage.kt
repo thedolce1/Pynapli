@@ -79,6 +79,13 @@ class LocalMediaUploadStorage(
         )
     }
 
+    /** Removes a stored upload and its metadata; a missing file is not an error. */
+    fun deleteUpload(mediaAssetId: UUID) {
+        val paths = mediaAssetId.localPaths()
+        Files.deleteIfExists(paths.dataPath)
+        Files.deleteIfExists(paths.metadataPath)
+    }
+
     private fun UUID.localPaths(): LocalMediaUploadPaths {
         val assetDirectory = rootDirectory.resolve(toString().take(2)).normalize()
         return LocalMediaUploadPaths(

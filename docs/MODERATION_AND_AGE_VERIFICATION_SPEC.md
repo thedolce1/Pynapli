@@ -44,6 +44,8 @@ Current MVP slice:
 - Admin/provider paths can review or callback verification results. The provider callback is signed with its own secret (`PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET`, HMAC-SHA256 over `<timestamp>.<body>`, 5-minute window); it never uses the admin token.
 - Results are stored in `age_verifications`; successful verification also sets `profiles.age_verified_at`.
 - Raw ID, selfie, and biometric payloads are not stored by this slice.
+- Selfie *photo* verification (the verified badge) is a separate flow from age verification; see
+  TRUST_AND_SAFETY_SPEC "Photo Verification". Its selfies are kept only until 7 days after the decision.
 - Still required before beta: provider selection, market-specific rules, legal review, social-auth parity, and production admin controls.
 
 ## Content Zones
