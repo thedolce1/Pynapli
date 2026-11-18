@@ -9,8 +9,11 @@ import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationOutboxRecord
 import com.pynapli.server.notifications.NotificationPublisher
+import com.pynapli.server.safety.JdbcRiskRepository
 import com.pynapli.server.safety.RateLimitOutageFallback
 import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.safety.RiskService
+import com.pynapli.server.safety.VerificationRiskSignalPublisher
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.CreatePhotoVerificationUploadRequestDto
 import com.pynapli.shared.network.dto.PhotoVerificationStatus
@@ -214,6 +217,45 @@ class PhotoVerificationServiceIntegrationTest {
         }
 
     @Test
+    fun approvalLowersAccountRiskOnceEvenAfterRevokeAndReapproval() =
+        runBlocking {
+            val userId = dataSource.insertVerificationUser()
+            val risk = RiskService(JdbcRiskRepository(dataSource, clock))
+            risk.recordImpossibleTravel(userId, distanceKm = 900.0, elapsedSeconds = 600, speedKmh = 5400.0)
+            val service = service(verificationRiskSignals = risk)
+
+            val (challengeId, assetId) = service.challengeAndUpload(userId)
+            service.submit(userId, SubmitPhotoVerificationRequestDto(challengeId, assetId))
+            service.approve(challengeId, "senior-1", null)
+            assertEquals(RiskService.IMPOSSIBLE_TRAVEL_DELTA + RiskService.PHOTO_VERIFIED_DELTA, risk.getState(userId)?.score)
+
+            // Revoked, then verified again with a new selfie: the reduction is not applied twice.
+            service.revoke(userId.toString(), "senior-1", "Photos show a different person.")
+            clock.advance(Duration.ofHours(25))
+            val (secondChallenge, secondAsset) = service.challengeAndUpload(userId)
+            service.submit(userId, SubmitPhotoVerificationRequestDto(secondChallenge, secondAsset))
+            service.approve(secondChallenge, "senior-1", null)
+
+            assertEquals(PhotoVerificationStatus.VERIFIED, service.status(userId).status)
+            assertEquals(RiskService.IMPOSSIBLE_TRAVEL_DELTA + RiskService.PHOTO_VERIFIED_DELTA, risk.getState(userId)?.score)
+        }
+
+    @Test
+    fun aRejectedSelfieDoesNotLowerAccountRisk() =
+        runBlocking {
+            val userId = dataSource.insertVerificationUser()
+            val risk = RiskService(JdbcRiskRepository(dataSource, clock))
+            risk.recordImpossibleTravel(userId, distanceKm = 900.0, elapsedSeconds = 600, speedKmh = 5400.0)
+            val service = service(verificationRiskSignals = risk)
+            val (challengeId, assetId) = service.challengeAndUpload(userId)
+            service.submit(userId, SubmitPhotoVerificationRequestDto(challengeId, assetId))
+
+            service.reject(challengeId, "senior-1", "Your face is not visible in the selfie.")
+
+            assertEquals(RiskService.IMPOSSIBLE_TRAVEL_DELTA, risk.getState(userId)?.score)
+        }
+
+    @Test
     fun reviewQueueListsOldestFirstWithAShortLivedSelfieUrl() =
         runBlocking {
             val first = dataSource.insertVerificationUser()
@@ -362,7 +404,10 @@ class PhotoVerificationServiceIntegrationTest {
             pixelHeight = 1440,
         )
 
-    private fun service(rateLimitService: RateLimitService? = null): PhotoVerificationService =
+    private fun service(
+        rateLimitService: RateLimitService? = null,
+        verificationRiskSignals: VerificationRiskSignalPublisher? = null,
+    ): PhotoVerificationService =
         PhotoVerificationService(
             repository = JdbcPhotoVerificationRepository(dataSource),
             selfieMedia =
@@ -384,6 +429,7 @@ class PhotoVerificationServiceIntegrationTest {
             notificationPublisher = notifications,
             clock = clock,
             poseRandom = Random(7),
+            verificationRiskSignals = verificationRiskSignals,
         )
 }
 

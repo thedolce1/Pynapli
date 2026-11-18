@@ -210,6 +210,10 @@ internal fun Connection.upsertRiskState(
         ON CONFLICT (user_id) DO UPDATE
         SET score = EXCLUDED.score,
             tier = EXCLUDED.tier,
+            -- An admin-set score never decays (safety/RiskDecayPolicy): minor points recorded before
+            -- the admin action are absorbed into it. Only minor points recorded after it can decay.
+            decayable_points = 0,
+            decay_anchor_at = NULL,
             last_event_at = now(),
             last_reviewed_at = CASE
                 WHEN ? THEN now()
