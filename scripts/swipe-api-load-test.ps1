@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$BaseUrl = "http://localhost:8080",
     [string]$Password = "PynapliLoadPass123!",
     [int]$CandidateCount = 5000,
@@ -257,8 +257,8 @@ function New-LoadViewerSession {
         -Body @{
             displayName = "Swipe Load $Index"
             birthdate = "1990-01-01"
-            gender = "open"
-            orientation = "open"
+            gender = "non_binary"
+            orientation = "bisexual"
             relationshipContext = if ($Index % 3 -eq 0) { "linked" } else { "single" }
             discoveryStyle = if ($Index % 4 -eq 0) { "together" } elseif ($Index % 4 -eq 1) { "solo" } elseif ($Index % 4 -eq 2) { "both" } else { "social" }
         }
