@@ -100,9 +100,12 @@ function Dump-Ui {
 function Get-VisibleTexts {
     param([xml]$Xml)
     $texts = @()
-    foreach ($node in $Xml.SelectNodes("//node[@text]")) {
-        $value = $node.GetAttribute("text")
-        if ($value -and $value.Trim()) { $texts += $value.Trim() }
+    # Icon-only controls (the header avatar is "Profile") carry a content description, not text.
+    foreach ($node in $Xml.SelectNodes("//node[@text or @content-desc]")) {
+        foreach ($attribute in @("text", "content-desc")) {
+            $value = $node.GetAttribute($attribute)
+            if ($value -and $value.Trim()) { $texts += $value.Trim() }
+        }
     }
     return $texts
 }
@@ -111,6 +114,9 @@ function Find-NodeByText {
     param([xml]$Xml, [string]$Text)
     foreach ($node in $Xml.SelectNodes("//node[@text]")) {
         if ($node.GetAttribute("text").Trim() -eq $Text) { return $node }
+    }
+    foreach ($node in $Xml.SelectNodes("//node[@content-desc]")) {
+        if ($node.GetAttribute("content-desc").Trim() -eq $Text) { return $node }
     }
     return $null
 }

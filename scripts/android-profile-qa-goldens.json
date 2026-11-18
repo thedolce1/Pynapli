@@ -24,7 +24,7 @@
       }
     },
     "editTags": {
-      "requiredTexts": ["Lifestyle", "Logistics", "Intents"],
+      "requiredTexts": ["Boundaries", "Logistics"],
       "forbiddenTexts": ["Something went wrong", "Verify your age to add lifestyle tags."],
       "image": {
         "minWidth": 700,

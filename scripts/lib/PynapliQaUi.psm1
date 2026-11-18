@@ -245,6 +245,9 @@ function Get-GridCardSnapshot {
         "Online",
         "Singles",
         "Linked",
+        "Verified",
+        "Nearby",
+        "Favorites",
         "Grid",
         "Swipe",
         "Activity",
@@ -258,6 +261,8 @@ function Get-GridCardSnapshot {
             $text = $node.GetAttribute("text")
             if ([string]::IsNullOrWhiteSpace($text)) { continue }
             if ($chromeTexts -contains $text) { continue }
+            # The Filters chip reads "Filters · 1" while a filter is active.
+            if ($text -like "Filters *") { continue }
             if ($text -match "^\s*(<=|≤)?\s*\d+(\.\d+)?\s*(m|km)\s*$") { continue }
             if ($text -match "^\s*\d+\s*$") { continue }
 

@@ -400,7 +400,7 @@ Scroll-And-Tap-Exact "Events"
 Scroll-And-Tap-Exact "Hosts"
 Scroll-And-Tap-Exact "ENM"
 $tagsXml = Capture-Stage "editTags" "03_edit_tags"
-Assert-TextPresent $tagsXml "Lifestyle" "Edit tags"
+Assert-TextPresent $tagsXml "Boundaries" "Edit tags"
 Assert-TextPresent $tagsXml "Logistics" "Edit tags"
 
 # Save and confirm the editor closes back to the hub with success feedback. The
