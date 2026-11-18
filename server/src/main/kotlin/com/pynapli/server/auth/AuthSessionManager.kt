@@ -1,10 +1,12 @@
 package com.pynapli.server.auth
 
+import com.pynapli.server.auth.security.RefreshReplaySeal
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.auth.security.TokenGenerator
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import java.time.Clock
+import java.time.Instant
 import java.util.UUID
 
 internal class AuthSessionManager(
@@ -44,9 +46,9 @@ internal class AuthSessionManager(
     suspend fun refresh(refreshToken: String): AuthSessionDto {
         val now = clock.instant()
         val presentedRefreshTokenHash = Sha256.hash(refreshToken)
-        val session =
-            repository.findSessionByRefreshTokenHash(presentedRefreshTokenHash)
-                ?: throw AuthException("INVALID_REFRESH_TOKEN")
+        val session = repository.findSessionByRefreshTokenHash(presentedRefreshTokenHash)
+        // Not a current refresh token: it may be one a rotation consumed moments ago.
+        if (session == null) return replay(refreshToken, presentedRefreshTokenHash, now)
 
         if (session.revokedAt != null || session.refreshExpiresAt <= now) {
             throw AuthException("INVALID_REFRESH_TOKEN")
@@ -58,6 +60,9 @@ internal class AuthSessionManager(
         val newRefreshToken = TokenGenerator.newToken()
         val accessExpiresAt = now.plus(AUTH_ACCESS_TOKEN_TTL)
         val refreshExpiresAt = now.plus(AUTH_REFRESH_TOKEN_TTL)
+        // Sealed under a key derived from the token being consumed, so only a caller presenting that
+        // same token again can get these tokens back (see replay()).
+        val sealed = RefreshReplaySeal.seal(refreshToken, session.id, newAccessToken, newRefreshToken)
         val rotated =
             repository.rotateSession(
                 sessionId = session.id,
@@ -66,7 +71,13 @@ internal class AuthSessionManager(
                 refreshTokenHash = Sha256.hash(newRefreshToken),
                 accessExpiresAt = accessExpiresAt,
                 refreshExpiresAt = refreshExpiresAt,
-            ) ?: throw AuthException("INVALID_REFRESH_TOKEN")
+                replayNonce = sealed.nonce,
+                replayCiphertext = sealed.ciphertext,
+                replayExpiresAt = now.plus(AUTH_REFRESH_REPLAY_GRACE),
+            )
+        // Lost the compare-and-swap: a concurrent request with this same token rotated first. Converge
+        // on the tokens it issued rather than rejecting (or minting a second set).
+        if (rotated == null) return replay(refreshToken, presentedRefreshTokenHash, now)
         // Evict again now the rotation has committed: an authenticate() racing the window above can
         // re-cache the still-valid old access token, which would otherwise keep working for the TTL.
         cache.remove(session.accessTokenHash)
@@ -75,6 +86,42 @@ internal class AuthSessionManager(
             accessToken = newAccessToken,
             refreshToken = newRefreshToken,
             user = AuthUserDto(userId = rotated.userId.toString(), status = rotated.userStatus),
+        )
+    }
+
+    /**
+     * Idempotent retry of a refresh whose response was lost (or that lost a race to a concurrent
+     * refresh with the same token): within [AUTH_REFRESH_REPLAY_GRACE] of the rotation that consumed
+     * [refreshToken], return the very tokens that rotation issued. Mints nothing and writes nothing, so
+     * it cannot extend a session; it applies the same revoked/expired/account checks as a refresh, and
+     * only the single most recent previous token of an unrevoked session qualifies.
+     */
+    private suspend fun replay(
+        refreshToken: String,
+        presentedRefreshTokenHash: String,
+        now: Instant,
+    ): AuthSessionDto {
+        val replay =
+            repository.findRefreshReplay(presentedRefreshTokenHash)
+                ?: throw AuthException("INVALID_REFRESH_TOKEN")
+        val session = replay.session
+        if (session.revokedAt != null || session.refreshExpiresAt <= now || replay.replayExpiresAt <= now) {
+            throw AuthException("INVALID_REFRESH_TOKEN")
+        }
+        val (accessToken, currentRefreshToken) =
+            RefreshReplaySeal.open(refreshToken, session.id, replay.nonce, replay.ciphertext)
+                ?: throw AuthException("INVALID_REFRESH_TOKEN")
+        // Only ever hand back the session's live tokens (written in the same UPDATE as the blob, so
+        // this holds unless the row was changed some other way; then refuse rather than guess).
+        if (Sha256.hash(accessToken) != session.accessTokenHash || Sha256.hash(currentRefreshToken) != session.refreshTokenHash) {
+            throw AuthException("INVALID_REFRESH_TOKEN")
+        }
+        if (session.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
+
+        return AuthSessionDto(
+            accessToken = accessToken,
+            refreshToken = currentRefreshToken,
+            user = AuthUserDto(userId = session.userId.toString(), status = session.userStatus),
         )
     }
 

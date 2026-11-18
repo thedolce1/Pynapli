@@ -1,5 +1,6 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.auth.CLEAR_REFRESH_REPLAY_SQL
 import java.sql.Connection
 import java.util.UUID
 
@@ -140,7 +141,8 @@ internal fun Connection.revokeUserSessions(userId: UUID): Int =
     prepareStatement(
         """
         UPDATE user_sessions
-        SET revoked_at = now()
+        SET revoked_at = now(),
+            $CLEAR_REFRESH_REPLAY_SQL
         WHERE user_id = ?
           AND revoked_at IS NULL
         """.trimIndent(),

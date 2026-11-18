@@ -39,6 +39,24 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 
 ## Surface contracts
 
+### Auth sessions (`POST /v1/auth/refresh`)
+
+- Access and refresh tokens are opaque and server-owned. A refresh rotates both: the presented
+  refresh token is exchanged for new tokens **exactly once** (compare-and-swap), even when several
+  requests present it at the same moment.
+- The exchange is **idempotent for 60 seconds** (`AUTH_REFRESH_REPLAY_GRACE`). Presenting the token
+  a rotation just consumed again — the first response was lost, or another tab won the race — returns
+  the **same** access and refresh tokens that rotation issued. Nothing new is minted and the session
+  is not extended. Only the single most recent previous token of a live session qualifies; a token two
+  rotations old, a revoked or expired session, or a retry after the grace answers
+  `INVALID_REFRESH_TOKEN`, and an account that is no longer active answers `ACCOUNT_NOT_ACTIVE`, as
+  a normal refresh does.
+- The server stores only token hashes, so it keeps the issued tokens sealed (AES-256-GCM) under a key
+  derived from the consumed refresh token, which it never stores. Revocation clears the seal.
+- Clients keep the stored session on a transient refresh failure (network, 5xx) and retry with the
+  token they hold; they clear it only on `INVALID_REFRESH_TOKEN`, `ACCOUNT_NOT_ACTIVE` or a 401 that
+  the refresh path has already judged terminal.
+
 ### Grid (`POST /v1/grid/query`)
 
 - Cards stay minimal (id, name, thumbnail, online, distance label, linked-partner mini, `verified`,

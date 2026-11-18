@@ -95,7 +95,9 @@ an endless splash; error handlers and a 45s watchdog guarantee a visible failure
 - **Opaque tokens, same server auth.** Access token in memory; refresh token in `localStorage`.
   `httpOnly` cookie sessions would be a server auth-model change and are out of scope. Mitigations:
   strict CSP (`default-src 'self'`, no third-party scripts), no token in URLs, server-side refresh
-  rotation + revocation.
+  rotation + revocation. A refresh is idempotent for 60 s: a tab that retries after a lost response,
+  or that loses a refresh race to another tab, gets the same rotated session back instead of being
+  signed out (`docs/API_CONTRACT_SPEC.md`, Auth sessions).
 - **The service worker caches the app shell only**: never API responses, profile photos, or
   anything user-specific (shared/family computers).
 - Client logging rules apply unchanged (no message bodies, private media URLs, exact location,

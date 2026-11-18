@@ -77,6 +77,9 @@ class JdbcAuthRepository(
         refreshTokenHash: String,
         accessExpiresAt: Instant,
         refreshExpiresAt: Instant,
+        replayNonce: ByteArray,
+        replayCiphertext: ByteArray,
+        replayExpiresAt: Instant,
     ): SessionRecord? =
         sessions.rotateSession(
             sessionId = sessionId,
@@ -85,7 +88,12 @@ class JdbcAuthRepository(
             refreshTokenHash = refreshTokenHash,
             accessExpiresAt = accessExpiresAt,
             refreshExpiresAt = refreshExpiresAt,
+            replayNonce = replayNonce,
+            replayCiphertext = replayCiphertext,
+            replayExpiresAt = replayExpiresAt,
         )
+
+    override suspend fun findRefreshReplay(previousRefreshTokenHash: String): RefreshReplayRecord? = sessions.findRefreshReplay(previousRefreshTokenHash)
 
     override suspend fun revokeSession(sessionId: UUID): Boolean = sessions.revokeSession(sessionId)
 }

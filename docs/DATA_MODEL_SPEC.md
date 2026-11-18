@@ -50,7 +50,10 @@ every change must keep.
 - Account-level age, terms and privacy acceptance live on `users`; profile DOB and display age live
   on `profiles`.
 - Access and refresh tokens are opaque random values (not JWTs). **Only their hashes are stored**, so
-  a leaked database can't be replayed as sessions. Password-reset codes are stored only as
+  a leaked database can't be replayed as sessions. For the 60 s refresh replay grace, `user_sessions`
+  also holds the hash of the refresh token the last rotation consumed and the tokens it issued,
+  sealed with AES-256-GCM under a key derived from that consumed token (never stored), so the blob is
+  useless without the old token; revocation clears it. Password-reset codes are stored only as
   `SHA-256(userId:code)`.
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
   the integrity of retained safety/legal records. In the same transaction, GDPR/CCPA erasure nulls

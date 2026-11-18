@@ -56,6 +56,20 @@ class AuthServiceTest {
         }
 
     @Test
+    fun aRetriedRefreshWithTheConsumedTokenReturnsTheSameSession() =
+        runBlocking {
+            val service = AuthService(InMemoryAuthRepository())
+            val session = signup(service)
+
+            val refreshed = service.refresh(session.refreshToken)
+            val retried = service.refresh(session.refreshToken)
+
+            assertEquals(refreshed, retried)
+            service.authenticate(retried.accessToken)
+            Unit
+        }
+
+    @Test
     fun refreshInvalidatesCachedOldAccessToken() =
         runBlocking {
             val service = AuthService(InMemoryAuthRepository())
@@ -313,6 +327,7 @@ private class InMemoryAuthRepository : AuthRepository {
     private val users = linkedMapOf<UUID, UserRecord>()
     private val identitiesByEmailHash = linkedMapOf<String, EmailIdentityRecord>()
     private val sessions = linkedMapOf<UUID, SessionRecord>()
+    private val replays = linkedMapOf<UUID, InMemoryReplay>()
     val signupProfiles = linkedMapOf<UUID, SignupProfile>()
 
     override suspend fun createEmailUser(
@@ -384,6 +399,9 @@ private class InMemoryAuthRepository : AuthRepository {
         refreshTokenHash: String,
         accessExpiresAt: Instant,
         refreshExpiresAt: Instant,
+        replayNonce: ByteArray,
+        replayCiphertext: ByteArray,
+        replayExpiresAt: Instant,
     ): SessionRecord? {
         val current = sessions[sessionId] ?: return null
         if (current.revokedAt != null || current.refreshTokenHash != presentedRefreshTokenHash) return null
@@ -395,14 +413,29 @@ private class InMemoryAuthRepository : AuthRepository {
                 refreshExpiresAt = refreshExpiresAt,
             )
         sessions[sessionId] = rotated
+        replays[sessionId] = InMemoryReplay(presentedRefreshTokenHash, replayNonce, replayCiphertext, replayExpiresAt)
         return rotated.withCurrentUserStatus()
+    }
+
+    override suspend fun findRefreshReplay(previousRefreshTokenHash: String): RefreshReplayRecord? {
+        val (sessionId, replay) = replays.entries.firstOrNull { it.value.previousRefreshTokenHash == previousRefreshTokenHash } ?: return null
+        val session = sessions[sessionId]?.takeIf { it.revokedAt == null } ?: return null
+        return RefreshReplayRecord(session.withCurrentUserStatus(), replay.nonce, replay.ciphertext, replay.expiresAt)
     }
 
     override suspend fun revokeSession(sessionId: UUID): Boolean {
         val current = sessions[sessionId] ?: return false
         sessions[sessionId] = current.copy(revokedAt = Instant.now())
+        replays.remove(sessionId)
         return true
     }
+
+    private class InMemoryReplay(
+        val previousRefreshTokenHash: String,
+        val nonce: ByteArray,
+        val ciphertext: ByteArray,
+        val expiresAt: Instant,
+    )
 
     fun setUserStatus(
         userId: UUID,
