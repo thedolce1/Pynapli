@@ -112,7 +112,9 @@ internal fun buildSwipeDependencies(
         topPicksService = topPicksService,
         matchCelebrationService =
             com.pynapli.server.swipe.MatchCelebrationService(
-                repository = com.pynapli.server.swipe.JdbcMatchCelebrationRepository(dataSource),
+                repository =
+                    com.pynapli.server.swipe
+                        .JdbcMatchCelebrationRepository(dataSource),
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
             ),
         // Delivers match side effects (Activity rows, match conversation, match push) whose request

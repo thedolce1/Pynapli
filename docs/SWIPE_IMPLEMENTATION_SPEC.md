@@ -484,12 +484,29 @@ Current MVP implementation:
 `SwipeStateHolder` exposes `StateFlow` deck state; `SwipeCardStack` uses `pointerInput` drag detection
 and `Animatable` offset/rotation (custom gestures, not `anchoredDraggable`).
 
-- Render only the top card (interactive), the next card (slight scale/offset) and a third (image
-  preloaded, minimal composition). Never render the whole deck. Key cards by `cardToken`.
-- Top card: horizontal drag with slight vertical tolerance, rotation proportional to drag, like/pass
-  label reveal, velocity-aware release, spring back below threshold, fly out beyond threshold or on
-  fling. Pineapple Like is a button, not a vertical swipe; vertical gestures stay free for photo
-  scroll.
+- Render only the top card (interactive), the next card (scales and fades up with the top card's
+  drag progress) and a third (image preloaded). Never render the whole deck. Key cards by person
+  (`userId`) so a promoted card keeps its state and loaded photo.
+- Top card (`SwipeCard`, `SwipePhysics`): follows the finger on both axes; rotation is proportional
+  to horizontal drag around a pivot set by where it was grabbed (top half pivots at the bottom,
+  bottom half at the top, so they turn opposite ways). Release: a fast short flick commits, a slow
+  drag past the threshold (28% width, 18% height up) commits, anything else settles on a spring. A
+  committed card exits along its fling direction at its fling speed (never against the decision).
+  LIKE / NOPE / PINEAPPLE stamps fade in with the drag. Buttons and arrow keys play the same exit;
+  Rewind brings a card back in from the side it left (`SwipeExitMemory`). Per-frame values are read
+  only in `graphicsLayer`.
+- Swiping up past the threshold opens the Pineapple Like sheet (optional note; spends one only on
+  Send), whose Send plays the upward exit. It never spends inventory on a gesture alone.
+- Haptics (`PynapliHaptics`, expect/actual): a light tick when the drag crosses a threshold in
+  either direction, a firmer one on commit, a distinct pattern on a match. Android View haptics
+  (follows the system touch-feedback setting), `navigator.vibrate` on the web where present, Compose
+  haptics on iOS, none on the desktop dev shell.
+- Photos: tap the left / right half to step through photos instantly (segmented bars at the top);
+  tap the bottom info area or the expand button to open the shared profile sheet. Tags show only in
+  the expanded profile.
+- Keyboard on wide panes: left pass, right like, up Pineapple Like, Space / Enter open the profile.
+- Empty deck offers "Widen filters" and "Try Travel mode"; offline says saved swipes send on
+  reconnect; the first load is a card-shaped placeholder.
 - On wide panes the deck is a centered stage with arrow-key shortcuts (see
   [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md)).
 
@@ -499,8 +516,8 @@ Swipe is photo-heavy, so preloading matters.
 
 Rules:
 
-- Preload all photos for top card.
-- Preload first photo for next 2-3 cards.
+- Preload all photos for the top two cards.
+- Preload the first photo for the rest of the next few cards.
 - Use CDN image sizes appropriate to card dimensions.
 - Avoid original images in swipe deck.
 - Keep image aspect ratios stable to avoid layout shift.
@@ -510,9 +527,18 @@ Rules:
 
 When a mutual match occurs:
 
-- Show match animation.
-- Offer Message.
-- Offer Keep Swiping.
+- Both people get the full-screen "It's a match" moment (`MatchCelebrationScreen`, app-wide, not a
+  sheet): both photos, gold title, "Send a message", "Keep swiping", success haptic; it swallows
+  input so the deck underneath cannot move; Esc / back close it.
+- Exactly once per person per match across devices: the server records who has seen it
+  (`match_celebrations`, V108; existing matches backfilled as seen). The swiper gets it from the
+  swipe response; the other person from `GET /v1/matches/celebrations` on sign-in, on foreground,
+  on the activity socket's `match` delta and after a reconnect. The client marks it seen with the
+  idempotent `POST /v1/matches/celebrations/seen` once it is on screen.
+- A Psync together match (two canonical matches for the target) is one moment with the pair
+  presentation ("Maya & Alex"). Each partner's own moment is individual.
+- Match alerts off: the moment is marked seen without showing. Discreet notification detail keeps
+  names off it. The in-app activity banner does not repeat a match.
 - If linked-partner context applies, offer Invite Partner later, not immediately unless user intent makes it natural.
 
 Do not automatically add linked partners to match chats.
@@ -651,6 +677,13 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
   a deck is below low water (the doubled radius is rounded up to its step); dealbreakers and identity
   filters (gender/orientation) stay hard.
 - [x] Compose stack renders only 2–3 cards; physics-based gestures; image preloading.
+- [x] Tinder-grade card feel: grab-point pivot, velocity fling, fling-speed exit, next card rising,
+  LIKE / NOPE / PINEAPPLE stamps, button exits, directional Rewind, threshold/commit/match haptics
+  (SwipePhysicsTest, SwipeCardGestureTest). Real-device feel QA still owed.
+- [x] Full-screen match moment for both people, once per person across devices (V108,
+  MatchCelebrationIntegrationTest, MatchCelebrationStateHolderTest).
+- [x] Swipe cards carry coupleVerified (both partners verified, partner visible), like the Grid.
+- [x] Empty / offline / loading deck states with next actions (widen filters, Travel mode).
 - [x] API load proof (`scripts/swipe-api-load-test.ps1`, 5,000 candidates, 100- and 500-concurrent).
 - [x] Connected Android visual/gesture QA (`scripts/android-swipe-qa.ps1`) and queue QA
   (`scripts/android-swipe-queue-qa.ps1`).

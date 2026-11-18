@@ -66,6 +66,5 @@ class NotificationService(
 
     override suspend fun enqueue(notification: NotificationEventDraft): NotificationOutboxRecord? = enqueueActions.enqueue(notification)
 
-    override suspend fun enqueueOrThrow(notification: NotificationEventDraft): NotificationOutboxRecord? =
-        enqueueActions.enqueue(notification, propagateWriteFailure = true)
+    override suspend fun enqueueOrThrow(notification: NotificationEventDraft): NotificationOutboxRecord? = enqueueActions.enqueue(notification, propagateWriteFailure = true)
 }

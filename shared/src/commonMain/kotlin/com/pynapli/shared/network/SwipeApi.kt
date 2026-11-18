@@ -29,6 +29,5 @@ interface SwipeApi {
     suspend fun getMatchCelebrations(): AppResult<MatchCelebrationsResponseDto> = AppResult.Failure(AppError("UNSUPPORTED", "Not available."))
 
     /** Idempotent: marks those moments seen for the viewer on every device. */
-    suspend fun markMatchesCelebrated(matchIds: List<String>): AppResult<MarkMatchesCelebratedResponseDto> =
-        AppResult.Failure(AppError("UNSUPPORTED", "Not available."))
+    suspend fun markMatchesCelebrated(matchIds: List<String>): AppResult<MarkMatchesCelebratedResponseDto> = AppResult.Failure(AppError("UNSUPPORTED", "Not available."))
 }

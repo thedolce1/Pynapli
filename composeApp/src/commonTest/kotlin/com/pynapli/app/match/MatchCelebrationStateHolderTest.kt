@@ -18,14 +18,22 @@ class MatchCelebrationStateHolderTest {
 
             holder.refresh()
 
-            assertEquals("m-1", holder.state.value.current?.primaryMatchId)
+            assertEquals(
+                "m-1",
+                holder.state.value.current
+                    ?.primaryMatchId,
+            )
             assertTrue(repository.marked.isEmpty(), "not seen until it is on screen")
 
             holder.markShown(holder.state.value.current!!)
             assertEquals(listOf(listOf("m-1")), repository.marked)
 
             holder.dismiss()
-            assertEquals("m-2", holder.state.value.current?.primaryMatchId)
+            assertEquals(
+                "m-2",
+                holder.state.value.current
+                    ?.primaryMatchId,
+            )
             holder.dismiss()
             assertNull(holder.state.value.current)
         }
@@ -59,7 +67,10 @@ class MatchCelebrationStateHolderTest {
             holder.refresh()
             holder.markShown(holder.state.value.current!!)
 
-            assertTrue(holder.state.value.current!!.isPair)
+            assertTrue(
+                holder.state.value.current!!
+                    .isPair,
+            )
             assertEquals(listOf(listOf("m-1", "m-2")), repository.marked)
         }
 
@@ -89,7 +100,10 @@ class MatchCelebrationStateHolderTest {
             holder.reset()
 
             assertNull(holder.state.value.current)
-            assertTrue(holder.state.value.handledMatchIds.isEmpty())
+            assertTrue(
+                holder.state.value.handledMatchIds
+                    .isEmpty(),
+            )
         }
 }
 

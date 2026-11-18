@@ -32,6 +32,5 @@ internal class KtorSwipeApi(
 
     override suspend fun getMatchCelebrations(): AppResult<MatchCelebrationsResponseDto> = support.authGet("/v1/matches/celebrations")
 
-    override suspend fun markMatchesCelebrated(matchIds: List<String>): AppResult<MarkMatchesCelebratedResponseDto> =
-        support.authSend(HttpMethod.Post, "/v1/matches/celebrations/seen", MarkMatchesCelebratedRequestDto(matchIds))
+    override suspend fun markMatchesCelebrated(matchIds: List<String>): AppResult<MarkMatchesCelebratedResponseDto> = support.authSend(HttpMethod.Post, "/v1/matches/celebrations/seen", MarkMatchesCelebratedRequestDto(matchIds))
 }

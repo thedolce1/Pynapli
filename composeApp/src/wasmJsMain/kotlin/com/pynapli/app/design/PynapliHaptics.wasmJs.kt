@@ -24,8 +24,6 @@ private const val THRESHOLD_TICK_MS = 8
 private const val COMMIT_MS = 18
 
 // Kotlin/Wasm JS interop requires js() to be the whole body of a top-level function.
-private fun vibrateOnce(durationMs: Int): Unit =
-    js("{ try { if ('vibrate' in navigator) { navigator.vibrate(durationMs); } } catch (e) {} }")
+private fun vibrateOnce(durationMs: Int): Unit = js("{ try { if ('vibrate' in navigator) { navigator.vibrate(durationMs); } } catch (e) {} }")
 
-private fun vibrateMatchPattern(): Unit =
-    js("{ try { if ('vibrate' in navigator) { navigator.vibrate([30, 70, 45]); } } catch (e) {} }")
+private fun vibrateMatchPattern(): Unit = js("{ try { if ('vibrate' in navigator) { navigator.vibrate([30, 70, 45]); } } catch (e) {} }")

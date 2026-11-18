@@ -40,7 +40,14 @@ class MatchCelebrationIntegrationTest {
             assertEquals(b.toString(), forA.matchedUserId)
             assertEquals("Blake", forA.matchedDisplayName)
             assertNull(forA.pairUserId)
-            assertEquals(a.toString(), service.listUncelebrated(b).items.single().matchedUserId)
+            assertEquals(
+                a.toString(),
+                service
+                    .listUncelebrated(b)
+                    .items
+                    .single()
+                    .matchedUserId,
+            )
 
             // a's device shows it and marks it; a second device (or a retry) marking it again is a no-op.
             assertEquals(1, service.markCelebrated(a, MarkMatchesCelebratedRequestDto(listOf(matchId.toString()))).marked)
@@ -48,7 +55,14 @@ class MatchCelebrationIntegrationTest {
 
             assertTrue(service.listUncelebrated(a).items.isEmpty())
             // b has still not seen it.
-            assertEquals(matchId.toString(), service.listUncelebrated(b).items.single().matchId)
+            assertEquals(
+                matchId.toString(),
+                service
+                    .listUncelebrated(b)
+                    .items
+                    .single()
+                    .matchId,
+            )
         }
 
     @Test
@@ -117,7 +131,13 @@ class MatchCelebrationIntegrationTest {
             assertNotNull(sessionId)
 
             // Each partner's own moment is individual: a swipe acts on the individual only.
-            assertNull(service.listUncelebrated(maya).items.single().pairUserId)
+            assertNull(
+                service
+                    .listUncelebrated(maya)
+                    .items
+                    .single()
+                    .pairUserId,
+            )
 
             service.markCelebrated(target, MarkMatchesCelebratedRequestDto(listOfNotNull(moment.matchId, moment.pairMatchId)))
             assertTrue(service.listUncelebrated(target).items.isEmpty())

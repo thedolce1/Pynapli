@@ -111,7 +111,8 @@ class SwipeStageKeyTest {
         }
 
     @Test
-    fun compactPaneIgnoresArrowKeys() =        runComposeUiTest {
+    fun compactPaneIgnoresArrowKeys() =
+        runComposeUiTest {
             var actions = 0
 
             setContent {

@@ -292,7 +292,10 @@ private fun MatchCelebrationOverlay(
     onSendMessage: (MatchCelebrationUi) -> Unit,
     scope: CoroutineScope,
 ) {
-    val celebration = holder.state.collectAsState().value.current ?: return
+    val celebration =
+        holder.state
+            .collectAsState()
+            .value.current ?: return
     // Shown (or deliberately not shown, with match alerts off): either way it is seen, once.
     // The mark runs in the app scope, so closing the moment quickly never cancels it.
     LaunchedEffect(celebration.primaryMatchId) {

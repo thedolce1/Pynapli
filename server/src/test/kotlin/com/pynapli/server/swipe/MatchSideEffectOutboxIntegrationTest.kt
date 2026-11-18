@@ -13,9 +13,9 @@ import com.pynapli.server.notifications.NotificationOutboxRecord
 import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.notifications.NotificationRepository
 import com.pynapli.server.notifications.NotificationService
-import com.pynapli.shared.network.dto.RegisterPushDeviceRequestDto
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.LikeBackRequestDto
+import com.pynapli.shared.network.dto.RegisterPushDeviceRequestDto
 import com.pynapli.shared.network.dto.SwipeAction
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
