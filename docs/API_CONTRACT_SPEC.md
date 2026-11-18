@@ -83,7 +83,9 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 - Cursors are signed and viewer/tab-scoped and carry seen-count state, so reveal-depth gates apply
   consistently across pages.
 - The summary applies the same visibility/block/risk filters as the feed. `badgeCount` excludes
-  profile views (`profileViewCount` is separate). If the recipient disables Viewed lists, view rows
+  profile views (`profileViewCount` is separate) and matches (no Activity tab shows them, so they
+  could never be marked seen; `matchCount` is kept for installed clients and is always `0`).
+  `latestBadgeOccurredAt` follows the same set. If the recipient disables Viewed lists, view rows
   disappear from their feed and count.
 - Album-request respond and dismiss only act on the recipient's own rows.
 - Match and partner-invite CTAs use server-provided ids (`matchId`, `conversationId`); **clients never

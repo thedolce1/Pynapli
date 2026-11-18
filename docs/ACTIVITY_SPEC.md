@@ -549,15 +549,21 @@ Bottom nav Activity badge should show meaningful new activity, not noise.
 
 Count:
 
-- New matches
 - New Likes You
 - New flirts
 - Album requests
 - Partner invites
 
+New matches are **not** in the Activity badge. Activity has no Matches tab (matches live in the
+Messages new-matches rail), so no client ever loads a match row to mark it seen; counting it would
+leave the badge stuck. A new match is announced by the full-screen match moment (once per person
+per match, `match_celebrations`), the match push (`target: messages`) and the new-matches rail.
+
 Current backend behavior:
 
-- `badgeCount` includes unseen flirts, likes, matches, pending album requests, and partner chat invites.
+- `badgeCount` includes unseen flirts, likes, pending album requests, and partner chat invites.
+- Unseen `match` events are excluded from `badgeCount` and from `latestBadgeOccurredAt`.
+  `matchCount` stays in the summary DTO for already-installed clients and is always `0`.
 - Profile views are not included in `badgeCount`.
 - `profileViewCount` is returned separately for in-screen Viewed-list copy.
 - Badge counts honor dismiss, block, actor risk, actor visibility, incognito, and Viewed-list opt-out rules.
