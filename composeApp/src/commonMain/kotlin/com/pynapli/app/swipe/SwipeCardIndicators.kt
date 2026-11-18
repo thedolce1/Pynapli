@@ -37,26 +37,6 @@ import com.pynapli.app.design.icons.filled.CheckCircle
 import com.pynapli.app.design.icons.filled.Person
 
 @Composable
-internal fun SwipeTagChip(label: String) {
-    Box(
-        modifier =
-            Modifier
-                .clip(PynapliShape.PillShape)
-                .background(PynapliColors.OnPhotoChipFill)
-                .border(1.dp, PynapliColors.OnPhotoChipStroke, PynapliShape.PillShape)
-                .padding(horizontal = 8.dp, vertical = 3.dp),
-    ) {
-        Text(
-            text = label,
-            color = PynapliColors.OnPhotoPrimary,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
 internal fun PhotoCarouselIndicators(
     count: Int,
     currentPage: Int,

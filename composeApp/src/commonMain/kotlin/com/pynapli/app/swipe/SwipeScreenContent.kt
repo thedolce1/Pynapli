@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
@@ -78,6 +79,8 @@ internal fun SwipeScreenContent(
         val wideStage = maxWidth >= WideStageMinPaneWidth
         val keyActionsEnabled = state.hasMore && !state.actionQueueFull && !state.isSubmitting
         val stageFocus = remember { FocusRequester() }
+        // Which side each card left by, so Rewind brings it back in from there.
+        val exitMemory = remember { SwipeExitMemory() }
         // Keys need focus; grab it whenever the wide stage (re)appears so arrows work
         // immediately. Compact never requests — the phone flow has no keyboard.
         LaunchedEffect(wideStage) {
@@ -122,6 +125,19 @@ internal fun SwipeScreenContent(
 
                             else -> false
                         }
+                    }
+                    // Space / Enter open the top card's profile. onKeyEvent, not preview, so a focused
+                    // button (a filter chip, an action) still gets its own Space / Enter first.
+                    .onKeyEvent { event ->
+                        if (!wideStage || event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        val top = state.topCard ?: return@onKeyEvent false
+                        when (event.key) {
+                            Key.Spacebar, Key.Enter, Key.NumPadEnter -> {
+                                onOpenProfile(top)
+                                true
+                            }
+                            else -> false
+                        }
                     },
         ) {
             SwipeHeader(
@@ -161,6 +177,9 @@ internal fun SwipeScreenContent(
                 onRetryDeck = onRetryDeck,
                 onOpenFilters = onOpenFilters,
                 onBackToForYou = { onFilterSelected(SwipeFilterType.ForYou) },
+                onOpenTravel = onOpenTravel,
+                onPineappleGesture = { onPineappleLike() },
+                exitMemory = exitMemory,
                 onActionConsumed = onActionConsumed,
                 onOpenProfile = onOpenProfile,
                 onLinkedPartnerTap = onLinkedPartnerTap,
@@ -253,6 +272,9 @@ private fun SwipeDeckArea(
     onRetryDeck: () -> Unit,
     onOpenFilters: () -> Unit,
     onBackToForYou: () -> Unit,
+    onOpenTravel: () -> Unit,
+    onPineappleGesture: (SwipeCardDto) -> Unit,
+    exitMemory: SwipeExitMemory,
     onActionConsumed: () -> Unit,
     onOpenProfile: (SwipeCardDto) -> Unit,
     onLinkedPartnerTap: (SwipeCardDto) -> Unit,
@@ -265,12 +287,13 @@ private fun SwipeDeckArea(
     ) {
         when {
             state.isLoading && state.cards.isEmpty() -> {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                SwipeDeckLoading()
             }
             state.errorMessage != null && state.cards.isEmpty() && state.nextCursor == null -> {
                 SwipeError(
                     message = state.errorMessage,
                     onRetry = onRetryDeck,
+                    errorCode = state.errorCode,
                 )
             }
             state.cards.isEmpty() && state.nextCursor != null -> {
@@ -283,6 +306,7 @@ private fun SwipeDeckArea(
                     onOpenFilters = onOpenFilters,
                     topPicksMode = state.topPicksMode,
                     onBackToForYou = onBackToForYou,
+                    onOpenTravel = onOpenTravel,
                 )
             }
             else -> {
@@ -295,6 +319,8 @@ private fun SwipeDeckArea(
                     onOpenProfile = onOpenProfile,
                     onLinkedPartnerTap = onLinkedPartnerTap,
                     onSwiped = onSwiped,
+                    onPineappleGesture = onPineappleGesture,
+                    exitMemory = exitMemory,
                 )
             }
         }

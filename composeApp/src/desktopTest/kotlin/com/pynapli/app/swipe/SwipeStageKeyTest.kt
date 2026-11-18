@@ -73,8 +73,45 @@ class SwipeStageKeyTest {
         }
 
     @Test
-    fun compactPaneIgnoresArrowKeys() =
+    fun wideStageSpaceAndEnterOpenTheTopProfile() =
         runComposeUiTest {
+            val opened = mutableListOf<String>()
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 900.dp, height = 800.dp)) {
+                        SwipeScreenContent(
+                            state = SwipeUiState(cards = listOf(sampleCard("a"), sampleCard("b"))),
+                            travelCityName = null,
+                            requestedAction = null,
+                            distanceUnit = "metric",
+                            onOpenFilters = {},
+                            onOpenTravel = {},
+                            onOpenStore = {},
+                            onFilterSelected = {},
+                            onRetryDeck = {},
+                            onActionConsumed = {},
+                            onOpenProfile = { opened += it.userId },
+                            onLinkedPartnerTap = {},
+                            onSwiped = { _, _ -> },
+                            onRetryPendingActions = {},
+                            onRewind = {},
+                            onPass = {},
+                            onPineappleLike = {},
+                            onLike = {},
+                        )
+                    }
+                }
+            }
+
+            onRoot().performKeyInput { pressKey(Key.Spacebar) }
+            onRoot().performKeyInput { pressKey(Key.Enter) }
+
+            assertEquals(listOf("a", "a"), opened)
+        }
+
+    @Test
+    fun compactPaneIgnoresArrowKeys() =        runComposeUiTest {
             var actions = 0
 
             setContent {

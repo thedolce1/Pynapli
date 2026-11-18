@@ -13,7 +13,7 @@ class SwipeImagePrefetchPlannerTest {
     }
 
     @Test
-    fun topCardPrefetchesAllCarouselPhotosAndOthersGetCoverOnly() {
+    fun topTwoCardsPrefetchAllCarouselPhotosAndOthersGetCoverOnly() {
         val cards =
             listOf(
                 card(
@@ -36,6 +36,7 @@ class SwipeImagePrefetchPlannerTest {
                 "https://cdn/a-3.jpg",
                 "https://cdn/a-partner.jpg",
                 "https://cdn/b-1.jpg",
+                "https://cdn/b-2.jpg",
                 "https://cdn/c-partner.jpg",
                 "https://cdn/d.jpg",
             ),
