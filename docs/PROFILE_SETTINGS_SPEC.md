@@ -359,7 +359,6 @@ Flirt controls:
 Message settings include:
 
 - Grid message permissions
-- Verified-only messages
 - Allow media messages
 - Allow voice messages
 - Read receipts, if premium
@@ -368,15 +367,18 @@ Message settings include:
 - Message request filtering
 - Partner invite settings
 
-Grid message permissions:
+Grid message permissions (who may send me a first message from the Grid; `grid_message_policy`):
 
-- Anyone
-- Verified users only
-- People matching my intent
-- Nearby only
-- No first messages, flirts only
+- Everyone (`everyone`)
+- Verified members only (`verified_only`): the sender must be photo-verified (`profiles.verified_at`,
+  the same verification behind the verified badge and the "Verified only" filters)
+- Matches only (`matches_only`)
+- No one (`no_one`, shown as "No first messages")
 
-Swipe chat remains match-gated regardless of this setting.
+The server validates the value and enforces it when a Grid conversation is opened; a refused sender
+gets `MESSAGING_NOT_ALLOWED`, whichever option refused them. The setting gates opening only: a thread
+that already exists keeps working. Swipe and Psync match chats remain match-gated regardless of this
+setting.
 
 ## Notification Settings
 

@@ -79,6 +79,23 @@ class ProfileHubDraftMappingTest {
     }
 
     @Test
+    fun activityDraftKeepsVerifiedOnlyGridMessagePolicyAndFallsBackForCutOptions() {
+        val draft = discoverySettingsDto(gridMessagePolicy = "verified_only").toActivityDraft()
+        assertEquals(true, draft.allowGridMessages)
+        assertEquals("verified_only", draft.gridMessagePolicy)
+        // Saving the controls must not silently downgrade the stored choice.
+        assertEquals("verified_only", draft.toRequest().gridMessagePolicy)
+        assertEquals("Verified members only", gridMessagePolicyLabel("verified_only"))
+        assertEquals(
+            listOf("everyone", "verified_only", "matches_only", "no_one"),
+            gridMessagePolicyOptions.map { it.value },
+        )
+
+        // Options the founder cut (2026-11-18) are not choices; an unknown value falls back to everyone.
+        assertEquals("everyone", discoverySettingsDto(gridMessagePolicy = "nearby_only").toActivityDraft().gridMessagePolicy)
+    }
+
+    @Test
     fun validationCatchesOverlongBioAndMissingSelfDescribeLabel() {
         val base = testProfileDto(displayName = "Alex").toDraft()
 
@@ -90,7 +107,10 @@ class ProfileHubDraftMappingTest {
     }
 }
 
-private fun discoverySettingsDto(partnerVisibility: String): DiscoverySettingsDto =
+private fun discoverySettingsDto(
+    partnerVisibility: String = "public",
+    gridMessagePolicy: String = "everyone",
+): DiscoverySettingsDto =
     DiscoverySettingsDto(
         gridVisible = true,
         swipeVisible = true,
@@ -99,7 +119,7 @@ private fun discoverySettingsDto(partnerVisibility: String): DiscoverySettingsDt
         showInViewedLists = true,
         incognito = false,
         allowGridMessages = true,
-        gridMessagePolicy = "everyone",
+        gridMessagePolicy = gridMessagePolicy,
         allowFlirts = true,
         allowIntroNotes = true,
         allowAlbumRequests = true,

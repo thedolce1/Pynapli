@@ -89,6 +89,14 @@ internal object JdbcProfileSql {
                        WHERE LEAST(m.user_a, m.user_b) = LEAST(?::uuid, u.id)
                          AND GREATEST(m.user_a, m.user_b) = GREATEST(?::uuid, u.id)
                    )
+                   -- Same photo-verified condition the message gate uses (profiles.verified_at).
+                   WHEN ds.grid_message_policy = 'verified_only'
+                   THEN EXISTS (
+                       SELECT 1
+                       FROM profiles sender_profile
+                       WHERE sender_profile.user_id = ?
+                         AND sender_profile.verified_at IS NOT NULL
+                   )
                    WHEN ds.grid_message_policy = 'everyone'
                    THEN true
                    ELSE false

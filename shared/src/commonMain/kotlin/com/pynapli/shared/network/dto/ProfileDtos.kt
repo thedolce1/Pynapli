@@ -95,6 +95,8 @@ data class DiscoverySettingsDto(
     val showInViewedLists: Boolean,
     val incognito: Boolean,
     val allowGridMessages: Boolean,
+    // Who may send a first Grid message: everyone | verified_only | matches_only | no_one.
+    // verified_only means the sender is photo-verified. The server validates and enforces it.
     val gridMessagePolicy: String,
     val allowFlirts: Boolean,
     // "Allow notes with Pineapple Likes". Off: a Pineapple Like still arrives, without its note.

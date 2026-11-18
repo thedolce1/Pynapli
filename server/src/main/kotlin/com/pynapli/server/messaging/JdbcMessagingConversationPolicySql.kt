@@ -46,10 +46,31 @@ private fun Connection.targetAllowsGridConversation(
     return when {
         !policy.allowGridMessages -> false
         policy.gridMessagePolicy == "everyone" -> true
+        policy.gridMessagePolicy == "verified_only" -> senderIsPhotoVerified(viewerUserId)
         policy.gridMessagePolicy == "matches_only" -> targetAllowsSwipeConversation(viewerUserId, targetUserId)
         else -> false
     }
 }
+
+// Verified means photo-verified: profiles.verified_at, the same column behind the verified badge,
+// the "Verified only" discovery filters and partner_visibility = 'verified_only'.
+private fun Connection.senderIsPhotoVerified(viewerUserId: UUID): Boolean =
+    prepareStatement(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM profiles vp
+            WHERE vp.user_id = ?
+              AND vp.verified_at IS NOT NULL
+        )
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, viewerUserId)
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.getBoolean(1)
+        }
+    }
 
 private fun Connection.targetAllowsSwipeConversation(
     viewerUserId: UUID,

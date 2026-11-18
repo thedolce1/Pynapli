@@ -31,18 +31,19 @@ internal class JdbcProfileReadActions(
             profileBlocking("profile.db.connectionWait") { dataSource.connection }.use { connection ->
                 profileBlocking("profile.db.publicQuery") {
                     connection.prepareStatement(JdbcProfileSql.PUBLIC_PROFILE_QUERY).use { statement ->
-                        statement.setObject(1, viewerUserId)
-                        statement.setObject(2, viewerUserId)
-                        statement.setObject(3, viewerUserId)
-                        statement.setObject(4, viewerUserId)
-                        statement.setObject(5, viewerUserId)
-                        statement.setObject(6, viewerUserId) // partner block check (blocker side)
-                        statement.setObject(7, viewerUserId) // partner block check (blocked side)
-                        statement.setObject(8, viewerUserId) // partner-visibility verified_only gate
-                        statement.setObject(9, viewerUserId) // partner-visibility matches_only gate (LEAST)
-                        statement.setObject(10, viewerUserId) // partner-visibility matches_only gate (GREATEST)
-                        statement.setObject(11, targetUserId)
-                        statement.setObject(12, viewerUserId) // self-preview bypass of discovery-visibility gates
+                        statement.setObject(1, viewerUserId) // grid-message matches_only gate (LEAST)
+                        statement.setObject(2, viewerUserId) // grid-message matches_only gate (GREATEST)
+                        statement.setObject(3, viewerUserId) // grid-message verified_only gate
+                        statement.setObject(4, viewerUserId) // viewer location
+                        statement.setObject(5, viewerUserId) // private album grant
+                        statement.setObject(6, viewerUserId) // private album request
+                        statement.setObject(7, viewerUserId) // partner block check (blocker side)
+                        statement.setObject(8, viewerUserId) // partner block check (blocked side)
+                        statement.setObject(9, viewerUserId) // partner-visibility verified_only gate
+                        statement.setObject(10, viewerUserId) // partner-visibility matches_only gate (LEAST)
+                        statement.setObject(11, viewerUserId) // partner-visibility matches_only gate (GREATEST)
+                        statement.setObject(12, targetUserId)
+                        statement.setObject(13, viewerUserId) // self-preview bypass of discovery-visibility gates
                         statement.executeQuery().use { rs ->
                             if (rs.next()) rs.toPublicProfileRecord() else null
                         }

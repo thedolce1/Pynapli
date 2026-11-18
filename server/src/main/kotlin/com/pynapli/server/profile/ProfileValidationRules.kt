@@ -5,7 +5,7 @@ import com.pynapli.shared.profile.ProfileTaxonomies
 import java.time.LocalDate
 
 internal val DISCOVERY_STYLES = setOf("solo", "together", "both", "social", "ask_in_chat")
-internal val GRID_MESSAGE_POLICIES = setOf("everyone", "matches_only", "no_one")
+internal val GRID_MESSAGE_POLICIES = setOf("everyone", "verified_only", "matches_only", "no_one")
 internal val PARTNER_VISIBILITIES = setOf("public", "matches_only", "verified_only", "hidden")
 
 /**

@@ -158,6 +158,7 @@ private fun minuteLabel(minuteOfDay: Int): String {
 
 internal fun gridMessagePolicyLabel(value: String): String =
     when (value) {
+        "verified_only" -> "Verified members only"
         "matches_only" -> "Matches only"
         "no_one" -> "Off"
         else -> "Everyone"
@@ -200,6 +201,7 @@ internal val discoveryStyleOptions =
 internal val gridMessagePolicyOptions =
     listOf(
         DiscoveryStyleOption("everyone", "Everyone"),
+        DiscoveryStyleOption("verified_only", "Verified members only"),
         DiscoveryStyleOption("matches_only", "Matches only"),
         DiscoveryStyleOption("no_one", "No first messages"),
     )
