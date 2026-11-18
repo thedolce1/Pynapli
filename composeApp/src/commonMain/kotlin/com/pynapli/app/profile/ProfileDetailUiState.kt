@@ -32,6 +32,9 @@ data class ProfileDetailUiState(
     // True when the viewer opened their OWN public profile from the Hub "Preview profile" row:
     // the sheet renders read-only (no block/hide/report, no message/spark/album actions).
     val isOwnProfile: Boolean = false,
+    // Opened from a like in Likes You: the Activity event the sheet's "Like back" answers.
+    val likeBackEventId: String? = null,
+    val isTogglingFavorite: Boolean = false,
 ) {
     val visible: Boolean
         get() = selectedCard != null

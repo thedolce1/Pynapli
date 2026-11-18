@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
+import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ConversationSheet
@@ -18,6 +19,7 @@ import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.profileLinkActionFor
+import com.pynapli.app.profile.LikeBackUi
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
@@ -60,6 +62,7 @@ internal fun PynapliOverlays(
     conversationActions: ConversationActions,
     onPickConversationPhoto: () -> Unit,
     scope: CoroutineScope,
+    activityStateHolder: ActivityStateHolder? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val conversationState by conversationStateHolder.state.collectAsState()
@@ -175,6 +178,11 @@ internal fun PynapliOverlays(
     // without this a profile opened from an Activity tile, "View album" or a Messages avatar would
     // set the sheet state with nothing on screen (and pop up later on the Grid).
     val overlayOwnsProfilePeek = selectedTab == PynapliTab.Messages || selectedTab == PynapliTab.Activity
+    // Likes You: a profile opened from a like offers "Like back", answered through Activity's own
+    // like-back (same rules, pair likes, and the tile's done state).
+    val activityState = activityStateHolder?.state?.collectAsState()?.value
+    val likeBackEvent =
+        profileDetailState.likeBackEventId?.let { eventId -> activityState?.items?.firstOrNull { it.eventId == eventId } }
     if ((overlayOwnsProfilePeek || psyncOwnsProfilePeek) && profileDetailState.visible) {
         // Unified profile peek: the exact same ProfileDetailSheet as Grid/Swipe (one profile
         // experience app-wide), with block/report/hide and the shared sheet chrome.
@@ -229,6 +237,12 @@ internal fun PynapliOverlays(
                 scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
             },
             distanceUnit = appSettingsState.settings.distanceUnit,
+            onToggleFavorite = { scope.launch { profileDetailStateHolder.toggleFavorite() } },
+            likeBack = likeBackEvent?.let { event -> LikeBackUi(done = event.eventId in activityState?.likedBackEventIds.orEmpty()) },
+            onLikeBack = {
+                val event = likeBackEvent
+                if (event != null && activityStateHolder != null) scope.launch { activityStateHolder.likeBack(event) }
+            },
         )
     }
 

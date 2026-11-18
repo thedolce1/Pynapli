@@ -5,10 +5,19 @@ import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ReportTargetType
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+
+/** A confirmed change to the viewer's private Favorites. */
+data class FavoriteChange(
+    val userId: String,
+    val favorite: Boolean,
+)
 
 class ProfileDetailStateHolder(
     private val repository: PublicProfileRepository,
@@ -20,6 +29,7 @@ class ProfileDetailStateHolder(
         card: GridProfileCardUi,
         flirtSource: String? = null,
         isOwnProfile: Boolean = false,
+        likeBackEventId: String? = null,
     ) {
         _state.update {
             ProfileDetailUiState(
@@ -27,6 +37,7 @@ class ProfileDetailStateHolder(
                 isLoading = true,
                 flirtSource = flirtSource,
                 isOwnProfile = isOwnProfile,
+                likeBackEventId = likeBackEventId,
             )
         }
 
@@ -135,6 +146,37 @@ class ProfileDetailStateHolder(
             }
         }
     }
+
+    /**
+     * Stars or un-stars the open profile (private Favorites). Optimistic: the star flips at once and
+     * reverts if the server refuses (cap reached, person gone). The other person is never told.
+     */
+    suspend fun toggleFavorite() {
+        val current = _state.value
+        val profile = current.profile ?: return
+        if (current.isTogglingFavorite || current.isOwnProfile) return
+        val target = !profile.favorite
+        _state.update { it.copy(profile = it.profile?.copy(favorite = target), isTogglingFavorite = true, errorMessage = null) }
+        when (val result = repository.setFavorite(profile.userId, target)) {
+            is AppResult.Success -> {
+                _state.update { it.copy(isTogglingFavorite = false) }
+                _favoriteChanges.tryEmit(FavoriteChange(profile.userId, target))
+            }
+            is AppResult.Failure ->
+                _state.update {
+                    it.copy(
+                        profile = it.profile?.takeIf { p -> p.userId == profile.userId }?.copy(favorite = !target) ?: it.profile,
+                        isTogglingFavorite = false,
+                        errorMessage = result.error.message,
+                    )
+                }
+        }
+    }
+
+    private val _favoriteChanges = MutableSharedFlow<FavoriteChange>(extraBufferCapacity = 8)
+
+    /** Confirmed star/un-star events, so the Favorites view can add or drop a card without a refetch. */
+    val favoriteChanges: SharedFlow<FavoriteChange> = _favoriteChanges.asSharedFlow()
 
     suspend fun requestAlbumAccess() {
         val targetUserId = _state.value.profile?.userId ?: _state.value.selectedCard?.id ?: return

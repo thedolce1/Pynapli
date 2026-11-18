@@ -3,6 +3,7 @@ package com.pynapli.app.grid
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,15 +37,21 @@ fun GridScreen(
     playingTonightStateHolder: PlayingTonightStateHolder? = null,
     lifestyleFiltersAllowed: Boolean = true,
     distanceUnit: String = AppSettings.UNIT_METRIC,
-    gridState: LazyGridState = rememberLazyGridState(),
+    // Restored from the holder so returning to the Grid tab lands where the viewer left it.
+    gridState: LazyGridState = rememberLazyGridState(stateHolder.scrollAnchor.index, stateHolder.scrollAnchor.offset),
     onUseCurrentLocation: () -> Unit = {},
     onProfileIconClick: () -> Unit = {},
     onOpenStore: () -> Unit = {},
     onOpenAgeVerification: () -> Unit = {},
     onOpenTonight: () -> Unit = {},
     travelLocationStateHolder: TravelLocationStateHolder? = null,
+    favoritesStateHolder: FavoritesStateHolder? = null,
 ) {
     val state by stateHolder.state.collectAsState()
+    val favoritesState by favoritesStateHolder?.state?.collectAsState()
+        ?: remember { mutableStateOf<FavoritesUiState?>(null) }
+    val favoritesGridState =
+        favoritesStateHolder?.let { holder -> rememberLazyGridState(holder.scrollAnchor.index, holder.scrollAnchor.offset) }
     val travelState by travelLocationStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf(TravelLocationUiState()) }
     val profileState by profileDetailStateHolder.state.collectAsState()
@@ -59,6 +66,22 @@ fun GridScreen(
 
     LaunchedEffect(stateHolder) {
         stateHolder.primeFromCacheThenLoad()
+    }
+
+    // Leaving the tab disposes this screen; keep both grids' scroll for the way back.
+    DisposableEffect(gridState, favoritesGridState) {
+        onDispose {
+            stateHolder.rememberScroll(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+            if (favoritesGridState != null) {
+                favoritesStateHolder?.rememberScroll(favoritesGridState.firstVisibleItemIndex, favoritesGridState.firstVisibleItemScrollOffset)
+            }
+        }
+    }
+
+    // A star or un-star from the profile sheet updates the Favorites view without a refetch.
+    LaunchedEffect(profileDetailStateHolder, favoritesStateHolder) {
+        val holder = favoritesStateHolder ?: return@LaunchedEffect
+        profileDetailStateHolder.favoriteChanges.collect(holder::onFavoriteChanged)
     }
 
     LaunchedEffect(savedGridFilterStateHolder) {
@@ -116,17 +139,25 @@ fun GridScreen(
         onOpenAgeVerification = onOpenAgeVerification,
         onOpenTonight = onOpenTonight,
         modifier = modifier,
+        favoritesState = favoritesState,
+        favoritesGridState = favoritesGridState,
+        onShowNearby = { favoritesStateHolder?.showNearby() },
+        onShowFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.show() } } },
+        onRefreshFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.refresh() } } },
+        onLoadMoreFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.loadMore() } } },
     )
 
     LaunchedEffect(profileState.blockedTargetUserId) {
         val blockedId = profileDetailStateHolder.consumeBlockedTargetUserId() ?: return@LaunchedEffect
         stateHolder.removeCardById(blockedId)
+        favoritesStateHolder?.removeCardById(blockedId)
         profileDetailStateHolder.dismiss()
     }
 
     LaunchedEffect(profileState.hiddenTargetUserId) {
         val hiddenId = profileDetailStateHolder.consumeHiddenTargetUserId() ?: return@LaunchedEffect
         stateHolder.removeCardById(hiddenId)
+        favoritesStateHolder?.removeCardById(hiddenId)
         profileDetailStateHolder.dismiss()
     }
 
@@ -180,6 +211,7 @@ fun GridScreen(
                 scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
             },
             distanceUnit = distanceUnit,
+            onToggleFavorite = { scope.launch { profileDetailStateHolder.toggleFavorite() } },
         )
     }
 }

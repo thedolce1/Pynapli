@@ -27,7 +27,13 @@ import com.pynapli.app.design.icons.filled.Check
 import com.pynapli.app.design.icons.filled.Visibility
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.shared.distance.formatDistanceForUnit
+import com.pynapli.shared.presence.LastActiveBucket
 import com.pynapli.shared.settings.AppSettings
+
+/** "Like back" offer on a profile opened from Likes You; [done] once answered. */
+data class LikeBackUi(
+    val done: Boolean,
+)
 
 enum class ProfileDetailActionMode {
     Grid,
@@ -66,6 +72,11 @@ fun ProfileDetailSheet(
     onOpenLinkedPartner: (GridLinkedPartnerUi) -> Unit = {},
     distanceUnit: String = AppSettings.UNIT_METRIC,
     onReportAlbum: ((albumId: String, category: String) -> Unit)? = null,
+    // Private Favorites star in the hero; null on surfaces that don't offer it.
+    onToggleFavorite: (() -> Unit)? = null,
+    // Offered when the sheet was opened from a like in Likes You; null otherwise.
+    likeBack: LikeBackUi? = null,
+    onLikeBack: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val card = state.selectedCard ?: return
@@ -104,6 +115,7 @@ fun ProfileDetailSheet(
                         ) {
                             when (actionMode) {
                                 ProfileDetailActionMode.Grid -> {
+                                    likeBack?.let { offer -> LikeBackAction(done = offer.done, onLikeBack = onLikeBack) }
                                     ProfileActions(
                                         allowGridMessages = profile.allowGridMessages,
                                         allowFlirts = profile.allowFlirts,
@@ -164,6 +176,9 @@ fun ProfileDetailSheet(
                     profileLinkAction
                         ?.takeIf { it.offeredInMenu && it.enabled && !it.isSubmitting }
                         ?.let { onInviteProfileLink },
+                lastActiveLabel = LastActiveBucket.labelFor(profile?.lastActive),
+                favorite = profile?.favorite == true,
+                onToggleFavorite = onToggleFavorite?.takeIf { profile != null },
             )
 
             when {

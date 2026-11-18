@@ -127,17 +127,17 @@ private fun ActivityScreenContent(
 
         when {
             state.isLoading && state.items.isEmpty() -> {
-                // Match the loading shape to the selected tab: FOMO tabs render a 2-up grid, the
-                // Requests tab renders a list, so the skeleton dissolves into the real content.
+                // Match the loading shape to the selected tab: FOMO tabs render the Grid's 3-up
+                // cards, the Requests tab renders a list, so the skeleton dissolves into the content.
                 if (state.selectedTab.isFomoGridTab()) {
                     PynapliGridSkeleton(
-                        columns = 2,
-                        rows = 3,
+                        columns = 3,
+                        rows = 4,
                         modifier = Modifier.fillMaxSize(),
-                        tileAspectRatio = 0.82f,
-                        tileShape = PynapliShape.CardShape,
-                        gap = 10.dp,
-                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp),
+                        tileAspectRatio = 1f,
+                        tileShape = PynapliShape.SmallShape,
+                        gap = 4.dp,
+                        contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 16.dp),
                     )
                 } else {
                     PynapliListSkeleton(modifier = Modifier.fillMaxSize())

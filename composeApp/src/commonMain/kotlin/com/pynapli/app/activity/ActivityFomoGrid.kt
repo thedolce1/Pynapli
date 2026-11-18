@@ -28,20 +28,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import com.pynapli.app.design.PhotoBottomScrim
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
@@ -50,7 +46,9 @@ import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.pynapliIconButtonSize
-import com.pynapli.shared.distance.formatDistanceForUnit
+import com.pynapli.app.grid.GridProfileTile
+import com.pynapli.app.grid.GridWidePaneMinWidth
+import com.pynapli.app.grid.gridWideTileMinSize
 import com.pynapli.shared.network.dto.ActivityEventDto
 
 internal object ActivityFomoTags {
@@ -67,9 +65,10 @@ internal object ActivityFomoTags {
 private const val MAX_LOCKED_TILES = 6
 
 /**
- * Views and Flirts render as a 2-up profile grid (founder direction, 2026-06-07): mirroring the
- * Grid surface makes the revealed set feel larger and, for gated tiers, the frosted locked tiles
- * create FOMO toward Select. Likes (premium reveal list) and Requests (action rows) keep the list.
+ * Views and Flirts (Likes You) render as a Grid of the Grid's own cards (founder direction,
+ * 2026-06-07; Grid card since round 5): mirroring the Grid makes the revealed set feel larger and,
+ * for gated tiers, the frosted locked tiles create FOMO toward Select. Gating is the server's
+ * Activity reveal rule, unchanged. Requests (action rows) keeps the list.
  */
 @Composable
 internal fun ActivityFomoGrid(
@@ -95,22 +94,21 @@ internal fun ActivityFomoGrid(
         if (index >= 0) gridState.animateScrollToItem(index)
     }
 
-    // Pane-width-adaptive like the discovery grid (WEB_PWA_GAMEPLAN.md W5.1): phone-width
-    // panes keep the locked 2-up FOMO layout; wider panes add columns at the same tile
-    // scale so a desktop window shows more of the tease, not two giant tiles.
+    // Same column rule as the discovery grid (3-up on phone-width panes, adaptive at the Grid's
+    // tile size on wider ones), so Likes You and Views read as a Grid of people.
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val columns =
-            if (maxWidth < WideFomoPaneMinWidth) {
-                GridCells.Fixed(2)
+            if (maxWidth < GridWidePaneMinWidth) {
+                GridCells.Fixed(3)
             } else {
-                GridCells.Adaptive(minSize = WideFomoTileMinSize)
+                GridCells.Adaptive(minSize = gridWideTileMinSize(LocalDensity.current.fontScale))
             }
         LazyVerticalGrid(
             state = gridState,
             columns = columns,
             modifier = Modifier.fillMaxSize().testTag(ActivityFomoTags.GRID),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(
@@ -144,12 +142,6 @@ internal fun ActivityFomoGrid(
     }
 }
 
-/** Panes narrower than this keep the locked 2-up FOMO grid. */
-private val WideFomoPaneMinWidth = 600.dp
-
-/** Minimum FOMO tile side on wide panes — close to the phone's 2-up tile scale. */
-private val WideFomoTileMinSize = 200.dp
-
 private fun androidx.compose.foundation.lazy.grid.LazyGridScope.fullSpanItem(
     key: String,
     content: @Composable () -> Unit,
@@ -157,6 +149,12 @@ private fun androidx.compose.foundation.lazy.grid.LazyGridScope.fullSpanItem(
     item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }
 }
 
+/**
+ * The Grid's own card (photo, name, online dot, distance; GRID_IMPLEMENTATION_SPEC "Grid Card
+ * Design") so Likes You reads as a Grid of people, with the Activity context (what they did, a
+ * Pineapple Like note, "via Playing Tonight") as a caption under the photo rather than on it. The
+ * NEW pill and dismiss button sit on corners the Grid card leaves free for Activity actors.
+ */
 @Composable
 private fun ActivityFomoTile(
     item: ActivityEventDto,
@@ -166,65 +164,37 @@ private fun ActivityFomoTile(
     onTileClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val distanceLabel =
-        formatDistanceForUnit(
-            distanceMeters = item.distanceMeters,
-            fallbackLabel = item.distanceLabel,
-            distanceUnit = distanceUnit,
-        )
-    val borderColor =
-        if (focused) PynapliColors.Accent else PynapliColors.Border
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.82f)
-                .clip(PynapliShape.CardShape)
-                .background(tileBackgroundBrush(item.actorUserId))
-                .border(if (focused) 2.dp else 1.dp, borderColor, PynapliShape.CardShape)
-                .handCursor()
-                .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onTileClick)
-                // One item per tile (actor + activity + distance); the dismiss button stays its own
-                // focusable control.
-                .semantics(mergeDescendants = true) {}
-                .testTag(ActivityFomoTags.tile(item.eventId)),
-    ) {
-        item.actorPhotoUrl?.let { url ->
-            AsyncImage(
-                model = url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
+    val card = remember(item) { item.toActivityProfileCardUi() }
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Box {
+            GridProfileTile(
+                card = card,
+                distanceUnit = distanceUnit,
+                onClick = onTileClick,
+                modifier =
+                    Modifier
+                        .then(
+                            if (focused) Modifier.border(2.dp, PynapliColors.Accent, PynapliShape.SmallShape) else Modifier,
+                        ).testTag(ActivityFomoTags.tile(item.eventId)),
+            )
+            if (item.isUnreadBadgeActivity()) {
+                Box(modifier = Modifier.align(Alignment.TopStart).padding(6.dp)) {
+                    ActivityNewPill()
+                }
+            }
+            ActivityTileDismiss(
+                pendingDismiss = pendingDismiss,
+                onDismiss = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).padding(2.dp),
             )
         }
-        PhotoBottomScrim(heightFraction = 0.55f)
-
-        if (item.isUnreadBadgeActivity()) {
-            Box(modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
-                ActivityNewPill()
-            }
-        }
-        ActivityTileDismiss(
-            pendingDismiss = pendingDismiss,
-            onDismiss = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
-        )
-
         Column(
-            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Text(
-                text = item.displayNames(),
-                color = PynapliColors.OnPhotoPrimary,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = item.activityText(),
-                color = PynapliColors.OnPhotoPrimary,
+                text = if (item.pairDisplayName != null) "${item.displayNames()} ${item.activityText()}" else item.activityText(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -232,20 +202,12 @@ private fun ActivityFomoTile(
             item.noteText?.let { note ->
                 Text(
                     text = "\u201C$note\u201D",
-                    color = PynapliColors.OnPhotoPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.labelSmall,
                     fontStyle = FontStyle.Italic,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.testTag(ACTIVITY_LIKE_NOTE_TEST_TAG),
-                )
-            }
-            distanceLabel?.let { distance ->
-                Text(
-                    text = distance,
-                    color = PynapliColors.OnPhotoSecondary,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
                 )
             }
             if (item.source == PLAYING_TONIGHT_SOURCE) {
@@ -255,7 +217,7 @@ private fun ActivityFomoTile(
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    modifier = Modifier.padding(top = 2.dp).testTag(VIA_PLAYING_TONIGHT_TEST_TAG),
+                    modifier = Modifier.testTag(VIA_PLAYING_TONIGHT_TEST_TAG),
                 )
             }
         }
@@ -303,10 +265,10 @@ private fun ActivityLockedTile(onClick: () -> Unit) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.82f)
-                .clip(PynapliShape.CardShape)
+                .aspectRatio(1f)
+                .clip(PynapliShape.SmallShape)
                 .background(PynapliPlaceholderGradients.neutralTile)
-                .border(1.dp, PynapliColors.BorderSoft, PynapliShape.CardShape)
+                .border(1.dp, PynapliColors.BorderSoft, PynapliShape.SmallShape)
                 .handCursor()
                 .clickable(onClick = onClick)
                 .testTag(ActivityFomoTags.LOCKED_TILE),
@@ -366,5 +328,3 @@ private fun ActivityUnlockBanner(
     }
 }
 
-// Reuses the first six shared card tones; mod 6 preserves the prior per-seed assignment.
-private fun tileBackgroundBrush(seed: String): Brush = PynapliPlaceholderGradients.cardTones[PynapliPlaceholderGradients.stableIndex(seed, 6)]
