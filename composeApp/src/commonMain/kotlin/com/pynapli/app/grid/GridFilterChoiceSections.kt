@@ -243,12 +243,12 @@ internal fun TrustSection(
     ageVerified: Boolean,
     onTogglesChanged: (Boolean, Boolean, Boolean) -> Unit,
 ) {
+    // "Verified" and "face photo verified" are the same reviewed-selfie signal (FILTERS_SPEC), so they
+    // share one chip; turning it off also clears the face-photo flag an older saved filter may carry.
+    val photoVerified = verified || facePhotoVerified
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SheetToggleChip(label = "Verified", active = verified) {
-            onTogglesChanged(!verified, facePhotoVerified, ageVerified)
-        }
-        SheetToggleChip(label = "Face photo", active = facePhotoVerified) {
-            onTogglesChanged(verified, !facePhotoVerified, ageVerified)
+        SheetToggleChip(label = "Photo verified", active = photoVerified) {
+            onTogglesChanged(!photoVerified, false, ageVerified)
         }
         SheetToggleChip(label = "Age verified", active = ageVerified) {
             onTogglesChanged(verified, facePhotoVerified, !ageVerified)

@@ -10,11 +10,13 @@ import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.admin.AdminDashboardService
+import com.pynapli.server.admin.AdminMediaReviewService
 import com.pynapli.server.admin.AdminPartnerLinkReviewService
 import com.pynapli.server.admin.AdminRequestAuditRecorder
 import com.pynapli.server.admin.AdminSubscriptionSupportService
 import com.pynapli.server.admin.AdminUserLookupService
 import com.pynapli.server.admin.JdbcAdminDashboardRepository
+import com.pynapli.server.admin.JdbcAdminMediaReviewRepository
 import com.pynapli.server.admin.JdbcAdminPartnerLinkReviewRepository
 import com.pynapli.server.admin.JdbcAdminRequestAuditRecorder
 import com.pynapli.server.admin.JdbcAdminSubscriptionSupportRepository
@@ -31,8 +33,6 @@ import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
 import com.pynapli.server.location.TravelPlaceSearchService
-import com.pynapli.server.admin.AdminMediaReviewService
-import com.pynapli.server.admin.JdbcAdminMediaReviewRepository
 import com.pynapli.server.media.JdbcMediaCleanupRepository
 import com.pynapli.server.media.JdbcMediaRepository
 import com.pynapli.server.media.LocalMediaUploadStorage

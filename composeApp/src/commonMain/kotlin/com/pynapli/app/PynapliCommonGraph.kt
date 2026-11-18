@@ -42,6 +42,8 @@ import com.pynapli.app.swipe.SwipeRepository
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.app.tonight.ApiTonightRepository
 import com.pynapli.app.tonight.PlayingTonightStateHolder
+import com.pynapli.app.verification.ApiPhotoVerificationRepository
+import com.pynapli.app.verification.PhotoVerificationStateHolder
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.ActivityStreamClient
 import com.pynapli.shared.network.KtorMediaByteUploader
@@ -138,6 +140,9 @@ class PynapliCommonGraph(
 
     val profileHubStateHolder = ProfileHubStateHolder(ApiProfileHubRepository(apiClient))
 
+    val photoVerificationStateHolder =
+        PhotoVerificationStateHolder(ApiPhotoVerificationRepository(apiClient, KtorMediaByteUploader()))
+
     val profileLinksStateHolder = ProfileLinksStateHolder(ApiProfileLinksRepository(apiClient))
 
     val swipeStateHolder =
@@ -231,6 +236,7 @@ class PynapliCommonGraph(
             psyncStreamClient = psyncStreamClient,
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
+            photoVerificationStateHolder = photoVerificationStateHolder,
         )
 
     /**

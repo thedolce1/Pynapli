@@ -424,6 +424,13 @@ Current MVP slice:
 - The Safety section in Profile Hub includes an Age verification row.
 - The dialog explains the gate, blocks start until profile DOB exists, sends explicit adult confirmation, and shows pending/verified/rejected status.
 - Admin/provider completion is server-side; mobile never receives raw provider data.
+- The Profile section has a **Photo verification** row ("Get verified" / "Under review" / "Verified" /
+  "Not accepted, try again"). Its sheet loads the server status, asks for a pose only when the person
+  taps "Get my pose", then "Take or choose selfie" opens the platform photo picker (Android system
+  picker, browser and desktop file pickers; no camera library). The selfie is uploaded as-is (no crop,
+  so the pose stays in frame) and submitted once; a failed submit refetches the status instead of
+  retrying. Rejections show the reviewer's reason and when a retry is allowed. iOS hides the selfie
+  action until its picker is wired.
 
 ## Safety Center
 

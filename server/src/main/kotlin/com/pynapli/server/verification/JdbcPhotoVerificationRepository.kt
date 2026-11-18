@@ -17,8 +17,7 @@ import javax.sql.DataSource
 class JdbcPhotoVerificationRepository(
     private val dataSource: DataSource,
 ) : PhotoVerificationRepository {
-    override suspend fun facePhotoVerifiedAt(userId: UUID): Instant? =
-        dataSource.withConnection { connection -> connection.facePhotoVerifiedAt(userId) }
+    override suspend fun facePhotoVerifiedAt(userId: UUID): Instant? = dataSource.withConnection { connection -> connection.facePhotoVerifiedAt(userId) }
 
     override suspend fun find(verificationId: UUID): PhotoVerificationRecord? =
         dataSource.withConnection { connection ->

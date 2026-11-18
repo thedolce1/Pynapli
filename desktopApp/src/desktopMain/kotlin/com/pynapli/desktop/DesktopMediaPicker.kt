@@ -32,6 +32,10 @@ class DesktopMediaPicker(
         pick(MediaPickTarget.Album(kind))
     }
 
+    fun pickVerificationSelfie() {
+        pick(MediaPickTarget.VerificationSelfie)
+    }
+
     private fun pick(target: MediaPickTarget) {
         scope.launch {
             // Swing dialogs and file reads both block; keeping them off the Compose UI dispatcher

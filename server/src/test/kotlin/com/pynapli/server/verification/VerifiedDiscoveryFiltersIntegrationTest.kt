@@ -44,6 +44,7 @@ class VerifiedDiscoveryFiltersIntegrationTest {
             dataSource.insertDiscoverableUser(verified, "Vera", age = 35, longitude = -122.0836, latitude = 37.4226)
             dataSource.insertDiscoverableUser(unverified, "Una", age = 33, longitude = -122.0838, latitude = 37.4228)
             val service = service()
+
             // Fresh repositories per read: each holds a 5-second in-process rank-window cache, so a
             // reused instance would answer from the window cached before verification changed.
             fun grid() = JdbcGridRepository(dataSource)
@@ -66,7 +67,14 @@ class VerifiedDiscoveryFiltersIntegrationTest {
             )
             val card = grid().queryNearby(viewer, radiusMeters = 100_000, limit = 10).cards.single { it.userId == verified }
             assertEquals(true, card.verified)
-            assertEquals(false, grid().queryNearby(viewer, radiusMeters = 100_000, limit = 10).cards.single { it.userId == unverified }.verified)
+            assertEquals(
+                false,
+                grid()
+                    .queryNearby(viewer, radiusMeters = 100_000, limit = 10)
+                    .cards
+                    .single { it.userId == unverified }
+                    .verified,
+            )
 
             service.revoke(verified.toString(), "senior-1", "Selfie did not match.")
 

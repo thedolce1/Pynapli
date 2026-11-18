@@ -93,6 +93,8 @@ fun PynapliApp(
                 tonightVisible = false
                 psyncVisible = false
                 storePaywallFocus = null
+                // Signed out: never show this account's verification state to the next one.
+                graph.photoVerificationStateHolder?.reset()
             },
             onOpenProfileHub = { profileSurface = ProfileSurface.Hub },
             onOpenPartnerPanel = {
@@ -287,6 +289,7 @@ fun PynapliApp(
                 travelLocationStateHolder = graph.travelLocationStateHolder,
                 playingTonightStateHolder = graph.playingTonightStateHolder,
                 onboardingStateHolder = graph.onboardingStateHolder,
+                photoVerificationStateHolder = graph.photoVerificationStateHolder,
                 conversationActions = conversationActions,
                 scope = scope,
                 onProfileSurface = { profileSurface = it },
@@ -311,6 +314,7 @@ fun PynapliApp(
                 onUseCurrentLocation = platform.onUseCurrentLocation,
                 onPickMediaForAlbum = platform.onPickMediaForAlbum,
                 onPickConversationPhoto = platform.onPickConversationPhoto,
+                onPickVerificationSelfie = platform.onPickVerificationSelfie,
                 onSetDiscreetIcon = platform.onSetDiscreetIcon,
                 discreetIconSupported = platform.discreetIconSupported,
             )

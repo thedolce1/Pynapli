@@ -145,6 +145,8 @@ fun ProfileDetailSheet(
                 displayName = displayName,
                 age = profile?.displayAge,
                 verified = profile?.verified == true,
+                // Server-computed, and only meaningful while the partner mini is visible.
+                coupleVerified = profile?.coupleVerified == true && profile.linkedPartner != null,
                 // Prefer the server-hydrated presence on the fetched profile (accurate from any
                 // entry point, including Activity/Hub where the synthesized card has online=false);
                 // fall back to the card's flag while the profile is still loading.

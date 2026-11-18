@@ -279,7 +279,9 @@ class PhotoVerificationServiceIntegrationTest {
                 com.pynapli.server.media.MediaService(
                     repository = JdbcMediaRepository(dataSource),
                     uploadSigner = StaticMediaUploadSigner("gcs", "verification-test", "http://upload.test", clock = clock),
-                    moderationScanner = com.pynapli.server.media.AutoApproveMediaModerationScanner(),
+                    moderationScanner =
+                        com.pynapli.server.media
+                            .AutoApproveMediaModerationScanner(),
                 )
             val albumSlot =
                 media.createUploadSlot(
@@ -297,7 +299,8 @@ class PhotoVerificationServiceIntegrationTest {
                     media.completeUpload(
                         userId,
                         selfieId,
-                        com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto(albumId = albumSlot.album.albumId),
+                        com.pynapli.shared.network.dto
+                            .CompleteMediaUploadRequestDto(albumId = albumSlot.album.albumId),
                     )
                 }
             assertEquals("MEDIA_ALBUM_NOT_FOUND", error.code)

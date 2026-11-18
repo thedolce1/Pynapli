@@ -229,7 +229,7 @@ function Assert-NoAppErrorText {
 
     - The Top floor sits below the horizontally-scrolling quick-filter chip row (~348-406), not just
       below the app bar. That row grows every time a filter ships — the Trust chips
-      (Verified / Face photo / Age verified) are the current tail — and any chip left of the first
+      (Photo verified / Age verified) are the current tail — and any chip left of the first
       card sorts ahead of it, so a lower floor resolves a chip as "the first grid card".
     - Bare integers are the density/context-strip count; card names are never purely numeric.
 #>

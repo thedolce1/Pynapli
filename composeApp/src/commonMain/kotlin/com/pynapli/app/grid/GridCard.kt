@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -45,6 +46,7 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.VerifiedBadge
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.DarkMode
@@ -121,6 +123,7 @@ internal fun GridProfileTile(
         if (card.linkedPartner != null) {
             LinkedPartnerBadge(
                 thumbnailUrl = card.linkedPartner.thumbnailUrl,
+                coupleVerified = card.coupleVerified,
                 color = card.linkedPartnerTone.badgeColor(),
                 modifier =
                     Modifier
@@ -165,6 +168,10 @@ internal fun GridProfileTile(
                 modifier = Modifier.weight(1f, fill = false),
             )
 
+            if (card.verified) {
+                VerifiedBadge(size = 11.dp, modifier = Modifier.testTag(GridCardTags.verifiedTag(card.id)))
+            }
+
             if (card.visiting || card.visitingDates != null) {
                 // SWIPE_IMPLEMENTATION_SPEC L348: target is here via passport,
                 // not physically local. Same wording + tone as the Swipe pill.
@@ -201,6 +208,8 @@ internal object GridCardTags {
     fun visitingTag(cardId: String): String = "grid-card-visiting-$cardId"
 
     fun tonightTag(cardId: String): String = "grid-card-tonight-$cardId"
+
+    fun verifiedTag(cardId: String): String = "grid-card-verified-$cardId"
 }
 
 @Composable
@@ -226,12 +235,36 @@ private fun TonightIndicator(modifier: Modifier = Modifier) {
 @Composable
 private fun LinkedPartnerBadge(
     thumbnailUrl: String?,
+    coupleVerified: Boolean,
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    // The couple badge rides on the partner mini: both partners verified (TRUST_AND_SAFETY_SPEC).
+    Box(modifier = modifier) {
+        PartnerMiniCircle(thumbnailUrl = thumbnailUrl, color = color)
+        if (coupleVerified) {
+            VerifiedBadge(
+                size = 12.dp,
+                contentDescription = "Verified couple",
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 3.dp, y = 3.dp)
+                        .clip(CircleShape)
+                        .background(PynapliColors.OnPhotoBadgeFill),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PartnerMiniCircle(
+    thumbnailUrl: String?,
+    color: Color,
+) {
     Box(
         modifier =
-            modifier
+            Modifier
                 .size(26.dp)
                 .clip(CircleShape)
                 .background(if (thumbnailUrl == null) color else PynapliColors.OnPhotoBadgeFill)

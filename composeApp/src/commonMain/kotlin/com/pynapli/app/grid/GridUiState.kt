@@ -283,6 +283,10 @@ data class GridProfileCardUi(
     val tonightActive: Boolean = false,
     // "Visiting 14–17 Nov": an announced planned trip bringing them here soon.
     val visitingDates: String? = null,
+    // Photo-verified (server-owned): a small check after the name.
+    val verified: Boolean = false,
+    // Both this person and the partner in the mini are verified: a check on the partner mini.
+    val coupleVerified: Boolean = false,
 )
 
 @Immutable
@@ -336,6 +340,9 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi =
                 com.pynapli.app.swipe
                     .tripDateRange(from, visitingUntil ?: from)
             },
+        verified = verified,
+        // Server-computed; never drawn without a visible partner mini to attach it to.
+        coupleVerified = coupleVerified && linkedPartner != null,
     )
 
 internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =

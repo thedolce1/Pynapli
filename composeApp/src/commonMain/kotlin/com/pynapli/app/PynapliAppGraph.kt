@@ -23,6 +23,7 @@ import com.pynapli.app.store.StoreStateHolder
 import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.app.tonight.PlayingTonightStateHolder
+import com.pynapli.app.verification.PhotoVerificationStateHolder
 import com.pynapli.shared.network.PsyncStreamClient
 
 /**
@@ -65,6 +66,7 @@ class PynapliAppGraph(
     val psyncStreamClient: PsyncStreamClient? = null,
     val deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     val onboardingStateHolder: OnboardingStateHolder? = null,
+    val photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
 )
 
 /**
@@ -80,6 +82,8 @@ data class PynapliPlatform(
     val onUseCurrentLocation: () -> Unit,
     val onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit = {},
     val onPickConversationPhoto: () -> Unit = {},
+    /** Opens the photo picker for a verification selfie; null where the shell has not wired one. */
+    val onPickVerificationSelfie: (() -> Unit)? = null,
     val onSetDiscreetIcon: (Boolean) -> Unit = {},
     val storePurchasesAvailable: Boolean = true,
     val discreetIconSupported: Boolean = true,

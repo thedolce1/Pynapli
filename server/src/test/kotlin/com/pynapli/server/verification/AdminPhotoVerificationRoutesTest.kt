@@ -128,7 +128,11 @@ class AdminPhotoVerificationRoutesTest {
         testApplication {
             application { install(config(), service()) }
 
-            val withoutReason = client.get("/v1/admin/verification/photo") { header("X-Admin-Token", TOKEN) ; header("X-Admin-Id", "senior-1") }
+            val withoutReason =
+                client.get("/v1/admin/verification/photo") {
+                    header("X-Admin-Token", TOKEN)
+                    header("X-Admin-Id", "senior-1")
+                }
             val withReason = client.get("/v1/admin/verification/photo") { adminHeaders("senior-1") }
 
             assertEquals(HttpStatusCode.BadRequest, withoutReason.status)

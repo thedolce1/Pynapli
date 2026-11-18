@@ -28,6 +28,10 @@ class WebMediaPicker(
         pick(MediaPickTarget.Album(kind))
     }
 
+    fun pickVerificationSelfie() {
+        pick(MediaPickTarget.VerificationSelfie)
+    }
+
     @OptIn(ExperimentalEncodingApi::class)
     private fun pick(target: MediaPickTarget) {
         openBrowserImagePicker { base64, contentType ->
