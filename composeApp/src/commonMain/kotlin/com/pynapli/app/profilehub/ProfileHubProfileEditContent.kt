@@ -43,9 +43,9 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.CalendarMonth
 import com.pynapli.app.design.icons.filled.PhotoLibrary
-import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.Boundary
 import com.pynapli.app.grid.BoundaryStance
+import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleGroup
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag

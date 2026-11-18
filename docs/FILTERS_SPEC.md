@@ -152,12 +152,17 @@ Filters:
 - Same-room
 - Separate-room
 - New to lifestyle
+- Some experience
 - Experienced
 - Kink-friendly
 - Vanilla/social
+- Boundaries (hide people who said "not for me" to: photos or video, meeting the same day, meeting at someone's home, separate dates, group settings)
 
 Rules:
 
+- Lifestyle filters match "any of" inside a group (Swap, Room, Experience, other terms) and "all of" across groups.
+- Experience is one value per profile (`profiles.experience_level`), never two tags.
+- A boundaries filter hides only "not for me"; "ask first" and unset pass.
 - Lifestyle terms should be optional.
 - Do not require explicit lifestyle tags during onboarding.
 - High-sensitivity filters should appear only after age-gated onboarding.
@@ -550,6 +555,7 @@ Do not rely on bios for filtering.
 - [x] "Active today" (Presence) is a grid-only hard filter (`activeTodayOnly`): only surface profiles whose owner has a non-revoked `user_sessions` row seen in the last 24h — a durable SQL `EXISTS` gate in the grid rank query (also in `gridRankCacheKey` + the grid cursor scope). Session activity (login/token-rotation, and any future heartbeat touch) is the durable proxy for "active today"; "Online now" stays Redis-live. Grid-only per the Presence group; Swipe ignores it (like Grid ignores `verifiedPreferred`). Also closed a latent gap: `withPhotosOnly`/`genders`/`orientations` were missing from the grid cursor scope hash, so a cursor could cross those filter values — all hard filters are now in the scope. Covered by `GridAndSwipeRepositoryIntegrationTest` "grid query with activeTodayOnly excludes profiles with no recent session" + client `GridStateHolderTest.activeTodayFilterSerializesAndRoundTrips`.
 - [x] "Recently joined" + "Traveling here" (Presence, grid-only): `recentlyJoinedOnly` = the account (`users.created_at`) was created within the last 7 days; `travelingHereOnly` = the candidate is near the viewer via an active `travel_locations` row (the card's `visiting` state, not their home GPS). Both are hard SQL gates in the grid rank query (also in `gridRankCacheKey` + the grid cursor scope); Swipe ignores them. Covered by `GridAndSwipeRepositoryIntegrationTest` "grid query with recentlyJoinedOnly excludes older accounts" + "grid query with travelingHereOnly returns only travel-mode visitors" + client `GridStateHolderTest.recentlyJoinedAndTravelingHereFiltersSerializeAndRoundTrip`.
 - [x] **Filter-scope invariant (both surfaces):** a new hard filter must be added to BOTH the rank-cache class key (`gridRankCacheKey` / swipe `rankCacheKey`) AND the cursor/token scope (`DiscoveryCursorCodec.gridScopeHash` / `SwipeDeckTokenCodec.deckScopeHash`), or a cursor/deck token can carry across a filter change and misalign or replay a stale page. Both scopes now cover every set/order-defining filter (`genders`/`orientations`/`withPhotosOnly` on grid + swipe; `verifiedPreferred` on the swipe deck token; `activeTodayOnly` on grid). Guarded by `GridRankCacheKeyTest`/`SwipeRankCacheKeyTest` and `SwipeDeckTokenCodecTest.deckScopeHashDistinguishesEverySetOrOrderDefiningFilter`.
+- [x] Swinger filters (Round 4): `LifestyleFilterSql` is the one predicate set for Grid rank, Swipe deck rank and the Playing Tonight feed (any-of within Swap / Room / Experience / other, all-of across; experience vs `profiles.experience_level`; `boundaryItems` hides `<item>:not_for_me`). `boundaryItems` is in both rank-cache keys, both cursor/deck-token scopes, `DiscoveryFiltersJson`, both saved-filter services and Psync. Swipe dealbreakers `swap` / `room` / `experience` / `boundaries` survive relaxation. Tonight feed takes `orientations` / `lifestyleTags` / `boundaryItems` with the Grid age-verification + advanced-filter gates. Travel mode uses the same SQL. Covered by `SwingerFilterDiscoveryTest` (Grid + Swipe, home + Travel), `TonightFeedServiceIntegrationTest`, `SwipeDeckLifestyleRelaxationTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `SwingerFiltersClientTest`.
 
 ## Do Not Implement
 

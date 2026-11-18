@@ -1,7 +1,7 @@
 package com.pynapli.server.swipe
 
-import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID

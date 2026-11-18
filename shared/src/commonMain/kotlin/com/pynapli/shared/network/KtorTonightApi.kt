@@ -17,8 +17,7 @@ internal class KtorTonightApi(
     override suspend fun getTonightFeed(
         radiusMeters: Int,
         intent: String?,
-    ): AppResult<TonightFeedResponseDto> =
-        getTonightFeed(radiusMeters, intent, TonightFeedFiltersDto())
+    ): AppResult<TonightFeedResponseDto> = getTonightFeed(radiusMeters, intent, TonightFeedFiltersDto())
 
     override suspend fun getTonightFeed(
         radiusMeters: Int,

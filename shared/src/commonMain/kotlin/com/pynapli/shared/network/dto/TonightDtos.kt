@@ -53,12 +53,6 @@ data class CurrentTonightSessionDto(
 )
 
 /**
- * Public Playing Tonight feed: live sessions near the viewer that opted into
- * discovery. One row per session, anchored on the session owner with the linked
- * partner surfaced as a mini-avatar (PLAYING_TONIGHT_SPEC: "Session row must still
- * make individual accounts clear"). Location is zone-only — never precise.
- */
-/**
  * Optional Playing Tonight feed filters, matched against the session owner's own profile with the
  * same rules as Grid and Swipe (orientation keys, lifestyle filter tokens, boundary items).
  */
@@ -69,6 +63,12 @@ data class TonightFeedFiltersDto(
     val boundaryItems: List<String> = emptyList(),
 )
 
+/**
+ * Public Playing Tonight feed: live sessions near the viewer that opted into
+ * discovery. One row per session, anchored on the session owner with the linked
+ * partner surfaced as a mini-avatar (PLAYING_TONIGHT_SPEC: "Session row must still
+ * make individual accounts clear"). Location is zone-only — never precise.
+ */
 @Serializable
 data class TonightFeedResponseDto(
     val items: List<TonightFeedItemDto> = emptyList(),

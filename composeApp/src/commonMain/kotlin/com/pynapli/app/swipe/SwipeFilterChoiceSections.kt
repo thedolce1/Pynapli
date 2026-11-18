@@ -13,14 +13,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.handCursor
-import com.pynapli.app.grid.DiscoveryStyle
-import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.BoundariesFilterSection
+import com.pynapli.app.grid.DiscoveryStyle
 import com.pynapli.app.grid.FilterGroupLabel
+import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleGroup
 import com.pynapli.app.grid.LifestyleSection
-import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.app.grid.LogisticsTag
+import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.shared.profile.ProfileTaxonomies
 
 @Composable

@@ -35,10 +35,10 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowForward
 import com.pynapli.app.design.icons.filled.Person
-import com.pynapli.app.grid.GridLinkedPartnerUi
-import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.Boundary
 import com.pynapli.app.grid.BoundaryStance
+import com.pynapli.app.grid.GridLinkedPartnerUi
+import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleGroup
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag

@@ -26,6 +26,7 @@ fun Application.configureTonightFeedRoutes(
                 call.request.queryParameters["intent"]
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }
+
             // Repeated or comma-separated: ?orientations=bisexual&lifestyleTags=soft_swap,same_room
             fun listParam(name: String): List<String> =
                 call.request.queryParameters
