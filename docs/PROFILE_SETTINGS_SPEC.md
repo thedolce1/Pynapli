@@ -378,8 +378,7 @@ Grid message permissions (who may send me a first message from the Grid; `grid_m
 The server validates the value and enforces it when a Grid conversation is opened; a refused sender
 gets `MESSAGING_NOT_ALLOWED`, whichever option refused them. The setting gates opening only: a thread
 that already exists keeps working. Swipe and Psync match chats remain match-gated regardless of this
-setting. ("People matching my intent", "Nearby only" and "No first messages, flirts only" were cut on
-2026-11-18 and are not options.)
+setting.
 
 ## Notification Settings
 

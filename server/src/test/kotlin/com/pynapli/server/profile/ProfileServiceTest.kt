@@ -171,11 +171,11 @@ class ProfileServiceTest {
             val userId = UUID.randomUUID()
             val service = ProfileService(InMemoryProfileRepository(userId), clock)
 
+            // A cut option (2026-11-18) stays unknown to the server.
             val error =
                 assertFailsWith<ProfileException> {
                     service.updateDiscoverySettings(
                         userId,
-                        // A cut option (2026-11-18) stays unknown to the server.
                         UpdateDiscoverySettingsRequestDto(gridMessagePolicy = "nearby_only"),
                     )
                 }
