@@ -288,7 +288,9 @@ $purchasedXml = Capture-StoreStage "boostPurchased" "06_boost_purchased"
 Assert-TextPresent $purchasedXml "Boost added." "Boost purchase"
 Assert-TextPresent $purchasedXml "Balance: 1" "Boost purchase"
 
-Scroll-UntilAnyText @("Balance: 0") | Out-Null
+# The Boost row grows once a Boost is owned (expiry line and "Use a Boost now"), so scroll to the
+# Pineapple Likes feature line itself rather than to its balance.
+Scroll-UntilAnyText @("Add a note up to 140 characters") | Out-Null
 $otherProductsXml = Capture-StoreStage "otherProductsVisible" "07_other_products_visible"
 Assert-TextPresent $otherProductsXml "Pineapple Likes" "Other Store products"
 Assert-TextPresent $otherProductsXml "Add a note up to 140 characters" "Other Store products"

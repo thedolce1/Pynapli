@@ -596,6 +596,7 @@ Client-local:
 - [x] Header avatar opens profile/settings hub.
 - [x] Bottom nav does not include Profile.
 - [x] Profile editing exists.
+- [x] `PATCH /v1/me/profile` is partial for every field: an unsent field keeps its stored value; an empty string or empty list clears an optional one; a name or birthdate can be changed but not cleared; a self-describe detail is kept only while its key is unchanged.
 - [x] Profile editor Lifestyle section is swinger-first and optional: one Experience level, Swap, Room, other terms (age-gated), plus a Boundaries section (ask first / not for me per curated item, not age-gated). Profile detail shows a grouped Lifestyle block; the partner preview shows the linked partner's own orientation, experience and swap/room (profile detail only, never Grid cards or the Tonight feed).
 - [x] Partner management exists.
 - [x] Private album management exists.

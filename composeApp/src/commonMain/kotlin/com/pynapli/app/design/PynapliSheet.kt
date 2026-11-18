@@ -34,8 +34,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -92,9 +95,8 @@ fun PynapliBottomSheet(
             contentColor = MaterialTheme.colorScheme.onSurface,
             modifier = modifier,
         ) {
-            val columnScope = this
             CompositionLocalProvider(LocalPynapliSheetHost provides PynapliSheetHost.BottomSheet) {
-                columnScope.content()
+                Column(modifier = Modifier.nestedScroll(SheetEndFlingGuard), content = content)
             }
         }
         return
@@ -170,6 +172,20 @@ fun PynapliBottomSheet(
         }
     }
 }
+
+/**
+ * Keeps what is left of an upward fling away from the sheet. A list flung to its end hands the
+ * leftover speed to the sheet, which is already fully open: it then springs around its resting
+ * place without settling and takes the next tap to stop itself, so a button pressed right after
+ * scrolling did nothing. Downward flings still reach the sheet, so swipe-to-dismiss is unchanged.
+ */
+private val SheetEndFlingGuard =
+    object : NestedScrollConnection {
+        override suspend fun onPostFling(
+            consumed: Velocity,
+            available: Velocity,
+        ): Velocity = if (available.y < 0f) available else Velocity.Zero
+    }
 
 /** Widest a wide-window dialog card grows; forms read badly past this. */
 private val WideDialogMaxWidth = 560.dp

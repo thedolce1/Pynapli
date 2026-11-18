@@ -674,7 +674,9 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
 - [x] Travel mode for Swipe and Grid (`travel_locations`, `TravelLocationService`; Select unlimited,
   Social one activation per 30 days); planned trips and "Visiting soon" (`travel_trips`).
 - [x] Dealbreakers (`SwipeDealbreakerKey`: `age`, `distance`, `verified`, `discoveryStyles`,
-  `intents`, `linkedOnly`) are hard gates and never relaxed; the filters sheet has a per-section lock.
+  `intents`, `linkedOnly`, `swap`, `room`, `experience`, `boundaries`) are hard gates and never
+  relaxed; the filters sheet has a per-section lock. The locks are part of the deck scope hash, so a
+  cursor or card token cannot cross a change of locks.
 - [x] Never-empty deck: `SwipeDeckRelaxation` drops soft filters and doubles the radius (capped) when
   a deck is below low water (the doubled radius is rounded up to its step); dealbreakers and identity
   filters (gender/orientation) stay hard.

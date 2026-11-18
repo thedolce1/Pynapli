@@ -493,7 +493,9 @@ updates when the app pauses, prefer event deltas over polling.
   then the public distance bucket; hidden-distance people get a location-independent position; Grid
   visibility rules on every read (blocks, hides, incognito, banned, deleted, quarantined drop out);
   sealed viewer-bound cursor (`FavoriteServiceIntegrationTest`). Nearby/Favorites switch on the Grid.
-- [ ] Favorites from a Grid-card long-press (no long-press menu exists); live presence deltas in Favorites.
+- [x] Favorites: online dots update live through the Grid presence stream while the view is showing;
+  the starred list is in the account data export. A long-press quick menu on Grid cards is deliberately
+  not built: one tap opens the profile, which holds the star and every other action.
 - [x] Last seen (V106): profile detail shows a server bucket (`online_now`, `active_15m`, `active_today`,
   `active_week`) from a throttled heartbeat and session activity; never a timestamp; none for incognito
   (`LastActiveIntegrationTest`). Not on the card face.
