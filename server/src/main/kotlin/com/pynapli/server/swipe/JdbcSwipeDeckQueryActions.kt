@@ -148,7 +148,7 @@ internal class JdbcSwipeDeckQueryActions(
             )
         val cachedRows =
             deckRankCache.load(cacheKey) {
-                queryDeckRank(
+                queryDeckRankBounded(
                     viewerUserId = viewerUserId,
                     radiusMeters = radiusMeters,
                     limit = cacheWindow,
@@ -181,7 +181,7 @@ internal class JdbcSwipeDeckQueryActions(
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>,
     ): List<DeckRankRow> =
-        queryDeckRank(
+        queryDeckRankBounded(
             viewerUserId = viewerUserId,
             radiusMeters = radiusMeters,
             limit = limit,

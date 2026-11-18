@@ -3,6 +3,7 @@ package com.pynapli.server.swipe
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.distance.CoarseLocation
+import com.pynapli.server.profiling.profileBlocking
 import java.sql.Connection
 import java.util.UUID
 
@@ -27,6 +28,11 @@ import java.util.UUID
  * When [userSpecificViewerId] is null the query is exclusion-free (no self or already-swiped
  * filter), so the window can be cached and shared by every viewer in the same cell, radius step
  * and filter class.
+ *
+ * With [ringMeters] only candidates whose order bucket is below the ring are ranked (plus every
+ * boosted candidate in the radius step): people who show distance within the ring, and people who
+ * hide it whose pseudo-random bucket falls below it, wherever in the radius step they are. The
+ * result is only the true window when [fillsWindowFromRing] holds; use [queryDeckRankBounded].
  */
 internal fun Connection.queryDeckRank(
     viewerUserId: UUID,
@@ -37,10 +43,53 @@ internal fun Connection.queryDeckRank(
     userSpecificViewerId: UUID?,
     forcedTargetUserIds: Set<UUID>? = null,
     boostedWindow: Int = limit,
+    ringMeters: Int? = null,
 ): List<DeckRankRow> {
+    require(ringMeters == null || forcedTargetUserIds == null) { "A ring applies to the geographic candidate source only." }
     val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
     val candidateSource =
-        if (forcedTargetUserIds == null) {
+        if (ringMeters != null) {
+            """
+            SELECT near_home.user_id
+            FROM viewer_location v
+            JOIN user_locations near_home ON ST_DWithin(v.geom, near_home.geom, ?)
+            UNION
+            SELECT near_travel.user_id
+            FROM viewer_location v
+            JOIN travel_locations near_travel
+              ON near_travel.status = 'active'
+             AND near_travel.active_until IS NULL
+             AND ST_DWithin(v.geom, near_travel.geom, ?)
+            UNION
+            -- Beyond the ring, only those who can still rank inside it: a hidden-distance bucket
+            -- below the ring (it does not depend on where they are), or an active Boost.
+            SELECT far.user_id
+            FROM viewer_location v
+            JOIN LATERAL (
+                SELECT far_home.user_id
+                FROM user_locations far_home
+                WHERE ST_DWithin(v.geom, far_home.geom, ?)
+                UNION
+                SELECT far_travel.user_id
+                FROM travel_locations far_travel
+                WHERE far_travel.status = 'active'
+                  AND far_travel.active_until IS NULL
+                  AND ST_DWithin(v.geom, far_travel.geom, ?)
+            ) far ON true
+            JOIN discovery_settings far_ds ON far_ds.user_id = far.user_id
+            WHERE (
+                      far_ds.show_distance IS NOT TRUE
+                      AND pynapli_order_bucket_m(false, 0, ?, v.order_seed, far.user_id) < ?
+                  )
+               OR EXISTS (
+                      SELECT 1
+                      FROM boost_activations far_ba
+                      WHERE far_ba.user_id = far.user_id
+                        AND far_ba.status = 'active'
+                        AND far_ba.ends_at > now()
+                  )
+            """.trimIndent()
+        } else if (forcedTargetUserIds == null) {
             """
             SELECT near_home.user_id
             FROM viewer_location v
@@ -248,6 +297,8 @@ $candidateSource
                        ORDER BY r.soft_score DESC, r.order_bucket ASC, r.order_tiebreak ASC, r.user_id ASC
                    ) AS group_rank
             FROM ranked r
+            -- Ring pass: nobody whose bucket is at or past the ring, except the boosted.
+            WHERE ?::integer IS NULL OR r.is_boosted OR r.order_bucket < ?::integer
         )
         -- The window in natural order, plus the best boosted candidates however far down they sit
         -- (MONETIZATION_SPEC "Boost": a Boost lifts someone onto the page, SwipeDeckBoostPlacement).
@@ -269,7 +320,16 @@ $candidateSource
         // Bound in SQL order; the running index keeps added placeholders from shifting the rest.
         var index = 1
         statement.setObject(index++, viewerUserId)
-        if (forcedTargetUserIds == null) {
+        if (ringMeters != null) {
+            // Index pre-filter for the ring, then for the whole radius step, both cell-padded.
+            val paddedRing = ringMeters + CoarseLocation.CELL_PAD_METERS
+            statement.setDouble(index++, paddedRing)
+            statement.setDouble(index++, paddedRing)
+            statement.setDouble(index++, paddedRadius)
+            statement.setDouble(index++, paddedRadius)
+            statement.setInt(index++, radiusMeters)
+            statement.setInt(index++, ringMeters)
+        } else if (forcedTargetUserIds == null) {
             // Index pre-filter radius (home GPS + travel point), padded by the cell slack.
             statement.setDouble(index++, paddedRadius)
             statement.setDouble(index++, paddedRadius)
@@ -313,9 +373,74 @@ $candidateSource
         statement.setArray(index++, excludedIds)
         // Order key: radius (hidden placement span).
         statement.setInt(index++, radiusMeters)
+        statement.setObject(index++, ringMeters, java.sql.Types.INTEGER)
+        statement.setObject(index++, ringMeters, java.sql.Types.INTEGER)
         // The window, and how many boosted candidates beyond it to bring along.
         statement.setInt(index++, limit)
         statement.setInt(index++, boostedWindow)
         statement.executeDeckRankRows()
+    }
+}
+
+/**
+ * Rings tried before ranking the whole radius step. Whole km, like the order buckets. A dense area
+ * fills a page from the first ring, so the cost of a deck no longer grows with everyone in range.
+ */
+internal val DECK_RANK_RINGS_METERS: List<Int> = listOf(5_000, 25_000)
+
+/**
+ * True when a ring pass returned the same window the whole radius step would. Everyone the ring
+ * left out has an order bucket at or past it, so they sort after a full window of ring candidates;
+ * with "verified preferred" that only holds when the whole window is verified, because a verified
+ * person outside the ring outranks an unverified one inside it.
+ */
+internal fun List<DeckRankRow>.fillsWindowFromRing(
+    limit: Int,
+    ringMeters: Int,
+    verifiedPreferred: Boolean,
+): Boolean {
+    val window = filter { it.naturalRank <= limit }
+    return window.size >= limit &&
+        window.all { it.orderBucket < ringMeters && (!verifiedPreferred || it.softScore > 0) }
+}
+
+/**
+ * [queryDeckRank] for a geographic deck, ranking the nearest ring that fills the window instead of
+ * everyone in the radius step. Same window, same order; only `naturalRank` of a boosted candidate
+ * beyond the window may read lower than its place in the whole radius step (still past the window).
+ */
+internal fun Connection.queryDeckRankBounded(
+    viewerUserId: UUID,
+    radiusMeters: Int,
+    limit: Int,
+    filters: DiscoveryFilters,
+    excludedTargetUserIds: Set<UUID>,
+    userSpecificViewerId: UUID?,
+): List<DeckRankRow> {
+    for (ringMeters in DECK_RANK_RINGS_METERS) {
+        if (ringMeters >= radiusMeters) break
+        val rows =
+            profileBlocking("swipe.deck.repo.rank.ring$ringMeters") {
+                queryDeckRank(
+                    viewerUserId = viewerUserId,
+                    radiusMeters = radiusMeters,
+                    limit = limit,
+                    filters = filters,
+                    excludedTargetUserIds = excludedTargetUserIds,
+                    userSpecificViewerId = userSpecificViewerId,
+                    ringMeters = ringMeters,
+                )
+            }
+        if (rows.fillsWindowFromRing(limit, ringMeters, filters.verifiedPreferred)) return rows
+    }
+    return profileBlocking("swipe.deck.repo.rank.whole") {
+        queryDeckRank(
+            viewerUserId = viewerUserId,
+            radiusMeters = radiusMeters,
+            limit = limit,
+            filters = filters,
+            excludedTargetUserIds = excludedTargetUserIds,
+            userSpecificViewerId = userSpecificViewerId,
+        )
     }
 }
