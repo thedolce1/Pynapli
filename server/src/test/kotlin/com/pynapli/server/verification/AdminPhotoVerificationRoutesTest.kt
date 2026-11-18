@@ -191,6 +191,7 @@ class AdminPhotoVerificationRoutesTest {
                 MediaVerificationSelfieGateway(
                     repository = JdbcMediaRepository(dataSource),
                     uploadSigner = StaticMediaUploadSigner("gcs", "verification-test", "http://upload.test", clock = clock),
+                    selfieUrlResolver = LocalMediaAssetUrlResolver("http://media.test"),
                     mediaAssetUrlResolver = LocalMediaAssetUrlResolver("http://media.test"),
                     objectDeleter = null,
                 ),

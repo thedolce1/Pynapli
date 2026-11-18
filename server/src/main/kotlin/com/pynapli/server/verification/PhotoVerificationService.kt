@@ -87,10 +87,11 @@ class PhotoVerificationService(
         userId: UUID,
         request: SubmitPhotoVerificationRequestDto,
     ): PhotoVerificationStatusDto {
-        enforceRateLimit(userId, RateLimitedAction.PHOTO_VERIFICATION_SUBMIT)
         val challenge = openChallenge(userId, request.challengeId)
         val mediaAssetId = request.mediaAssetId.toUuidOrNull() ?: throw VerificationException("PHOTO_VERIFICATION_SELFIE_NOT_FOUND")
         val selfie = repository.findUnusedSelfie(userId, mediaAssetId) ?: throw VerificationException("PHOTO_VERIFICATION_SELFIE_NOT_FOUND")
+        // Counted only once the attempt is real, so a stale challenge doesn't spend the daily budget.
+        enforceRateLimit(userId, RateLimitedAction.PHOTO_VERIFICATION_SUBMIT)
         val now = clock.instant()
         val submitted =
             repository.submit(userId, challenge.verificationId, mediaAssetId, now)

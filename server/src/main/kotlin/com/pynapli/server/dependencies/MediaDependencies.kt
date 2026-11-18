@@ -191,6 +191,16 @@ internal fun buildMediaDependencies(
         MediaVerificationSelfieGateway(
             repository = mediaRepository,
             uploadSigner = uploadSigner,
+            // Direct short-lived GCS signature, never the CDN: an edge-cached selfie would outlive its
+            // retention delete. Local storage serves straight from disk.
+            selfieUrlResolver =
+                gcsSignedUrlFactory?.let { factory ->
+                    GcsV4MediaAssetUrlResolver(
+                        storageBucket = config.mediaStorageBucket,
+                        signedUrlFactory = factory,
+                        ttl = java.time.Duration.ofMinutes(5),
+                    )
+                } ?: mediaAssetUrlResolver.takeIf { localMediaUploadStorage != null },
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             objectDeleter = mediaObjectDeleter,
         )

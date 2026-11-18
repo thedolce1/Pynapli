@@ -113,6 +113,7 @@ class JdbcPhotoVerificationRepository(
                       AND m.intended_album_kind = 'verification'
                       AND m.deleted_at IS NULL
                       AND NOT EXISTS (SELECT 1 FROM photo_verifications pv WHERE pv.media_asset_id = m.id)
+                      AND NOT EXISTS (SELECT 1 FROM media_album_items mai WHERE mai.media_asset_id = m.id)
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setObject(1, mediaAssetId)

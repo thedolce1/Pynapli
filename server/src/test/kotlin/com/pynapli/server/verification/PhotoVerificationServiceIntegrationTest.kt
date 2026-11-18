@@ -269,6 +269,58 @@ class PhotoVerificationServiceIntegrationTest {
             assertEquals(PhotoVerificationStatus.VERIFIED, service.status(userId).status)
         }
 
+    @Test
+    fun aSelfieCannotBeAttachedToAPhotoAlbum() =
+        runBlocking {
+            val userId = dataSource.insertVerificationUser()
+            val service = service()
+            val (_, selfieId) = service.challengeAndUpload(userId)
+            val media =
+                com.pynapli.server.media.MediaService(
+                    repository = JdbcMediaRepository(dataSource),
+                    uploadSigner = StaticMediaUploadSigner("gcs", "verification-test", "http://upload.test", clock = clock),
+                    moderationScanner = com.pynapli.server.media.AutoApproveMediaModerationScanner(),
+                )
+            val albumSlot =
+                media.createUploadSlot(
+                    userId,
+                    com.pynapli.shared.network.dto.CreateMediaUploadRequestDto(
+                        albumKind = "profile",
+                        mediaType = "image",
+                        contentType = "image/jpeg",
+                        byteSize = 1_000,
+                    ),
+                )
+
+            val error =
+                assertFailsWith<com.pynapli.server.media.MediaException> {
+                    media.completeUpload(
+                        userId,
+                        selfieId,
+                        com.pynapli.shared.network.dto.CompleteMediaUploadRequestDto(albumId = albumSlot.album.albumId),
+                    )
+                }
+            assertEquals("MEDIA_ALBUM_NOT_FOUND", error.code)
+            assertEquals(0, dataSource.albumItemCount(UUID.fromString(selfieId)))
+        }
+
+    @Test
+    fun aStaleChallengeDoesNotSpendTheSubmitBudget() =
+        runBlocking {
+            val userId = dataSource.insertVerificationUser()
+            val service = service(rateLimitService = RateLimitService(RateLimitOutageFallback().repository))
+            val (challengeId, assetId) = service.challengeAndUpload(userId)
+            clock.advance(Duration.ofMinutes(11))
+
+            repeat(6) {
+                val error =
+                    assertFailsWith<VerificationException> {
+                        service.submit(userId, SubmitPhotoVerificationRequestDto(challengeId, assetId))
+                    }
+                assertEquals("PHOTO_VERIFICATION_CHALLENGE_EXPIRED", error.code)
+            }
+        }
+
     private suspend fun PhotoVerificationService.challengeAndUpload(userId: UUID): Pair<String, String> {
         val challengeId = assertNotNull(requestChallenge(userId).challenge).challengeId
         val slot = createSelfieUpload(userId, uploadRequest(challengeId))
@@ -297,6 +349,7 @@ class PhotoVerificationServiceIntegrationTest {
                             uploadBaseUrl = "http://upload.test",
                             clock = clock,
                         ),
+                    selfieUrlResolver = LocalMediaAssetUrlResolver("http://media.test"),
                     mediaAssetUrlResolver = LocalMediaAssetUrlResolver("http://media.test"),
                     objectDeleter = deleter,
                 ),

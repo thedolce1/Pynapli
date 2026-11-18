@@ -136,6 +136,8 @@ internal suspend fun DataSource.addMediaAssetToAlbum(
                       ON m.id = ?
                      AND m.owner_user_id = a.owner_user_id
                      AND m.deleted_at IS NULL
+                     -- Only album uploads go into albums: never a chat photo or a verification selfie.
+                     AND (m.intended_album_kind IS NULL OR m.intended_album_kind IN ('profile', 'private'))
                     WHERE a.id = ?
                       AND a.owner_user_id = ?
                       AND a.deleted_at IS NULL

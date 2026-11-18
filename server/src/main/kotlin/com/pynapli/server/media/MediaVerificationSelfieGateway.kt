@@ -10,10 +10,15 @@ import java.util.UUID
  * and asset rows as album photos (the existing upload path), tagged `intended_album_kind =
  * 'verification'`. They are never added to an album or approved, so only the owner (who holds the
  * upload URL) and admin reviewers (who get [reviewUrl]) can reach them.
+ *
+ * [selfieUrlResolver] must sign directly against storage, never through an edge cache: a cached
+ * selfie would outlive the retention delete. [mediaAssetUrlResolver] serves the owner's public profile
+ * photos shown next to the selfie and may use the CDN.
  */
 class MediaVerificationSelfieGateway(
     private val repository: MediaRepository,
     private val uploadSigner: MediaUploadSigner,
+    private val selfieUrlResolver: MediaAssetUrlResolver?,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver?,
     private val objectDeleter: MediaObjectDeleter?,
 ) : SelfieMediaGateway {
@@ -57,7 +62,7 @@ class MediaVerificationSelfieGateway(
         )
     }
 
-    override fun reviewUrl(mediaAssetId: UUID): String? = mediaAssetUrlResolver?.publicContentUrl(mediaAssetId)
+    override fun reviewUrl(mediaAssetId: UUID): String? = selfieUrlResolver?.publicContentUrl(mediaAssetId)
 
     override fun profilePhotoUrl(mediaAssetId: UUID): String? = mediaAssetUrlResolver?.publicContentUrl(mediaAssetId)
 

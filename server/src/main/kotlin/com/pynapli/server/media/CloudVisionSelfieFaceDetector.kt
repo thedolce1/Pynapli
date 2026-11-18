@@ -65,10 +65,7 @@ class CloudVisionSelfieFaceDetector(
                     logger.warn("Vision face detection returned HTTP {} for asset {}", response.statusCode(), selfie.mediaAssetId)
                     return@runCatching null
                 }
-                val parsed = JSON.decodeFromString<FaceAnnotateResponse>(response.body())
-                val first = parsed.responses.firstOrNull() ?: return@runCatching null
-                // A per-image error (e.g. unreadable object) means the count can't be trusted.
-                if (first.error != null) null else first.faceAnnotations.size
+                parseVisionFaceCount(response.body())
             }.getOrElse { error ->
                 logger.warn("Vision face detection failed for asset {}: {}", selfie.mediaAssetId, error.javaClass.simpleName)
                 null
@@ -77,8 +74,18 @@ class CloudVisionSelfieFaceDetector(
 
     private companion object {
         const val MAX_FACES = 5
-        val JSON = Json { ignoreUnknownKeys = true }
     }
+}
+
+private val FACE_JSON = Json { ignoreUnknownKeys = true }
+
+/**
+ * Face count from a Vision `images:annotate` response, or null when it can't be trusted (no response,
+ * or a per-image error such as an unreadable object). Only the number of annotations is read.
+ */
+internal fun parseVisionFaceCount(body: String): Int? {
+    val first = FACE_JSON.decodeFromString<FaceAnnotateResponse>(body).responses.firstOrNull() ?: return null
+    return if (first.error != null) null else first.faceAnnotations.size
 }
 
 @Serializable
