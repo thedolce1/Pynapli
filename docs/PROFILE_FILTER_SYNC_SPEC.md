@@ -105,6 +105,7 @@ One-directional filters affect only what the searching user sees:
 - Logistics tags.
 - Hosting/travel.
 - Experience level.
+- Boundaries.
 - Has album.
 - Preferences.
 
@@ -146,6 +147,7 @@ Ktor owns filter correctness.
 - [x] Partner unlink removes active linked visibility: `getPublicProfile` drops the linked-partner mini once the link is unlinked. Regression coverage in `ProfileRepositoryIntegrationTest.publicProfileDropsLinkedPartnerMiniAfterUnlink` (active link projects the mini → unlink → mini gone).
 - [x] Suspension removes profile from all discovery quickly.
 - [x] Profile update propagates within target: `updateProfile` changes are reflected in the target's `getPublicProfile` (neighborhood/bio) and the updated lifestyle tags satisfy the grid/swipe overlap filter predicate — `ProfileRepositoryIntegrationTest.updateProfilePersistsBioTagsAndSelfDescribeAndMatchesTheFilterPredicate`.
+- [x] Experience level is one profile value (`profiles.experience_level`, V104 backfills the old `new_to_lifestyle` / `experienced` tags; contradictory rows are left unset) matched by the Experience filter group; boundaries are curated `<item>:<stance>` tokens (`profiles.boundaries`, at most one stance per item) matched by the boundaries filter. Older clients sending experience as a lifestyle tag still set the level. Covered by `ProfileRepositoryIntegrationTest`, `ProfileLifestyleParsingTest`, `SwingerFilterDiscoveryTest`.
 
 ## Do Not Implement
 

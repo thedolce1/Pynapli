@@ -1,6 +1,7 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID
@@ -143,7 +144,8 @@ internal fun Connection.queryGridRank(
               AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
               AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
               AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
-              AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+              -- Lifestyle groups + boundaries (LifestyleFilterSql): same predicate on every surface.
+              ${LifestyleFilterSql.predicates("p")}
               AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
               AND (
                   -- PLAYING_TONIGHT_SPEC: "playing tonight" means a live session (the legacy
@@ -297,7 +299,6 @@ internal fun Connection.queryGridRank(
     return prepareStatement(sql).use { statement ->
         val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
         val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
-        val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
         val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
         val intents = createArrayOf("text", filters.intents.toTypedArray())
         val genders = createArrayOf("text", filters.genders.toTypedArray())
@@ -328,8 +329,7 @@ internal fun Connection.queryGridRank(
         statement.setBoolean(index++, filters.ageVerifiedOnly)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
-        statement.setArray(index++, lifestyleTags)
-        statement.setArray(index++, lifestyleTags)
+        index = LifestyleFilterSql.bind(statement, this, index, filters.lifestyleTags, filters.boundaryItems)
         statement.setArray(index++, logisticsTags)
         statement.setArray(index++, logisticsTags)
         statement.setBoolean(index++, filters.tonightAvailableOnly)

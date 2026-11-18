@@ -154,6 +154,12 @@ internal fun GridFiltersSheet(
                 )
             }
 
+            SectionTitle("Boundaries")
+            BoundariesFilterSection(
+                selected = draft.boundaryItems,
+                onChange = { draft = draft.copy(boundaryItems = it) },
+            )
+
             SectionTitle("Logistics")
             LogisticsSection(
                 selected = draft.logisticsTags,

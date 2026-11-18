@@ -115,6 +115,17 @@ class DiscoveryCursorCodecTest {
     }
 
     @Test
+    fun lifestyleLevelAndBoundaryFiltersAreInTheCursorScope() {
+        val base = scope()
+        assertNotEquals(base, scope(filters = DiscoveryFilters(lifestyleTags = setOf("some_experience"))))
+        assertNotEquals(base, scope(filters = DiscoveryFilters(boundaryItems = setOf("same_day"))))
+        assertNotEquals(
+            scope(filters = DiscoveryFilters(boundaryItems = setOf("same_day"))),
+            scope(filters = DiscoveryFilters(boundaryItems = setOf("groups"))),
+        )
+    }
+
+    @Test
     fun rejectsMalformedTokens() {
         assertFailsWith<DiscoveryCursorException> { codec.decodeGridCursor("", scope()) }
         assertFailsWith<DiscoveryCursorException> { codec.decodeGridCursor("not-a-token", scope()) }

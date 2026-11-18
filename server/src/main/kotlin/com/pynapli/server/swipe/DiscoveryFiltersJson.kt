@@ -20,6 +20,7 @@ internal fun DiscoveryFilters.toPersistedJson(): String =
         append(",\"ageVerifiedOnly\":").append(ageVerifiedOnly)
         append(",\"discoveryStyles\":").append(discoveryStyles.toJsonArray())
         append(",\"lifestyleTags\":").append(lifestyleTags.toJsonArray())
+        append(",\"boundaryItems\":").append(boundaryItems.toJsonArray())
         append(",\"logisticsTags\":").append(logisticsTags.toJsonArray())
         append(",\"tonightAvailableOnly\":").append(tonightAvailableOnly)
         append(",\"intents\":").append(intents.toJsonArray())

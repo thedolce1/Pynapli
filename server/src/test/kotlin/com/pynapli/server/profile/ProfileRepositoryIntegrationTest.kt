@@ -234,6 +234,130 @@ class ProfileRepositoryIntegrationTest {
             assertEquals(false, dataSource.lifestyleOverlapMatches(userId, listOf("enm")))
         }
 
+    @Test
+    fun updateProfilePersistsExperienceLevelAndBoundaries() =
+        runBlocking {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000741")
+            dataSource.insertUserWithProfile(userId, "Rae")
+            val repository = JdbcProfileRepository(dataSource)
+
+            val updated =
+                repository.updateProfile(
+                    userId,
+                    baseUpdate("Rae").copy(
+                        experienceLevelProvided = true,
+                        experienceLevel = "some_experience",
+                        boundaries = listOf("photos:not_for_me", "same_day:ask_first"),
+                    ),
+                )
+            assertEquals("some_experience", requireNotNull(updated).profile.experienceLevel)
+            assertEquals(listOf("photos:not_for_me", "same_day:ask_first"), updated.profile.boundaries)
+            val public = requireNotNull(repository.getPublicProfile(userId, userId))
+            assertEquals("some_experience", public.experienceLevel)
+            assertEquals(listOf("photos:not_for_me", "same_day:ask_first"), public.boundaries)
+
+            // Omitted: unchanged.
+            val unchanged = requireNotNull(repository.updateProfile(userId, baseUpdate("Rae")))
+            assertEquals("some_experience", unchanged.profile.experienceLevel)
+            assertEquals(2, unchanged.profile.boundaries.size)
+
+            // Provided null / empty: cleared.
+            val cleared =
+                requireNotNull(
+                    repository.updateProfile(
+                        userId,
+                        baseUpdate("Rae").copy(experienceLevelProvided = true, experienceLevel = null, boundaries = emptyList()),
+                    ),
+                )
+            assertNull(cleared.profile.experienceLevel)
+            assertEquals(emptyList(), cleared.profile.boundaries)
+        }
+
+    @Test
+    fun v104BackfillTurnsLegacyExperienceTagsIntoOneLevel() =
+        runBlocking {
+            val onlyNew = UUID.fromString("00000000-0000-0000-0000-000000000751")
+            val onlyExperienced = UUID.fromString("00000000-0000-0000-0000-000000000752")
+            val both = UUID.fromString("00000000-0000-0000-0000-000000000753")
+            listOf(onlyNew, onlyExperienced, both).forEach { dataSource.insertUserWithProfile(it, "Legacy") }
+            dataSource.setRawLifestyleTags(onlyNew, listOf("soft_swap", "new_to_lifestyle"))
+            dataSource.setRawLifestyleTags(onlyExperienced, listOf("experienced"))
+            dataSource.setRawLifestyleTags(both, listOf("new_to_lifestyle", "enm", "experienced"))
+
+            // Re-run the data part of V104 against these legacy-shaped rows.
+            val migration =
+                requireNotNull(javaClass.getResource("/db/migration/V104__add_experience_level_and_boundaries.sql")).readText()
+            val backfill = migration.substring(migration.lastIndexOf("UPDATE profiles"))
+            dataSource.connection.use { connection -> connection.createStatement().use { it.execute(backfill) } }
+
+            val repository = JdbcProfileRepository(dataSource)
+            val a = requireNotNull(repository.getMe(onlyNew)).profile
+            assertEquals("new_to_lifestyle", a.experienceLevel)
+            assertEquals(listOf("soft_swap"), a.lifestyleTags)
+            val b = requireNotNull(repository.getMe(onlyExperienced)).profile
+            assertEquals("experienced", b.experienceLevel)
+            assertEquals(emptyList(), b.lifestyleTags)
+            // Contradictory: no level is guessed, and both old tags are gone.
+            val c = requireNotNull(repository.getMe(both)).profile
+            assertNull(c.experienceLevel)
+            assertEquals(listOf("enm"), c.lifestyleTags)
+        }
+
+    @Test
+    fun publicProfilePartnerMiniCarriesThePartnersOwnOrientationAndSwapRoom() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000761")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000762")
+            val partner = UUID.fromString("00000000-0000-0000-0000-000000000763")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(target, "Maya")
+            dataSource.insertUserWithProfile(partner, "Jon")
+            dataSource.insertActiveProfileLink(userId = target, linkedUserId = partner)
+            val repository = JdbcProfileRepository(dataSource)
+            repository.updateProfile(
+                partner,
+                baseUpdate("Jon").copy(
+                    orientation = "bisexual",
+                    lifestyleTags = listOf("soft_swap", "same_room", "kink_friendly"),
+                    experienceLevelProvided = true,
+                    experienceLevel = "experienced",
+                ),
+            )
+
+            val profile = requireNotNull(repository.getPublicProfile(viewer, target))
+
+            assertEquals(partner, profile.linkedPartnerUserId)
+            assertEquals("bisexual", profile.linkedPartnerOrientation)
+            assertEquals("experienced", profile.linkedPartnerExperienceLevel)
+            // Only swap/room travel with the preview; everything else stays on the partner's profile.
+            assertEquals(listOf("soft_swap", "same_room"), profile.linkedPartnerLifestyleTags)
+        }
+
+    private fun baseUpdate(name: String) =
+        ProfileUpdate(
+            displayName = name,
+            birthdate = null,
+            gender = null,
+            orientation = null,
+            relationshipContext = null,
+            discoveryStyle = null,
+            displayAge = null,
+            profileCompletenessScore = 20,
+        )
+
+    private fun DataSource.setRawLifestyleTags(
+        userId: UUID,
+        tags: List<String>,
+    ) {
+        connection.use { connection ->
+            connection.prepareStatement("UPDATE profiles SET lifestyle_tags = ?::text[] WHERE user_id = ?").use { statement ->
+                statement.setArray(1, connection.createArrayOf("text", tags.toTypedArray()))
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+        }
+    }
+
     private fun DataSource.lifestyleOverlapMatches(
         userId: UUID,
         tags: List<String>,

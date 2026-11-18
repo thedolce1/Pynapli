@@ -40,6 +40,7 @@ internal object SwipeDeckRequestParser {
                 ageVerifiedOnly = request.ageVerifiedOnly,
                 discoveryStyles = request.discoveryStyles,
                 lifestyleTags = request.lifestyleTags,
+                boundaryItems = request.boundaryItems,
                 logisticsTags = request.logisticsTags,
                 withPhotosOnly = request.withPhotosOnly,
                 hasPrivateAlbumOnly = request.hasPrivateAlbumOnly,

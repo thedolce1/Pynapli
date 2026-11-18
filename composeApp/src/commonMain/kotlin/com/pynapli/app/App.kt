@@ -374,6 +374,12 @@ fun PynapliApp(
 
         PynapliOverlays(
             tonightVisible = tonightVisible,
+            lifestyleFiltersAllowed =
+                graph.profileHubStateHolder.state
+                    .collectAsState()
+                    .value.me
+                    ?.profile
+                    ?.ageVerified == true,
             onTonightDismiss = { tonightVisible = false },
             psyncVisible = psyncVisible,
             onPsyncDismiss = { psyncVisible = false },

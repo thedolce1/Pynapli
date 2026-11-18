@@ -1,6 +1,7 @@
 package com.pynapli.server.dependencies
 
 import com.pynapli.server.db.PostgresJobLock
+import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.notifications.NotificationService
 import com.pynapli.server.presence.PresenceService
@@ -52,6 +53,8 @@ internal fun buildTonightDependencies(
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             blockRepository = blockRepository,
             hiddenProfileRepository = hiddenProfileRepository,
+            viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
+            subscriptionService = subscriptionService,
         )
     // Hygiene sweep so elapsed sessions move to 'expired' (reads already filter on
     // expires_at, so this is not load-bearing for correctness). Default every 5 minutes.

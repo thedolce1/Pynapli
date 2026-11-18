@@ -75,6 +75,13 @@ class ProfileHubStateHolder(
 
     fun toggleLifestyleTag(value: String) = drafts.toggleLifestyleTag(value)
 
+    fun updateExperienceLevel(value: String) = drafts.updateExperienceLevel(value)
+
+    fun updateBoundaryStance(
+        item: String,
+        stance: String,
+    ) = drafts.updateBoundaryStance(item, stance)
+
     fun toggleLogisticsTag(value: String) = drafts.toggleLogisticsTag(value)
 
     fun toggleIntent(value: String) = drafts.toggleIntent(value)

@@ -15,9 +15,22 @@ class DiscoveryTaxonomiesAlignmentTest {
     @Test
     fun lifestyleTagServerValuesMatchSharedTaxonomy() {
         assertEquals(
-            DiscoveryTagTaxonomies.lifestyleTags,
+            DiscoveryTagTaxonomies.lifestyleFilterTags,
             LifestyleTag.entries.map { it.serverValue }.toSet(),
         )
+        // Groups line up with the server's grouped matching (any-of inside, all-of across).
+        assertEquals(DiscoveryTagTaxonomies.swapPreferences, LifestyleTag.inGroup(LifestyleGroup.Swap).map { it.serverValue }.toSet())
+        assertEquals(DiscoveryTagTaxonomies.roomPreferences, LifestyleTag.inGroup(LifestyleGroup.Room).map { it.serverValue }.toSet())
+        assertEquals(DiscoveryTagTaxonomies.experienceLevels, LifestyleTag.inGroup(LifestyleGroup.Experience).map { it.serverValue })
+        assertEquals(DiscoveryTagTaxonomies.otherLifestyleTags, LifestyleTag.inGroup(LifestyleGroup.Other).map { it.serverValue }.toSet())
+    }
+
+    @Test
+    fun boundaryValuesMatchSharedTaxonomy() {
+        assertEquals(DiscoveryTagTaxonomies.boundaryItems, Boundary.entries.map { it.serverValue })
+        assertEquals(DiscoveryTagTaxonomies.boundaryStances, BoundaryStance.entries.map { it.serverValue }.toSet())
+        val tokens = Boundary.entries.flatMap { b -> BoundaryStance.entries.map { it.tokenFor(b) } }.toSet()
+        assertEquals(DiscoveryTagTaxonomies.boundaryTokens, tokens)
     }
 
     @Test

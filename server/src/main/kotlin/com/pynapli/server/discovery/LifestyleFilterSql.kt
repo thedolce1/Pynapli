@@ -1,0 +1,51 @@
+package com.pynapli.server.discovery
+
+import com.pynapli.shared.profile.DiscoveryTagTaxonomies
+import java.sql.Connection
+import java.sql.PreparedStatement
+
+/**
+ * The lifestyle + boundary hard-filter predicates shared by every discovery surface (Grid rank,
+ * Swipe deck rank, Playing Tonight feed), so a profile matches the same way wherever it is seen.
+ *
+ *  - Lifestyle: "any of" inside a group, "all of" across groups (swap, room, experience, other).
+ *    Swap/room/other match `profiles.lifestyle_tags`; experience matches the single
+ *    `profiles.experience_level` (V104). A profile with nothing in a filtered group is excluded
+ *    by that group (hard "has X"), exactly as the single overlap predicate did before.
+ *  - Boundaries: a profile that marked any selected item "not for me" is hidden; "ask first"
+ *    and unset pass (blank optional fields soft-include, PROFILE_FILTER_SYNC_SPEC).
+ *
+ * Every predicate leads with `cardinality(?) = 0` so an unused group costs nothing.
+ */
+object LifestyleFilterSql {
+    fun predicates(alias: String): String =
+        """
+        AND (cardinality(?::text[]) = 0 OR ($alias.lifestyle_tags IS NOT NULL AND $alias.lifestyle_tags && ?::text[]))
+        AND (cardinality(?::text[]) = 0 OR ($alias.lifestyle_tags IS NOT NULL AND $alias.lifestyle_tags && ?::text[]))
+        AND (cardinality(?::text[]) = 0 OR ($alias.lifestyle_tags IS NOT NULL AND $alias.lifestyle_tags && ?::text[]))
+        AND (cardinality(?::text[]) = 0 OR $alias.experience_level = ANY(?::text[]))
+        AND (cardinality(?::text[]) = 0 OR NOT (COALESCE($alias.boundaries, '{}'::text[]) && ?::text[]))
+        """.trimIndent()
+
+    /** Binds [predicates] starting at [startIndex]; returns the next free index. */
+    fun bind(
+        statement: PreparedStatement,
+        connection: Connection,
+        startIndex: Int,
+        lifestyleTags: Set<String>,
+        boundaryItems: Set<String>,
+    ): Int {
+        val groups = DiscoveryTagTaxonomies.lifestyleFilterGroups(lifestyleTags)
+        val notForMe =
+            boundaryItems.map {
+                DiscoveryTagTaxonomies.boundaryToken(it, DiscoveryTagTaxonomies.BOUNDARY_NOT_FOR_ME)
+            }
+        var index = startIndex
+        listOf(groups.swap, groups.room, groups.other, groups.experience, notForMe).forEach { values ->
+            val array = connection.createArrayOf("text", values.toTypedArray())
+            statement.setArray(index++, array)
+            statement.setArray(index++, array)
+        }
+        return index
+    }
+}

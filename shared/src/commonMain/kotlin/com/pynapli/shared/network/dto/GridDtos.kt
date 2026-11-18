@@ -17,6 +17,8 @@ data class GridQueryRequestDto(
     val ageVerifiedOnly: Boolean = false,
     val discoveryStyles: List<String> = emptyList(),
     val lifestyleTags: List<String> = emptyList(),
+    // Boundary items (DiscoveryTagTaxonomies.boundaryItems): hide profiles that said "not for me".
+    val boundaryItems: List<String> = emptyList(),
     val logisticsTags: List<String> = emptyList(),
     val tonightAvailableOnly: Boolean = false,
     val activeTodayOnly: Boolean = false,
@@ -72,6 +74,12 @@ data class LinkedPartnerMiniDto(
     val displayName: String? = null,
     val thumbnailUrl: String? = null,
     val online: Boolean = false,
+    // Partner preview only (public profile detail): the partner's own orientation, experience
+    // level and swap/room tags. Always null/empty on Grid cards and the Tonight feed.
+    val orientation: String? = null,
+    val orientationDetail: String? = null,
+    val experienceLevel: String? = null,
+    val lifestyleTags: List<String> = emptyList(),
 )
 
 @Serializable

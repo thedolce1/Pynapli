@@ -2,6 +2,7 @@ package com.pynapli.server.swipe
 
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.shared.network.dto.SwipeDealbreakerKey
+import com.pynapli.shared.profile.DiscoveryTagTaxonomies
 
 internal object SwipeDeckRelaxation {
     // Below this, the deck is considered "low" and relaxation is attempted on
@@ -43,10 +44,11 @@ internal object SwipeDeckRelaxation {
         ) {
             return true
         }
-        // relationshipContexts, lifestyleTags, logisticsTags are always relaxable
-        // (not in the dealbreaker allow-list per SwipeDealbreakerKey).
+        // relationshipContexts, logisticsTags and the non-swinger lifestyle tags are always
+        // relaxable; swap / room / experience and boundaries only when not a dealbreaker.
         if (filters.relationshipContexts.isNotEmpty()) return true
-        if (filters.lifestyleTags.isNotEmpty()) return true
+        if (relaxLifestyleTags(filters.lifestyleTags, dealbreakers) != filters.lifestyleTags) return true
+        if (SwipeDealbreakerKey.BOUNDARIES !in dealbreakers && filters.boundaryItems.isNotEmpty()) return true
         if (filters.logisticsTags.isNotEmpty()) return true
         if (SwipeDealbreakerKey.DISTANCE !in dealbreakers &&
             radiusMeters < maxRadiusMeters
@@ -75,9 +77,23 @@ internal object SwipeDeckRelaxation {
                     emptySet()
                 },
             intents = if (SwipeDealbreakerKey.INTENTS in dealbreakers) filters.intents else emptySet(),
-            lifestyleTags = emptySet(),
+            lifestyleTags = relaxLifestyleTags(filters.lifestyleTags, dealbreakers),
+            boundaryItems = if (SwipeDealbreakerKey.BOUNDARIES in dealbreakers) filters.boundaryItems else emptySet(),
             logisticsTags = emptySet(),
         )
+
+    /** Keeps only the lifestyle groups the viewer marked as dealbreakers. */
+    private fun relaxLifestyleTags(
+        tags: Set<String>,
+        dealbreakers: Set<String>,
+    ): Set<String> {
+        val groups = DiscoveryTagTaxonomies.lifestyleFilterGroups(tags)
+        return buildSet {
+            if (SwipeDealbreakerKey.SWAP in dealbreakers) addAll(groups.swap)
+            if (SwipeDealbreakerKey.ROOM in dealbreakers) addAll(groups.room)
+            if (SwipeDealbreakerKey.EXPERIENCE in dealbreakers) addAll(groups.experience)
+        }
+    }
 
     fun relaxRadius(
         radiusMeters: Int,

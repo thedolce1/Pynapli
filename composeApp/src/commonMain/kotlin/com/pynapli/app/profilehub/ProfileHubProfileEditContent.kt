@@ -43,7 +43,10 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.CalendarMonth
 import com.pynapli.app.design.icons.filled.PhotoLibrary
+import com.pynapli.app.grid.Boundary
+import com.pynapli.app.grid.BoundaryStance
 import com.pynapli.app.grid.Intent
+import com.pynapli.app.grid.LifestyleGroup
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag
 import com.pynapli.app.media.MediaAlbumCaps
@@ -70,6 +73,8 @@ internal fun ProfileEditContent(
     onRelationshipContextChanged: (String) -> Unit,
     onDiscoveryStyleChanged: (String) -> Unit,
     onToggleLifestyleTag: (String) -> Unit,
+    onExperienceLevelChanged: (String) -> Unit,
+    onBoundaryStanceChanged: (item: String, stance: String) -> Unit,
     onToggleLogisticsTag: (String) -> Unit,
     onToggleIntent: (String) -> Unit,
     onSave: () -> Unit,
@@ -217,13 +222,24 @@ internal fun ProfileEditContent(
             }
 
             item {
+                // Swinger-first, all optional: experience (one), swap, room, then broader terms.
+                // Each linked partner sets their own on their own account.
                 ProfileHubSection("Lifestyle") {
                     if (ageVerified) {
+                        EditGroupLabel("Experience")
                         TagChipFlow(
-                            options = LifestyleTag.entries.map { it.serverValue to it.label },
-                            selected = state.draft.lifestyleTags,
-                            onToggle = onToggleLifestyleTag,
+                            options = LifestyleTag.inGroup(LifestyleGroup.Experience).map { it.serverValue to it.label },
+                            selected = setOf(state.draft.experienceLevel),
+                            onToggle = onExperienceLevelChanged,
                         )
+                        listOf(LifestyleGroup.Swap, LifestyleGroup.Room, LifestyleGroup.Other).forEach { group ->
+                            EditGroupLabel(group.label)
+                            TagChipFlow(
+                                options = LifestyleTag.inGroup(group).map { it.serverValue to it.label },
+                                selected = state.draft.lifestyleTags,
+                                onToggle = onToggleLifestyleTag,
+                            )
+                        }
                     } else {
                         // PROFILE_SETTINGS_SPEC: high-sensitivity lifestyle terms are
                         // age-gated; the server rejects them for unverified accounts.
@@ -232,6 +248,26 @@ internal fun ProfileEditContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+
+            item {
+                ProfileHubSection("Boundaries") {
+                    Text(
+                        text = "Optional. Let people know what to ask about first, or what isn't for you.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                    val stances = BoundaryStance.parse(state.draft.boundaries)
+                    Boundary.entries.forEach { boundary ->
+                        EditGroupLabel(boundary.label)
+                        TagChipFlow(
+                            options = BoundaryStance.entries.map { it.serverValue to it.label },
+                            selected = setOfNotNull(stances[boundary]?.serverValue),
+                            onToggle = { stance -> onBoundaryStanceChanged(boundary.serverValue, stance) },
                         )
                     }
                 }
@@ -254,6 +290,16 @@ internal fun ProfileEditContent(
             onSave = onSave,
         )
     }
+}
+
+@Composable
+private fun EditGroupLabel(text: String) {
+    Text(
+        text = text,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp),
+    )
 }
 
 @Composable

@@ -118,6 +118,8 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         append(';')
         append(lifestyleTags.sorted().joinToString("|"))
         append(';')
+        append(boundaryItems.sorted().joinToString("|"))
+        append(';')
         append(logisticsTags.sorted().joinToString("|"))
         append(';')
         append(tonightAvailableOnly)

@@ -32,6 +32,8 @@ internal fun ProfileRecord.toDto(): ProfileDto =
         relationshipContext = relationshipContext,
         discoveryStyle = discoveryStyle,
         lifestyleTags = lifestyleTags,
+        experienceLevel = experienceLevel,
+        boundaries = boundaries,
         logisticsTags = logisticsTags,
         intents = intents,
         profileCompletenessScore = profileCompletenessScore,
@@ -54,6 +56,8 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
         relationshipContext = relationshipContext,
         discoveryStyle = discoveryStyle,
         lifestyleTags = lifestyleTags,
+        experienceLevel = experienceLevel,
+        boundaries = boundaries,
         logisticsTags = logisticsTags,
         intents = intents,
         distanceLabel = distanceMeters?.toPublicDistanceLabel(),
@@ -71,6 +75,10 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
                     thumbnailUrl =
                         linkedPartnerThumbnailMediaAssetId
                             ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                    orientation = linkedPartnerOrientation,
+                    orientationDetail = linkedPartnerOrientationDetail,
+                    experienceLevel = linkedPartnerExperienceLevel,
+                    lifestyleTags = linkedPartnerLifestyleTags,
                 )
             },
         allowGridMessages = allowGridMessages,

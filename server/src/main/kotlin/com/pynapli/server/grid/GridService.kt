@@ -55,6 +55,7 @@ class GridService(
                     ageVerifiedOnly = request.ageVerifiedOnly,
                     discoveryStyles = request.discoveryStyles,
                     lifestyleTags = request.lifestyleTags,
+                    boundaryItems = request.boundaryItems,
                     logisticsTags = request.logisticsTags,
                     tonightAvailableOnly = request.tonightAvailableOnly,
                     activeTodayOnly = request.activeTodayOnly,

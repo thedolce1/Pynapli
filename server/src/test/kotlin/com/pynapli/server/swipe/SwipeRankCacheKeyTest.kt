@@ -33,6 +33,18 @@ class SwipeRankCacheKeyTest {
     }
 
     @Test
+    fun experienceLevelAndBoundariesChangeTheRankCacheKey() {
+        assertNotEquals(
+            DiscoveryFilters().rankCacheKey(),
+            DiscoveryFilters(lifestyleTags = setOf("new_to_lifestyle")).rankCacheKey(),
+        )
+        assertNotEquals(
+            DiscoveryFilters().rankCacheKey(),
+            DiscoveryFilters(boundaryItems = setOf("home_meets")).rankCacheKey(),
+        )
+    }
+
+    @Test
     fun withPhotosOnlyChangesTheRankCacheKey() {
         assertNotEquals(
             DiscoveryFilters().rankCacheKey(),

@@ -82,6 +82,8 @@ internal fun UpdateProfileRequestDto.toProfileUpdate(clock: Clock): ProfileUpdat
         throw ProfileException("INVALID_NEIGHBORHOOD")
     }
 
+    val lifestyle = parseLifestyle(lifestyleTags, experienceLevel)
+
     return ProfileUpdate(
         displayName = trimmedName,
         birthdate = parsedBirthdate,
@@ -105,7 +107,10 @@ internal fun UpdateProfileRequestDto.toProfileUpdate(clock: Clock): ProfileUpdat
         bio = cleanBio,
         neighborhoodProvided = neighborhoodProvided,
         neighborhood = cleanNeighborhood,
-        lifestyleTags = lifestyleTags.cleanTags(DiscoveryTagTaxonomies.lifestyleTags),
+        lifestyleTags = lifestyle.tags,
+        experienceLevelProvided = lifestyle.experienceProvided,
+        experienceLevel = lifestyle.experienceLevel,
+        boundaries = boundaries.cleanBoundaries(),
         logisticsTags = logisticsTags.cleanTags(DiscoveryTagTaxonomies.logisticsTags),
         intents = intents.cleanTags(DiscoveryTagTaxonomies.intents),
     )

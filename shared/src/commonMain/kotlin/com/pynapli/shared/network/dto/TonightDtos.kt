@@ -53,6 +53,29 @@ data class CurrentTonightSessionDto(
 )
 
 /**
+ * Optional Playing Tonight feed filters, matched against the session owner's own profile with the
+ * same rules as Grid and Swipe (orientation keys, lifestyle filter tokens, boundary items).
+ */
+@Serializable
+data class TonightFeedFiltersDto(
+    val orientations: List<String> = emptyList(),
+    val lifestyleTags: List<String> = emptyList(),
+    val boundaryItems: List<String> = emptyList(),
+)
+
+/**
+ * Body of `POST /v1/tonight/feed/query`: the feed with filters. Filters travel in a body, never the
+ * query string, so orientation / lifestyle / boundary values stay out of URLs and access logs.
+ */
+@Serializable
+data class TonightFeedQueryRequestDto(
+    val radiusMeters: Int = 50_000,
+    val intent: String? = null,
+    val limit: Int = 100,
+    val filters: TonightFeedFiltersDto = TonightFeedFiltersDto(),
+)
+
+/**
  * Public Playing Tonight feed: live sessions near the viewer that opted into
  * discovery. One row per session, anchored on the session owner with the linked
  * partner surfaced as a mini-avatar (PLAYING_TONIGHT_SPEC: "Session row must still

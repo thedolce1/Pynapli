@@ -3,6 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
+import com.pynapli.shared.network.dto.TonightFeedFiltersDto
 import com.pynapli.shared.network.dto.TonightFeedResponseDto
 import com.pynapli.shared.network.dto.TonightSessionDto
 
@@ -16,6 +17,13 @@ interface TonightApi {
         radiusMeters: Int = 50_000,
         intent: String? = null,
     ): AppResult<TonightFeedResponseDto>
+
+    /** Filtered feed; the default ignores filters so test fakes need not implement it. */
+    suspend fun getTonightFeed(
+        radiusMeters: Int,
+        intent: String?,
+        filters: TonightFeedFiltersDto,
+    ): AppResult<TonightFeedResponseDto> = getTonightFeed(radiusMeters, intent)
 
     suspend fun getCurrentTonightSession(): AppResult<CurrentTonightSessionDto>
 

@@ -48,6 +48,7 @@ internal fun PynapliOverlays(
     onPsyncOpenStore: () -> Unit = {},
     onPsyncOpenProfileHub: () -> Unit = {},
     psyncTravelCityName: String? = null,
+    lifestyleFiltersAllowed: Boolean = true,
     selectedTab: PynapliTab,
     playingTonightStateHolder: PlayingTonightStateHolder?,
     psyncStateHolder: PsyncStateHolder?,
@@ -99,6 +100,7 @@ internal fun PynapliOverlays(
         com.pynapli.app.tonight.PlayingTonightScreen(
             stateHolder = playingTonightStateHolder,
             viewerUserId = authState.session?.userId,
+            lifestyleFiltersAllowed = lifestyleFiltersAllowed,
             onBack = onTonightDismiss,
             onOpenProfile = { userId ->
                 onTonightDismiss()

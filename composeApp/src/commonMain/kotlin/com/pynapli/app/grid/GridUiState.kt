@@ -36,6 +36,8 @@ data class GridFilters(
     val ageVerified: Boolean = false,
     val discoveryStyles: Set<DiscoveryStyle> = emptySet(),
     val lifestyleTags: Set<LifestyleTag> = emptySet(),
+    // Hide people who marked any of these boundaries "not for me" (free, not age-gated).
+    val boundaryItems: Set<Boundary> = emptySet(),
     val logisticsTags: Set<LogisticsTag> = emptySet(),
     val intents: Set<Intent> = emptySet(),
     // Structured gender/orientation keys from ProfileTaxonomies (self-describe excluded).
@@ -69,6 +71,7 @@ data class GridFilters(
             if (ageVerified) count += 1
             if (discoveryStyles.isNotEmpty()) count += 1
             if (lifestyleTags.isNotEmpty()) count += 1
+            if (boundaryItems.isNotEmpty()) count += 1
             if (logisticsTags.isNotEmpty()) count += 1
             if (intents.isNotEmpty()) count += 1
             if (genders.isNotEmpty()) count += 1
@@ -112,6 +115,7 @@ data class GridFilters(
             ageVerifiedOnly = ageVerified,
             discoveryStyles = discoveryStyles.map { it.serverValue },
             lifestyleTags = lifestyleTags.map { it.serverValue },
+            boundaryItems = boundaryItems.map { it.serverValue },
             logisticsTags = logisticsTags.map { it.serverValue },
             tonightAvailableOnly = tonightAvailable,
             activeTodayOnly = activeToday,
@@ -159,6 +163,7 @@ data class GridFilters(
                 ageVerified = request.ageVerifiedOnly,
                 discoveryStyles = request.discoveryStyles.mapNotNull { styleByValue[it] }.toSet(),
                 lifestyleTags = request.lifestyleTags.mapNotNull { lifestyleByValue[it] }.toSet(),
+                boundaryItems = Boundary.fromServerValues(request.boundaryItems),
                 logisticsTags = request.logisticsTags.mapNotNull { logisticsByValue[it] }.toSet(),
                 intents = request.intents.mapNotNull { intentByValue[it] }.toSet(),
                 genders = request.genders.toSet(),
@@ -236,17 +241,83 @@ enum class Intent(
 enum class LifestyleTag(
     val serverValue: String,
     val label: String,
+    val group: LifestyleGroup,
 ) {
-    SoftSwap("soft_swap", "Soft swap"),
-    FullSwap("full_swap", "Full swap"),
-    SameRoom("same_room", "Same-room"),
-    SeparateRoom("separate_room", "Separate-room"),
-    NewToLifestyle("new_to_lifestyle", "New"),
-    Experienced("experienced", "Experienced"),
-    KinkFriendly("kink_friendly", "Kink-friendly"),
-    VanillaSocial("vanilla_social", "Vanilla/social"),
-    Enm("enm", "ENM"),
-    Swinging("swinging", "Swinging"),
+    SoftSwap("soft_swap", "Soft swap", LifestyleGroup.Swap),
+    FullSwap("full_swap", "Full swap", LifestyleGroup.Swap),
+    SameRoom("same_room", "Same-room", LifestyleGroup.Room),
+    SeparateRoom("separate_room", "Separate-room", LifestyleGroup.Room),
+    NewToLifestyle("new_to_lifestyle", "New to lifestyle", LifestyleGroup.Experience),
+    SomeExperience("some_experience", "Some experience", LifestyleGroup.Experience),
+    Experienced("experienced", "Experienced", LifestyleGroup.Experience),
+    Enm("enm", "ENM", LifestyleGroup.Other),
+    Swinging("swinging", "Swinging", LifestyleGroup.Other),
+    KinkFriendly("kink_friendly", "Kink-friendly", LifestyleGroup.Other),
+    VanillaSocial("vanilla_social", "Vanilla/social", LifestyleGroup.Other),
+    ;
+
+    companion object {
+        fun inGroup(group: LifestyleGroup): List<LifestyleTag> = entries.filter { it.group == group }
+
+        fun fromServerValue(value: String?): LifestyleTag? = entries.firstOrNull { it.serverValue == value }
+    }
+}
+
+/**
+ * Lifestyle filter groups (DiscoveryTagTaxonomies): a filter matches "any of" inside a group and
+ * "all of" across groups. Experience is ONE value per profile (`experienceLevel`); the others are
+ * profile tags.
+ */
+enum class LifestyleGroup(
+    val label: String,
+) {
+    Swap("Swap"),
+    Room("Room"),
+    Experience("Experience"),
+    Other("Lifestyle"),
+}
+
+/**
+ * Curated, consent-oriented boundaries (DiscoveryTagTaxonomies.boundaryItems). A profile marks an
+ * item "ask first" or "not for me"; a filter hides people who said "not for me". Never free text.
+ */
+enum class Boundary(
+    val serverValue: String,
+    val label: String,
+) {
+    Photos("photos", "Photos or video"),
+    SameDay("same_day", "Meeting the same day"),
+    HomeMeets("home_meets", "Meeting at someone's home"),
+    SeparateDates("separate_dates", "Separate dates"),
+    Groups("groups", "Group settings"),
+    ;
+
+    companion object {
+        fun fromServerValues(values: List<String>): Set<Boundary> = values.mapNotNull { v -> entries.firstOrNull { it.serverValue == v } }.toSet()
+    }
+}
+
+/** A boundary stance a profile can take. Tokens are "<item>:<stance>" (DiscoveryTagTaxonomies). */
+enum class BoundaryStance(
+    val serverValue: String,
+    val label: String,
+) {
+    AskFirst("ask_first", "Ask first"),
+    NotForMe("not_for_me", "Not for me"),
+    ;
+
+    fun tokenFor(boundary: Boundary): String = "${boundary.serverValue}:$serverValue"
+
+    companion object {
+        /** Parses stored boundary tokens into item -> stance, ignoring unknown values. */
+        fun parse(tokens: Collection<String>): Map<Boundary, BoundaryStance> =
+            tokens
+                .mapNotNull { token ->
+                    val item = Boundary.entries.firstOrNull { it.serverValue == token.substringBefore(':') }
+                    val stance = entries.firstOrNull { it.serverValue == token.substringAfter(':', "") }
+                    if (item != null && stance != null) item to stance else null
+                }.toMap()
+    }
 }
 
 /**

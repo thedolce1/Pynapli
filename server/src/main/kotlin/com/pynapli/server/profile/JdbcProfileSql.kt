@@ -17,6 +17,8 @@ internal object JdbcProfileSql {
                p.relationship_context,
                p.discovery_style,
                p.lifestyle_tags,
+               p.experience_level,
+               p.boundaries,
                p.logistics_tags,
                p.intents,
                p.profile_completeness_score,
@@ -56,6 +58,10 @@ internal object JdbcProfileSql {
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
+               linked_partner.linked_partner_orientation,
+               linked_partner.linked_partner_orientation_detail,
+               linked_partner.linked_partner_experience_level,
+               linked_partner.linked_partner_lifestyle_tags,
                p.display_age,
                (p.verified_at IS NOT NULL) AS verified,
                -- Couple verified: this profile and its visible linked partner are both photo-verified.
@@ -69,6 +75,8 @@ internal object JdbcProfileSql {
                p.relationship_context,
                p.discovery_style,
                p.lifestyle_tags,
+               p.experience_level,
+               p.boundaries,
                p.logistics_tags,
                p.intents,
                CASE
@@ -177,7 +185,16 @@ internal object JdbcProfileSql {
             SELECT upl.linked_user_id AS linked_partner_user_id,
                    COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
                    linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
-                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified
+                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified,
+                   -- Partner preview: the partner's OWN declared orientation and lifestyle (each
+                   -- account is one adult). Only swap/room tags; the rest stays on their profile.
+                   linked_profile.orientation AS linked_partner_orientation,
+                   linked_profile.orientation_detail AS linked_partner_orientation_detail,
+                   linked_profile.experience_level AS linked_partner_experience_level,
+                   ARRAY(
+                       SELECT t FROM unnest(COALESCE(linked_profile.lifestyle_tags, '{}'::text[])) AS t
+                       WHERE t IN ('soft_swap', 'full_swap', 'same_room', 'separate_room')
+                   ) AS linked_partner_lifestyle_tags
             FROM user_profile_links upl
             JOIN users linked_user
               ON linked_user.id = upl.linked_user_id

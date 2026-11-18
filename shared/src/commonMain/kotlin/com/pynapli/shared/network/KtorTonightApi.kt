@@ -3,10 +3,10 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
+import com.pynapli.shared.network.dto.TonightFeedFiltersDto
+import com.pynapli.shared.network.dto.TonightFeedQueryRequestDto
 import com.pynapli.shared.network.dto.TonightFeedResponseDto
 import com.pynapli.shared.network.dto.TonightSessionDto
-import io.ktor.client.request.get
-import io.ktor.client.request.parameter
 import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [TonightApi], composed into `KtorPynapliApiClient` via delegation. */
@@ -16,11 +16,18 @@ internal class KtorTonightApi(
     override suspend fun getTonightFeed(
         radiusMeters: Int,
         intent: String?,
+    ): AppResult<TonightFeedResponseDto> = getTonightFeed(radiusMeters, intent, TonightFeedFiltersDto())
+
+    override suspend fun getTonightFeed(
+        radiusMeters: Int,
+        intent: String?,
+        filters: TonightFeedFiltersDto,
     ): AppResult<TonightFeedResponseDto> =
-        support.authGet("/v1/tonight/feed") {
-            parameter("radiusMeters", radiusMeters)
-            intent?.let { parameter("intent", it) }
-        }
+        support.authSend(
+            HttpMethod.Post,
+            "/v1/tonight/feed/query",
+            TonightFeedQueryRequestDto(radiusMeters = radiusMeters, intent = intent, filters = filters),
+        )
 
     override suspend fun getCurrentTonightSession(): AppResult<CurrentTonightSessionDto> = support.authGet("/v1/me/tonight/session")
 

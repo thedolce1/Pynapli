@@ -30,7 +30,7 @@ internal fun Connection.findLatestRewindableAction(
                COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                p.display_age,
                p.bio,
-               COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+               array_remove(ARRAY[p.experience_level], NULL) || COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
                p.verified_at IS NOT NULL AS verified,
                target_travel.id IS NOT NULL AS visiting,
                profile_photos.thumbnail_media_asset_id,

@@ -28,6 +28,10 @@ data class ProfileDto(
     val relationshipContext: String? = null,
     val discoveryStyle: String,
     val lifestyleTags: List<String> = emptyList(),
+    // One lifestyle experience level (DiscoveryTagTaxonomies.experienceLevels) or null.
+    val experienceLevel: String? = null,
+    // "<item>:<stance>" tokens (DiscoveryTagTaxonomies.boundaryTokens).
+    val boundaries: List<String> = emptyList(),
     val logisticsTags: List<String> = emptyList(),
     val intents: List<String> = emptyList(),
     val profileCompletenessScore: Int,
@@ -51,6 +55,10 @@ data class PublicProfileDto(
     val relationshipContext: String? = null,
     val discoveryStyle: String,
     val lifestyleTags: List<String> = emptyList(),
+    // One lifestyle experience level (DiscoveryTagTaxonomies.experienceLevels) or null.
+    val experienceLevel: String? = null,
+    // "<item>:<stance>" tokens (DiscoveryTagTaxonomies.boundaryTokens).
+    val boundaries: List<String> = emptyList(),
     val logisticsTags: List<String> = emptyList(),
     val intents: List<String> = emptyList(),
     val distanceLabel: String? = null,
@@ -119,6 +127,10 @@ data class UpdateProfileRequestDto(
     val bio: String? = null,
     val neighborhood: String? = null,
     val lifestyleTags: List<String>? = null,
+    // Partial: null leaves the stored level unchanged; "" clears it.
+    val experienceLevel: String? = null,
+    // Partial: null leaves the stored boundaries unchanged; an empty list clears them.
+    val boundaries: List<String>? = null,
     val logisticsTags: List<String>? = null,
     val intents: List<String>? = null,
 )

@@ -13,10 +13,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.handCursor
+import com.pynapli.app.grid.BoundariesFilterSection
 import com.pynapli.app.grid.DiscoveryStyle
+import com.pynapli.app.grid.FilterGroupLabel
 import com.pynapli.app.grid.Intent
-import com.pynapli.app.grid.LifestyleTag
+import com.pynapli.app.grid.LifestyleGroup
+import com.pynapli.app.grid.LifestyleSection
 import com.pynapli.app.grid.LogisticsTag
+import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.shared.profile.ProfileTaxonomies
 
 @Composable
@@ -227,24 +231,75 @@ internal fun PhotosSection(
     }
 }
 
+/**
+ * Swipe lifestyle filter: the Grid's grouped section with a dealbreaker Lock on Swap, Room and
+ * Experience, so those survive deck relaxation when the viewer says they must.
+ */
 @Composable
 internal fun LifestyleTagsSection(
-    selected: Set<LifestyleTag>,
-    onChange: (Set<LifestyleTag>) -> Unit,
+    draft: SwipeFilters,
+    onDraftChange: (SwipeFilters) -> Unit,
 ) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        LifestyleTag.entries.forEach { tag ->
-            val active = tag in selected
-            SwipeSheetChip(label = tag.label, active = active) {
-                onChange(if (active) selected - tag else selected + tag)
+    LifestyleSection(
+        selected = draft.lifestyleTags,
+        onChange = { tags ->
+            // A group emptied of selections cannot stay locked.
+            val emptied = LifestyleGroup.entries.filter { g -> tags.none { it.group == g } }.mapNotNull { it.dealbreakerKey }
+            onDraftChange(draft.copy(lifestyleTags = tags, dealbreakers = draft.dealbreakers - emptied.toSet()))
+        },
+        groupHeader = { group ->
+            val key = group.dealbreakerKey
+            if (key == null) {
+                FilterGroupLabel(group.label)
+            } else {
+                SubsectionHeader(
+                    title = group.label,
+                    dealbreakerKey = key,
+                    eligible = draft.lifestyleTags.any { it.group == group },
+                    locked = key in draft.dealbreakers,
+                    onLockChange = { locked ->
+                        onDraftChange(draft.copy(dealbreakers = toggleDealbreaker(draft.dealbreakers, key, locked)))
+                    },
+                )
             }
-        }
-    }
+        },
+        chip = { label, active, onClick -> SwipeSheetChip(label = label, active = active, onClick = onClick) },
+    )
 }
+
+/** Swipe boundaries filter with its own dealbreaker Lock. */
+@Composable
+internal fun BoundariesSection(
+    draft: SwipeFilters,
+    onDraftChange: (SwipeFilters) -> Unit,
+) {
+    SubsectionHeader(
+        title = "Boundaries",
+        dealbreakerKey = SwipeDealbreakerKey.BOUNDARIES,
+        eligible = draft.boundaryItems.isNotEmpty(),
+        locked = SwipeDealbreakerKey.BOUNDARIES in draft.dealbreakers,
+        onLockChange = { locked ->
+            onDraftChange(draft.copy(dealbreakers = toggleDealbreaker(draft.dealbreakers, SwipeDealbreakerKey.BOUNDARIES, locked)))
+        },
+    )
+    BoundariesFilterSection(
+        selected = draft.boundaryItems,
+        onChange = { items ->
+            val dealbreakers = if (items.isEmpty()) draft.dealbreakers - SwipeDealbreakerKey.BOUNDARIES else draft.dealbreakers
+            onDraftChange(draft.copy(boundaryItems = items, dealbreakers = dealbreakers))
+        },
+        chip = { label, active, onClick -> SwipeSheetChip(label = label, active = active, onClick = onClick) },
+    )
+}
+
+private val LifestyleGroup.dealbreakerKey: String?
+    get() =
+        when (this) {
+            LifestyleGroup.Swap -> SwipeDealbreakerKey.SWAP
+            LifestyleGroup.Room -> SwipeDealbreakerKey.ROOM
+            LifestyleGroup.Experience -> SwipeDealbreakerKey.EXPERIENCE
+            LifestyleGroup.Other -> null
+        }
 
 @Composable
 internal fun LogisticsTagsSection(

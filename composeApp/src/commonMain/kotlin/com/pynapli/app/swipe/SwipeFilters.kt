@@ -1,6 +1,7 @@
 package com.pynapli.app.swipe
 
 import androidx.compose.runtime.Immutable
+import com.pynapli.app.grid.Boundary
 import com.pynapli.app.grid.DiscoveryStyle
 import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleTag
@@ -37,6 +38,8 @@ data class SwipeFilters(
     val discoveryStyles: Set<DiscoveryStyle> = emptySet(),
     val intents: Set<Intent> = emptySet(),
     val lifestyleTags: Set<LifestyleTag> = emptySet(),
+    // Hide people who marked any of these boundaries "not for me".
+    val boundaryItems: Set<Boundary> = emptySet(),
     val logisticsTags: Set<LogisticsTag> = emptySet(),
     // Structured gender/orientation keys from ProfileTaxonomies (self-describe excluded).
     val genders: Set<String> = emptySet(),
@@ -62,6 +65,7 @@ data class SwipeFilters(
             if (discoveryStyles.isNotEmpty()) count += 1
             if (intents.isNotEmpty()) count += 1
             if (lifestyleTags.isNotEmpty()) count += 1
+            if (boundaryItems.isNotEmpty()) count += 1
             if (logisticsTags.isNotEmpty()) count += 1
             if (genders.isNotEmpty()) count += 1
             if (orientations.isNotEmpty()) count += 1
@@ -102,6 +106,7 @@ data class SwipeFilters(
             discoveryStyles = discoveryStyles.map { it.serverValue },
             intents = intents.map { it.serverValue },
             lifestyleTags = lifestyleTags.map { it.serverValue },
+            boundaryItems = boundaryItems.map { it.serverValue },
             logisticsTags = logisticsTags.map { it.serverValue },
             genders = genders.toList(),
             orientations = orientations.toList(),
@@ -160,6 +165,7 @@ data class SwipeFilters(
                 discoveryStyles = request.discoveryStyles.mapNotNull { styleByValue[it] }.toSet(),
                 intents = request.intents.mapNotNull { intentByValue[it] }.toSet(),
                 lifestyleTags = request.lifestyleTags.mapNotNull { lifestyleByValue[it] }.toSet(),
+                boundaryItems = Boundary.fromServerValues(request.boundaryItems),
                 logisticsTags = request.logisticsTags.mapNotNull { logisticsByValue[it] }.toSet(),
                 genders = request.genders.toSet(),
                 orientations = request.orientations.toSet(),

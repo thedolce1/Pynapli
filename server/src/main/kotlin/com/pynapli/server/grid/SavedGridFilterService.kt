@@ -84,6 +84,7 @@ private fun validatePayload(payload: GridQueryRequestDto): DiscoveryFilters =
         ageVerifiedOnly = payload.ageVerifiedOnly,
         discoveryStyles = payload.discoveryStyles,
         lifestyleTags = payload.lifestyleTags,
+        boundaryItems = payload.boundaryItems,
         logisticsTags = payload.logisticsTags,
         tonightAvailableOnly = payload.tonightAvailableOnly,
         activeTodayOnly = payload.activeTodayOnly,

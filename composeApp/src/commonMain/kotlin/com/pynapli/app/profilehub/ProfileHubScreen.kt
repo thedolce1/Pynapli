@@ -96,6 +96,8 @@ fun ProfileHubScreen(
             onRelationshipContextChanged = stateHolder::updateRelationshipContext,
             onDiscoveryStyleChanged = stateHolder::updateDiscoveryStyle,
             onToggleLifestyleTag = stateHolder::toggleLifestyleTag,
+            onExperienceLevelChanged = stateHolder::updateExperienceLevel,
+            onBoundaryStanceChanged = stateHolder::updateBoundaryStance,
             onToggleLogisticsTag = stateHolder::toggleLogisticsTag,
             onToggleIntent = stateHolder::toggleIntent,
             onSave = { scope.launch { stateHolder.saveDraft() } },

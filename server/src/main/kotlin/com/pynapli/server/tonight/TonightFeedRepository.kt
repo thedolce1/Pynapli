@@ -1,5 +1,6 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.discovery.DiscoveryFilters
 import java.time.Instant
 import java.util.UUID
 
@@ -26,6 +27,7 @@ interface TonightFeedRepository {
         intent: String?,
         limit: Int,
         now: Instant,
+        filters: DiscoveryFilters = DiscoveryFilters(),
     ): List<TonightFeedRow>
 }
 

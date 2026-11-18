@@ -31,7 +31,7 @@ class PlayingTonightStateHolder(
         _state.update { it.copy(isLoading = true, errorMessage = null) }
         val intent = _state.value.intentFilter
         coroutineScope {
-            val feedDeferred = async { repository.loadFeed(radiusMeters, intent?.serverValue) }
+            val feedDeferred = async { repository.loadFeed(radiusMeters, intent?.serverValue, _state.value.feedFilters) }
             val sessionDeferred = async { repository.loadCurrentSession() }
             val photosDeferred = async { repository.loadProfilePhotos() }
             val feedResult = feedDeferred.await()
@@ -67,12 +67,43 @@ class PlayingTonightStateHolder(
     suspend fun setIntentFilter(intent: TonightIntent?) {
         if (_state.value.intentFilter == intent) return
         _state.update { it.copy(intentFilter = intent, isLoading = true, errorMessage = null) }
-        when (val result = repository.loadFeed(radiusMeters, intent?.serverValue)) {
+        when (val result = repository.loadFeed(radiusMeters, intent?.serverValue, _state.value.feedFilters)) {
             is AppResult.Success ->
                 _state.update { it.copy(isLoading = false, feedItems = result.value, errorMessage = null) }
 
             is AppResult.Failure ->
                 _state.update { it.copy(isLoading = false, errorMessage = result.error.message) }
+        }
+    }
+
+    /** Re-query the feed with new orientation/lifestyle/boundary filters. */
+    suspend fun setFeedFilters(filters: TonightFeedFilters) {
+        val previous = _state.value.feedFilters
+        if (previous == filters) return
+        _state.update { it.copy(feedFilters = filters, isLoading = true, errorMessage = null) }
+        val intent = _state.value.intentFilter?.serverValue
+        when (val result = repository.loadFeed(radiusMeters, intent, filters)) {
+            is AppResult.Success ->
+                _state.update { it.copy(isLoading = false, feedItems = result.value) }
+            is AppResult.Failure -> {
+                // Lifestyle filters are gated like the Grid's (age verification, then the advanced-
+                // filter plan). Keep the rest of the filters but drop the gated part, so later
+                // refreshes don't keep failing, and say why.
+                val gated = result.error.code in TONIGHT_GATED_FILTER_CODES
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        feedFilters = if (gated) filters.copy(lifestyleTags = emptySet()) else previous,
+                        errorMessage =
+                            when (result.error.code) {
+                                "AGE_VERIFICATION_REQUIRED" -> "Verify your age to use lifestyle filters."
+                                "ENTITLEMENT_REQUIRED" -> "Lifestyle filters are part of a paid plan."
+                                else -> result.error.message
+                            },
+                    )
+                }
+                if (gated) refreshSilently()
+            }
         }
     }
 
@@ -85,7 +116,7 @@ class PlayingTonightStateHolder(
     suspend fun refreshSilently() {
         val intent = _state.value.intentFilter
         coroutineScope {
-            val feedDeferred = async { repository.loadFeed(radiusMeters, intent?.serverValue) }
+            val feedDeferred = async { repository.loadFeed(radiusMeters, intent?.serverValue, _state.value.feedFilters) }
             val sessionDeferred = async { repository.loadCurrentSession() }
             val feedResult = feedDeferred.await()
             val sessionResult = sessionDeferred.await()
@@ -219,6 +250,13 @@ interface TonightRepository {
         intent: String?,
     ): AppResult<List<TonightFeedItemUi>>
 
+    /** Filtered feed; defaults to the unfiltered call so simple fakes need not implement it. */
+    suspend fun loadFeed(
+        radiusMeters: Int,
+        intent: String?,
+        filters: TonightFeedFilters,
+    ): AppResult<List<TonightFeedItemUi>> = loadFeed(radiusMeters, intent)
+
     suspend fun loadCurrentSession(): AppResult<TonightSessionUi?>
 
     /** The viewer's approved profile photos, offered as optional session photos. */
@@ -233,14 +271,22 @@ interface TonightRepository {
     suspend fun endSession(sessionId: String): AppResult<TonightSessionUi>
 }
 
+private val TONIGHT_GATED_FILTER_CODES = setOf("AGE_VERIFICATION_REQUIRED", "ENTITLEMENT_REQUIRED")
+
 class ApiTonightRepository(
     private val apiClient: PynapliApiClient,
 ) : TonightRepository {
     override suspend fun loadFeed(
         radiusMeters: Int,
         intent: String?,
+    ): AppResult<List<TonightFeedItemUi>> = loadFeed(radiusMeters, intent, TonightFeedFilters())
+
+    override suspend fun loadFeed(
+        radiusMeters: Int,
+        intent: String?,
+        filters: TonightFeedFilters,
     ): AppResult<List<TonightFeedItemUi>> =
-        when (val result = apiClient.getTonightFeed(radiusMeters = radiusMeters, intent = intent)) {
+        when (val result = apiClient.getTonightFeed(radiusMeters, intent, filters.toDto())) {
             is AppResult.Success -> AppResult.Success(result.value.items.map { it.toUi() })
             is AppResult.Failure -> AppResult.Failure(result.error)
         }

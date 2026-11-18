@@ -92,6 +92,7 @@ private fun validatePayload(payload: SwipeDeckRequestDto): DiscoveryFilters {
         ageVerifiedOnly = payload.ageVerifiedOnly,
         discoveryStyles = payload.discoveryStyles,
         lifestyleTags = payload.lifestyleTags,
+        boundaryItems = payload.boundaryItems,
         logisticsTags = payload.logisticsTags,
         withPhotosOnly = payload.withPhotosOnly,
         hasPrivateAlbumOnly = payload.hasPrivateAlbumOnly,

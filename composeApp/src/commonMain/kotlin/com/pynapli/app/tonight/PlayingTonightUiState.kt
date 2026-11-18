@@ -1,6 +1,9 @@
 package com.pynapli.app.tonight
 
 import androidx.compose.runtime.Immutable
+import com.pynapli.app.grid.Boundary
+import com.pynapli.app.grid.LifestyleTag
+import com.pynapli.shared.network.dto.TonightFeedFiltersDto
 
 /**
  * Availability intent for a Playing Tonight session. Server tokens are the canonical wire
@@ -110,6 +113,29 @@ data class TonightPhotoOptionUi(
     val thumbnailUrl: String?,
 )
 
+/**
+ * Playing Tonight feed filters: the session owner's own orientation, swap/room/experience and
+ * boundaries, matched by the server exactly as on Grid and Swipe.
+ */
+@Immutable
+data class TonightFeedFilters(
+    val orientations: Set<String> = emptySet(),
+    val lifestyleTags: Set<LifestyleTag> = emptySet(),
+    val boundaryItems: Set<Boundary> = emptySet(),
+) {
+    val activeCount: Int
+        get() = listOf(orientations, lifestyleTags, boundaryItems).count { it.isNotEmpty() }
+
+    fun withLifestyleAccess(allowed: Boolean): TonightFeedFilters = if (allowed) this else copy(lifestyleTags = emptySet())
+
+    fun toDto(): TonightFeedFiltersDto =
+        TonightFeedFiltersDto(
+            orientations = orientations.sorted(),
+            lifestyleTags = lifestyleTags.map { it.serverValue }.sorted(),
+            boundaryItems = boundaryItems.map { it.serverValue }.sorted(),
+        )
+}
+
 @Immutable
 data class PlayingTonightUiState(
     val isLoading: Boolean = false,
@@ -117,6 +143,7 @@ data class PlayingTonightUiState(
     val feedItems: List<TonightFeedItemUi> = emptyList(),
     val currentSession: TonightSessionUi? = null,
     val intentFilter: TonightIntent? = null,
+    val feedFilters: TonightFeedFilters = TonightFeedFilters(),
     val photoOptions: List<TonightPhotoOptionUi> = emptyList(),
     val errorMessage: String? = null,
     // A passing, non-error line ("Your partner can't join tonight.").
