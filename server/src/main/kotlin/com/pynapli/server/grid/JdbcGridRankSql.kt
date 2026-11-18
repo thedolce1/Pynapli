@@ -66,11 +66,7 @@ internal fun Connection.queryGridRank(
              AND near_travel.active_until IS NULL
              AND ST_DWithin(v.geom, near_travel.geom, ?)
         ),
-        -- MATERIALIZED, and the distance behind an OFFSET 0 fence: the coarse distance is a spheroid
-        -- ST_Distance and the costliest thing here. Left to the planner it is inlined into the
-        -- radius test, the output column and the order bucket, and so computed up to three times a
-        -- candidate (more on the keyset cursor predicate).
-        base_candidates AS MATERIALIZED (
+        base_candidates AS (
             SELECT u.id AS user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                    ds.show_distance,
@@ -83,7 +79,7 @@ internal fun Connection.queryGridRank(
                    ) THEN 0 ELSE 1 END AS boost_bucket,
                    -- Cell-to-cell distance from the target's EFFECTIVE location (travel point when
                    -- travelling, else home): never a raw GPS distance, never a traveller's home.
-                   coarse.distance_meters,
+                   pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
                    target_travel.id IS NOT NULL AS visiting,
                    -- has_visible_linked_partner only feeds the linkedOnly filter,
                    -- which always runs on the uncached path (userSpecificViewerId
@@ -130,10 +126,6 @@ internal fun Connection.queryGridRank(
               ON target_travel.user_id = u.id
              AND target_travel.status = 'active'
              AND target_travel.active_until IS NULL
-            CROSS JOIN LATERAL (
-                SELECT pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters
-                OFFSET 0
-            ) coarse
             WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
               AND u.status = 'active'
               AND u.deleted_at IS NULL
@@ -144,7 +136,7 @@ internal fun Connection.queryGridRank(
               AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
               -- Radius membership (L-09): cell-to-cell distance of the EFFECTIVE location within the
               -- snapped radius step. A traveller is matched only where they are travelling.
-              AND coarse.distance_meters <= ?
+              AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= ?
               AND (?::integer IS NULL OR p.display_age >= ?::integer)
               AND (?::integer IS NULL OR p.display_age <= ?::integer)
               AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
