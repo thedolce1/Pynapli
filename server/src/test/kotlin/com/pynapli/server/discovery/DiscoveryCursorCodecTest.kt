@@ -46,19 +46,36 @@ class DiscoveryCursorCodecTest {
 
     @Test
     fun cursorIsOpaqueAndRevealsNothing() {
-        val token = codec.encodeGridCursor(scope(), anchor)
-        val segments = token.split(".")
-        assertEquals(2, segments.size, "token is <version>.<sealed box>: $token")
-        val body = Base64.getUrlDecoder().decode(segments[1])
-        val asText = String(body, StandardCharsets.ISO_8859_1)
-        // No JSON, no field names, no ids, no numbers from the anchor survive in the token.
-        listOf("{", "distance", "boost", "userId", "1234", anchor.userId.toString(), "seen").forEach {
-            assertFalse(asText.contains(it), "cursor leaks '$it'")
-            assertFalse(token.contains(it), "cursor leaks '$it'")
+        // The token is random-looking, so this runs many times and every needle must be impossible or
+        // vanishingly unlikely by chance: JSON punctuation is outside the base64url alphabet, and the
+        // raw (still encrypted) box bytes are only searched for long needles. A lone '{' or a 4-digit
+        // string in random bytes is a coin flip over enough runs, not a leak.
+        val tokenNeedles =
+            listOf("{", "\"", ":", "distance", "boostBucket", "orderBucket", "userId", "seenCount", anchor.userId.toString())
+        val boxNeedles =
+            listOf(
+                "\"boostBucket\"",
+                "\"orderBucket\"",
+                "\"orderBucket\":1234",
+                "\"userId\"",
+                "\"seenCount\"",
+                "\"scopeHash\"",
+                "\"surface\":\"grid\"",
+                anchor.userId.toString(),
+                scope(),
+            )
+        repeat(OPACITY_ITERATIONS) {
+            val token = codec.encodeGridCursor(scope(), anchor)
+            val segments = token.split(".")
+            assertEquals(2, segments.size, "token is <version>.<sealed box>: $token")
+            // base64url text: no JSON punctuation, field names, ids or anchor numbers.
+            tokenNeedles.forEach { assertFalse(token.contains(it), "cursor token leaks '$it'") }
+            val asText = String(Base64.getUrlDecoder().decode(segments[1]), StandardCharsets.ISO_8859_1)
+            boxNeedles.forEach { assertFalse(asText.contains(it), "cursor box leaks '$it'") }
+            // Randomised nonce: the same anchor never encodes to the same token, so two cursors cannot be
+            // compared to learn that they point at the same card or the same distance.
+            assertNotEquals(token, codec.encodeGridCursor(scope(), anchor))
         }
-        // Randomised nonce: the same anchor never encodes to the same token, so two cursors cannot be
-        // compared to learn that they point at the same card or the same distance.
-        assertNotEquals(token, codec.encodeGridCursor(scope(), anchor))
     }
 
     @Test
@@ -122,5 +139,9 @@ class DiscoveryCursorCodecTest {
         val legacy = "$signed.${b64.encodeToString(mac.doFinal(signed.toByteArray(StandardCharsets.UTF_8)))}"
         assertTrue(legacy.startsWith("v1."))
         assertFailsWith<DiscoveryCursorException> { codec.decodeGridCursor(legacy, scope()) }
+    }
+
+    private companion object {
+        const val OPACITY_ITERATIONS = 200
     }
 }
