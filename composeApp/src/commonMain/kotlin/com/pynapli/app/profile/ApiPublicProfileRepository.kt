@@ -45,6 +45,11 @@ class ApiPublicProfileRepository(
 
     override suspend fun hideProfile(userId: String): AppResult<HiddenProfileSummaryDto> = apiClient.hideProfile(userId)
 
+    override suspend fun setFavorite(
+        userId: String,
+        favorite: Boolean,
+    ): AppResult<com.pynapli.shared.network.dto.FavoriteStatusDto> = if (favorite) apiClient.addFavorite(userId) else apiClient.removeFavorite(userId)
+
     override suspend fun submitReport(
         userId: String,
         targetType: String,

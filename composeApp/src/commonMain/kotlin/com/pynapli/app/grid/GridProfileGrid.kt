@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -24,12 +26,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
+import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.pynapliEntrance
+
+internal const val GRID_LOAD_MORE_RETRY_TAG = "grid-load-more-retry"
 
 /**
  * Minimum tile side once the grid's own pane grows past phone width. Keeps wide-window
@@ -86,14 +92,17 @@ internal fun ProfileGrid(
     canLoadMore: Boolean,
     isLoadingMore: Boolean,
     modifier: Modifier = Modifier,
+    // The last page request failed: stop auto-paging (it would retry in a tight loop) and offer a
+    // Retry at the end of the list instead.
+    loadMoreFailed: Boolean = false,
 ) {
-    val shouldLoadMore by remember(cards.size, gridState, isLoadingMore, canLoadMore) {
+    val shouldLoadMore by remember(cards.size, gridState, isLoadingMore, canLoadMore, loadMoreFailed) {
         derivedStateOf {
             val lastVisibleIndex =
                 gridState.layoutInfo.visibleItemsInfo
                     .lastOrNull()
                     ?.index ?: return@derivedStateOf false
-            canLoadMore && !isLoadingMore && cards.isNotEmpty() && lastVisibleIndex >= cards.lastIndex - 9
+            canLoadMore && !loadMoreFailed && !isLoadingMore && cards.isNotEmpty() && lastVisibleIndex >= cards.lastIndex - 9
         }
     }
 
@@ -177,6 +186,27 @@ internal fun ProfileGrid(
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp),
                         )
+                    }
+                }
+            } else if (loadMoreFailed && canLoadMore) {
+                item(
+                    key = "grid-load-more-failed",
+                    span = { GridItemSpan(maxLineSpan) },
+                    contentType = "grid-loading",
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        TextButton(
+                            onClick = onLoadMore,
+                            modifier = Modifier.handCursor().testTag(GRID_LOAD_MORE_RETRY_TAG),
+                        ) {
+                            Text(text = "Couldn't load more. Retry")
+                        }
                     }
                 }
             }

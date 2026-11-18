@@ -67,6 +67,7 @@ class PynapliAppGraph(
     val deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     val onboardingStateHolder: OnboardingStateHolder? = null,
     val photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
+    val favoritesStateHolder: com.pynapli.app.grid.FavoritesStateHolder? = null,
 )
 
 /**

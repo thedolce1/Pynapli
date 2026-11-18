@@ -1,8 +1,10 @@
 package com.pynapli.app.profile
 
 import com.pynapli.app.media.MediaAlbumItemUi
+import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.BlockSummaryDto
+import com.pynapli.shared.network.dto.FavoriteStatusDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.ReportDto
@@ -35,4 +37,10 @@ interface PublicProfileRepository {
         note: String?,
         targetId: String? = null,
     ): AppResult<ReportDto>
+
+    /** Stars or un-stars [userId] (private Favorites). Idempotent on the server. */
+    suspend fun setFavorite(
+        userId: String,
+        favorite: Boolean,
+    ): AppResult<FavoriteStatusDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 }

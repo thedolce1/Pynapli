@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +48,8 @@ import com.pynapli.app.design.icons.filled.Close
 import com.pynapli.app.design.icons.filled.Flag
 import com.pynapli.app.design.icons.filled.MoreVert
 import com.pynapli.app.design.icons.filled.PersonAdd
+import com.pynapli.app.design.icons.filled.Star
+import com.pynapli.app.design.icons.filled.StarBorder
 import com.pynapli.app.design.icons.filled.VisibilityOff
 
 @Composable
@@ -66,7 +69,13 @@ internal fun ProfileHero(
     isOwnProfile: Boolean = false,
     onInviteProfileLink: (() -> Unit)? = null,
     coupleVerified: Boolean = false,
+    // Coarse server bucket ("Active today"); shown only while the person is not online.
+    lastActiveLabel: String? = null,
+    favorite: Boolean = false,
+    // Null hides the star (own profile, or a surface that doesn't offer Favorites).
+    onToggleFavorite: (() -> Unit)? = null,
 ) {
+    val lastSeen = lastActiveLabel?.takeUnless { online }
     val photos =
         remember(photoUrls, profilePhotoUrl) {
             photoUrls.ifEmpty { listOfNotNull(profilePhotoUrl) }
@@ -139,6 +148,9 @@ internal fun ProfileHero(
                     .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (!isOwnProfile && onToggleFavorite != null) {
+                FavoriteStarButton(favorite = favorite, onToggle = onToggleFavorite)
+            }
             if (!isOwnProfile) {
                 ProfileOverflowMenu(
                     onHideClick = onHideClick,
@@ -216,7 +228,7 @@ internal fun ProfileHero(
                 }
             }
 
-            if (online || distanceLabel != null || neighborhood != null) {
+            if (online || lastSeen != null || distanceLabel != null || neighborhood != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -235,7 +247,16 @@ internal fun ProfileHero(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
-                    var precededBySegment = online
+                    lastSeen?.let { label ->
+                        Text(
+                            text = label,
+                            color = PynapliColors.OnPhotoSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            modifier = Modifier.testTag(ProfileDetailTags.LAST_SEEN),
+                        )
+                    }
+                    var precededBySegment = online || lastSeen != null
                     distanceLabel?.let {
                         if (precededBySegment) {
                             MetaDivider()
@@ -266,6 +287,36 @@ internal fun ProfileHero(
                 }
             }
         }
+    }
+}
+
+internal object ProfileDetailTags {
+    const val FAVORITE = "profile-detail-favorite"
+    const val LAST_SEEN = "profile-detail-last-seen"
+    const val LIKE_BACK = "profile-detail-like-back"
+}
+
+/** Private Favorites star (GRID_IMPLEMENTATION_SPEC "Favorites"): the other person is never told. */
+@Composable
+private fun FavoriteStarButton(
+    favorite: Boolean,
+    onToggle: () -> Unit,
+) {
+    IconButton(
+        onClick = onToggle,
+        modifier =
+            Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(PynapliColors.OverlayScrim)
+                .handCursor()
+                .testTag(ProfileDetailTags.FAVORITE),
+    ) {
+        Icon(
+            imageVector = if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+            contentDescription = if (favorite) "Remove from Favorites" else "Add to Favorites",
+            tint = if (favorite) PynapliColors.Accent else PynapliColors.OnPhotoPrimary,
+        )
     }
 }
 

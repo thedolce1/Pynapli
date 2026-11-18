@@ -270,6 +270,29 @@ class PhotoVerificationServiceIntegrationTest {
         }
 
     @Test
+    fun aSelfieNobodyReviewsIsPurgedAndThePersonCanTryAgain() =
+        runBlocking {
+            val userId = dataSource.insertVerificationUser()
+            val service = service()
+            val (challengeId, assetId) = service.challengeAndUpload(userId)
+            service.submit(userId, SubmitPhotoVerificationRequestDto(challengeId, assetId))
+
+            clock.advance(PhotoVerificationService.UNREVIEWED_SELFIE_RETENTION.minus(Duration.ofHours(1)))
+            assertEquals(0, service.purgeExpiredSelfies())
+            assertEquals(PhotoVerificationStatus.PENDING, service.status(userId).status)
+
+            clock.advance(Duration.ofHours(2))
+            assertEquals(1, service.purgeExpiredSelfies())
+            assertEquals(listOf(assetId), deleter.deletedAssetIds)
+            assertTrue(!dataSource.assetExists(UUID.fromString(assetId)))
+            assertNotNull(dataSource.selfiePurgedAt(UUID.fromString(challengeId)))
+            // The attempt left the review queue, and the person is free to start over.
+            assertTrue(service.listPending("senior-1", "queue", null, null).items.isEmpty())
+            assertEquals(PhotoVerificationStatus.NONE, service.status(userId).status)
+            assertEquals(PhotoVerificationStatus.CHALLENGE, service.requestChallenge(userId).status)
+        }
+
+    @Test
     fun aSelfieCannotBeAttachedToAPhotoAlbum() =
         runBlocking {
             val userId = dataSource.insertVerificationUser()

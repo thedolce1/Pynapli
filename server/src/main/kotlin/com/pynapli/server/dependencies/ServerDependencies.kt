@@ -100,6 +100,7 @@ class ServerDependencies(
     val passwordRecoveryService: PasswordRecoveryService? = null,
     val signedInDevicesService: SignedInDevicesService? = null,
     val profileService: ProfileService,
+    val favoriteService: com.pynapli.server.favorites.FavoriteService? = null,
     val profileLinkService: ProfileLinkService,
     val adminUserLookupService: AdminUserLookupService,
     val adminPartnerLinkReviewService: AdminPartnerLinkReviewService,
@@ -283,8 +284,25 @@ class ServerDependencies(
                 } else {
                     null
                 }
+            val favoriteService =
+                com.pynapli.server.favorites.FavoriteService(
+                    repository =
+                        com.pynapli.server.favorites
+                            .JdbcFavoriteRepository(database.dataSource),
+                    cursorCodec =
+                        com.pynapli.server.discovery
+                            .DiscoveryCursorCodec(config.discoveryCursorSecret),
+                    presenceService = core.presenceService,
+                    mediaAssetUrlResolver = media.mediaAssetUrlResolver,
+                    blockRepository = core.blockRepository,
+                    rateLimitService = core.rateLimitService,
+                )
             val profileService =
                 ProfileService(
+                    lastActiveRepository =
+                        com.pynapli.server.presence
+                            .JdbcLastActiveRepository(database.dataSource),
+                    favoriteService = favoriteService,
                     repository = JdbcProfileRepository(database.dataSource),
                     bioScanner = com.pynapli.server.profile.ContactAndSolicitationBioScanner,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
@@ -439,6 +457,7 @@ class ServerDependencies(
                 passwordRecoveryService = core.passwordRecoveryService,
                 signedInDevicesService = core.signedInDevicesService,
                 profileService = profileService,
+                favoriteService = favoriteService,
                 profileLinkService = profileLinkService,
                 adminUserLookupService = adminUserLookupService,
                 adminPartnerLinkReviewService = adminPartnerLinkReviewService,

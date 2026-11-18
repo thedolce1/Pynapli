@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import com.pynapli.app.activity.likeBackEventIdOrNull
 import com.pynapli.app.activity.toActivityProfileCardUi
 import com.pynapli.app.auth.AuthScreen
 import com.pynapli.app.design.PynapliTheme
@@ -75,6 +76,22 @@ fun PynapliApp(
                 }
             }
         var activeNotification by remember { mutableStateOf<InAppNotificationUi?>(null) }
+        // Signed out, session died, or a cold start whose stored session is gone: forget this
+        // account's Grid (in memory and the cold-start cache) and Favorites. Waits for the session
+        // check so a cold start with a live session keeps its instant cached Grid.
+        // Blocked, hidden or reported anywhere: the Grid and Favorites (kept across tabs) drop them.
+        LaunchedEffect(graph.profileDetailStateHolder) {
+            graph.profileDetailStateHolder.removedProfiles.collect { userId ->
+                graph.gridStateHolder.removeCardById(userId)
+                graph.favoritesStateHolder?.removeCardById(userId)
+            }
+        }
+        LaunchedEffect(authState.isCheckingSession, authState.session == null) {
+            if (!authState.isCheckingSession && authState.session == null) {
+                graph.gridStateHolder.clearForSignOut()
+                graph.favoritesStateHolder?.clear()
+            }
+        }
         PynapliAppEffects(
             authStateHolder = graph.authStateHolder,
             appSettingsStateHolder = graph.appSettingsStateHolder,
@@ -105,7 +122,12 @@ fun PynapliApp(
             onOpenPsync = { psyncVisible = true },
             onOpenStore = { openStore(StorePaywallFocus.Plans) },
             onOpenActivityProfile = { event ->
-                scope.launch { graph.profileDetailStateHolder.open(event.toActivityProfileCardUi()) }
+                scope.launch {
+                    graph.profileDetailStateHolder.open(
+                        event.toActivityProfileCardUi(),
+                        likeBackEventId = event.likeBackEventIdOrNull(),
+                    )
+                }
             },
         )
 
@@ -290,6 +312,7 @@ fun PynapliApp(
                 playingTonightStateHolder = graph.playingTonightStateHolder,
                 onboardingStateHolder = graph.onboardingStateHolder,
                 photoVerificationStateHolder = graph.photoVerificationStateHolder,
+                favoritesStateHolder = graph.favoritesStateHolder,
                 conversationActions = conversationActions,
                 scope = scope,
                 onProfileSurface = { profileSurface = it },
@@ -407,6 +430,7 @@ fun PynapliApp(
             profileLinksStateHolder = graph.profileLinksStateHolder,
             authStateHolder = graph.authStateHolder,
             appSettingsStateHolder = graph.appSettingsStateHolder,
+            activityStateHolder = graph.activityStateHolder,
             conversationActions = conversationActions,
             onPickConversationPhoto = platform.onPickConversationPhoto,
             scope = scope,

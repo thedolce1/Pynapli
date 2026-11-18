@@ -26,6 +26,7 @@ internal class JdbcAccountDeletionActions(
                 anonymizeAuthIdentities(connection, userId)
                 anonymizeProfile(connection, userId)
                 val purgedLocationCount = purgeExactLocation(connection, userId)
+                purgeFavoritesAndLastActive(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)
@@ -266,6 +267,22 @@ internal class JdbcAccountDeletionActions(
                 statement.setObject(1, userId)
                 return statement.executeUpdate()
             }
+    }
+
+    /** Their private Favorites (both directions) and last-active timestamp go with the account. */
+    private fun purgeFavoritesAndLastActive(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection.prepareStatement("DELETE FROM favorite_profiles WHERE user_id = ? OR favorite_user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+        connection.prepareStatement("DELETE FROM user_last_active WHERE user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
     }
 
     private fun endActivePartnerLinks(

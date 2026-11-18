@@ -76,6 +76,41 @@ class DiscoveryCursorCodec(
         )
     }
 
+    /** Favorites list position, sealed the same way as a Grid cursor but bound to its own surface. */
+    fun encodeFavoritesCursor(
+        viewerUserId: UUID,
+        anchor: GridCursorAnchor,
+    ): String =
+        encode(
+            DiscoveryCursorPayload(
+                surface = SURFACE_FAVORITES,
+                scopeHash = favoritesScopeHash(viewerUserId),
+                boostBucket = anchor.boostBucket,
+                orderBucket = anchor.orderBucket,
+                orderTiebreak = anchor.orderTiebreak,
+                userId = anchor.userId.toString(),
+            ),
+        )
+
+    fun decodeFavoritesCursor(
+        token: String,
+        viewerUserId: UUID,
+    ): GridCursorAnchor {
+        val payload = decode(token)
+        if (payload.surface != SURFACE_FAVORITES || payload.version != VERSION || payload.scopeHash != favoritesScopeHash(viewerUserId)) {
+            throw DiscoveryCursorException()
+        }
+        return GridCursorAnchor(
+            boostBucket = payload.boostBucket ?: throw DiscoveryCursorException(),
+            orderBucket = payload.orderBucket ?: throw DiscoveryCursorException(),
+            userId =
+                runCatching {
+                    UUID.fromString(payload.userId ?: throw DiscoveryCursorException())
+                }.getOrElse { throw DiscoveryCursorException() },
+            orderTiebreak = payload.orderTiebreak ?: throw DiscoveryCursorException(),
+        )
+    }
+
     /**
      * Sealed token: `g2.<base64url(nonce || AES-256-GCM(payload json))>`. The payload is encrypted, not
      * just signed (L-07): a client reading its own cursor learns nothing about the ranking anchor (an
@@ -125,6 +160,9 @@ class DiscoveryCursorCodec(
         private const val GCM_NONCE_BYTES = 12
         private const val GCM_TAG_BITS = 128
         private const val SURFACE_GRID = "grid"
+        private const val SURFACE_FAVORITES = "favorites"
+
+        private fun favoritesScopeHash(viewerUserId: UUID): String = sha256Base64Url("favorites:v1|viewer=$viewerUserId")
 
         fun gridScopeHash(
             viewerUserId: UUID,

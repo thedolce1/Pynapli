@@ -13,11 +13,18 @@ import kotlin.time.ExperimentalTime
  * an instant first paint while the network refresh runs). Only the lightweight card list is cached —
  * cursor, paywall, and ad state always come fresh from the network refresh. This is a best-effort
  * convenience cache, never the source of truth.
+ *
+ * Privacy: a cached card holds only what the server sent for the card (name, thumbnail URL, coarse
+ * distance bucket, presence flag, partner mini), never a coordinate. The refetch replaces the cached
+ * cards wholesale, so anyone blocked or hidden since drops out, and sign-out wipes the cache.
  */
 interface GridSnapshotStore {
     suspend fun load(): List<GridProfileCardUi>
 
     suspend fun save(cards: List<GridProfileCardUi>)
+
+    /** Forgets the cached cards (sign-out / account switch). */
+    suspend fun clear()
 }
 
 /** No-op store for previews/tests and platforms without local persistence wired. */
@@ -25,6 +32,8 @@ object NoOpGridSnapshotStore : GridSnapshotStore {
     override suspend fun load(): List<GridProfileCardUi> = emptyList()
 
     override suspend fun save(cards: List<GridProfileCardUi>) = Unit
+
+    override suspend fun clear() = Unit
 }
 
 /**
@@ -57,6 +66,10 @@ class SqlDelightGridSnapshotStore(
             value_ = json.encodeToString(cardListSerializer, capped),
             updated_at_epoch_ms = currentTimeMillis(),
         )
+    }
+
+    override suspend fun clear() {
+        database.appMetaQueries.deleteByKey(GRID_SNAPSHOT_KEY)
     }
 
     @OptIn(ExperimentalTime::class)

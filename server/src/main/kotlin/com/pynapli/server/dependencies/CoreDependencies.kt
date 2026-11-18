@@ -120,6 +120,11 @@ internal fun buildCoreDependencies(
         PresenceService(
             repository = presenceRepository,
             onlineTracker = onlinePresenceTracker,
+            lastActiveRecorder =
+                com.pynapli.server.presence.LastActiveRecorder(
+                    com.pynapli.server.presence
+                        .JdbcLastActiveRepository(database.dataSource),
+                ),
         )
     val presenceOfflineScanner =
         PresenceOfflineScanner(

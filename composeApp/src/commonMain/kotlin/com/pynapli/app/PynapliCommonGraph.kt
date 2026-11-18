@@ -7,8 +7,10 @@ import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.grid.ApiFavoritesRepository
 import com.pynapli.app.grid.ApiGridFeedRepository
 import com.pynapli.app.grid.ApiSavedGridFilterRepository
+import com.pynapli.app.grid.FavoritesStateHolder
 import com.pynapli.app.grid.GridPresenceStreamCoordinator
 import com.pynapli.app.grid.GridSnapshotStore
 import com.pynapli.app.grid.GridStateHolder
@@ -55,7 +57,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.minutes
 
 /**
  * Every state holder that is built from the API client and nothing platform-specific.
@@ -108,6 +109,8 @@ class PynapliCommonGraph(
         )
 
     val savedGridFilterStateHolder = SavedGridFilterStateHolder(ApiSavedGridFilterRepository(apiClient))
+
+    val favoritesStateHolder = FavoritesStateHolder(ApiFavoritesRepository(apiClient))
 
     val savedSwipeFilterStateHolder = SavedSwipeFilterStateHolder(ApiSavedSwipeFilterRepository(apiClient))
 
@@ -177,7 +180,7 @@ class PynapliCommonGraph(
                     // The Grid reorders only when the user asks or its results have expired, so a
                     // quick app switch never reshuffles the cards (composeApp/CLAUDE.md).
                     if (gridStateHolder.state.value.cards
-                            .isNotEmpty() && gridStateHolder.resultsOlderThan(GRID_RESULTS_EXPIRE_AFTER)
+                            .isNotEmpty() && gridStateHolder.resultsOlderThan(GridStateHolder.RESULTS_EXPIRE_AFTER)
                     ) {
                         launch { gridStateHolder.load(quiet = true) }
                     }
@@ -237,6 +240,7 @@ class PynapliCommonGraph(
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
             photoVerificationStateHolder = photoVerificationStateHolder,
+            favoritesStateHolder = favoritesStateHolder,
         )
 
     /**
@@ -251,6 +255,3 @@ class PynapliCommonGraph(
             scope.launch { runCatchingCancellable { messagesRealtimeCoordinator.run() } },
         )
 }
-
-/** Grid results older than this are refetched (quietly, keeping scroll) when the app returns. */
-private val GRID_RESULTS_EXPIRE_AFTER = 15.minutes

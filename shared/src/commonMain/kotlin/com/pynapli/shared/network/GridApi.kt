@@ -1,8 +1,10 @@
 package com.pynapli.shared.network
 
+import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
+import com.pynapli.shared.network.dto.FavoriteStatusDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.SavedGridFilterDto
@@ -21,6 +23,15 @@ import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
  */
 interface GridApi {
     suspend fun queryGrid(request: GridQueryRequestDto = GridQueryRequestDto()): AppResult<GridQueryResponseDto>
+
+    /** The viewer's Favorites as Grid cards: online first, then coarse distance. */
+    suspend fun listFavorites(cursor: String? = null): AppResult<GridQueryResponseDto> = notSupported()
+
+    /** Stars [userId]. Idempotent, and private: the other person is never told. */
+    suspend fun addFavorite(userId: String): AppResult<FavoriteStatusDto> = notSupported()
+
+    /** Un-stars [userId]. Idempotent. */
+    suspend fun removeFavorite(userId: String): AppResult<FavoriteStatusDto> = notSupported()
 
     suspend fun listSavedGridFilters(): AppResult<SavedGridFiltersListDto>
 
@@ -64,3 +75,6 @@ interface GridApi {
     /** Type-ahead place search for the free-text travel picker (city name or ZIP/postal code). */
     suspend fun searchTravelPlaces(query: String): AppResult<TravelPlaceSearchResponseDto>
 }
+
+// Default for the Favorites calls so hand-written test fakes of the whole client keep compiling.
+private fun notSupported(): AppResult.Failure = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))

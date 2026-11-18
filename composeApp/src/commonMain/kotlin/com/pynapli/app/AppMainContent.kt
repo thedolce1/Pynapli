@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.activity.ActivityScreen
 import com.pynapli.app.activity.ActivityStateHolder
+import com.pynapli.app.activity.likeBackEventIdOrNull
 import com.pynapli.app.activity.toActivityProfileCardUi
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
@@ -104,6 +105,7 @@ internal fun ColumnScope.PynapliMainContent(
     onPickVerificationSelfie: (() -> Unit)?,
     onSetDiscreetIcon: (Boolean) -> Unit,
     discreetIconSupported: Boolean = true,
+    favoritesStateHolder: com.pynapli.app.grid.FavoritesStateHolder? = null,
 ) {
     // Pure dispatcher: it reads no state, so a state change only recomposes the child that reads it.
     // (A `when` branch is not its own recomposition scope; a composable function is.)
@@ -166,6 +168,7 @@ internal fun ColumnScope.PynapliMainContent(
                         onOpenTonight = onOpenTonight,
                         onUseCurrentLocation = onUseCurrentLocation,
                         travelLocationStateHolder = travelLocationStateHolder,
+                        favoritesStateHolder = favoritesStateHolder,
                     )
                 PynapliTab.Messages ->
                     MessagesTabContent(
@@ -357,6 +360,7 @@ private fun ColumnScope.GridTabContent(
     onOpenTonight: () -> Unit,
     onUseCurrentLocation: () -> Unit,
     travelLocationStateHolder: TravelLocationStateHolder? = null,
+    favoritesStateHolder: com.pynapli.app.grid.FavoritesStateHolder? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val locationState by locationStateHolder.state.collectAsState()
@@ -412,6 +416,7 @@ private fun ColumnScope.GridTabContent(
         onOpenAgeVerification = onOpenAgeVerification,
         onOpenTonight = onOpenTonight,
         travelLocationStateHolder = travelLocationStateHolder,
+        favoritesStateHolder = favoritesStateHolder,
     )
 }
 
@@ -579,7 +584,12 @@ private fun ColumnScope.ActivityTabContent(
             }
         },
         onOpenProfile = { event ->
-            scope.launch { profileDetailStateHolder.open(event.toActivityProfileCardUi()) }
+            scope.launch {
+                profileDetailStateHolder.open(
+                    event.toActivityProfileCardUi(),
+                    likeBackEventId = event.likeBackEventIdOrNull(),
+                )
+            }
         },
         onOpenPsync = { sessionId -> onOpenPsyncSession?.invoke(sessionId) },
     )

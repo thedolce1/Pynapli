@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
@@ -19,7 +20,7 @@ class GridStateHolder(
     private val repository: GridFeedRepository,
     private val snapshotStore: GridSnapshotStore = NoOpGridSnapshotStore,
 ) {
-    private val _state = MutableStateFlow(GridUiState(isRefreshing = true))
+    private val _state = MutableStateFlow(GridUiState(isRefreshing = true, cacheChecked = false))
     val state: StateFlow<GridUiState> = _state.asStateFlow()
 
     /**
@@ -35,12 +36,18 @@ class GridStateHolder(
      * present yet, so it never clobbers a live grid. Call once on first composition instead of [load].
      */
     suspend fun primeFromCacheThenLoad() {
+        if (_state.value.cards.isNotEmpty()) {
+            // Returning to the Grid tab: the cards are still here, so keep them (and their order and
+            // scroll) and only refresh quietly once they have expired, as the app-resume path does.
+            if (resultsOlderThan(RESULTS_EXPIRE_AFTER)) load(quiet = true)
+            return
+        }
         if (_state.value.cards.isEmpty()) {
             val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }
             if (cached.isNotEmpty() && _state.value.cards.isEmpty()) {
                 // Show cached cards instantly; a quiet refresh swaps in the live feed atomically
                 // (no blank, no scroll reset) per the spec's instant-render rule.
-                _state.update { current -> current.copy(cards = cached, isRefreshing = true) }
+                _state.update { current -> current.copy(cards = cached, isRefreshing = true, cacheChecked = true) }
                 load(quiet = true)
                 return
             }
@@ -54,6 +61,7 @@ class GridStateHolder(
     fun resultsOlderThan(age: Duration): Boolean = loadedAt?.let { it.elapsedNow() >= age } ?: true
 
     suspend fun load(quiet: Boolean = false) {
+        _state.update { if (it.cacheChecked) it else it.copy(cacheChecked = true) }
         val before = _state.value
         val keepCardsVisible = quiet && before.cards.isNotEmpty()
         feedGeneration += 1
@@ -65,8 +73,11 @@ class GridStateHolder(
                 errorMessage = if (keepCardsVisible) current.errorMessage else null,
             )
         }
+        val generation = feedGeneration
         runCatchingCancellable { repository.loadGrid(_state.value.filters) }
             .onSuccess { feed ->
+                // Signed out (or reloaded) while this was in flight: never resurrect old cards.
+                if (generation != feedGeneration) return@onSuccess
                 loadedAt = TimeSource.Monotonic.markNow()
                 _state.update { current ->
                     current.copy(
@@ -224,10 +235,47 @@ class GridStateHolder(
             }
     }
 
-    fun removeCardById(userId: String) {
+    suspend fun removeCardById(userId: String) {
         _state.update { current ->
             current.copy(cards = current.cards.filterNot { it.id == userId })
         }
+        // Keep the cold-start cache in step, so someone just blocked or hidden never paints again.
+        runCatchingCancellable { snapshotStore.save(_state.value.cards) }
+    }
+
+    /**
+     * Travel mode as it was when the Grid last left the screen. Travel can be switched on or off from
+     * Swipe meanwhile; the Grid then reloads on return instead of keeping another place's cards.
+     */
+    var travelKeyWhenLeft: String? = null
+
+    /** Marks the cards as expired, so the next return to the Grid refetches them quietly. */
+    fun invalidate() {
+        loadedAt = null
+    }
+
+    /** Where the Grid was scrolled when it last left the screen (tab switch), restored on return. */
+    var scrollAnchor: GridScrollAnchor = GridScrollAnchor()
+        private set
+
+    fun rememberScroll(
+        firstVisibleItemIndex: Int,
+        firstVisibleItemScrollOffset: Int,
+    ) {
+        scrollAnchor = GridScrollAnchor(firstVisibleItemIndex, firstVisibleItemScrollOffset)
+    }
+
+    /**
+     * Signed out (or the session died): forget this account's Grid, in memory and in the cold-start
+     * cache, so the next account never sees it.
+     */
+    suspend fun clearForSignOut() {
+        feedGeneration += 1
+        loadedAt = null
+        scrollAnchor = GridScrollAnchor()
+        travelKeyWhenLeft = null
+        _state.value = GridUiState(isRefreshing = true, cacheChecked = false)
+        runCatchingCancellable { snapshotStore.clear() }
     }
 
     fun applyPresenceDelta(delta: PresenceDeltaDto) {
@@ -268,7 +316,18 @@ class GridStateHolder(
             else -> lo to hi
         }
     }
+
+    companion object {
+        /** Grid results older than this are refetched (quietly, keeping scroll) on return. */
+        val RESULTS_EXPIRE_AFTER: Duration = 15.minutes
+    }
 }
+
+/** A saved [androidx.compose.foundation.lazy.grid.LazyGridState] position. */
+data class GridScrollAnchor(
+    val index: Int = 0,
+    val offset: Int = 0,
+)
 
 interface GridFeedRepository {
     suspend fun loadGrid(

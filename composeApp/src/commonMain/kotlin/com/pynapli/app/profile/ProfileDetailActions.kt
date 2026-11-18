@@ -14,6 +14,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
@@ -172,6 +173,34 @@ internal fun ProfileActions(
                 maxLines = 1,
             )
         }
+    }
+}
+
+/** Answers a like from Likes You (same server rules and Activity state as the row's Like back). */
+@Composable
+internal fun LikeBackAction(
+    done: Boolean,
+    onLikeBack: () -> Unit,
+) {
+    Button(
+        onClick = onLikeBack,
+        enabled = !done,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .handCursor(enabled = !done)
+                .testTag(ProfileDetailTags.LIKE_BACK),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = if (done) "Liked back" else "Like back",
+            modifier = Modifier.padding(start = 6.dp),
+            maxLines = 1,
+        )
     }
 }
 

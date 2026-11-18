@@ -791,6 +791,68 @@ class GridStateHolderTest {
         }
 }
 
+class GridInstantLoadTest {
+    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km", tone = GridCardTone.Warm)
+
+    @Test
+    fun returningToTheGridTabKeepsFreshCardsWithoutARefetch() =
+        runTest {
+            val repository = FakeGridFeedRepository(GridFeedUi(cards = listOf(card("a"), card("b"))))
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore())
+
+            stateHolder.primeFromCacheThenLoad()
+            stateHolder.rememberScroll(firstVisibleItemIndex = 7, firstVisibleItemScrollOffset = 42)
+            // The screen leaves and re-enters composition (tab switch): no second load, no spinner.
+            stateHolder.primeFromCacheThenLoad()
+
+            assertEquals(1, repository.loadCount)
+            assertFalse(stateHolder.state.value.isRefreshing)
+            assertEquals(GridScrollAnchor(7, 42), stateHolder.scrollAnchor)
+        }
+
+    @Test
+    fun aBlockedCardLeavesTheColdStartCacheToo() =
+        runTest {
+            val snapshotStore = FakeGridSnapshotStore()
+            val stateHolder = GridStateHolder(FakeGridFeedRepository(GridFeedUi(cards = listOf(card("a"), card("b")))), snapshotStore)
+            stateHolder.load()
+
+            stateHolder.removeCardById("a")
+
+            assertEquals(listOf("b"), snapshotStore.saved.last().map { it.id })
+        }
+
+    @Test
+    fun signOutWipesTheGridAndItsCache() =
+        runTest {
+            val snapshotStore = FakeGridSnapshotStore()
+            val stateHolder = GridStateHolder(FakeGridFeedRepository(GridFeedUi(cards = listOf(card("a")))), snapshotStore)
+            stateHolder.load()
+            stateHolder.rememberScroll(5, 10)
+
+            stateHolder.clearForSignOut()
+
+            assertTrue(
+                stateHolder.state.value.cards
+                    .isEmpty(),
+            )
+            assertEquals(1, snapshotStore.cleared)
+            assertEquals(GridScrollAnchor(), stateHolder.scrollAnchor)
+        }
+
+    @Test
+    fun theCachedSnapshotCarriesNoCoordinates() {
+        val json =
+            com.pynapli.shared.network.PynapliJson.encodeToString(
+                kotlinx.serialization.builtins.ListSerializer(GridProfileCardUi.serializer()),
+                listOf(card("a").copy(distanceMeters = 1_000, linkedPartner = GridLinkedPartnerUi("p", "Partner", "https://x"))),
+            )
+        listOf("lat", "lon", "lng", "geom", "coordinate").forEach { key ->
+            assertFalse(json.contains(key, ignoreCase = true), "snapshot must not hold $key: $json")
+        }
+    }
+}
+
 private class FakeGridSnapshotStore(
     private val initial: List<GridProfileCardUi> = emptyList(),
 ) : GridSnapshotStore {
@@ -800,6 +862,13 @@ private class FakeGridSnapshotStore(
 
     override suspend fun save(cards: List<GridProfileCardUi>) {
         saved += cards
+    }
+
+    var cleared = 0
+        private set
+
+    override suspend fun clear() {
+        cleared += 1
     }
 }
 

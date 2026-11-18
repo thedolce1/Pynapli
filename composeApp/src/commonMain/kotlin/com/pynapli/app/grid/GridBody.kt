@@ -2,6 +2,7 @@ package com.pynapli.app.grid
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,14 +23,17 @@ import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.SearchOff
 import com.pynapli.app.location.LocationUiState
 
-private enum class GridPhase { Loading, LocationRequired, Error, EmptyFiltered, Content }
+private enum class GridPhase { CheckingCache, Loading, LocationRequired, Error, EmptyFiltered, Empty, Content }
 
 private fun gridPhase(state: GridUiState): GridPhase =
     when {
+        !state.cacheChecked && state.cards.isEmpty() -> GridPhase.CheckingCache
         state.isRefreshing && state.cards.isEmpty() -> GridPhase.Loading
         state.errorCode == "LOCATION_REQUIRED" && state.cards.isEmpty() -> GridPhase.LocationRequired
         state.errorMessage != null && state.cards.isEmpty() -> GridPhase.Error
         state.cards.isEmpty() && state.filters.isAnyActive -> GridPhase.EmptyFiltered
+        // Nobody at all, even after the server widened to the maximum radius: say so, never a blank grid.
+        state.cards.isEmpty() -> GridPhase.Empty
         else -> GridPhase.Content
     }
 
@@ -56,6 +60,10 @@ internal fun GridBody(
         modifier = modifier,
     ) { phase ->
         when (phase) {
+            // A frame or two while the cold-start cache is read: nothing, so cached cards (the
+            // usual case) appear without a skeleton flashing first.
+            GridPhase.CheckingCache -> Box(modifier = Modifier.fillMaxSize())
+
             GridPhase.Loading -> {
                 GridLoadingSkeleton(modifier = Modifier.fillMaxSize())
             }
@@ -114,6 +122,17 @@ internal fun GridBody(
                 )
             }
 
+            GridPhase.Empty -> {
+                PynapliEmptyState(
+                    icon = Icons.Filled.SearchOff,
+                    title = "No one nearby right now.",
+                    subtitle = "New people join all the time. Pull down or tap Refresh to look again.",
+                    actionLabel = "Refresh",
+                    onAction = onRetry,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
             GridPhase.Content -> {
                 ProfileGrid(
                     cards = state.cards,
@@ -123,6 +142,7 @@ internal fun GridBody(
                     onLoadMore = onLoadMore,
                     canLoadMore = state.nextCursor != null,
                     isLoadingMore = state.isLoadingMore,
+                    loadMoreFailed = state.errorMessage != null,
                     modifier = Modifier,
                 )
             }

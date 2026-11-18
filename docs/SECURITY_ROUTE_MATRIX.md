@@ -19,6 +19,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `ActivityStreamRoutes.kt` | User-authenticated | SSE stream authenticates bearer token before subscription. |
 | `AuthRoutes.kt` | Public/auth mixed | Signup, login, refresh are public but rate-limited by hashed anonymous subject; login counts failed attempts only, per account + trusted client IP (no per-email lockout); logout requires bearer token. |
 | `GridRoutes.kt` | User-authenticated | Grid query is token-derived and rate-limited. |
+| `FavoriteRoutes.kt` | User-authenticated | Favorites are token-derived and private to the owner; add/remove are idempotent, rate-limited and capped; the list applies Grid visibility, block and hide rules on every read. |
 | `SavedGridFilterRoutes.kt` | User-authenticated | Saved filters are owner-scoped. |
 | `LocationRoutes.kt` | User-authenticated | Current location updates only affect the token-derived user. |
 | `TravelLocationRoutes.kt` | User-authenticated | Travel mode is token-derived and tier-gated. |

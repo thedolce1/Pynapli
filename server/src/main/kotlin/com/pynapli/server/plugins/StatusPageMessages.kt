@@ -93,6 +93,8 @@ internal fun userSafeMessage(code: String): String =
         "AGE_VERIFICATION_REQUIRED" -> "Age verification is required for this feature."
         "INVALID_GRID_FILTER" -> "Grid filters are not valid."
         "INVALID_GRID_CURSOR" -> "Grid position is no longer valid."
+        "FAVORITES_LIMIT_REACHED" -> "You've reached the Favorites limit. Remove someone to add more."
+        "INVALID_FAVORITE" -> "You can't favorite your own profile."
         "INVALID_SAVED_FILTER_NAME" -> "Saved filter name is not valid."
         "INVALID_SAVED_FILTER_PAYLOAD" -> "Saved filter contains a value that is no longer supported."
         "INVALID_SAVED_FILTER_ID" -> "Saved filter could not be found."
