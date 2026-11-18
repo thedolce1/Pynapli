@@ -35,6 +35,23 @@ internal fun UpdateDiscoverySettingsRequestDto.toDiscoverySettingsUpdate(): Disc
     )
 }
 
+/**
+ * Fills the fields a request left out with what is stored, so a write that names one field cannot
+ * wipe the others. A name and a birthdate can be changed but never cleared; for the optional fields
+ * an empty string is the explicit clear. A detail is carried over only while its key is unchanged.
+ */
+internal fun UpdateProfileRequestDto.keepingUnsent(current: ProfileRecord): UpdateProfileRequestDto =
+    copy(
+        displayName = displayName?.takeIf { it.isNotBlank() } ?: current.displayName,
+        birthdate = birthdate?.takeIf { it.isNotBlank() } ?: current.birthdate?.toString(),
+        gender = gender ?: current.gender,
+        genderDetail = genderDetail ?: current.genderDetail.takeIf { gender == null },
+        orientation = orientation ?: current.orientation,
+        orientationDetail = orientationDetail ?: current.orientationDetail.takeIf { orientation == null },
+        relationshipContext = relationshipContext ?: current.relationshipContext,
+        discoveryStyle = discoveryStyle ?: current.discoveryStyle,
+    )
+
 internal fun UpdateProfileRequestDto.toProfileUpdate(clock: Clock): ProfileUpdate {
     val trimmedName = displayName?.trim()?.takeIf { it.isNotEmpty() }
     if (trimmedName != null && trimmedName.length !in 2..32) {

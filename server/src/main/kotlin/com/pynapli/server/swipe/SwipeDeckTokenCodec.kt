@@ -240,6 +240,7 @@ class SwipeDeckTokenCodec(
             radiusMeters: Int,
             limit: Int,
             filters: DiscoveryFilters,
+            dealbreakers: Set<String> = emptySet(),
         ): String {
             val normalized =
                 buildString {
@@ -277,6 +278,11 @@ class SwipeDeckTokenCodec(
                     append("|orientations=")
                     append(filters.orientations.sorted().joinToString(","))
                     append("|verifiedPreferred=").append(filters.verifiedPreferred)
+                    // Locks decide which filters a thin deck may relax, so they shape later pages
+                    // too. Appended only when set, so decks dealt without locks keep their hash.
+                    if (dealbreakers.isNotEmpty()) {
+                        append("|dealbreakers=").append(dealbreakers.sorted().joinToString(","))
+                    }
                 }
             return sha256Base64Url(normalized)
         }

@@ -517,6 +517,52 @@ class ProfileServiceTest {
         }
 
     @Test
+    fun aPartialWriteKeepsTheCoreFieldsItDoesNotName() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId), clock)
+            val full =
+                service.updateProfile(
+                    userId,
+                    UpdateProfileRequestDto(
+                        displayName = "Alex",
+                        birthdate = "1990-04-12",
+                        gender = "self_describe",
+                        genderDetail = "Genderfluid",
+                        orientation = "bisexual",
+                        relationshipContext = "couple",
+                    ),
+                )
+
+            // Naming one field leaves the rest, and the completeness score, as stored.
+            val renamed = service.updateProfile(userId, UpdateProfileRequestDto(displayName = "Alexis"))
+            assertEquals("Alexis", renamed.profile.displayName)
+            assertEquals("1990-04-12", renamed.profile.birthdate)
+            assertEquals("self_describe", renamed.profile.gender)
+            assertEquals("Genderfluid", renamed.profile.genderDetail)
+            assertEquals("bisexual", renamed.profile.orientation)
+            assertEquals("couple", renamed.profile.relationshipContext)
+            assertEquals(full.profile.profileCompletenessScore, renamed.profile.profileCompletenessScore)
+
+            // An empty string is the explicit clear; a name and a birthdate cannot be cleared.
+            val cleared =
+                service.updateProfile(
+                    userId,
+                    UpdateProfileRequestDto(displayName = " ", birthdate = "", orientation = "", relationshipContext = ""),
+                )
+            assertEquals("Alexis", cleared.profile.displayName)
+            assertEquals("1990-04-12", cleared.profile.birthdate)
+            assertEquals(null, cleared.profile.orientation)
+            assertEquals(null, cleared.profile.relationshipContext)
+            assertEquals("self_describe", cleared.profile.gender)
+
+            // Changing the key drops the detail that belonged to the old one.
+            val regendered = service.updateProfile(userId, UpdateProfileRequestDto(gender = "woman"))
+            assertEquals("woman", regendered.profile.gender)
+            assertEquals(null, regendered.profile.genderDetail)
+        }
+
+    @Test
     fun omittedBioAndTagsLeaveStoredValuesUnchangedWhileEmptyClears() =
         runBlocking {
             val userId = UUID.randomUUID()

@@ -50,6 +50,7 @@ internal class SwipeDeckQueryAction(
                 radiusMeters = radiusMeters,
                 limit = limit,
                 filters = filters,
+                dealbreakers = deckRequest.dealbreakers,
             )
         val cursor =
             request.cursor?.trim()?.takeIf { it.isNotEmpty() }?.let { token ->

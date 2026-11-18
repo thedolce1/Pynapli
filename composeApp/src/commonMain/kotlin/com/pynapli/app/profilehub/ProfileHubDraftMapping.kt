@@ -31,11 +31,12 @@ internal fun ProfileEditDraft.toRequest(): UpdateProfileRequestDto =
     UpdateProfileRequestDto(
         displayName = displayName.trim().emptyToNull(),
         birthdate = birthdate.trim().emptyToNull(),
-        gender = gender.trim().emptyToNull(),
-        genderDetail = genderDetail.trim().emptyToNull(),
-        orientation = orientation.trim().emptyToNull(),
-        orientationDetail = orientationDetail.trim().emptyToNull(),
-        relationshipContext = relationshipContext.trim().emptyToNull(),
+        // Sent even when empty: the editor holds the whole profile, and "" is how a field is cleared.
+        gender = gender.trim(),
+        genderDetail = genderDetail.trim(),
+        orientation = orientation.trim(),
+        orientationDetail = orientationDetail.trim(),
+        relationshipContext = relationshipContext.trim(),
         discoveryStyle = discoveryStyle.trim().lowercase().emptyToNull(),
         // Always sent: an empty bio/neighborhood/tag selection clears the stored value (the
         // request's null-means-unchanged semantics are for older callers).

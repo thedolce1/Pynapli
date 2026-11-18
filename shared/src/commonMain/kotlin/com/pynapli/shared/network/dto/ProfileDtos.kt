@@ -126,9 +126,8 @@ data class UpdateProfileRequestDto(
     val orientationDetail: String? = null,
     val relationshipContext: String? = null,
     val discoveryStyle: String? = null,
-    // Partial semantics for the fields below (unlike the overwrite fields above,
-    // which predate them): null/omitted leaves the stored value unchanged; an
-    // empty string / empty list clears it.
+    // Every field is partial: null/omitted leaves the stored value unchanged; an empty
+    // string / empty list clears it. A name and a birthdate cannot be cleared.
     val bio: String? = null,
     val neighborhood: String? = null,
     val lifestyleTags: List<String>? = null,

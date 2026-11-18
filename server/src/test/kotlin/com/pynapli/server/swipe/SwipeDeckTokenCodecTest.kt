@@ -73,6 +73,24 @@ class SwipeDeckTokenCodecTest {
     }
 
     @Test
+    fun deckScopeHashChangesWithTheLockedFiltersAndIgnoresTheirOrder() {
+        val filters = DiscoveryFilters(minimumAge = 25)
+
+        fun hash(dealbreakers: Set<String>) =
+            SwipeDeckTokenCodec.deckScopeHash(
+                viewer,
+                radiusMeters = 50_000,
+                limit = 30,
+                filters = filters,
+                dealbreakers = dealbreakers,
+            )
+
+        assertNotEquals(hash(emptySet()), hash(setOf("age")))
+        assertNotEquals(hash(setOf("age")), hash(setOf("age", "distance")))
+        assertEquals(hash(linkedSetOf("age", "distance")), hash(linkedSetOf("distance", "age")))
+    }
+
+    @Test
     fun rejectsDeckSessionReplayedByAnotherViewer() {
         val (session, card) = issuedSessionWithCard()
         val error =
