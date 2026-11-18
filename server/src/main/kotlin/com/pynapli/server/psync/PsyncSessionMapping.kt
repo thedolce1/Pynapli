@@ -48,7 +48,7 @@ internal fun SwipeDeckRequestDto.toPsyncFiltersSummary(): String {
             if (verifiedOnly) add("verified only")
             if (discoveryStyles.isNotEmpty()) add(discoveryStyles.joinToString("/"))
             if (intents.isNotEmpty()) add(intents.joinToString("/"))
-            val tagCount = lifestyleTags.size + logisticsTags.size
+            val tagCount = lifestyleTags.size + logisticsTags.size + boundaryItems.size
             if (tagCount > 0) add("$tagCount tags")
         }
     return parts.joinToString(" · ")

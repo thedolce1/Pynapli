@@ -12,7 +12,12 @@ data class DiscoveryFilters(
     val facePhotoVerifiedOnly: Boolean = false,
     val ageVerifiedOnly: Boolean = false,
     val discoveryStyles: Set<String> = emptySet(),
+    // Lifestyle filter tokens (DiscoveryTagTaxonomies.lifestyleFilterTags): swap, room, experience
+    // level and other tags. "Any of" within a group, "all of" across groups (LifestyleFilterSql).
     val lifestyleTags: Set<String> = emptySet(),
+    // Boundary items (DiscoveryTagTaxonomies.boundaryItems): hide profiles that marked any of them
+    // "not for me". Free and not age-gated (consent wording, low sensitivity).
+    val boundaryItems: Set<String> = emptySet(),
     val logisticsTags: Set<String> = emptySet(),
     val tonightAvailableOnly: Boolean = false,
     // Grid-only Presence filter (FILTERS_SPEC "Active today"): only surface profiles whose owner has
@@ -56,6 +61,7 @@ data class DiscoveryFilters(
                 ageVerifiedOnly ||
                 discoveryStyles.isNotEmpty() ||
                 lifestyleTags.isNotEmpty() ||
+                boundaryItems.isNotEmpty() ||
                 logisticsTags.isNotEmpty() ||
                 tonightAvailableOnly ||
                 activeTodayOnly ||
@@ -96,6 +102,7 @@ fun discoveryFiltersFrom(
     genders: List<String> = emptyList(),
     orientations: List<String> = emptyList(),
     verifiedPreferred: Boolean = false,
+    boundaryItems: List<String> = emptyList(),
     errorFactory: (String) -> RuntimeException,
 ): DiscoveryFilters {
     val min =
@@ -138,6 +145,15 @@ fun discoveryFiltersFrom(
             .filter { it.isNotEmpty() }
             .onEach { value ->
                 if (value !in ALLOWED_LIFESTYLE_TAGS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+            }.toSet()
+
+    if (boundaryItems.size > ALLOWED_BOUNDARY_ITEMS.size) throw errorFactory("INVALID_DISCOVERY_FILTER")
+    val boundaries =
+        boundaryItems
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .onEach { value ->
+                if (value !in ALLOWED_BOUNDARY_ITEMS) throw errorFactory("INVALID_DISCOVERY_FILTER")
             }.toSet()
 
     if (logisticsTags.size > MAX_LOGISTICS_TAG_FILTERS) {
@@ -190,6 +206,7 @@ fun discoveryFiltersFrom(
         ageVerifiedOnly = ageVerifiedOnly,
         discoveryStyles = styles,
         lifestyleTags = tags,
+        boundaryItems = boundaries,
         logisticsTags = logistics,
         tonightAvailableOnly = tonightAvailableOnly,
         activeTodayOnly = activeTodayOnly,
@@ -213,7 +230,10 @@ private val ALLOWED_DISCOVERY_STYLES = DiscoveryTagTaxonomies.discoveryStyles
 
 private const val MAX_LIFESTYLE_TAG_FILTERS = 12
 
-private val ALLOWED_LIFESTYLE_TAGS = DiscoveryTagTaxonomies.lifestyleTags
+// Includes the experience levels, so saved filters holding new_to_lifestyle / experienced keep working.
+private val ALLOWED_LIFESTYLE_TAGS = DiscoveryTagTaxonomies.lifestyleFilterTags
+
+private val ALLOWED_BOUNDARY_ITEMS = DiscoveryTagTaxonomies.boundaryItems.toSet()
 
 private const val MAX_LOGISTICS_TAG_FILTERS = 8
 

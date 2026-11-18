@@ -17,4 +17,21 @@ class GridRankCacheKeyTest {
             DiscoveryFilters(withPhotosOnly = true).gridRankCacheKey(),
         )
     }
+
+    @Test
+    fun experienceLevelAndBoundariesChangeTheRankCacheKey() {
+        assertNotEquals(
+            DiscoveryFilters().gridRankCacheKey(),
+            DiscoveryFilters(lifestyleTags = setOf("some_experience")).gridRankCacheKey(),
+        )
+        assertNotEquals(
+            DiscoveryFilters().gridRankCacheKey(),
+            DiscoveryFilters(boundaryItems = setOf("photos")).gridRankCacheKey(),
+        )
+        // Lifestyle tokens and boundary items must not collide in the key.
+        assertNotEquals(
+            DiscoveryFilters(lifestyleTags = setOf("enm")).gridRankCacheKey(),
+            DiscoveryFilters(boundaryItems = setOf("groups")).gridRankCacheKey(),
+        )
+    }
 }

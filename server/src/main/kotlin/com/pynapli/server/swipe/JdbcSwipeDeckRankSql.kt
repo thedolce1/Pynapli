@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
@@ -123,7 +124,8 @@ $candidateSource
               AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
               AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
               AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
-              AND (cardinality(?::text[]) = 0 OR (p.lifestyle_tags IS NOT NULL AND p.lifestyle_tags && ?::text[]))
+              -- Lifestyle groups + boundaries (LifestyleFilterSql): same predicate on every surface.
+              ${LifestyleFilterSql.predicates("p")}
               AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
               -- Structured identity filters: hard match against the stored gender / orientation key.
               AND (cardinality(?::text[]) = 0 OR p.gender = ANY(?::text[]))
@@ -250,7 +252,6 @@ $candidateSource
         val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
         val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
         val intents = createArrayOf("text", filters.intents.toTypedArray())
-        val lifestyleTags = createArrayOf("text", filters.lifestyleTags.toTypedArray())
         val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
         val genders = createArrayOf("text", filters.genders.toTypedArray())
         val orientations = createArrayOf("text", filters.orientations.toTypedArray())
@@ -283,8 +284,7 @@ $candidateSource
         statement.setArray(index++, styles)
         statement.setArray(index++, intents)
         statement.setArray(index++, intents)
-        statement.setArray(index++, lifestyleTags)
-        statement.setArray(index++, lifestyleTags)
+        index = LifestyleFilterSql.bind(statement, this, index, filters.lifestyleTags, filters.boundaryItems)
         statement.setArray(index++, logisticsTags)
         statement.setArray(index++, logisticsTags)
         statement.setArray(index++, genders)

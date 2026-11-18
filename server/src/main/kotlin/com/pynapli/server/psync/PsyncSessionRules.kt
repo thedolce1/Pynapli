@@ -72,6 +72,7 @@ internal fun requirePsyncFiltersAllowed(
             ageVerifiedOnly = filters.ageVerifiedOnly,
             discoveryStyles = filters.discoveryStyles,
             lifestyleTags = filters.lifestyleTags,
+            boundaryItems = filters.boundaryItems,
             logisticsTags = filters.logisticsTags,
             intents = filters.intents,
             verifiedPreferred = filters.verifiedPreferred,

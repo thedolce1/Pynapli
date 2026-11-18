@@ -31,7 +31,15 @@ object SwipeDealbreakerKey {
     const val INTENTS = "intents"
     const val LINKED_ONLY = "linkedOnly"
 
-    val ALL: Set<String> = setOf(AGE, DISTANCE, VERIFIED, DISCOVERY_STYLES, INTENTS, LINKED_ONLY)
+    // Swinger dealbreakers: keep the swap / room / experience group of the lifestyle filter, or
+    // the boundary filter, through deck relaxation.
+    const val SWAP = "swap"
+    const val ROOM = "room"
+    const val EXPERIENCE = "experience"
+    const val BOUNDARIES = "boundaries"
+
+    val ALL: Set<String> =
+        setOf(AGE, DISTANCE, VERIFIED, DISCOVERY_STYLES, INTENTS, LINKED_ONLY, SWAP, ROOM, EXPERIENCE, BOUNDARIES)
 }
 
 @Serializable
@@ -49,6 +57,8 @@ data class SwipeDeckRequestDto(
     val discoveryStyles: List<String> = emptyList(),
     val intents: List<String> = emptyList(),
     val lifestyleTags: List<String> = emptyList(),
+    // Boundary items (DiscoveryTagTaxonomies.boundaryItems): hide profiles that said "not for me".
+    val boundaryItems: List<String> = emptyList(),
     val logisticsTags: List<String> = emptyList(),
     val genders: List<String> = emptyList(),
     val orientations: List<String> = emptyList(),

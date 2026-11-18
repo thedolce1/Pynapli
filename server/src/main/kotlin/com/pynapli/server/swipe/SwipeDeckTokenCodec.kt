@@ -259,6 +259,8 @@ class SwipeDeckTokenCodec(
                     append(filters.discoveryStyles.sorted().joinToString(","))
                     append("|lifestyleTags=")
                     append(filters.lifestyleTags.sorted().joinToString(","))
+                    append("|boundaryItems=")
+                    append(filters.boundaryItems.sorted().joinToString(","))
                     append("|logisticsTags=")
                     append(filters.logisticsTags.sorted().joinToString(","))
                     append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)

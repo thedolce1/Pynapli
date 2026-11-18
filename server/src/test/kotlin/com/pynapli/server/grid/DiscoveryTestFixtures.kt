@@ -290,6 +290,33 @@ internal fun DataSource.setProfileLifestyleTags(
     tags: List<String>,
 ) = setProfileTagArray(userId, column = "lifestyle_tags", tags = tags)
 
+internal fun DataSource.setProfileExperienceLevel(
+    userId: UUID,
+    level: String?,
+) {
+    connection.use { connection ->
+        connection.prepareStatement("UPDATE profiles SET experience_level = ? WHERE user_id = ?").use { statement ->
+            statement.setString(1, level)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
+
+internal fun DataSource.setProfileBoundaries(
+    userId: UUID,
+    tokens: List<String>,
+) {
+    connection.use { connection ->
+        val array = connection.createArrayOf("text", tokens.toTypedArray())
+        connection.prepareStatement("UPDATE profiles SET boundaries = ? WHERE user_id = ?").use { statement ->
+            statement.setArray(1, array)
+            statement.setObject(2, userId)
+            statement.executeUpdate()
+        }
+    }
+}
+
 internal fun DataSource.setProfileLogisticsTags(
     userId: UUID,
     tags: List<String>,
