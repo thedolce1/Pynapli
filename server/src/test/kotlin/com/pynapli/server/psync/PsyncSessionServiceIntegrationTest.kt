@@ -557,7 +557,8 @@ class PsyncSessionServiceIntegrationTest :
                 val drainer =
                     com.pynapli.server.swipe.MatchSideEffectDrainer(
                         dataSource,
-                        com.pynapli.server.swipe.MatchSideEffectDelivery(activity, null, messaging.matchConversationOpener),
+                        com.pynapli.server.swipe
+                            .MatchSideEffectDelivery(activity, null, messaging.matchConversationOpener),
                         java.time.Clock.offset(java.time.Clock.systemUTC(), java.time.Duration.ofMinutes(5)),
                     )
                 drainer.drainOnce()

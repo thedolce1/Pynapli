@@ -42,6 +42,7 @@ class SwipeDeckBoostPlacementTest {
 
         assertEquals(listOf("b1", "r1", "r2", "r3", "b2", "r4"), page.names())
     }
+
     @Test
     fun fillsWithBoostedPeopleOnceNoOneElseIsLeft() {
         val rows = listOf(row("r1"), row("b1", boosted = true), row("b2", boosted = true), row("b3", boosted = true))
