@@ -163,6 +163,7 @@ internal fun FavoritesBody(
                             onLoadMore = onLoadMore,
                             canLoadMore = state.nextCursor != null,
                             isLoadingMore = state.isLoadingMore,
+                            loadMoreFailed = state.errorMessage != null,
                         )
                 }
             }
