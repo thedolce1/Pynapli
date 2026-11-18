@@ -16,7 +16,7 @@
 #   .\scripts\android-qa-matrix.ps1 -Avd Pynapli_API34 -SkipBuild
 #
 # Prereqs: the Ktor server reachable at -BaseUrl, Docker running (for the Redis flush between
-# scripts), and the AVDs themselves — see docs/ANDROID_PRODUCTION_GAMEPLAN.md "API-level coverage".
+# scripts), and the AVDs themselves — see docs/archive/ANDROID_PRODUCTION_GAMEPLAN.md "API-level coverage".
 param(
     [string[]]$Avd = @("Pynapli_Phone", "Pynapli_API34"),
     [string[]]$Scripts = @("android-e2e-qa.ps1"),
@@ -135,7 +135,7 @@ function Start-AvdIfNeeded {
 
     $known = & $emulator -list-avds
     if ($known -notcontains $Name) {
-        throw "AVD '$Name' does not exist. Known AVDs: $($known -join ', '). See docs/ANDROID_PRODUCTION_GAMEPLAN.md."
+        throw "AVD '$Name' does not exist. Known AVDs: $($known -join ', '). See docs/archive/ANDROID_PRODUCTION_GAMEPLAN.md."
     }
 
     Write-Host "  booting $Name ..."
