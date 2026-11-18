@@ -19,10 +19,10 @@ import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.profileLinkActionFor
-import com.pynapli.app.profile.LikeBackUi
 import com.pynapli.app.match.MatchCelebrationScreen
 import com.pynapli.app.match.MatchCelebrationStateHolder
 import com.pynapli.app.match.MatchCelebrationUi
+import com.pynapli.app.profile.LikeBackUi
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
