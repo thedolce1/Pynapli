@@ -78,9 +78,33 @@ class PlayingTonightStateHolder(
 
     /** Re-query the feed with new orientation/lifestyle/boundary filters. */
     suspend fun setFeedFilters(filters: TonightFeedFilters) {
-        if (_state.value.feedFilters == filters) return
-        _state.update { it.copy(feedFilters = filters) }
-        load()
+        val previous = _state.value.feedFilters
+        if (previous == filters) return
+        _state.update { it.copy(feedFilters = filters, isLoading = true, errorMessage = null) }
+        val intent = _state.value.intentFilter?.serverValue
+        when (val result = repository.loadFeed(radiusMeters, intent, filters)) {
+            is AppResult.Success ->
+                _state.update { it.copy(isLoading = false, feedItems = result.value) }
+            is AppResult.Failure -> {
+                // Lifestyle filters are gated like the Grid's (age verification, then the advanced-
+                // filter plan). Keep the rest of the filters but drop the gated part, so later
+                // refreshes don't keep failing, and say why.
+                val gated = result.error.code in TONIGHT_GATED_FILTER_CODES
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        feedFilters = if (gated) filters.copy(lifestyleTags = emptySet()) else previous,
+                        errorMessage =
+                            when (result.error.code) {
+                                "AGE_VERIFICATION_REQUIRED" -> "Verify your age to use lifestyle filters."
+                                "ENTITLEMENT_REQUIRED" -> "Lifestyle filters are part of a paid plan."
+                                else -> result.error.message
+                            },
+                    )
+                }
+                if (gated) refreshSilently()
+            }
+        }
     }
 
     suspend fun refresh() = load()
@@ -246,6 +270,8 @@ interface TonightRepository {
 
     suspend fun endSession(sessionId: String): AppResult<TonightSessionUi>
 }
+
+private val TONIGHT_GATED_FILTER_CODES = setOf("AGE_VERIFICATION_REQUIRED", "ENTITLEMENT_REQUIRED")
 
 class ApiTonightRepository(
     private val apiClient: PynapliApiClient,

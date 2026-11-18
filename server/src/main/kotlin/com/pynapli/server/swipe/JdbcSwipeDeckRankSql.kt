@@ -77,7 +77,7 @@ $candidateSource
                    COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                    p.display_age,
                    p.bio,
-                   COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
+                   array_remove(ARRAY[p.experience_level], NULL) || COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
                    p.verified_at IS NOT NULL AS verified,
                    ds.show_distance,
                    -- Cell-to-cell distance from the target's EFFECTIVE location: never a raw GPS

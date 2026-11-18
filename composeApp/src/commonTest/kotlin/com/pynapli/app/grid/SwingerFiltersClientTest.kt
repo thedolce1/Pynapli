@@ -68,7 +68,7 @@ class SwingerFiltersClientTest {
             listOf(
                 "Experience" to listOf("Some experience"),
                 "Swap" to listOf("Soft swap"),
-                "Room" to listOf("Same room"),
+                "Room" to listOf("Same-room"),
                 "Lifestyle" to listOf("ENM"),
                 "Ask first" to listOf("Meeting the same day"),
                 "Not for me" to listOf("Photos or video", "Group settings"),

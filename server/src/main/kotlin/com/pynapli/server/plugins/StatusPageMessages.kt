@@ -101,6 +101,7 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_TONIGHT_DURATION" -> "Tonight availability must be between 1 and 24 hours."
         "INVALID_TONIGHT_MODE" -> "Choose a valid Playing Tonight mode."
         "INVALID_TONIGHT_INTENT" -> "That availability doesn't match the selected mode."
+        "INVALID_TONIGHT_FILTER" -> "Those Playing Tonight filters aren't valid."
         "INVALID_TONIGHT_HOST_MODE" -> "Choose a valid hosting option."
         "TONIGHT_NOTE_TOO_LONG" -> "Your note can be at most 100 characters."
         "TONIGHT_INVALID_PHOTO" -> "That photo can't be used for this session."

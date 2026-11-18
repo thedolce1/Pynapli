@@ -64,6 +64,18 @@ data class TonightFeedFiltersDto(
 )
 
 /**
+ * Body of `POST /v1/tonight/feed/query`: the feed with filters. Filters travel in a body, never the
+ * query string, so orientation / lifestyle / boundary values stay out of URLs and access logs.
+ */
+@Serializable
+data class TonightFeedQueryRequestDto(
+    val radiusMeters: Int = 50_000,
+    val intent: String? = null,
+    val limit: Int = 100,
+    val filters: TonightFeedFiltersDto = TonightFeedFiltersDto(),
+)
+
+/**
  * Public Playing Tonight feed: live sessions near the viewer that opted into
  * discovery. One row per session, anchored on the session owner with the linked
  * partner surfaced as a mini-avatar (PLAYING_TONIGHT_SPEC: "Session row must still

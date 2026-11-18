@@ -26,6 +26,26 @@ private class FakeTonightRepository(
 
     override suspend fun loadCurrentSession(): AppResult<TonightSessionUi?> = AppResult.Success(current)
 
+    // Filtered feed: records what was sent; a set gate code fails any request with lifestyle filters.
+    var lastFilters: TonightFeedFilters? = null
+    var lifestyleGateCode: String? = null
+
+    override suspend fun loadFeed(
+        radiusMeters: Int,
+        intent: String?,
+        filters: TonightFeedFilters,
+    ): AppResult<List<TonightFeedItemUi>> {
+        lastFilters = filters
+        val gate = lifestyleGateCode
+        if (gate != null && filters.lifestyleTags.isNotEmpty()) {
+            return AppResult.Failure(
+                com.pynapli.shared.core.result
+                    .AppError(gate, "Forbidden"),
+            )
+        }
+        return loadFeed(radiusMeters, intent)
+    }
+
     var photoOptions: List<TonightPhotoOptionUi> = emptyList()
 
     override suspend fun loadProfilePhotos(): AppResult<List<TonightPhotoOptionUi>> = AppResult.Success(photoOptions)
@@ -275,5 +295,32 @@ class PlayingTonightStateHolderTest {
                     ?.contains("Upgrade", ignoreCase = true) == true,
             )
             assertNull(holder.state.value.currentSession)
+        }
+
+    @Test
+    fun feedFiltersAreSentAndAGatedLifestyleFilterIsDroppedNotRetriedForever() =
+        runTest {
+            val repository = FakeTonightRepository(feed = listOf(item("a", "solo")), current = null)
+            val holder = PlayingTonightStateHolder(repository)
+            holder.load()
+
+            val boundaries = TonightFeedFilters(boundaryItems = setOf(com.pynapli.app.grid.Boundary.Photos))
+            holder.setFeedFilters(boundaries)
+            assertEquals(boundaries, repository.lastFilters)
+            assertEquals(boundaries, holder.state.value.feedFilters)
+
+            // Age-verified but no advanced-filter plan: the server answers 403 ENTITLEMENT_REQUIRED.
+            repository.lifestyleGateCode = "ENTITLEMENT_REQUIRED"
+            holder.setFeedFilters(boundaries.copy(lifestyleTags = setOf(com.pynapli.app.grid.LifestyleTag.SoftSwap)))
+
+            // The gated lifestyle part is dropped (boundaries kept), the reason is shown, and the
+            // next refresh succeeds instead of failing on the same filter again.
+            assertEquals(boundaries, holder.state.value.feedFilters)
+            assertTrue(
+                holder.state.value.errorMessage
+                    ?.contains("paid plan") == true,
+            )
+            holder.refreshSilently()
+            assertEquals(boundaries, repository.lastFilters)
         }
 }

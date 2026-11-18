@@ -245,9 +245,9 @@ enum class LifestyleTag(
 ) {
     SoftSwap("soft_swap", "Soft swap", LifestyleGroup.Swap),
     FullSwap("full_swap", "Full swap", LifestyleGroup.Swap),
-    SameRoom("same_room", "Same room", LifestyleGroup.Room),
-    SeparateRoom("separate_room", "Separate room", LifestyleGroup.Room),
-    NewToLifestyle("new_to_lifestyle", "New to the lifestyle", LifestyleGroup.Experience),
+    SameRoom("same_room", "Same-room", LifestyleGroup.Room),
+    SeparateRoom("separate_room", "Separate-room", LifestyleGroup.Room),
+    NewToLifestyle("new_to_lifestyle", "New to lifestyle", LifestyleGroup.Experience),
     SomeExperience("some_experience", "Some experience", LifestyleGroup.Experience),
     Experienced("experienced", "Experienced", LifestyleGroup.Experience),
     Enm("enm", "ENM", LifestyleGroup.Other),
