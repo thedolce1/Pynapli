@@ -3,6 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CurrentTonightSessionDto
 import com.pynapli.shared.network.dto.ProposeTonightSessionRequestDto
+import com.pynapli.shared.network.dto.TonightFeedFiltersDto
 import com.pynapli.shared.network.dto.TonightFeedResponseDto
 import com.pynapli.shared.network.dto.TonightSessionDto
 import io.ktor.client.request.get
@@ -17,9 +18,19 @@ internal class KtorTonightApi(
         radiusMeters: Int,
         intent: String?,
     ): AppResult<TonightFeedResponseDto> =
+        getTonightFeed(radiusMeters, intent, TonightFeedFiltersDto())
+
+    override suspend fun getTonightFeed(
+        radiusMeters: Int,
+        intent: String?,
+        filters: TonightFeedFiltersDto,
+    ): AppResult<TonightFeedResponseDto> =
         support.authGet("/v1/tonight/feed") {
             parameter("radiusMeters", radiusMeters)
             intent?.let { parameter("intent", it) }
+            filters.orientations.forEach { parameter("orientations", it) }
+            filters.lifestyleTags.forEach { parameter("lifestyleTags", it) }
+            filters.boundaryItems.forEach { parameter("boundaryItems", it) }
         }
 
     override suspend fun getCurrentTonightSession(): AppResult<CurrentTonightSessionDto> = support.authGet("/v1/me/tonight/session")

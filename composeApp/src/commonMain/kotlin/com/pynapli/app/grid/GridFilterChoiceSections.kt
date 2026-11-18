@@ -201,23 +201,71 @@ internal fun LifestyleSectionHeader(onOpenGlossary: () -> Unit) {
     }
 }
 
+/**
+ * Lifestyle filter, grouped the way the server matches it: any of the chips inside a group, all of
+ * the groups that have a selection (Soft swap + Same room means both).
+ */
 @Composable
 internal fun LifestyleSection(
     selected: Set<LifestyleTag>,
     onChange: (Set<LifestyleTag>) -> Unit,
+    groupHeader: @Composable (LifestyleGroup) -> Unit = { group -> FilterGroupLabel(group.label) },
+    chip: @Composable (label: String, active: Boolean, onClick: () -> Unit) -> Unit = { label, active, onClick ->
+        SheetToggleChip(label = label, active = active, onClick = onClick)
+    },
 ) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        LifestyleTag.entries.forEach { tag ->
-            val active = tag in selected
-            SheetToggleChip(label = tag.label, active = active) {
-                onChange(if (active) selected - tag else selected + tag)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LifestyleGroup.entries.forEach { group ->
+            groupHeader(group)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                LifestyleTag.inGroup(group).forEach { tag ->
+                    val active = tag in selected
+                    chip(tag.label, active) { onChange(if (active) selected - tag else selected + tag) }
+                }
             }
         }
     }
+}
+
+/** Boundaries filter: hides people who marked a chosen item "not for me". */
+@Composable
+internal fun BoundariesFilterSection(
+    selected: Set<Boundary>,
+    onChange: (Set<Boundary>) -> Unit,
+    chip: @Composable (label: String, active: Boolean, onClick: () -> Unit) -> Unit = { label, active, onClick ->
+        SheetToggleChip(label = label, active = active, onClick = onClick)
+    },
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Hide people who've said \"not for me\" to:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Boundary.entries.forEach { boundary ->
+                val active = boundary in selected
+                chip(boundary.label, active) { onChange(if (active) selected - boundary else selected + boundary) }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun FilterGroupLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

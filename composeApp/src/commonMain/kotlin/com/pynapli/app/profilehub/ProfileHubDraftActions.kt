@@ -26,6 +26,19 @@ internal class ProfileHubDraftActions(
 
     fun toggleLifestyleTag(value: String) = updateDraft { it.copy(lifestyleTags = it.lifestyleTags.toggled(value)) }
 
+    // One level per person: tapping the selected level clears it.
+    fun updateExperienceLevel(value: String) = updateDraft { it.copy(experienceLevel = if (it.experienceLevel == value) "" else value) }
+
+    // At most one stance per boundary item; tapping the selected stance clears the item.
+    fun updateBoundaryStance(
+        item: String,
+        stance: String,
+    ) = updateDraft { draft ->
+        val token = "$item:$stance"
+        val others = draft.boundaries.filterNot { it.substringBefore(':') == item }.toSet()
+        draft.copy(boundaries = if (token in draft.boundaries) others else others + token)
+    }
+
     fun toggleLogisticsTag(value: String) = updateDraft { it.copy(logisticsTags = it.logisticsTags.toggled(value)) }
 
     fun toggleIntent(value: String) = updateDraft { it.copy(intents = it.intents.toggled(value)) }

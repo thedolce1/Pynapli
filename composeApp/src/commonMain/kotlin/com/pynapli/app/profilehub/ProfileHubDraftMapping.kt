@@ -21,6 +21,8 @@ internal fun ProfileDto.toDraft(): ProfileEditDraft =
         relationshipContext = relationshipContext.orEmpty(),
         discoveryStyle = discoveryStyle.ifBlank { "both" },
         lifestyleTags = lifestyleTags.toSet(),
+        experienceLevel = experienceLevel.orEmpty(),
+        boundaries = boundaries.toSet(),
         logisticsTags = logisticsTags.toSet(),
         intents = intents.toSet(),
     )
@@ -40,6 +42,9 @@ internal fun ProfileEditDraft.toRequest(): UpdateProfileRequestDto =
         bio = bio.trim(),
         neighborhood = neighborhood.trim(),
         lifestyleTags = lifestyleTags.toList(),
+        // "" clears the level; always sent like the tag lists.
+        experienceLevel = experienceLevel,
+        boundaries = boundaries.toList(),
         logisticsTags = logisticsTags.toList(),
         intents = intents.toList(),
     )

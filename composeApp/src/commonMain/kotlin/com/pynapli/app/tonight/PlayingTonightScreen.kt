@@ -91,11 +91,14 @@ fun PlayingTonightScreen(
     onOpenProfile: (String) -> Unit,
     onMessage: (String) -> Unit,
     viewerUserId: String? = null,
+    // Lifestyle filters need age verification (server-enforced, mirrored here like the Grid sheet).
+    lifestyleFiltersAllowed: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
     var showStartSheet by remember { mutableStateOf(false) }
+    var showFiltersSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { stateHolder.load() }
     // The feed is live (people start and end sessions all evening) and has no socket: refetch it
@@ -143,6 +146,7 @@ fun PlayingTonightScreen(
         TonightFeed(
             state = state,
             onIntentSelected = { scope.launch { stateHolder.setIntentFilter(it) } },
+            onOpenFilters = { showFiltersSheet = true },
             onOpenProfile = onOpenProfile,
             onMessage = onMessage,
             modifier = feedModifier,
@@ -157,6 +161,18 @@ fun PlayingTonightScreen(
         CompactTonightLayout(state.feedItems, floater, feed, error, modifier)
     } else {
         WideTonightLayout(state.feedItems, floater, feed, error, modifier)
+    }
+
+    if (showFiltersSheet) {
+        TonightFiltersSheet(
+            initial = state.feedFilters,
+            lifestyleFiltersAllowed = lifestyleFiltersAllowed,
+            onDismiss = { showFiltersSheet = false },
+            onApply = { filters ->
+                showFiltersSheet = false
+                scope.launch { stateHolder.setFeedFilters(filters) }
+            },
+        )
     }
 
     if (showStartSheet) {
@@ -624,6 +640,7 @@ private fun TonightSheet(
 private fun TonightFeed(
     state: PlayingTonightUiState,
     onIntentSelected: (TonightIntent?) -> Unit,
+    onOpenFilters: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onMessage: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -648,7 +665,12 @@ private fun TonightFeed(
             )
         }
 
-        IntentFilterRow(selected = state.intentFilter, onSelected = onIntentSelected)
+        IntentFilterRow(
+            selected = state.intentFilter,
+            onSelected = onIntentSelected,
+            filtersActiveCount = state.feedFilters.activeCount,
+            onOpenFilters = onOpenFilters,
+        )
 
         if (state.feedItems.isEmpty() && state.isLoading) {
             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -675,6 +697,8 @@ private fun TonightFeed(
 private fun IntentFilterRow(
     selected: TonightIntent?,
     onSelected: (TonightIntent?) -> Unit,
+    filtersActiveCount: Int,
+    onOpenFilters: () -> Unit,
 ) {
     // Scrolls rather than squeezing: five pills overflow the wide-window side panel (and a phone)
     // once text is enlarged.
@@ -700,6 +724,12 @@ private fun IntentFilterRow(
                 modifier = Modifier.testTag(PlayingTonightTags.intentPill(intent.label)),
             )
         }
+        PynapliPill(
+            text = if (filtersActiveCount == 0) "Filters" else "Filters · $filtersActiveCount",
+            selected = filtersActiveCount > 0,
+            onClick = onOpenFilters,
+            modifier = Modifier.testTag(PlayingTonightTags.FILTERS),
+        )
     }
 }
 
@@ -846,6 +876,9 @@ internal object PlayingTonightTags {
     const val SCREEN = "tonight-screen"
     const val BACK = "tonight-back"
     const val LIST = "tonight-list"
+    const val FILTERS = "tonight-filters"
+    const val FILTERS_SHEET = "tonight-filters-sheet"
+    const val FILTERS_APPLY = "tonight-filters-apply"
     const val LIVE_FLOATER = "tonight-live-floater"
     const val START = "tonight-start"
     const val END = "tonight-end"

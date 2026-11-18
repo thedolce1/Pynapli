@@ -72,6 +72,10 @@ data class ProfileEditDraft(
     val relationshipContext: String = "",
     val discoveryStyle: String = "both",
     val lifestyleTags: Set<String> = emptySet(),
+    // One experience level token ("" = unset); see DiscoveryTagTaxonomies.experienceLevels.
+    val experienceLevel: String = "",
+    // "<item>:<stance>" boundary tokens, at most one per item.
+    val boundaries: Set<String> = emptySet(),
     val logisticsTags: Set<String> = emptySet(),
     val intents: Set<String> = emptySet(),
 )

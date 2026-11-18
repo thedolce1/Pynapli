@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +37,9 @@ import com.pynapli.app.design.icons.automirrored.filled.ArrowForward
 import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.Intent
+import com.pynapli.app.grid.Boundary
+import com.pynapli.app.grid.BoundaryStance
+import com.pynapli.app.grid.LifestyleGroup
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag
 import com.pynapli.app.grid.discoveryTagLabel
@@ -61,11 +66,11 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
     val tagChips =
         remember(profile) {
             buildList {
-                profile.lifestyleTags.forEach { value -> add(lifestyleTagLabel(value)) }
                 profile.logisticsTags.forEach { value -> add(logisticsTagLabel(value)) }
                 profile.intents.forEach { value -> add(intentLabel(value)) }
             }
         }
+    val lifestyleRows = remember(profile) { lifestyleRows(profile.experienceLevel, profile.lifestyleTags, profile.boundaries) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -105,6 +110,10 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
             }
         }
 
+        if (lifestyleRows.isNotEmpty()) {
+            LifestyleFacts(lifestyleRows)
+        }
+
         if (tagChips.isNotEmpty()) {
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -129,7 +138,90 @@ private fun selfDescribableLabel(
         key.toDisplayLabel()
     }
 
-private fun lifestyleTagLabel(value: String): String = LifestyleTag.entries.firstOrNull { it.serverValue == value }?.label ?: value.toDisplayLabel()
+internal object ProfileDetailTags {
+    const val LIFESTYLE = "profile-detail-lifestyle"
+    const val PARTNER_SUMMARY = "profile-detail-partner-summary"
+}
+
+/** One labeled row of the profile's "Lifestyle" block (e.g. "Swap" -> ["Soft swap"]). */
+internal data class LifestyleFactRow(
+    val label: String,
+    val values: List<String>,
+)
+
+/**
+ * The person's own lifestyle answers, grouped swinger-first: experience, swap, room, other terms,
+ * then boundaries split into "Ask first" and "Not for me". Unknown tokens are dropped.
+ */
+internal fun lifestyleRows(
+    experienceLevel: String?,
+    lifestyleTags: List<String>,
+    boundaries: List<String>,
+): List<LifestyleFactRow> =
+    buildList {
+        val tags = lifestyleTags.mapNotNull { LifestyleTag.fromServerValue(it) }
+        LifestyleTag.fromServerValue(experienceLevel)?.let { add(LifestyleFactRow(LifestyleGroup.Experience.label, listOf(it.label))) }
+        listOf(LifestyleGroup.Swap, LifestyleGroup.Room, LifestyleGroup.Other).forEach { group ->
+            val labels = tags.filter { it.group == group }.map { it.label }
+            if (labels.isNotEmpty()) add(LifestyleFactRow(group.label, labels))
+        }
+        val stances = BoundaryStance.parse(boundaries)
+        BoundaryStance.entries.forEach { stance ->
+            val labels = Boundary.entries.filter { stances[it] == stance }.map { it.label }
+            if (labels.isNotEmpty()) add(LifestyleFactRow(stance.label, labels))
+        }
+    }
+
+@Composable
+private fun LifestyleFacts(rows: List<LifestyleFactRow>) {
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag(ProfileDetailTags.LIFESTYLE),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = "Lifestyle",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = row.label,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.width(88.dp),
+                )
+                FlowRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    row.values.forEach { value -> PynapliPill(text = value, selected = false) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Partner preview line: the linked partner's OWN orientation, experience and swap/room, as
+ * declared on their own account ("Bisexual · Experienced · Soft swap"). Null when none is set.
+ */
+internal fun partnerPreviewSummary(partner: LinkedPartnerMiniDto?): String? {
+    partner ?: return null
+    val parts =
+        buildList {
+            partner.orientation?.let { add(selfDescribableLabel(it, partner.orientationDetail)) }
+            LifestyleTag.fromServerValue(partner.experienceLevel)?.let { add(it.label) }
+            partner.lifestyleTags.mapNotNull { LifestyleTag.fromServerValue(it) }.forEach { add(it.label) }
+        }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
 
 private fun logisticsTagLabel(value: String): String = LogisticsTag.entries.firstOrNull { it.serverValue == value }?.label ?: value.toDisplayLabel()
 
@@ -210,6 +302,16 @@ internal fun LinkedPartnerSection(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            partnerPreviewSummary(linkedPartner)?.let { summary ->
+                Text(
+                    text = summary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag(ProfileDetailTags.PARTNER_SUMMARY),
+                )
+            }
         }
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
