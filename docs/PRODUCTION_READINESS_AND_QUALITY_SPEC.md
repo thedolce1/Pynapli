@@ -547,6 +547,8 @@ For core-only high-concurrency proof:
 .\scripts\swipe-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 500 -ConcurrentUsers 500 -OnlineCandidateCount 1000 -ServerProfile -SkipExtendedScenarios -FailOnBudget
 ```
 
+Add `-CandidateSpreadKm 40` to seed the candidates across a deterministic, metro-shaped 40 km disc (dense core, density falling as 1/r) instead of the default dense seed (`0`, every candidate within ~0.5 km, comparable with earlier baselines); keep it at or below ~48 km so every candidate stays inside the 50 km deck radius.
+
 Use a Ktor restart before `-ColdCache` when the goal is true-cold Swipe evidence; Redis clearing alone does not clear the in-process rank cache.
 
 Minimum beta load targets:

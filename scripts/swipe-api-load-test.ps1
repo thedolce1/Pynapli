@@ -16,6 +16,12 @@ param(
     [int]$ActionBudgetP95Ms = 400,
     [int]$RewindBudgetP95Ms = 600,
     [int]$BoostedCandidateCount = 100,
+    # 0 (default) keeps the historical dense seed: every candidate within ~0.5 km of the viewer
+    # point, so runs stay comparable with the 2026-05-18 and 2026-11-18 baselines. A value above 0
+    # spreads candidates across a metro-shaped disc of that radius in km (see Seed-DenseCandidates).
+    # Every deck request asks for 50 km, so keep this at or below ~48 km to keep all candidates
+    # inside the requested radius after the server's cell-to-cell distance rounding.
+    [int]$CandidateSpreadKm = 0,
     [string]$OutputRoot = "artifacts\swipe-api-load",
     [switch]$ColdCache,
     [switch]$ServerProfile,
@@ -342,6 +348,23 @@ function Seed-DenseCandidates {
     # Reuses the same 1000-prefix candidate range as the Grid harness. Profiles and
     # locations are idempotent so running both harnesses against the same DB is fine.
     # Adds profiles.bio so the new SwipeService.toShortBio() path has something to trim.
+    $longitudeSql = "$viewerLongitude + (((i % 100) - 50) * 0.00008)"
+    $latitudeSql = "$viewerLatitude + ((((i / 100)::integer % 100) - 25) * 0.00008)"
+    if ($CandidateSpreadKm -gt 0) {
+        # Metro spread. Each candidate i gets two deterministic, low-discrepancy fractions from the
+        # R2 (plastic-number) sequence: u = frac(0.5 + i*0.7548...), v = frac(0.5 + i*0.5698...).
+        # They are evenly spread over [0,1) whatever the candidate count and uncorrelated with the
+        # i % n attribute pattern above, so boosted/online candidates (low i) are not all central.
+        # Distance from the viewer is r = spread * u (linear in u, not sqrt(u) as a uniform disc
+        # would be), giving a surface density that falls off as 1/r: a dense core and a thin
+        # outskirts, with an equal share of candidates in every 1 km ring (5000 over 40 km is
+        # ~125 per ring). Bearing is 2*pi*v. Offsets use a flat-earth km-per-degree conversion,
+        # accurate to well under 1% at metro scale. numeric mod() keeps it exact and run-stable.
+        $uSql = "mod(0.5 + i * 0.7548776662466927, 1.0)::double precision"
+        $vSql = "mod(0.5 + i * 0.5698402909980532, 1.0)::double precision"
+        $longitudeSql = "$viewerLongitude + ($CandidateSpreadKm * $uSql) * cos(2 * pi() * $vSql) / (111.320 * cos(radians($viewerLatitude)))"
+        $latitudeSql = "$viewerLatitude + ($CandidateSpreadKm * $uSql) * sin(2 * pi() * $vSql) / 110.574"
+    }
     $sql = @"
 WITH candidates AS (
     SELECT
@@ -357,8 +380,8 @@ WITH candidates AS (
             WHEN 2 THEN 'both'
             ELSE 'social'
         END AS discovery_style,
-        $viewerLongitude + (((i % 100) - 50) * 0.00008) AS longitude,
-        $viewerLatitude + ((((i / 100)::integer % 100) - 25) * 0.00008) AS latitude
+        $longitudeSql AS longitude,
+        $latitudeSql AS latitude
     FROM generate_series(1, $Count) AS i
 ),
 upsert_users AS (
@@ -1012,7 +1035,11 @@ if (-not $SkipSwipeStateReset) {
     Reset-SwipeRunState
 }
 
-Write-Host "Seeding $CandidateCount dense Swipe candidates..."
+if ($CandidateSpreadKm -gt 0) {
+    Write-Host "Seeding $CandidateCount Swipe candidates across a $CandidateSpreadKm km metro spread..."
+} else {
+    Write-Host "Seeding $CandidateCount dense Swipe candidates..."
+}
 Seed-DenseCandidates -Count $CandidateCount
 
 if (-not $SkipExtendedScenarios) {
@@ -1379,6 +1406,7 @@ $tierMix = @($sessions | Group-Object Tier | Sort-Object Name | ForEach-Object {
 $parameters = [pscustomobject]@{
     baseUrl = $BaseUrl
     candidateCount = $CandidateCount
+    candidateSpreadKm = $CandidateSpreadKm
     viewerCount = $ViewerCount
     concurrentUsers = $ConcurrentUsers
     onlineCandidateCount = $OnlineCandidateCount
