@@ -1,5 +1,6 @@
 package com.pynapli.server.auth
 
+import com.pynapli.server.safety.clientIp
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
@@ -25,6 +26,7 @@ fun Application.configureAuthRoutes(
     authService: AuthService,
     passwordRecoveryService: PasswordRecoveryService? = null,
     signedInDevicesService: SignedInDevicesService? = null,
+    trustedProxyHops: Int = 1,
 ) {
     routing {
         route("/v1/auth") {
@@ -40,6 +42,7 @@ fun Application.configureAuthRoutes(
                 call.respond(
                     authService.loginEmail(
                         request = call.receive(),
+                        clientIp = call.clientIp(trustedProxyHops),
                     ),
                 )
             }
@@ -114,14 +117,17 @@ private suspend fun AuthService.signupEmail(request: EmailSignupRequestDto) =
         appVersion = request.appVersion,
     )
 
-private suspend fun AuthService.loginEmail(request: EmailLoginRequestDto) =
-    loginEmail(
-        email = request.email,
-        password = request.password,
-        deviceId = request.deviceId,
-        platform = request.platform,
-        appVersion = request.appVersion,
-    )
+private suspend fun AuthService.loginEmail(
+    request: EmailLoginRequestDto,
+    clientIp: String,
+) = loginEmail(
+    email = request.email,
+    password = request.password,
+    deviceId = request.deviceId,
+    platform = request.platform,
+    appVersion = request.appVersion,
+    clientIp = clientIp,
+)
 
 fun authStatusFor(code: String): HttpStatusCode =
     when (code) {

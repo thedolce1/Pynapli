@@ -90,6 +90,10 @@ data class ServerConfig(
     val ageVerificationProvider: String? = null,
     val ageVerificationProviderLabel: String = "Identity provider",
     val ageVerificationProviderRedirectBaseUrl: String? = null,
+    // HMAC-SHA256 secret the age-verification provider signs its callbacks with
+    // (PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET). Unset: the callback route isn't served. The provider
+    // never holds the admin token. Required in production-like environments when a provider is set.
+    val ageVerificationCallbackSecret: String? = null,
     // Travel mode destination rules by country, e.g. "AE=blocked,QA=age_verified"
     // (PYNAPLI_TRAVEL_REGION_POLICY). Empty: no destination needs anything extra.
     val travelRegionPolicy: String? = null,
@@ -413,6 +417,11 @@ data class ServerConfig(
                 ageVerificationProviderRedirectBaseUrl =
                     System
                         .getenv("PYNAPLI_AGE_VERIFICATION_PROVIDER_REDIRECT_BASE_URL")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() },
+                ageVerificationCallbackSecret =
+                    System
+                        .getenv("PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET")
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() },
                 adminApiToken =

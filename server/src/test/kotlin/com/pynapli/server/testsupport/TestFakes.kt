@@ -18,6 +18,8 @@ internal fun denyingRateLimitService(): RateLimitService =
                 key: String,
                 windowSeconds: Long,
             ): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = windowSeconds)
+
+            override suspend fun current(key: String): RateLimitCounter = RateLimitCounter(count = Long.MAX_VALUE, ttlSeconds = 60)
         },
     )
 

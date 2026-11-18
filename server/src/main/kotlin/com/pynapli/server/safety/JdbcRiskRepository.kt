@@ -39,6 +39,117 @@ class JdbcRiskRepository(
             }
         }
 
+    override suspend fun recordReportEvent(
+        userId: UUID,
+        reporterUserId: UUID,
+        reason: String,
+        requestedDelta: Int,
+        metadataJson: String,
+        policy: ReportScoringPolicy,
+        eventIdFactory: () -> UUID,
+    ): RiskMutationRecord =
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                // Lock the account's risk row first so concurrent reports are judged one at a time.
+                val currentScore = connection.lockRiskScore(userId)
+                val windowSeconds = policy.window.seconds
+                val duplicate = connection.hasRecentReportEvent(userId, reporterUserId, reason, windowSeconds)
+                val distinctReporters = connection.distinctRecentReporters(userId, reporterUserId, windowSeconds)
+                val counted = policy.countedDelta(currentScore, requestedDelta, duplicate, distinctReporters)
+                val state = connection.upsertRiskState(userId, counted)
+                val event =
+                    connection.insertRiskEvent(
+                        id = eventIdFactory(),
+                        userId = userId,
+                        actorUserId = reporterUserId,
+                        source = RiskService.SOURCE_REPORT,
+                        reason = reason,
+                        delta = counted,
+                        state = state,
+                        metadataJson =
+                            metadataJson.withJsonFields(
+                                "\"requestedDelta\":$requestedDelta,\"countedDelta\":$counted," +
+                                    "\"duplicate\":$duplicate,\"distinctReporters\":$distinctReporters",
+                            ),
+                    )
+                connection.commit()
+                RiskMutationRecord(event = event, state = state)
+            }
+        }
+
+    private fun Connection.lockRiskScore(userId: UUID): Int {
+        prepareStatement("INSERT INTO account_risk_states (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING").use { statement ->
+            statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
+        return prepareStatement("SELECT score FROM account_risk_states WHERE user_id = ? FOR UPDATE").use { statement ->
+            statement.setObject(1, userId)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getInt(1)
+            }
+        }
+    }
+
+    private fun Connection.hasRecentReportEvent(
+        userId: UUID,
+        reporterUserId: UUID,
+        reason: String,
+        windowSeconds: Long,
+    ): Boolean =
+        prepareStatement(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM account_risk_events
+                WHERE user_id = ?
+                  AND source = '${RiskService.SOURCE_REPORT}'
+                  AND actor_user_id = ?
+                  AND reason = ?
+                  AND created_at > now() - make_interval(secs => ?::double precision)
+            )
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, userId)
+            statement.setObject(2, reporterUserId)
+            statement.setString(3, reason)
+            statement.setLong(4, windowSeconds)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getBoolean(1)
+            }
+        }
+
+    /** Distinct accounts that reported [userId] in the window, counting [reporterUserId] (this report). */
+    private fun Connection.distinctRecentReporters(
+        userId: UUID,
+        reporterUserId: UUID,
+        windowSeconds: Long,
+    ): Int =
+        prepareStatement(
+            """
+            SELECT count(DISTINCT reporter)
+            FROM (
+                SELECT actor_user_id AS reporter
+                FROM account_risk_events
+                WHERE user_id = ?
+                  AND source = '${RiskService.SOURCE_REPORT}'
+                  AND actor_user_id IS NOT NULL
+                  AND created_at > now() - make_interval(secs => ?::double precision)
+                UNION ALL
+                SELECT ?::uuid
+            ) reporters
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, userId)
+            statement.setLong(2, windowSeconds)
+            statement.setObject(3, reporterUserId)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getInt(1)
+            }
+        }
+
     override suspend fun getState(userId: UUID): AccountRiskStateRecord? =
         dataSource.withConnection { connection ->
             connection
@@ -184,6 +295,12 @@ class JdbcRiskRepository(
         )
 
     private fun ResultSet.getTimestampOrNull(column: String): Timestamp? = getTimestamp(column).takeUnless { wasNull() }
+
+    /** Adds already-encoded `"key":value` pairs to a JSON object string. */
+    private fun String.withJsonFields(fields: String): String {
+        val body = trim().removePrefix("{").removeSuffix("}").trim()
+        return if (body.isEmpty()) "{$fields}" else "{$body,$fields}"
+    }
 
     private fun riskTierCase(scoreExpression: String): String =
         """

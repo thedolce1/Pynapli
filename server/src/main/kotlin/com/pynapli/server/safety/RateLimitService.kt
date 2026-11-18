@@ -1,5 +1,6 @@
 package com.pynapli.server.safety
 
+import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 import java.security.MessageDigest
 import java.util.Base64
@@ -8,6 +9,8 @@ import java.util.UUID
 class RateLimitService(
     private val repository: RateLimitRepository,
     private val riskSignalPublisher: RateLimitRiskSignalPublisher? = null,
+    /** Answers checks made with `fallbackOnOutage` while [repository] (Redis) is unreachable. */
+    val outageFallback: RateLimitOutageFallback = RateLimitOutageFallback(),
 ) {
     suspend fun check(
         userId: UUID,
@@ -48,16 +51,20 @@ class RateLimitService(
         return decision
     }
 
+    /**
+     * Counts one [action] for [subject]. With [fallbackOnOutage], a Redis failure is answered by the
+     * in-process [outageFallback] instead of throwing: for flows that must keep working (sign-in).
+     */
     suspend fun checkSubject(
         subject: String,
         action: String,
+        fallbackOnOutage: Boolean = false,
     ): RateLimitDecision {
         val policy = POLICIES[action] ?: throw SafetyException("INVALID_RATE_LIMIT_ACTION")
         val counter =
-            repository.increment(
-                key = policy.subjectKeyFor(subject),
-                windowSeconds = policy.windowSeconds,
-            )
+            withOutageFallback(fallbackOnOutage) { store ->
+                store.increment(key = policy.subjectKeyFor(subject), windowSeconds = policy.windowSeconds)
+            }
         return RateLimitDecision(
             allowed = counter.count <= policy.limit,
             action = policy.action,
@@ -68,13 +75,55 @@ class RateLimitService(
         )
     }
 
+    /**
+     * Where [subject] stands against [action]'s limit without counting anything: allowed while the
+     * counter is below the limit, so one more counted attempt would still fit. Lets a caller check a
+     * budget up front and spend it only when the attempt turns out to count (a failed sign-in).
+     */
+    suspend fun peekSubject(
+        subject: String,
+        action: String,
+        fallbackOnOutage: Boolean = false,
+    ): RateLimitDecision {
+        val policy = POLICIES[action] ?: throw SafetyException("INVALID_RATE_LIMIT_ACTION")
+        val counter = withOutageFallback(fallbackOnOutage) { store -> store.current(policy.subjectKeyFor(subject)) }
+        val count = counter?.count ?: 0
+        return RateLimitDecision(
+            allowed = count < policy.limit,
+            action = policy.action,
+            count = count,
+            limit = policy.limit,
+            ttlSeconds = counter?.ttlSeconds ?: 0,
+            windowSeconds = policy.windowSeconds,
+        )
+    }
+
+    private suspend fun <T> withOutageFallback(
+        enabled: Boolean,
+        block: suspend (RateLimitRepository) -> T,
+    ): T {
+        if (!enabled) return block(repository)
+        return try {
+            block(repository).also { outageFallback.recovered() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            outageFallback.failedOver(error)
+            block(outageFallback.repository)
+        }
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(RateLimitService::class.java)
 
         private val POLICIES =
             listOf(
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
-                RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
+                // Failed sign-ins only (AuthRateLimitGuard). Per account + client IP: tight, so guessing
+                // from one address stops fast, while someone elsewhere can't lock the real user out.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN_FAILURE, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
+                // Per account from every address: past this, attempts are slowed, never refused.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN_FAILURE_ACCOUNT, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_REFRESH, limit = 120, windowSeconds = ONE_HOUR_SECONDS),
                 // Each request sends an email; a handful an hour covers a mistyped inbox.
                 RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET, limit = 5, windowSeconds = ONE_HOUR_SECONDS),
@@ -105,8 +154,10 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.ACCOUNT_APPEAL_IP, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
-                // Per session, far above real use: a fast chatter sends a few messages a minute.
+                // Per user, far above real use: a fast chatter sends a few messages a minute.
                 RateLimitPolicy(action = RateLimitedAction.MESSAGE_SEND, limit = 600, windowSeconds = ONE_HOUR_SECONDS),
+                // Per sender per conversation (text + media): three a minute sustained for an hour.
+                RateLimitPolicy(action = RateLimitedAction.MESSAGE_SEND_CONVERSATION, limit = 180, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.THREAD_CREATE, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.TYPING, limit = 2_400, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.PROFILE_LINK_INVITE, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
@@ -116,7 +167,21 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.DATA_EXPORT, limit = 5, windowSeconds = ONE_DAY_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.APPEAL, limit = 10, windowSeconds = ONE_DAY_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.PUSH_REGISTER, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
+                // A private-album fetch per owner id; walking ids would enumerate who has albums.
+                RateLimitPolicy(action = RateLimitedAction.PRIVATE_ALBUM_FETCH, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
+                // Opening someone's profile, per user: browsing opens a few dozen an hour; walking ids is a crawl.
+                RateLimitPolicy(action = RateLimitedAction.PROFILE_FETCH, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
+                // Admin per-person lookups per client IP: a moderator works a queue, not a crawl.
+                RateLimitPolicy(action = RateLimitedAction.ADMIN_PERSON_LOOKUP, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
+                // Global abuse ceilings (RequestRateLimitPlugin), per minute so a burst is caught fast.
+                // Per user: ten requests a second, sustained, is a script. Per client IP: room for a
+                // venue's shared Wi-Fi. Without a session (sign-in, sign-up, reset): much lower.
+                RateLimitPolicy(action = RateLimitedAction.GLOBAL_USER, limit = 600, windowSeconds = ONE_MINUTE_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.GLOBAL_IP, limit = 1_200, windowSeconds = ONE_MINUTE_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.GLOBAL_ANONYMOUS_IP, limit = 120, windowSeconds = ONE_MINUTE_SECONDS),
             ).associateBy { it.action }
+
+        private const val ONE_MINUTE_SECONDS = 60L
 
         private const val ONE_HOUR_SECONDS = 3_600L
         private const val ONE_DAY_SECONDS = 86_400L
@@ -126,7 +191,8 @@ class RateLimitService(
 
 object RateLimitedAction {
     const val AUTH_SIGNUP = "auth_signup"
-    const val AUTH_LOGIN = "auth_login"
+    const val AUTH_LOGIN_FAILURE = "auth_login_failure"
+    const val AUTH_LOGIN_FAILURE_ACCOUNT = "auth_login_failure_account"
     const val AUTH_REFRESH = "auth_refresh"
     const val AUTH_PASSWORD_RESET = "auth_password_reset"
     const val AUTH_PASSWORD_RESET_VERIFY = "auth_password_reset_verify"
@@ -150,6 +216,8 @@ object RateLimitedAction {
     const val AUTH_PASSWORD_RESET_IP = "auth_password_reset_ip"
     const val ACCOUNT_APPEAL_IP = "account_appeal_ip"
     const val MESSAGE_SEND = "message_send"
+    const val MESSAGE_SEND_CONVERSATION = "message_send_conversation"
+    const val PROFILE_FETCH = "profile_fetch"
     const val THREAD_CREATE = "thread_create"
     const val TYPING = "typing"
     const val PROFILE_LINK_INVITE = "profile_link_invite"
@@ -159,6 +227,11 @@ object RateLimitedAction {
     const val DATA_EXPORT = "data_export"
     const val APPEAL = "appeal"
     const val PUSH_REGISTER = "push_register"
+    const val PRIVATE_ALBUM_FETCH = "private_album_fetch"
+    const val ADMIN_PERSON_LOOKUP = "admin_person_lookup"
+    const val GLOBAL_USER = "global_user"
+    const val GLOBAL_IP = "global_ip"
+    const val GLOBAL_ANONYMOUS_IP = "global_anonymous_ip"
 }
 
 data class RateLimitDecision(

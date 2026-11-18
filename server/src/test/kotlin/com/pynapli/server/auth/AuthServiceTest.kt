@@ -1,6 +1,9 @@
 package com.pynapli.server.auth
 
 import com.pynapli.server.auth.security.PasswordHash
+import com.pynapli.server.auth.security.PasswordHasher
+import com.pynapli.server.safety.RateLimitService
+import com.pynapli.server.testsupport.CountingRateLimitRepository
 import com.pynapli.server.testsupport.denyingRateLimitService
 import kotlinx.coroutines.runBlocking
 import java.time.Instant
@@ -467,5 +470,105 @@ private class RecordingDeviceRiskSignalPublisher : com.pynapli.server.safety.Dev
         windowHours: Long,
     ) {
         signals += RecordedDeviceFarmSignal(userId, distinctAccountCount, windowHours)
+    }
+}
+
+class AuthLoginRateLimitTest {
+    private val limits = CountingRateLimitRepository()
+    private val service =
+        AuthService(
+            repository = InMemoryAuthRepository(),
+            passwordHasher = PasswordHasher(iterations = 1_000),
+            rateLimitService = RateLimitService(limits),
+        )
+
+    private suspend fun signup() =
+        service.signupEmail(
+            email = EMAIL,
+            password = PASSWORD,
+            birthdate = "1990-01-01",
+            confirmedAdult = true,
+            acceptedTerms = true,
+            acceptedPrivacy = true,
+            deviceId = null,
+            platform = null,
+            appVersion = null,
+        )
+
+    private suspend fun login(
+        password: String,
+        clientIp: String,
+    ) = service.loginEmail(EMAIL, password, "device", "android", "1.0", clientIp = clientIp)
+
+    @Test
+    fun anAttackerElsewhereCannotLockTheRealUserOutWithBadPasswords() =
+        runBlocking {
+            signup()
+            repeat(40) { runCatching { login("wrong password guess", ATTACKER_IP) } }
+
+            val session = login(PASSWORD, REAL_USER_IP)
+            assertEquals(false, session.accessToken.isEmpty())
+        }
+
+    @Test
+    fun guessingFromOneAddressStopsAfterTenFailuresEvenWithTheRightPassword() =
+        runBlocking {
+            signup()
+            repeat(10) {
+                assertEquals("INVALID_CREDENTIALS", assertFailsWith<AuthException> { login("wrong password guess", ATTACKER_IP) }.code)
+            }
+
+            assertEquals("RATE_LIMITED", assertFailsWith<AuthException> { login(PASSWORD, ATTACKER_IP) }.code)
+            // Guessing at an account that doesn't exist counts the same way.
+            repeat(10) { runCatching { service.loginEmail("nobody@example.com", "a long enough guess", null, null, null, clientIp = ATTACKER_IP) } }
+            assertEquals(
+                "RATE_LIMITED",
+                assertFailsWith<AuthException> { service.loginEmail("nobody@example.com", "a long enough guess", null, null, null, clientIp = ATTACKER_IP) }.code,
+            )
+        }
+
+    @Test
+    fun successfulSignInsNeverSpendTheFailureBudget() =
+        runBlocking {
+            signup()
+            repeat(30) { login(PASSWORD, REAL_USER_IP) }
+            repeat(9) { runCatching { login("one typo too many", REAL_USER_IP) } }
+
+            assertEquals(false, login(PASSWORD, REAL_USER_IP).accessToken.isEmpty())
+        }
+
+    @Test
+    fun pastThePerAccountCeilingAttemptsAreSlowedNotRefused() =
+        runBlocking {
+            val slowdowns = mutableListOf<Long>()
+            val guard = AuthRateLimitGuard(RateLimitService(limits), slowdown = { slowdowns += it })
+
+            // A distributed attack: 100 failures from addresses that each stay under their own limit.
+            repeat(100) { index -> guard.recordLoginFailure(EMAIL, "198.51.100.${index % 50}") }
+            guard.beforeLoginAttempt(EMAIL, "203.0.113.200")
+            assertEquals(listOf(AuthRateLimitGuard.LOGIN_SLOWDOWN_MILLIS), slowdowns)
+
+            guard.beforeLoginAttempt("someone.else@example.com", "203.0.113.200")
+            assertEquals(1, slowdowns.size, "other accounts are not slowed")
+        }
+
+    @Test
+    fun whileRedisIsDownSignUpSignInAndRefreshStillWorkUnderAnInProcessLimit() =
+        runBlocking {
+            limits.down = true
+
+            val session = signup()
+            assertEquals(false, service.refresh(session.refreshToken).accessToken.isEmpty())
+            assertEquals(false, login(PASSWORD, REAL_USER_IP).accessToken.isEmpty())
+            // Still bounded: guessing from one address stops on the in-process counters.
+            repeat(10) { runCatching { login("wrong password guess", ATTACKER_IP) } }
+            assertEquals("RATE_LIMITED", assertFailsWith<AuthException> { login(PASSWORD, ATTACKER_IP) }.code)
+        }
+
+    private companion object {
+        const val EMAIL = "alex@example.com"
+        const val PASSWORD = "correct horse battery"
+        const val ATTACKER_IP = "198.51.100.66"
+        const val REAL_USER_IP = "203.0.113.20"
     }
 }

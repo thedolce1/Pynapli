@@ -134,7 +134,9 @@ changes.
 ## Security
 
 - Server-side authorization on every endpoint, including object ownership.
-- Rate limits on login, messaging, album requests, flirts, reports and swipes; a request body cap.
+- Rate limits on login, messaging, album requests, flirts, reports and swipes; a request body cap
+  enforced on bytes read; global per-IP and per-user request ceilings (TRUST_AND_SAFETY_SPEC, Rate
+  Limits).
 - Audit logs for admin and moderation actions.
 - Blocks enforced across Grid, Swipe, Activity and Messages, and on every new discovery surface.
 - No client-trusted premium state or distance.

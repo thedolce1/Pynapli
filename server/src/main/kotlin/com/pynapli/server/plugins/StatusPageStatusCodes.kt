@@ -323,6 +323,7 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
 internal fun verificationStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
+        "INVALID_CALLBACK_SIGNATURE" -> HttpStatusCode.Unauthorized
         "PROFILE_NOT_FOUND",
         "VERIFICATION_NOT_FOUND",
         -> HttpStatusCode.NotFound

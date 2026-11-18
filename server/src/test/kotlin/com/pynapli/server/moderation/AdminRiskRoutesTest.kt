@@ -1,5 +1,7 @@
 package com.pynapli.server.moderation
 
+import com.pynapli.server.admin.ADMIN_MFA_HEADER
+import com.pynapli.server.admin.AdminTotp
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
@@ -8,6 +10,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -16,6 +19,7 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class AdminRiskRoutesTest {
     @Test
@@ -24,7 +28,7 @@ class AdminRiskRoutesTest {
             application {
                 configureSerialization()
                 configureStatusPages()
-                configureAdminRiskRoutes(testConfig(), AdminRiskService(RouteAdminRiskRepository()))
+                configureAdminRiskRoutes(testConfig(), AdminRiskService(RouteAdminRiskRepository()), revokeSessions = {})
             }
 
             val response =
@@ -43,7 +47,7 @@ class AdminRiskRoutesTest {
             application {
                 configureSerialization()
                 configureStatusPages()
-                configureAdminRiskRoutes(testConfig(), AdminRiskService(RouteAdminRiskRepository()))
+                configureAdminRiskRoutes(testConfig(), AdminRiskService(RouteAdminRiskRepository()), revokeSessions = {})
             }
 
             val response =
@@ -73,7 +77,7 @@ class AdminRiskRoutesTest {
             application {
                 configureSerialization()
                 configureStatusPages()
-                configureAdminRiskRoutes(testConfig(), AdminRiskService(repository))
+                configureAdminRiskRoutes(testConfig(), AdminRiskService(repository), revokeSessions = {})
             }
 
             val response =
@@ -109,7 +113,7 @@ class AdminRiskRoutesTest {
             application {
                 configureSerialization()
                 configureStatusPages()
-                configureAdminRiskRoutes(testConfig(), AdminRiskService(repository))
+                configureAdminRiskRoutes(testConfig(), AdminRiskService(repository), revokeSessions = {})
             }
 
             val response =
@@ -126,10 +130,76 @@ class AdminRiskRoutesTest {
             assertEquals("confirmed severe spam", repository.lastReason)
         }
 
+    @Test
+    fun lockBanAndSetTierNeedASeniorAdminWithAValidMfaCode() =
+        testApplication {
+            val userId = UUID.fromString("00000000-0000-0000-0000-000000000923")
+            val repository = RouteAdminRiskRepository(action = enforcedAction(userId))
+            val revoked = mutableListOf<UUID>()
+            val config =
+                testConfig().copy(
+                    adminRoles = mapOf("senior-1" to "senior", "operator-1" to "operator"),
+                    adminMfaEnforced = true,
+                    adminMfaSecrets = mapOf("senior-1" to MFA_SECRET),
+                )
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAdminRiskRoutes(config, AdminRiskService(repository), revokeSessions = { revoked += it })
+            }
+
+            for (action in listOf("lock", "ban", "set-tier")) {
+                val body = if (action == "set-tier") """{"tier":"terminate","reason":"confirmed abuse"}""" else """{"reason":"confirmed abuse"}"""
+                val asOperator = adminPost("/v1/admin/risk/users/$userId/$action", "operator-1", mfa = null, body)
+                assertEquals(HttpStatusCode.Forbidden, asOperator.status, "$action as operator")
+                assertTrue(asOperator.bodyAsText().contains("ADMIN_ROLE_REQUIRED"))
+
+                val noCode = adminPost("/v1/admin/risk/users/$userId/$action", "senior-1", mfa = null, body)
+                assertEquals(HttpStatusCode.Forbidden, noCode.status, "$action without MFA")
+                assertTrue(noCode.bodyAsText().contains("ADMIN_MFA_REQUIRED"))
+            }
+            assertEquals(null, repository.lastEnforcementAction, "nothing ran without the step-up")
+            assertEquals(null, repository.lastTier)
+
+            val code = AdminTotp.generate(MFA_SECRET, Instant.now().epochSecond)
+            assertEquals(HttpStatusCode.OK, adminPost("/v1/admin/risk/users/$userId/ban", "senior-1", code, """{"reason":"confirmed abuse"}""").status)
+            assertEquals("ban", repository.lastEnforcementAction)
+            assertEquals(listOf(userId), revoked, "a ban signs the account out everywhere at once")
+            assertEquals(HttpStatusCode.OK, adminPost("/v1/admin/risk/users/$userId/lock", "senior-1", code, """{"reason":"confirmed abuse"}""").status)
+            assertEquals(listOf(userId, userId), revoked)
+        }
+
+    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.adminPost(
+        path: String,
+        actorId: String,
+        mfa: String?,
+        body: String,
+    ) = client.post(path) {
+        header("X-Admin-Token", "test-admin-token")
+        header("X-Admin-Id", actorId)
+        mfa?.let { header(ADMIN_MFA_HEADER, it) }
+        contentType(ContentType.Application.Json)
+        setBody(body)
+    }
+
+    private fun enforcedAction(userId: UUID) =
+        AdminRiskActionRecord(
+            userId = userId,
+            score = 90,
+            tier = "terminate",
+            lastReviewedAt = Instant.parse("2026-04-24T18:00:00Z"),
+            updatedAt = Instant.parse("2026-04-24T18:00:00Z"),
+            accountStatus = "banned",
+        )
+
     private fun testConfig(): ServerConfig =
         testServerConfig().copy(
             adminApiToken = "test-admin-token",
         )
+
+    private companion object {
+        const val MFA_SECRET = "JBSWY3DPEHPK3PXP"
+    }
 }
 
 private class RouteAdminRiskRepository(

@@ -47,6 +47,7 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_VERIFICATION_METHOD" -> "Choose a valid verification method."
         "INVALID_VERIFICATION_STATUS" -> "Choose a valid verification status."
         "INVALID_VERIFICATION_ID" -> "Verification item was not found."
+        "INVALID_CALLBACK_SIGNATURE" -> "The callback signature is missing, wrong or expired."
         "VERIFICATION_NOT_FOUND" -> "Verification item was not found."
         "INVALID_VERIFICATION_CALLBACK" -> "Verification callback is not valid."
         "VERIFICATION_REASON_TOO_LONG" -> "Verification reason is too long."

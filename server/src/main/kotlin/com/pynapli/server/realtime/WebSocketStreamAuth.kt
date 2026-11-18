@@ -14,6 +14,9 @@ private val streamAuthJson = Json { ignoreUnknownKeys = true }
 /** Web clients must authenticate within this window or the socket closes. */
 const val STREAM_FIRST_FRAME_AUTH_TIMEOUT_MS: Long = 5_000L
 
+/** The pre-auth frame carries one opaque token; anything bigger is refused unparsed. */
+const val STREAM_AUTH_FRAME_MAX_BYTES: Int = 4_096
+
 /**
  * Extracts the bearer token for a realtime stream socket. Native clients send an
  * Authorization header. Browsers cannot set WebSocket headers, so the web client
@@ -28,7 +31,9 @@ suspend fun DefaultWebSocketServerSession.awaitStreamToken(timeoutMillis: Long =
 
     return withTimeoutOrNull(timeoutMillis) {
         val frame = incoming.receiveCatching().getOrNull() ?: return@withTimeoutOrNull null
-        val text = (frame as? Frame.Text)?.readText() ?: return@withTimeoutOrNull null
+        val textFrame = frame as? Frame.Text ?: return@withTimeoutOrNull null
+        if (textFrame.data.size > STREAM_AUTH_FRAME_MAX_BYTES) return@withTimeoutOrNull null
+        val text = textFrame.readText()
         runCatching { streamAuthJson.decodeFromString(StreamAuthFrameDto.serializer(), text) }
             .getOrNull()
             ?.takeIf { it.type == STREAM_AUTH_FRAME_TYPE }

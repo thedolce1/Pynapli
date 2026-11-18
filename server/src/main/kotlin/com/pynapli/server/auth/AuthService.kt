@@ -10,6 +10,10 @@ import com.pynapli.server.safety.DeviceRiskSignalPublisher
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.shared.network.dto.AuthSessionDto
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.sql.SQLException
 import java.time.Clock
 import java.time.Duration
@@ -37,6 +41,12 @@ class AuthService(
             cache = AuthAccessSessionCache(accessSessionCacheTtl, accessSessionCacheMaxSize),
         )
 
+    // Accounts whose sessions were just revoked (here or on another replica): open realtime sockets
+    // re-check at once instead of at their next periodic check. Never suspends; on overflow the
+    // oldest is dropped and those sockets fall back to the periodic check.
+    private val revokedUsers = MutableSharedFlow<UUID>(extraBufferCapacity = 256, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val sessionRevocations: SharedFlow<UUID> = revokedUsers.asSharedFlow()
+
     // Other replicas cache sessions for a few seconds too: tell them about every sign-out and
     // account-wide revocation so a revoked token stops working everywhere at once.
     init {
@@ -46,7 +56,10 @@ class AuthService(
                 message.startsWith(REVOKED_USER_PREFIX) ->
                     runCatching { UUID.fromString(message.removePrefix(REVOKED_USER_PREFIX)) }
                         .getOrNull()
-                        ?.let(sessionManager::invalidateCachedSessionsForUser)
+                        ?.let { userId ->
+                            sessionManager.invalidateCachedSessionsForUser(userId)
+                            revokedUsers.tryEmit(userId)
+                        }
             }
         }
     }
@@ -106,8 +119,9 @@ class AuthService(
         deviceId: String?,
         platform: String?,
         appVersion: String?,
+        clientIp: String? = null,
     ): AuthSessionDto {
-        val identity = verifyCredentials(email, password, deviceId)
+        val identity = verifyCredentials(email, password, clientIp)
         if (identity.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
 
         val session = sessionManager.createSession(UserRecord(identity.userId, identity.userStatus), deviceId, platform, appVersion)
@@ -119,18 +133,20 @@ class AuthService(
      * Checks an email + password without signing in. The password is checked before the account's
      * status, so a wrong password never reveals whether an account exists or is suspended.
      * Used by sign-in and by the suspended-account appeal (which can't have a session).
+     * Failed attempts are limited per account + [clientIp] (AuthRateLimitGuard).
      */
     suspend fun verifyCredentials(
         email: String,
         password: String,
-        deviceId: String?,
+        clientIp: String?,
     ): EmailIdentityRecord {
-        rateLimitGuard.enforce(RateLimitedAction.AUTH_LOGIN, email, deviceId)
+        rateLimitGuard.beforeLoginAttempt(email, clientIp)
         validator.validateEmailPassword(email, password)
-        val identity =
-            repository.findEmailIdentity(Sha256.hash(normalizeEmail(email)))
-                ?: throw AuthException("INVALID_CREDENTIALS")
-        if (!passwordHasher.verify(password, identity.passwordHash)) throw AuthException("INVALID_CREDENTIALS")
+        val identity = repository.findEmailIdentity(Sha256.hash(normalizeEmail(email)))
+        if (identity == null || !passwordHasher.verify(password, identity.passwordHash)) {
+            rateLimitGuard.recordLoginFailure(email, clientIp)
+            throw AuthException("INVALID_CREDENTIALS")
+        }
         return identity
     }
 
@@ -152,6 +168,7 @@ class AuthService(
     fun invalidateCachedSessionsForUser(userId: UUID) {
         revocationRelay.publish(REVOCATION_CHANNEL, REVOKED_USER_PREFIX + userId)
         sessionManager.invalidateCachedSessionsForUser(userId)
+        revokedUsers.tryEmit(userId)
     }
 }
 

@@ -223,6 +223,17 @@ private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config
         code = "ADMIN_API_TOKEN_REQUIRED",
         message = "Production-like admin routes require a strong PYNAPLI_ADMIN_API_TOKEN.",
     )
+    if (!config.ageVerificationProvider.isNullOrBlank()) {
+        require(
+            condition =
+                config.ageVerificationCallbackSecret.isStrongRuntimeSecret() &&
+                    config.ageVerificationCallbackSecret != config.adminApiToken,
+            code = "AGE_VERIFICATION_CALLBACK_SECRET_REQUIRED",
+            message =
+                "An age-verification provider requires a strong PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET, " +
+                    "different from the admin token.",
+        )
+    }
     require(
         condition = !config.devStorePurchasesEnabled,
         code = "DEV_STORE_PURCHASES_FORBIDDEN",

@@ -55,6 +55,7 @@ import com.pynapli.server.swipe.configureTopPicksRoutes
 import com.pynapli.server.tonight.configureTonightFeedRoutes
 import com.pynapli.server.tonight.configureTonightSessionRoutes
 import com.pynapli.server.verification.configureAgeVerificationAdminRoutes
+import com.pynapli.server.verification.configureAgeVerificationCallbackRoute
 import com.pynapli.server.verification.configureAgeVerificationRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.engine.embeddedServer
@@ -106,6 +107,8 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
             rateLimitService = it,
             trustedProxyHops = dependencies.config.trustedProxyHops,
             perIpLimits = dependencies.config.environment != "local",
+            // Signed-in limits follow the account, so a fresh sign-in doesn't reset them.
+            resolveUserId = { token -> runCatching { dependencies.authService.authenticate(token).id }.getOrNull() },
         )
     }
     configureRequestMediaBaseUrl()
@@ -125,12 +128,21 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
                         "psync" to { dependencies.psyncBroadcaster.subscriptionCount.value },
                     ),
                 dataSource = dependencies.database.dataSource,
+                gauges =
+                    dependencies.rateLimitService
+                        ?.outageFallback
+                        ?.let { fallback ->
+                            mapOf(
+                                "pynapli_rate_limit_fallback_active" to ("1 while Redis rate limiting is down and in-process limits apply." to { if (fallback.active) 1 else 0 }),
+                                "pynapli_rate_limit_fallback_checks" to ("Rate-limit checks answered in-process since start." to { fallback.fallbackChecks }),
+                            )
+                        }.orEmpty(),
             ),
     )
     configureAdminAppealRoutes(dependencies.config, dependencies.adminAppealService)
     configureAdminModerationRoutes(dependencies.config, dependencies.messageModerationService)
     configureAdminReportRoutes(dependencies.config, dependencies.adminReportService)
-    configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService)
+    configureAdminRiskRoutes(dependencies.config, dependencies.adminRiskService, dependencies.authService::invalidateCachedSessionsForUser)
     configureAdminMetricsRoutes(dependencies.config, dependencies.notificationDispatchWorker)
     configureProductMetricsRoutes(dependencies.config, dependencies.productMetrics)
     configureAdminUserLookupRoutes(dependencies.config, dependencies.adminUserLookupService)
@@ -138,9 +150,15 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminSubscriptionSupportRoutes(dependencies.config, dependencies.adminSubscriptionSupportService)
     configureAdminDashboardRoutes(dependencies.config, dependencies.adminDashboardService)
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
+    configureAgeVerificationCallbackRoute(dependencies.config, dependencies.ageVerificationService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
-    configureAuthRoutes(dependencies.authService, dependencies.passwordRecoveryService, dependencies.signedInDevicesService)
+    configureAuthRoutes(
+        dependencies.authService,
+        dependencies.passwordRecoveryService,
+        dependencies.signedInDevicesService,
+        trustedProxyHops = dependencies.config.trustedProxyHops,
+    )
     configureAccountLifecycleRoutes(dependencies.authService, dependencies.accountLifecycleService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService, dependencies.requestProfilerFactory)
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
@@ -180,7 +198,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         hiddenProfileService = dependencies.hiddenProfileService,
         reportService = dependencies.reportService,
     )
-    configureAppealRoutes(dependencies.authService, dependencies.appealService)
+    configureAppealRoutes(dependencies.authService, dependencies.appealService, dependencies.config.trustedProxyHops)
     configureSwipeRoutes(
         authService = dependencies.authService,
         swipeService = dependencies.swipeService,

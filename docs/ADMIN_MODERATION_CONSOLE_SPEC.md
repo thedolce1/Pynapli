@@ -20,7 +20,8 @@ is **no console UI** and none is planned now; operators call `/v1/admin/*` direc
 - Admin routes are server-only and disabled unless `PYNAPLI_ADMIN_API_TOKEN` is set. Calls send
   `X-Admin-Token`, `X-Admin-Id` and, for sensitive actions, `X-Admin-Reason`.
 - **Roles** (`PYNAPLI_ADMIN_ROLES` = `id:role,...`, `admin/AdminRoles.kt`): operator and senior.
-  Sensitive actions (PII reveals, entitlement grant/revoke, appeal decisions, reported-media removal)
+  Sensitive actions (PII reveals, entitlement grant/revoke, appeal decisions, reported-media removal,
+  risk set-tier, account lock and ban)
   need the senior role (`requireSeniorAdmin`, 403 otherwise). Unconfigured = every admin is senior.
 - **Step-up MFA** (`admin/AdminMfa.kt`): with `PYNAPLI_ADMIN_MFA_ENFORCED`, the same sensitive set needs
   a per-admin TOTP code in `X-Admin-MFA`, verified against `PYNAPLI_ADMIN_MFA_SECRETS`
@@ -40,7 +41,7 @@ is **no console UI** and none is planned now; operators call `/v1/admin/*` direc
 | Reports | `/v1/admin/reports` | list, mark under review, resolve, resolve + remove reported media, dismiss |
 | Held messages | `/v1/admin/messages/review-queue` | list (needs reason), release, remove |
 | Appeals | `/v1/admin/appeals` | list, mark under review, decide: `upheld`, `reduced`, `restored`, `verification_required`, `escalated` |
-| Risk | `/v1/admin/risk` | list states and events, clear, set tier, mark reviewed, lock, ban |
+| Risk | `/v1/admin/risk` | list states and events, clear, mark reviewed; set tier, lock, ban (senior + MFA; lock/ban also end the account's sessions and close its sockets at once) |
 | Age verification | `/v1/admin/verification/age/{id}/review` | review with reason |
 | Entitlements | `/v1/admin/subscriptions/entitlements` | grant, revoke (senior) |
 
