@@ -85,6 +85,7 @@ fun PynapliApp(
             profileHubStateHolder = graph.profileHubStateHolder,
             profileLinksStateHolder = graph.profileLinksStateHolder,
             deepLinkStateHolder = graph.deepLinkStateHolder,
+            matchCelebrationStateHolder = graph.matchCelebrationStateHolder,
             activeNotification = activeNotification,
             onNotification = { activeNotification = it },
             onSelectTab = { selectedTab = it },
@@ -404,6 +405,7 @@ fun PynapliApp(
             conversationActions = conversationActions,
             onPickConversationPhoto = platform.onPickConversationPhoto,
             scope = scope,
+            matchCelebrationStateHolder = graph.matchCelebrationStateHolder,
         )
 
         storePaywallFocus?.let { focus ->

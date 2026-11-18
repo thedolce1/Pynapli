@@ -22,7 +22,8 @@ class MatchCelebrationService(
     suspend fun listUncelebrated(viewerUserId: UUID): MatchCelebrationsResponseDto {
         val since = clock.instant().minus(CELEBRATION_WINDOW)
         val records = repository.listUncelebrated(viewerUserId, since, MAX_UNCELEBRATED)
-        if (records.isEmpty()) return MatchCelebrationsResponseDto()
+        val viewerPhotoUrl = repository.firstProfilePhoto(viewerUserId)?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
+        if (records.isEmpty()) return MatchCelebrationsResponseDto(viewerPhotoUrl = viewerPhotoUrl)
         val byOther = records.associateBy { it.otherUserId }
         // A Psync together match is two canonical matches for the target (one per partner): one moment.
         val pairs: Map<UUID, UncelebratedMatchRecord?> =
@@ -41,7 +42,6 @@ class MatchCelebrationService(
                     }
                 }
             }
-        val viewerPhotoUrl = repository.firstProfilePhoto(viewerUserId)?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
         val items =
             records.mapNotNull { record ->
                 // The trailing half of a pair is folded into its lead's moment.
@@ -60,7 +60,7 @@ class MatchCelebrationService(
                     createdAt = record.createdAt.toString(),
                 )
             }
-        return MatchCelebrationsResponseDto(items)
+        return MatchCelebrationsResponseDto(items = items, viewerPhotoUrl = viewerPhotoUrl)
     }
 
     suspend fun markCelebrated(

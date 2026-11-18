@@ -33,6 +33,29 @@ class SwipeStateHolderTest {
         }
 
     @Test
+    fun aMatchGoesToTheAppWideMomentWithTheSwipedCardsNameAndPhoto() =
+        runTest {
+            val card = swipeCard(userId = "target-1").copy(displayName = "Maya", photoUrl = "https://cdn.test/maya.jpg")
+            val repository =
+                FakeSwipeRepository(
+                    deck = SwipeDeckUi(deckSessionId = "s", cards = listOf(card)),
+                    actionResult = AppResult.Success(MatchDto(matchId = "m-1", matchedUserId = "target-1", createdAt = "2026-11-18T00:00:00Z")),
+                )
+            val handedOff = mutableListOf<MatchDto>()
+            val stateHolder = SwipeStateHolder(repository, onMatch = { handedOff += it })
+            stateHolder.load()
+
+            stateHolder.submitAction(card, SwipeAction.LIKE)
+
+            val match = handedOff.single()
+            assertEquals("m-1", match.matchId)
+            assertEquals("Maya", match.matchedDisplayName)
+            assertEquals("https://cdn.test/maya.jpg", match.matchedPhotoUrl)
+            // The Swipe screen does not show its own copy on top of the app-wide one.
+            assertNull(stateHolder.state.value.pendingMatch)
+        }
+
+    @Test
     fun pineappleLikeNoteOverTheLimitIsStoppedBeforeSending() =
         runTest {
             val card = swipeCard(userId = "target-1")

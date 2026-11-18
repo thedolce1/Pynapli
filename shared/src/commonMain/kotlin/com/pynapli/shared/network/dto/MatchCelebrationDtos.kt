@@ -29,6 +29,8 @@ data class MatchCelebrationDto(
 @Serializable
 data class MatchCelebrationsResponseDto(
     val items: List<MatchCelebrationDto> = emptyList(),
+    /** The viewer's own first profile photo, sent even with no items so the swiper's moment has it. */
+    val viewerPhotoUrl: String? = null,
 )
 
 /** Idempotent: ids already seen, or of matches the caller is not part of, are ignored. */

@@ -18,6 +18,9 @@ import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.profileLinkActionFor
+import com.pynapli.app.match.MatchCelebrationScreen
+import com.pynapli.app.match.MatchCelebrationStateHolder
+import com.pynapli.app.match.MatchCelebrationUi
 import com.pynapli.app.profile.ProfileDetailSheet
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
@@ -26,6 +29,7 @@ import com.pynapli.app.psync.PsyncStateHolder
 import com.pynapli.app.swipe.toProfileCardUi
 import com.pynapli.app.tonight.PlayingTonightStateHolder
 import com.pynapli.shared.network.PsyncStreamClient
+import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -60,6 +64,7 @@ internal fun PynapliOverlays(
     conversationActions: ConversationActions,
     onPickConversationPhoto: () -> Unit,
     scope: CoroutineScope,
+    matchCelebrationStateHolder: MatchCelebrationStateHolder? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val conversationState by conversationStateHolder.state.collectAsState()
@@ -260,6 +265,51 @@ internal fun PynapliOverlays(
             },
         )
     }
+
+    // Last, so it sits over every tab, sheet and overlay: the "It's a match" moment for whichever
+    // side of the match this person is on.
+    matchCelebrationStateHolder?.let { holder ->
+        MatchCelebrationOverlay(
+            holder = holder,
+            matchAlertsOn = appSettingsState.settings.matchNotifications,
+            showNames = appSettingsState.settings.notificationDetail == AppSettings.NOTIFICATION_STANDARD,
+            onSendMessage = { celebration ->
+                scope.launch {
+                    conversationStateHolder.openSwipeMatch(match = celebration.toMatchDto(), viewerUserId = authState.session?.userId)
+                }
+            },
+            scope = scope,
+        )
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun MatchCelebrationOverlay(
+    holder: MatchCelebrationStateHolder,
+    matchAlertsOn: Boolean,
+    showNames: Boolean,
+    onSendMessage: (MatchCelebrationUi) -> Unit,
+    scope: CoroutineScope,
+) {
+    val celebration = holder.state.collectAsState().value.current ?: return
+    // Shown (or deliberately not shown, with match alerts off): either way it is seen, once.
+    // The mark runs in the app scope, so closing the moment quickly never cancels it.
+    LaunchedEffect(celebration.primaryMatchId) {
+        scope.launch { holder.markShown(celebration) }
+        if (!matchAlertsOn) holder.dismiss()
+    }
+    if (!matchAlertsOn) return
+    BackHandler(onBack = holder::dismiss)
+    MatchCelebrationScreen(
+        celebration = celebration,
+        showNames = showNames,
+        onSendMessage = {
+            holder.dismiss()
+            onSendMessage(celebration)
+        },
+        onKeepSwiping = holder::dismiss,
+    )
 }
 
 // How often a Psync screen that is waiting on the partner refetches, in case a realtime update was missed.

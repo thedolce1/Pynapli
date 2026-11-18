@@ -18,6 +18,8 @@ import com.pynapli.app.location.ApiLocationUpdateRepository
 import com.pynapli.app.location.ApiTravelLocationRepository
 import com.pynapli.app.location.LocationStateHolder
 import com.pynapli.app.location.TravelLocationStateHolder
+import com.pynapli.app.match.ApiMatchCelebrationRepository
+import com.pynapli.app.match.MatchCelebrationStateHolder
 import com.pynapli.app.media.ApiMediaAlbumsRepository
 import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.messages.ApiMessagesRepository
@@ -145,10 +147,14 @@ class PynapliCommonGraph(
 
     val profileLinksStateHolder = ProfileLinksStateHolder(ApiProfileLinksRepository(apiClient))
 
+    /** The app-wide "It's a match" moment, for both people in a match. */
+    val matchCelebrationStateHolder = MatchCelebrationStateHolder(ApiMatchCelebrationRepository(apiClient))
+
     val swipeStateHolder =
         SwipeStateHolder(
             repository = swipeRepository,
             queueStore = swipeQueueStore,
+            onMatch = matchCelebrationStateHolder::celebrate,
         )
 
     val storeStateHolder =
@@ -174,6 +180,8 @@ class PynapliCommonGraph(
                     // Plan, age verification and export status can all change while away.
                     launch { profileHubStateHolder.refreshSilently() }
                     launch { playingTonightStateHolder.refreshIfOnScreen() }
+                    // A match made while away shows its moment now (once, across devices).
+                    launch { matchCelebrationStateHolder.refresh() }
                     // The Grid reorders only when the user asks or its results have expired, so a
                     // quick app switch never reshuffles the cards (composeApp/CLAUDE.md).
                     if (gridStateHolder.state.value.cards
@@ -190,7 +198,8 @@ class PynapliCommonGraph(
 
     val gridPresenceStreamCoordinator = GridPresenceStreamCoordinator(presenceStreamClient, gridStateHolder)
 
-    val activityRealtimeCoordinator = ActivityRealtimeCoordinator(activityStreamClient, activityStateHolder)
+    val activityRealtimeCoordinator =
+        ActivityRealtimeCoordinator(activityStreamClient, activityStateHolder, onMatch = matchCelebrationStateHolder::refresh)
 
     val messagesRealtimeCoordinator =
         MessagesRealtimeCoordinator(
@@ -237,6 +246,7 @@ class PynapliCommonGraph(
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
             photoVerificationStateHolder = photoVerificationStateHolder,
+            matchCelebrationStateHolder = matchCelebrationStateHolder,
         )
 
     /**

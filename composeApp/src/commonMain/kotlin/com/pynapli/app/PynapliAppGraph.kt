@@ -11,6 +11,7 @@ import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
 import com.pynapli.app.location.LocationStateHolder
 import com.pynapli.app.location.TravelLocationStateHolder
+import com.pynapli.app.match.MatchCelebrationStateHolder
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.messages.MessagesStateHolder
@@ -67,6 +68,8 @@ class PynapliAppGraph(
     val deepLinkStateHolder: AppDeepLinkStateHolder? = null,
     val onboardingStateHolder: OnboardingStateHolder? = null,
     val photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
+    /** The app-wide "It's a match" moment; absent, the Swipe screen shows its own matches. */
+    val matchCelebrationStateHolder: MatchCelebrationStateHolder? = null,
 )
 
 /**

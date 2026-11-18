@@ -2,6 +2,7 @@ package com.pynapli.app.swipe
 
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
+import com.pynapli.shared.network.dto.MatchDto
 import com.pynapli.shared.network.dto.PineappleLikeNote
 import com.pynapli.shared.network.dto.SwipeAction
 import com.pynapli.shared.network.dto.SwipeCardDto
@@ -14,6 +15,11 @@ class SwipeStateHolder(
     private val repository: SwipeRepository,
     private val actionIdFactory: () -> String = ::newSwipeActionId,
     private val queueStore: SwipeActionQueueStore = NoOpSwipeActionQueueStore,
+    /**
+     * Where a new match goes: the app-wide match moment (MatchCelebrationStateHolder). Without one
+     * the match stays in [SwipeUiState.pendingMatch] for the Swipe screen to show itself.
+     */
+    private val onMatch: ((MatchDto) -> Unit)? = null,
 ) {
     private val _state = MutableStateFlow(SwipeUiState())
     val state: StateFlow<SwipeUiState> = _state.asStateFlow()
@@ -325,13 +331,17 @@ class SwipeStateHolder(
                     is AppResult.Success -> {
                         pendingActions.removeAt(0)
                         persistPendingActions()
+                        // The swipe response carries ids only; the card the person just swiped has the rest.
+                        val match = result.value?.withCardDetails(queued.card)
+                        val handOff = onMatch
+                        if (match != null && handOff != null) handOff(match)
                         _state.update { current ->
                             current.copy(
                                 isSubmitting = pendingActions.isNotEmpty(),
                                 pendingActionCount = pendingActions.size,
                                 errorCode = null,
                                 errorMessage = null,
-                                pendingMatch = result.value ?: current.pendingMatch,
+                                pendingMatch = match.takeIf { handOff == null } ?: current.pendingMatch,
                             )
                         }
                     }
@@ -440,3 +450,9 @@ class SwipeStateHolder(
 
     private fun String?.normalizedOwnerUserId(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 }
+
+private fun MatchDto.withCardDetails(card: SwipeCardDto): MatchDto =
+    copy(
+        matchedDisplayName = matchedDisplayName ?: card.displayName.takeIf { matchedUserId == card.userId },
+        matchedPhotoUrl = matchedPhotoUrl ?: card.photoUrl.takeIf { matchedUserId == card.userId },
+    )
