@@ -1,12 +1,17 @@
 package com.pynapli.server.tonight
 
+import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.discovery.discoveryFiltersFrom
 import com.pynapli.server.distance.CoarseLocation
+import com.pynapli.server.grid.GridViewerTrustRepository
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
+import com.pynapli.server.subscriptions.EntitlementPolicy
+import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.network.dto.TonightFeedItemDto
 import com.pynapli.shared.network.dto.TonightFeedPersonDto
@@ -33,17 +38,36 @@ class TonightFeedService(
     private val blockRepository: BlockRepository? = null,
     private val hiddenProfileRepository: HiddenProfileRepository? = null,
     private val clock: Clock = Clock.systemUTC(),
+    // Same gates the Grid applies to lifestyle filters, so Tonight is never a bypass.
+    private val viewerTrustRepository: GridViewerTrustRepository? = null,
+    private val subscriptionService: SubscriptionService? = null,
 ) {
     suspend fun feed(
         viewerUserId: UUID,
         radiusMeters: Int,
         intent: String?,
         limit: Int,
+        orientations: List<String> = emptyList(),
+        lifestyleTags: List<String> = emptyList(),
+        boundaryItems: List<String> = emptyList(),
     ): TonightFeedResponseDto {
         val normalizedIntent = intent?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
         if (normalizedIntent != null && normalizedIntent !in VALID_INTENTS) {
             throw TonightSessionException("INVALID_TONIGHT_INTENT")
         }
+        // Round 4: the owner's own orientation, swap/room/experience and boundaries, matched by the
+        // same predicates as Grid and Swipe (LifestyleFilterSql). One-directional; never logged.
+        val filters =
+            discoveryFiltersFrom(
+                minimumAge = null,
+                maximumAge = null,
+                relationshipContexts = emptyList(),
+                linkedOnly = null,
+                orientations = orientations,
+                lifestyleTags = lifestyleTags,
+                boundaryItems = boundaryItems,
+            ) { TonightSessionException("INVALID_TONIGHT_FILTER") }
+        requireFilterAccess(viewerUserId, filters)
 
         // L-09: snapped to the same fixed radius steps as the Grid.
         val boundedRadius = CoarseLocation.snapRadiusMeters(radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS))
@@ -56,6 +80,7 @@ class TonightFeedService(
                 intent = normalizedIntent,
                 limit = boundedLimit,
                 now = clock.instant(),
+                filters = filters,
             )
         if (rows.isEmpty()) return TonightFeedResponseDto(items = emptyList())
 
@@ -120,6 +145,19 @@ class TonightFeedService(
             }
 
         return TonightFeedResponseDto(items = items)
+    }
+
+    private suspend fun requireFilterAccess(
+        viewerUserId: UUID,
+        filters: DiscoveryFilters,
+    ) {
+        if (filters.lifestyleTags.isEmpty()) return
+        val ageVerified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
+        if (!ageVerified) throw TonightSessionException("AGE_VERIFICATION_REQUIRED")
+        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
+        if (filters.requiresAdvancedEntitlement && !policy.advancedFiltersAllowed) {
+            throw TonightSessionException("ENTITLEMENT_REQUIRED")
+        }
     }
 
     private suspend fun onlineUserIdsFor(userIds: Set<UUID>): Set<UUID> = runCatching { presenceService?.onlineUserIds(userIds).orEmpty() }.getOrDefault(emptySet())

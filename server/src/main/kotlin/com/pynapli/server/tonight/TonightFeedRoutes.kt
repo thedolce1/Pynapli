@@ -10,7 +10,7 @@ import io.ktor.server.routing.routing
 
 /**
  * Public Playing Tonight feed route (PT-3). Bearer-authed; thin — all rules live in
- * [TonightFeedService]. `GET /v1/tonight/feed?radiusMeters=&intent=&limit=`.
+ * [TonightFeedService]. `GET /v1/tonight/feed?radiusMeters=&intent=&limit=&orientations=&lifestyleTags=&boundaryItems=`.
  */
 fun Application.configureTonightFeedRoutes(
     authService: AuthService,
@@ -26,12 +26,23 @@ fun Application.configureTonightFeedRoutes(
                 call.request.queryParameters["intent"]
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }
+            // Repeated or comma-separated: ?orientations=bisexual&lifestyleTags=soft_swap,same_room
+            fun listParam(name: String): List<String> =
+                call.request.queryParameters
+                    .getAll(name)
+                    .orEmpty()
+                    .flatMap { it.split(',') }
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
             call.respond(
                 service.feed(
                     viewerUserId = user.id,
                     radiusMeters = radiusMeters,
                     intent = intent,
                     limit = limit,
+                    orientations = listParam("orientations"),
+                    lifestyleTags = listParam("lifestyleTags"),
+                    boundaryItems = listParam("boundaryItems"),
                 ),
             )
         }

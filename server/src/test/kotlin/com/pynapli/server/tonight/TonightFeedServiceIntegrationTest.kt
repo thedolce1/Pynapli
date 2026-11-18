@@ -2,6 +2,10 @@ package com.pynapli.server.tonight
 
 import com.pynapli.server.grid.insertActiveTravelLocation
 import com.pynapli.server.grid.moveUser
+import com.pynapli.server.grid.setProfileBoundaries
+import com.pynapli.server.grid.setProfileExperienceLevel
+import com.pynapli.server.grid.setProfileLifestyleTags
+import com.pynapli.server.grid.setProfileOrientation
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.JdbcBlockRepository
@@ -229,6 +233,83 @@ class TonightFeedServiceIntegrationTest :
                 val response = service().feed(viewer, radiusMeters = 50_000, intent = "social", limit = 100)
 
                 assertEquals(setOf(socialOwner.toString()), response.items.map { it.person.userId }.toSet())
+            }
+        }
+
+        "orientation, swap/room/experience and boundary filters match the session owner like Grid and Swipe" {
+            runBlocking {
+                val viewer = UUID.randomUUID()
+                val bi = UUID.randomUUID()
+                val straight = UUID.randomUUID()
+                val partnerOfStraight = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
+                dataSource.seedDiscoverableUser(bi, "Bi Bea", viewerLon + 0.001, viewerLat)
+                dataSource.seedDiscoverableUser(straight, "Straight Sam", viewerLon + 0.002, viewerLat)
+                dataSource.seedDiscoverableUser(partnerOfStraight, "Partner Pia", viewerLon + 0.002, viewerLat)
+                dataSource.setProfileOrientation(bi, "bisexual")
+                dataSource.setProfileOrientation(straight, "straight")
+                // The partner's own values never stand in for the session owner's.
+                dataSource.setProfileOrientation(partnerOfStraight, "bisexual")
+                dataSource.setProfileLifestyleTags(bi, listOf("soft_swap", "same_room"))
+                dataSource.setProfileLifestyleTags(straight, listOf("full_swap", "same_room"))
+                dataSource.setProfileExperienceLevel(bi, "some_experience")
+                dataSource.setProfileBoundaries(straight, listOf("same_day:not_for_me"))
+                dataSource.insertActiveSoloSession(bi, intent = "solo")
+                dataSource.insertActiveTogetherSession(straight, partnerOfStraight, intent = "together")
+
+                suspend fun owners(
+                    orientations: List<String> = emptyList(),
+                    lifestyleTags: List<String> = emptyList(),
+                    boundaryItems: List<String> = emptyList(),
+                ): Set<UUID> =
+                    service()
+                        .feed(viewer, 50_000, null, 100, orientations, lifestyleTags, boundaryItems)
+                        .items
+                        .map { UUID.fromString(it.person.userId) }
+                        .toSet()
+
+                assertEquals(setOf(bi, straight), owners())
+                // The partner preview fields belong to the profile detail only, never the feed mini.
+                val mini =
+                    service()
+                        .feed(viewer, 50_000, null, 100)
+                        .items
+                        .single { it.person.userId == straight.toString() }
+                        .linkedPartner
+                assertNotNull(mini)
+                assertNull(mini.orientation)
+                assertTrue(mini.lifestyleTags.isEmpty())
+                assertEquals(setOf(bi), owners(orientations = listOf("bisexual")))
+                assertEquals(setOf(straight), owners(lifestyleTags = listOf("full_swap", "same_room")))
+                assertEquals(setOf(bi), owners(lifestyleTags = listOf("some_experience")))
+                assertEquals(setOf(bi), owners(boundaryItems = listOf("same_day")))
+            }
+        }
+
+        "Tonight lifestyle filters keep the Grid's age-verification gate" {
+            runBlocking {
+                val viewer = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
+                val gated =
+                    TonightFeedService(
+                        repository = JdbcTonightFeedRepository(dataSource),
+                        viewerTrustRepository =
+                            object : com.pynapli.server.grid.GridViewerTrustRepository {
+                                override suspend fun isAgeVerified(userId: UUID): Boolean = false
+                            },
+                    )
+                val error =
+                    assertFailsWith<TonightSessionException> {
+                        gated.feed(viewer, 50_000, null, 100, lifestyleTags = listOf("soft_swap"))
+                    }
+                assertEquals("AGE_VERIFICATION_REQUIRED", error.code)
+                // Orientation and boundaries are not age-gated.
+                gated.feed(viewer, 50_000, null, 100, orientations = listOf("gay"), boundaryItems = listOf("photos"))
+                val bad =
+                    assertFailsWith<TonightSessionException> {
+                        gated.feed(viewer, 50_000, null, 100, boundaryItems = listOf("anything"))
+                    }
+                assertEquals("INVALID_TONIGHT_FILTER", bad.code)
             }
         }
 

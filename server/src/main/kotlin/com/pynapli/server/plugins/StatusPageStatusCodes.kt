@@ -109,6 +109,10 @@ internal fun travelLocationStatusFor(code: String): HttpStatusCode =
 internal fun tonightSessionStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RISK_RESTRICTED" -> HttpStatusCode.Forbidden
+        "AGE_VERIFICATION_REQUIRED",
+        "ENTITLEMENT_REQUIRED",
+        -> HttpStatusCode.Forbidden
+        "INVALID_TONIGHT_FILTER",
         "INVALID_TONIGHT_MODE",
         "INVALID_TONIGHT_INTENT",
         "INVALID_TONIGHT_HOST_MODE",

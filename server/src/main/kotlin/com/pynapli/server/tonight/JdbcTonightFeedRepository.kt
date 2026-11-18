@@ -1,6 +1,8 @@
 package com.pynapli.server.tonight
 
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.distance.CoarseLocation
 import java.sql.Timestamp
 import java.time.Instant
@@ -30,6 +32,7 @@ class JdbcTonightFeedRepository(
         intent: String?,
         limit: Int,
         now: Instant,
+        filters: DiscoveryFilters,
     ): List<TonightFeedRow> =
         dataSource.withConnection { connection ->
             connection.prepareStatement(SQL).use { statement ->
@@ -46,6 +49,10 @@ class JdbcTonightFeedRepository(
                 statement.setDouble(index++, radiusMeters.toDouble()) // exact cell-to-cell radius
                 statement.setString(index++, intent) // intent filter sentinel
                 statement.setString(index++, intent) // intent filter value
+                val orientations = connection.createArrayOf("text", filters.orientations.toTypedArray())
+                statement.setArray(index++, orientations)
+                statement.setArray(index++, orientations)
+                index = LifestyleFilterSql.bind(statement, connection, index, filters.lifestyleTags, filters.boundaryItems)
                 statement.setInt(index++, limit)
                 statement.executeQuery().use { rs ->
                     buildList {
@@ -214,6 +221,10 @@ class JdbcTonightFeedRepository(
               )
               AND pynapli_coarse_distance_m(v.geom, COALESCE(owner_travel.geom, owner_ul.geom)) <= ?
               AND (?::text IS NULL OR ts.intent = ?::text)
+              -- The session OWNER's own orientation, lifestyle and boundaries (same predicates as
+              -- Grid and Swipe); a linked partner's values never stand in for the owner's.
+              AND (cardinality(?::text[]) = 0 OR owner_profile.orientation = ANY(?::text[]))
+              ${LifestyleFilterSql.predicates("owner_profile")}
             -- L-08 ordering: coarse km bucket (distance-independent for owners who hide it),
             -- then a stable pseudo-random tiebreak; never exact distance.
             ORDER BY order_bucket ASC, order_tiebreak ASC, ts.id ASC
