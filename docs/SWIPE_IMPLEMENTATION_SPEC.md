@@ -676,7 +676,7 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
 - [x] Dealbreakers (`SwipeDealbreakerKey`: `age`, `distance`, `verified`, `discoveryStyles`,
   `intents`, `linkedOnly`, `swap`, `room`, `experience`, `boundaries`) are hard gates and never
   relaxed; the filters sheet has a per-section lock. The locks are part of the deck scope hash, so a
-  cursor or card token cannot cross a change of locks.
+  paging cursor cannot cross a change of locks.
 - [x] Never-empty deck: `SwipeDeckRelaxation` drops soft filters and doubles the radius (capped) when
   a deck is below low water (the doubled radius is rounded up to its step); dealbreakers and identity
   filters (gender/orientation) stay hard.
