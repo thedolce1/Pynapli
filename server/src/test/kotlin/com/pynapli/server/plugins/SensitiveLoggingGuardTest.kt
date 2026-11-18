@@ -121,6 +121,10 @@ class SensitiveLoggingGuardTest {
                 "mediaUrl",
                 "downloadUrl",
                 "publicContentUrl",
+                // Verification selfies (face images) and their review URLs
+                "selfieUrl",
+                "reviewUrl",
+                "storageObjectKey",
                 // Sensitive profile tags
                 "lifestyleTags",
             )

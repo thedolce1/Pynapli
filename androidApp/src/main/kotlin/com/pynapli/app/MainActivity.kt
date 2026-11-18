@@ -117,6 +117,7 @@ class MainActivity : ComponentActivity() {
                                 onUseCurrentLocation = ::requestCurrentLocation,
                                 onPickMediaForAlbum = ::pickMediaForAlbum,
                                 onPickConversationPhoto = ::pickConversationPhoto,
+                                onPickVerificationSelfie = ::pickVerificationSelfie,
                                 onSetDiscreetIcon = ::applyLauncherIcon,
                                 devLoginCredentials = graph.devLoginCredentials,
                                 testerDiagnosticLabel = graph.testerDiagnosticLabel,
@@ -235,6 +236,9 @@ class MainActivity : ComponentActivity() {
     private fun pickMediaForAlbum(kind: MediaAlbumKindUi) = launchPhotoPicker(MediaPickTarget.Album(kind))
 
     private fun pickConversationPhoto() = launchPhotoPicker(MediaPickTarget.Conversation)
+
+    // The existing system photo picker (no camera library): the person picks the selfie they just took.
+    private fun pickVerificationSelfie() = launchPhotoPicker(MediaPickTarget.VerificationSelfie)
 
     private fun launchPhotoPicker(target: MediaPickTarget) {
         pendingPickTarget = target

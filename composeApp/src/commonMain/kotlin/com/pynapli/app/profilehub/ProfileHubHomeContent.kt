@@ -27,6 +27,7 @@ import com.pynapli.app.design.icons.filled.Security
 import com.pynapli.app.design.icons.filled.Settings
 import com.pynapli.app.design.icons.filled.ShoppingBag
 import com.pynapli.app.design.icons.filled.Tune
+import com.pynapli.app.design.icons.filled.Verified
 import com.pynapli.app.design.icons.filled.Visibility
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.app.profilelink.ProfileLinksUiState
@@ -59,6 +60,8 @@ internal fun ProfileHubContent(
     onLogoutClick: () -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier,
+    photoVerificationSummary: String? = null,
+    onOpenPhotoVerification: (() -> Unit)? = null,
 ) {
     val hasPartnerSurface =
         profileLinksState.current != null ||
@@ -137,6 +140,14 @@ internal fun ProfileHubContent(
                     value = "See your public view",
                     onClick = onPreviewProfile,
                 )
+                if (onOpenPhotoVerification != null) {
+                    ProfileHubRow(
+                        icon = Icons.Filled.Verified,
+                        label = "Photo verification",
+                        value = photoVerificationSummary ?: "Get verified",
+                        onClick = onOpenPhotoVerification,
+                    )
+                }
             }
         }
 

@@ -10,11 +10,13 @@ import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.activity.JdbcActivityRepository
 import com.pynapli.server.activity.JdbcActivityRetentionRepository
 import com.pynapli.server.admin.AdminDashboardService
+import com.pynapli.server.admin.AdminMediaReviewService
 import com.pynapli.server.admin.AdminPartnerLinkReviewService
 import com.pynapli.server.admin.AdminRequestAuditRecorder
 import com.pynapli.server.admin.AdminSubscriptionSupportService
 import com.pynapli.server.admin.AdminUserLookupService
 import com.pynapli.server.admin.JdbcAdminDashboardRepository
+import com.pynapli.server.admin.JdbcAdminMediaReviewRepository
 import com.pynapli.server.admin.JdbcAdminPartnerLinkReviewRepository
 import com.pynapli.server.admin.JdbcAdminRequestAuditRecorder
 import com.pynapli.server.admin.JdbcAdminSubscriptionSupportRepository
@@ -32,6 +34,7 @@ import com.pynapli.server.location.LocationService
 import com.pynapli.server.location.TravelLocationService
 import com.pynapli.server.location.TravelPlaceSearchService
 import com.pynapli.server.media.JdbcMediaCleanupRepository
+import com.pynapli.server.media.JdbcMediaRepository
 import com.pynapli.server.media.LocalMediaUploadStorage
 import com.pynapli.server.media.MediaCleanupService
 import com.pynapli.server.media.MediaCleanupWorker
@@ -77,6 +80,9 @@ import com.pynapli.server.tonight.TonightSessionExpiryWorker
 import com.pynapli.server.tonight.TonightSessionService
 import com.pynapli.server.verification.AgeVerificationService
 import com.pynapli.server.verification.JdbcAgeVerificationRepository
+import com.pynapli.server.verification.JdbcPhotoVerificationRepository
+import com.pynapli.server.verification.PhotoVerificationRetentionWorker
+import com.pynapli.server.verification.PhotoVerificationService
 import com.pynapli.server.verification.RedirectAgeVerificationProvider
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
@@ -99,6 +105,7 @@ class ServerDependencies(
     val adminPartnerLinkReviewService: AdminPartnerLinkReviewService,
     val adminSubscriptionSupportService: AdminSubscriptionSupportService,
     val adminDashboardService: AdminDashboardService,
+    val adminMediaReviewService: AdminMediaReviewService,
     val adminRequestAuditRecorder: AdminRequestAuditRecorder?,
     val locationService: LocationService,
     val travelLocationService: TravelLocationService,
@@ -148,6 +155,8 @@ class ServerDependencies(
     val matchSideEffectDrainWorker: com.pynapli.server.swipe.MatchSideEffectDrainWorker? = null,
     val psyncPresenceWatcher: com.pynapli.server.psync.PsyncPresenceWatcher? = null,
     val ageVerificationService: AgeVerificationService,
+    val photoVerificationService: PhotoVerificationService,
+    val photoVerificationRetentionWorker: PhotoVerificationRetentionWorker? = null,
     val accountLifecycleService: AccountLifecycleService,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     private val profileActivityScope: CoroutineScope,
@@ -161,6 +170,7 @@ class ServerDependencies(
         runCatching { activityRetentionWorker?.close() }
         runCatching { dataRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
+        runCatching { photoVerificationRetentionWorker?.close() }
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
         runCatching { psyncSessionExpiryWorker?.close() }
@@ -314,6 +324,13 @@ class ServerDependencies(
                 AdminDashboardService(
                     repository = JdbcAdminDashboardRepository(database.dataSource),
                 )
+            val adminMediaReviewService =
+                AdminMediaReviewService(
+                    repository = JdbcAdminMediaReviewRepository(database.dataSource),
+                    mediaRepository = JdbcMediaRepository(database.dataSource),
+                    mediaAssetUrlResolver = media.mediaAssetUrlResolver,
+                    notificationPublisher = core.notificationService,
+                )
             val adminRequestAuditRecorder =
                 config.adminApiToken?.let { JdbcAdminRequestAuditRecorder(database.dataSource) }
             val grid =
@@ -362,6 +379,25 @@ class ServerDependencies(
                     // Successful verification lowers account risk (TRUST_AND_SAFETY_SPEC).
                     verificationRiskSignals = core.riskService,
                 )
+            val photoVerificationService =
+                PhotoVerificationService(
+                    repository = JdbcPhotoVerificationRepository(database.dataSource),
+                    selfieMedia = media.selfieMediaGateway,
+                    faceDetector = media.selfieFaceDetector,
+                    rateLimitService = core.rateLimitService,
+                    notificationPublisher = core.notificationService,
+                )
+            // Selfie retention runs with the media cleanup sweep (same switch and interval).
+            val photoVerificationRetentionWorker =
+                if (config.mediaCleanupEnabled) {
+                    PhotoVerificationRetentionWorker(
+                        service = photoVerificationService,
+                        intervalMillis = config.mediaCleanupIntervalMillis,
+                        jobLock = PostgresJobLock(database.dataSource),
+                    )
+                } else {
+                    null
+                }
             val messaging =
                 buildMessagingDependencies(
                     dataSource = database.dataSource,
@@ -408,6 +444,7 @@ class ServerDependencies(
                 adminPartnerLinkReviewService = adminPartnerLinkReviewService,
                 adminSubscriptionSupportService = adminSubscriptionSupportService,
                 adminDashboardService = adminDashboardService,
+                adminMediaReviewService = adminMediaReviewService,
                 adminRequestAuditRecorder = adminRequestAuditRecorder,
                 locationService = core.locationService,
                 travelLocationService = commerceTravel.travelLocationService,
@@ -466,6 +503,8 @@ class ServerDependencies(
                         broadcaster = core.psyncBroadcaster,
                     ),
                 ageVerificationService = ageVerificationService,
+                photoVerificationService = photoVerificationService,
+                photoVerificationRetentionWorker = photoVerificationRetentionWorker,
                 accountLifecycleService = core.accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
                 profileActivityScope = profileActivityScope,

@@ -91,7 +91,9 @@ MVP behavior:
 - Android saves the user's local timezone with the preference.
 - Ktor validates the saved window and timezone.
 - The dispatch worker defers non-safety notifications until quiet hours end by returning the outbox row to `pending` with a future `available_at`.
-- `system_safety` notifications bypass quiet hours.
+- `system_safety` notifications bypass quiet hours. They are sent for photo verification decisions
+  (approved, rejected, revoked) and when an admin rejects a held profile photo, with the generic
+  "Pynapli safety" copy; the payload carries only an `event` name, never the reason or a media URL.
 
 ## Grouping
 

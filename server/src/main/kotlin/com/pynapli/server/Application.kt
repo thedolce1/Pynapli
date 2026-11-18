@@ -4,6 +4,7 @@ import com.pynapli.server.account.configureAccountLifecycleRoutes
 import com.pynapli.server.activity.configureActivityRoutes
 import com.pynapli.server.activity.configureActivityStreamRoutes
 import com.pynapli.server.admin.configureAdminDashboardRoutes
+import com.pynapli.server.admin.configureAdminMediaReviewRoutes
 import com.pynapli.server.admin.configureAdminPartnerLinkReviewRoutes
 import com.pynapli.server.admin.configureAdminSubscriptionSupportRoutes
 import com.pynapli.server.admin.configureAdminUserLookupRoutes
@@ -54,9 +55,11 @@ import com.pynapli.server.swipe.configureSwipeRoutes
 import com.pynapli.server.swipe.configureTopPicksRoutes
 import com.pynapli.server.tonight.configureTonightFeedRoutes
 import com.pynapli.server.tonight.configureTonightSessionRoutes
+import com.pynapli.server.verification.configureAdminPhotoVerificationRoutes
 import com.pynapli.server.verification.configureAgeVerificationAdminRoutes
 import com.pynapli.server.verification.configureAgeVerificationCallbackRoute
 import com.pynapli.server.verification.configureAgeVerificationRoutes
+import com.pynapli.server.verification.configurePhotoVerificationRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -90,6 +93,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.activityRetentionWorker?.start()
     dependencies.dataRetentionWorker?.start()
     dependencies.mediaCleanupWorker?.start()
+    dependencies.photoVerificationRetentionWorker?.start()
     dependencies.tonightSessionExpiryWorker.start()
     dependencies.psyncSessionExpiryWorker?.start()
     dependencies.matchSideEffectDrainWorker?.start()
@@ -150,8 +154,10 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAdminPartnerLinkReviewRoutes(dependencies.config, dependencies.adminPartnerLinkReviewService)
     configureAdminSubscriptionSupportRoutes(dependencies.config, dependencies.adminSubscriptionSupportService)
     configureAdminDashboardRoutes(dependencies.config, dependencies.adminDashboardService)
+    configureAdminMediaReviewRoutes(dependencies.config, dependencies.adminMediaReviewService)
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
     configureAgeVerificationCallbackRoute(dependencies.config, dependencies.ageVerificationService)
+    configureAdminPhotoVerificationRoutes(dependencies.config, dependencies.photoVerificationService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(
@@ -163,6 +169,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAccountLifecycleRoutes(dependencies.authService, dependencies.accountLifecycleService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService, dependencies.requestProfilerFactory)
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
+    configurePhotoVerificationRoutes(dependencies.authService, dependencies.photoVerificationService)
     configureProfileLinkRoutes(dependencies.authService, dependencies.profileLinkService)
     configureLocationRoutes(dependencies.authService, dependencies.locationService)
     configureTravelLocationRoutes(

@@ -68,10 +68,11 @@ fun VerifiedBadge(
     modifier: Modifier = Modifier,
     size: Dp = 14.dp,
     tint: Color = PynapliSemantic.Verified,
+    contentDescription: String? = "Verified",
 ) {
     Icon(
         imageVector = Icons.Filled.Verified,
-        contentDescription = "Verified",
+        contentDescription = contentDescription,
         tint = tint,
         modifier = modifier.size(size),
     )

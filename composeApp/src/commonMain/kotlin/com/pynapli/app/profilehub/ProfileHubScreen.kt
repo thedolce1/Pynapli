@@ -25,6 +25,9 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.app.messages.MessagesUiState
 import com.pynapli.app.profilelink.ProfileLinksUiState
+import com.pynapli.app.verification.PhotoVerificationSheet
+import com.pynapli.app.verification.PhotoVerificationStateHolder
+import com.pynapli.app.verification.hubSummary
 import com.pynapli.shared.network.dto.SupportContactDto
 import kotlinx.coroutines.launch
 
@@ -53,6 +56,9 @@ fun ProfileHubScreen(
     discreetIconSupported: Boolean = true,
     modifier: Modifier = Modifier,
     onStartPsync: (() -> Unit)? = null,
+    photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
+    // The platform photo picker for the selfie; null hides the action (not wired on this shell).
+    onPickVerificationSelfie: (() -> Unit)? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
@@ -68,6 +74,11 @@ fun ProfileHubScreen(
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
+    }
+
+    val photoVerificationState = photoVerificationStateHolder?.state?.collectAsState()?.value
+    LaunchedEffect(photoVerificationStateHolder) {
+        photoVerificationStateHolder?.load()
     }
 
     if (state.editVisible) {
@@ -209,6 +220,14 @@ fun ProfileHubScreen(
                 scope.launch { stateHolder.loadSafetyLists() }
             },
             onOpenAgeVerification = stateHolder::openAgeVerification,
+            photoVerificationSummary = photoVerificationState?.hubSummary(),
+            onOpenPhotoVerification =
+                photoVerificationStateHolder?.let { holder ->
+                    {
+                        holder.open()
+                        scope.launch { holder.load() }
+                    }
+                },
             onOpenAppSettings = {
                 appSettingsStateHolder.editFromCurrent()
                 stateHolder.openAppSettings()
@@ -233,6 +252,16 @@ fun ProfileHubScreen(
             onLogoutClick = { showLogoutConfirm = true },
             onClearMessage = stateHolder::clearMessage,
             modifier = modifier,
+        )
+    }
+
+    if (photoVerificationStateHolder != null && photoVerificationState != null && photoVerificationState.sheetVisible) {
+        PhotoVerificationSheet(
+            state = photoVerificationState,
+            retryLabel = photoVerificationStateHolder.retryLabel(),
+            onDismiss = photoVerificationStateHolder::dismiss,
+            onRequestChallenge = { scope.launch { photoVerificationStateHolder.requestChallenge() } },
+            onPickSelfie = onPickVerificationSelfie,
         )
     }
 

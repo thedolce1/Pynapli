@@ -197,8 +197,12 @@ internal fun FacePhotoAndAgeVerifiedSection(
     onChange: (face: Boolean, ageVerified: Boolean) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SwipeSheetChip(label = "Face photo verified", active = facePhotoVerified) {
-            onChange(!facePhotoVerified, ageVerified)
+        // "Verified only" already means a reviewed selfie (FILTERS_SPEC), the same signal as face photo
+        // verified, so this chip only appears to clear an older saved filter that still has it on.
+        if (facePhotoVerified) {
+            SwipeSheetChip(label = "Photo verified", active = true) {
+                onChange(false, ageVerified)
+            }
         }
         SwipeSheetChip(label = "Age verified", active = ageVerified) {
             onChange(facePhotoVerified, !ageVerified)

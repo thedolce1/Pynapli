@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,6 +65,7 @@ internal fun ProfileHero(
     onReportClick: () -> Unit,
     isOwnProfile: Boolean = false,
     onInviteProfileLink: (() -> Unit)? = null,
+    coupleVerified: Boolean = false,
 ) {
     val photos =
         remember(photoUrls, profilePhotoUrl) {
@@ -194,6 +196,23 @@ internal fun ProfileHero(
                 }
                 if (verified) {
                     VerifiedBadge(size = 18.dp)
+                }
+            }
+
+            if (coupleVerified) {
+                // Both linked partners are photo-verified (TRUST_AND_SAFETY_SPEC).
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.semantics(mergeDescendants = true) {},
+                ) {
+                    VerifiedBadge(size = 14.dp, contentDescription = null)
+                    Text(
+                        text = "Verified couple",
+                        color = PynapliColors.OnPhotoPrimary,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
 

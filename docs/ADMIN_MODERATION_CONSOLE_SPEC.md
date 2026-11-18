@@ -11,7 +11,7 @@ is **no console UI** and none is planned now; operators call `/v1/admin/*` direc
 ## Scope (2026-11-17)
 
 - **Active:** moderation queues: reports, held-message review queue, appeals, risk review, age
-  verification review, and entitlement grant/revoke.
+  verification review, photo verification review, pending profile photos, and entitlement grant/revoke.
 - **Frozen** (no consumer, no further investment): dashboard counts, user lookup, subscription support
   view, partner-link review, product and notification metrics endpoints.
 
@@ -21,7 +21,7 @@ is **no console UI** and none is planned now; operators call `/v1/admin/*` direc
   `X-Admin-Token`, `X-Admin-Id` and, for sensitive actions, `X-Admin-Reason`.
 - **Roles** (`PYNAPLI_ADMIN_ROLES` = `id:role,...`, `admin/AdminRoles.kt`): operator and senior.
   Sensitive actions (PII reveals, entitlement grant/revoke, appeal decisions, reported-media removal,
-  risk set-tier, account lock and ban)
+  risk set-tier, account lock and ban, photo verification review and revoke)
   need the senior role (`requireSeniorAdmin`, 403 otherwise). Unconfigured = every admin is senior.
 - **Step-up MFA** (`admin/AdminMfa.kt`): with `PYNAPLI_ADMIN_MFA_ENFORCED`, the same sensitive set needs
   a per-admin TOTP code in `X-Admin-MFA`, verified against `PYNAPLI_ADMIN_MFA_SECRETS`
@@ -43,6 +43,8 @@ is **no console UI** and none is planned now; operators call `/v1/admin/*` direc
 | Appeals | `/v1/admin/appeals` | list, mark under review, decide: `upheld`, `reduced`, `restored`, `verification_required`, `escalated` |
 | Risk | `/v1/admin/risk` | list states and events, clear, mark reviewed; set tier, lock, ban (senior + MFA; lock/ban also end the account's sessions and close its sockets at once) |
 | Age verification | `/v1/admin/verification/age/{id}/review` | review with reason |
+| Pending profile photos | `/v1/admin/media/pending` | list photos the scanner held, oldest first (paged); approve (ready/approved, now public) or reject with a reason (removed; owner gets a system-safety push). Operator-level |
+| Photo verification | `/v1/admin/verification/photo` | list pending selfies oldest first (needs reason; audited view), approve, reject with a user-visible reason, revoke a user's verification (all senior + MFA) |
 | Entitlements | `/v1/admin/subscriptions/entitlements` | grant, revoke (senior) |
 
 Moderation priority: (1) underage / CSAM / imminent harm, (2) threats, violence, doxxing,
@@ -59,6 +61,9 @@ Moderation priority: (1) underage / CSAM / imminent harm, (2) threats, violence,
   possible; high false-positive patterns should raise an engineering alert.
 - **Appeals:** reviewed by a senior moderator not involved in the original decision; target response
   7 business days; CSAM and confirmed severe fraud may be non-appealable per policy/legal review.
+- **Photo verification:** the reviewer compares the selfie's pose with the issued instruction and its
+  face with the profile photos. Selfie URLs are short-lived signed URLs; selfies are deleted 7 days after
+  the decision. Rejections and revokes need a reason the user sees.
 - **Age verification:** never show raw ID documents, raw biometric media, or provider data beyond
   what is needed.
 - **Billing:** no silent permanent paid entitlements without elevated permission; every billing action

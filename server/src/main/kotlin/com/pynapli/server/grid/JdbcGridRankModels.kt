@@ -31,7 +31,14 @@ internal data class GridHydration(
     val linkedPartnerDisplayName: String?,
     val linkedPartnerThumbnailMediaAssetId: UUID?,
     val tonightActive: Boolean = false,
-)
+    // The card owner is photo-verified (profiles.verified_at).
+    val verified: Boolean = false,
+    // The linked partner shown in the mini is photo-verified too.
+    val linkedPartnerVerified: Boolean = false,
+) {
+    /** Couple verified: both linked partners verified, and the partner is visible to this viewer. */
+    val coupleVerified: Boolean get() = verified && linkedPartnerUserId != null && linkedPartnerVerified
+}
 
 /**
  * The viewer's location CELL (effective location snapped to the 0.01-degree grid, in hundredths of a

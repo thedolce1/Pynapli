@@ -45,7 +45,12 @@ fun main() {
         )
     val mediaPicker =
         DesktopMediaPicker(
-            router = PickedMediaRouter(graph.pynapliAppGraph.mediaAlbumsStateHolder, graph.pynapliAppGraph.conversationStateHolder),
+            router =
+                PickedMediaRouter(
+                    graph.pynapliAppGraph.mediaAlbumsStateHolder,
+                    graph.pynapliAppGraph.conversationStateHolder,
+                    graph.pynapliAppGraph.photoVerificationStateHolder,
+                ),
             scope = appScope,
         )
 
@@ -88,6 +93,7 @@ private fun DesktopAppContent(
                 onUseCurrentLocation = locationAdapter::requestCurrentLocation,
                 onPickMediaForAlbum = mediaPicker::pickForAlbum,
                 onPickConversationPhoto = mediaPicker::pickConversationPhoto,
+                onPickVerificationSelfie = mediaPicker::pickVerificationSelfie,
                 // No billing and no launcher icon on the desktop dev shell, same as web.
                 storePurchasesAvailable = false,
                 discreetIconSupported = false,

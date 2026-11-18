@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$PackageName = "com.pynapli.app",
     [string]$LaunchActivity = ".DefaultLauncherAlias",
@@ -203,7 +203,7 @@ Assert-NoAppErrorText $filterSheetTrustXml "Filter sheet (trust)"
 Assert-TextPresent $filterSheetTrustXml "Trust" "Filter sheet (trust)"
 # The Trust chips moved off the filtersSheet golden with the section itself; assert them here so the
 # coverage is relocated rather than lost.
-foreach ($trustChip in @("Verified", "Face photo", "Age verified")) {
+foreach ($trustChip in @("Photo verified", "Age verified")) {
     Assert-TextPresent $filterSheetTrustXml $trustChip "Filter sheet (trust)"
 }
 

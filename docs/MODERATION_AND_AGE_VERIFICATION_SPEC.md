@@ -44,6 +44,8 @@ Current MVP slice:
 - Admin/provider paths can review or callback verification results. The provider callback is signed with its own secret (`PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET`, HMAC-SHA256 over `<timestamp>.<body>`, 5-minute window); it never uses the admin token.
 - Results are stored in `age_verifications`; successful verification also sets `profiles.age_verified_at`.
 - Raw ID, selfie, and biometric payloads are not stored by this slice.
+- Selfie *photo* verification (the verified badge) is a separate flow from age verification; see
+  TRUST_AND_SAFETY_SPEC "Photo Verification". Its selfies are kept only until 7 days after the decision.
 - Still required before beta: provider selection, market-specific rules, legal review, social-auth parity, and production admin controls.
 
 ## Content Zones
@@ -188,6 +190,7 @@ Avoid:
 - [x] Market-driven enhanced verification flags: server-side `AgeVerificationMarketPolicy` seam (baseline default flags nothing; ops/legal swaps a real policy via DI, mirroring `TravelRegionPolicy`). In a flagged market with a provider configured, `requirements` reports `enhancedRequired` and accepts only the provider method, and `start` rejects manual review with `ENHANCED_VERIFICATION_REQUIRED`; without a provider the flag fails open to manual review so misconfiguration cannot strand users. Which markets to flag (and the provider choice) remains an ops/legal decision.
 - [x] Verification data minimization.
 - [x] Public/profile media moderation is enforced before discovery visibility.
+- [x] Held profile photos (manual-review scanner, or a Cloud Vision "possible" result) have an admin queue: `GET /v1/admin/media/pending` (oldest first, paged), approve (ready/approved) or reject with a reason (removed, owner notified by a system-safety push). Operator-level, audited.
 - [x] Private album grants and report flow exist; consent-gated private media stays hidden from non-grantees, removed media is filtered, and severe scanner decisions remove the asset before escalating.
 - [x] Report categories implemented.
 - [ ] Partial: reports/risk/message/appeal review queues and actions exist; full moderator console, roles, MFA, senior-review separation, and production admin separation are not complete.

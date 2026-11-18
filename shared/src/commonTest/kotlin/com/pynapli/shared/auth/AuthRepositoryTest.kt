@@ -410,6 +410,18 @@ private class FakeApiClient(
         request: StartAgeVerificationRequestDto,
     ): AppResult<AgeVerificationStatusDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun getPhotoVerificationStatus(): AppResult<com.pynapli.shared.network.dto.PhotoVerificationStatusDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun requestPhotoVerificationChallenge(): AppResult<com.pynapli.shared.network.dto.PhotoVerificationStatusDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun createPhotoVerificationUpload(
+        request: com.pynapli.shared.network.dto.CreatePhotoVerificationUploadRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.PhotoVerificationUploadSlotDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
+    override suspend fun submitPhotoVerification(
+        request: com.pynapli.shared.network.dto.SubmitPhotoVerificationRequestDto,
+    ): AppResult<com.pynapli.shared.network.dto.PhotoVerificationStatusDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+
     override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))

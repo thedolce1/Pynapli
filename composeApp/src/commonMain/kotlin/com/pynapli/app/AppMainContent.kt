@@ -53,6 +53,7 @@ import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SwipeScreen
 import com.pynapli.app.swipe.SwipeStateHolder
 import com.pynapli.app.tonight.PlayingTonightStateHolder
+import com.pynapli.app.verification.PhotoVerificationStateHolder
 import com.pynapli.shared.network.dto.MatchDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -87,6 +88,7 @@ internal fun ColumnScope.PynapliMainContent(
     travelLocationStateHolder: TravelLocationStateHolder?,
     playingTonightStateHolder: PlayingTonightStateHolder?,
     onboardingStateHolder: OnboardingStateHolder?,
+    photoVerificationStateHolder: PhotoVerificationStateHolder?,
     conversationActions: ConversationActions,
     scope: CoroutineScope,
     onProfileSurface: (ProfileSurface) -> Unit,
@@ -99,6 +101,7 @@ internal fun ColumnScope.PynapliMainContent(
     onUseCurrentLocation: () -> Unit,
     onPickMediaForAlbum: (MediaAlbumKindUi) -> Unit,
     onPickConversationPhoto: () -> Unit,
+    onPickVerificationSelfie: (() -> Unit)?,
     onSetDiscreetIcon: (Boolean) -> Unit,
     discreetIconSupported: Boolean = true,
 ) {
@@ -120,6 +123,8 @@ internal fun ColumnScope.PynapliMainContent(
                 onSetDiscreetIcon = onSetDiscreetIcon,
                 discreetIconSupported = discreetIconSupported,
                 onOpenPsync = onOpenPsync,
+                photoVerificationStateHolder = photoVerificationStateHolder,
+                onPickVerificationSelfie = onPickVerificationSelfie,
             )
         profileSurface == ProfileSurface.MediaAlbums -> {
             MediaAlbumsScreen(
@@ -222,6 +227,8 @@ private fun ColumnScope.ProfileHubSurface(
     onSetDiscreetIcon: (Boolean) -> Unit,
     discreetIconSupported: Boolean,
     onOpenPsync: (() -> Unit)? = null,
+    photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
+    onPickVerificationSelfie: (() -> Unit)? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val messagesState by messagesStateHolder.state.collectAsState()
@@ -298,6 +305,8 @@ private fun ColumnScope.ProfileHubSurface(
                     open()
                 }
             },
+        photoVerificationStateHolder = photoVerificationStateHolder,
+        onPickVerificationSelfie = onPickVerificationSelfie,
         // Cap + center the settings column on wide windows so it reads as an
         // intentional column instead of stretching edge-to-edge (WEB_PWA_GAMEPLAN).
         modifier =

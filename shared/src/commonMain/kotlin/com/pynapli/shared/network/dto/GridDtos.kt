@@ -59,6 +59,11 @@ data class GridCardDto(
     // "Visiting soon": the dates of an announced planned trip bringing them here (yyyy-MM-dd).
     val visitingFrom: String? = null,
     val visitingUntil: String? = null,
+    // Photo-verified (TRUST_AND_SAFETY_SPEC "Photo Verification"): the verified badge.
+    val verified: Boolean = false,
+    // This person and the linked partner shown in [linkedPartner] are both photo-verified.
+    // Computed server-side; false whenever the partner mini is hidden from this viewer.
+    val coupleVerified: Boolean = false,
 )
 
 @Serializable

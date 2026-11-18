@@ -58,6 +58,8 @@ internal object JdbcProfileSql {
                linked_partner.linked_partner_thumbnail_media_asset_id,
                p.display_age,
                (p.verified_at IS NOT NULL) AS verified,
+               -- Couple verified: this profile and its visible linked partner are both photo-verified.
+               (p.verified_at IS NOT NULL AND COALESCE(linked_partner.linked_partner_verified, false)) AS couple_verified,
                p.bio,
                p.neighborhood,
                p.gender,
@@ -174,7 +176,8 @@ internal object JdbcProfileSql {
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
                    COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
-                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id
+                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
+                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified
             FROM user_profile_links upl
             JOIN users linked_user
               ON linked_user.id = upl.linked_user_id

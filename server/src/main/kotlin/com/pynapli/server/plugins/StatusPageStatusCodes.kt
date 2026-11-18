@@ -304,6 +304,9 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         "APPEAL_REVIEW_NOT_FOUND",
         "USER_NOT_FOUND",
         -> HttpStatusCode.NotFound
+        "MEDIA_REVIEW_NOT_FOUND" -> HttpStatusCode.NotFound
+        "MEDIA_REVIEW_NOT_PENDING" -> HttpStatusCode.Conflict
+        "INVALID_REVIEW_CURSOR" -> HttpStatusCode.BadRequest
         "INVALID_ID",
         "INVALID_USER_ID",
         "INVALID_ADMIN_ACTOR",
@@ -324,6 +327,17 @@ internal fun verificationStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_CALLBACK_SIGNATURE" -> HttpStatusCode.Unauthorized
+        "PHOTO_VERIFICATION_COOLDOWN" -> HttpStatusCode.TooManyRequests
+        "PHOTO_VERIFICATION_ALREADY_VERIFIED" -> HttpStatusCode.Conflict
+        "PHOTO_VERIFICATION_PENDING" -> HttpStatusCode.Conflict
+        "PHOTO_VERIFICATION_CHALLENGE_EXPIRED" -> HttpStatusCode.Conflict
+        "PHOTO_VERIFICATION_NOT_PENDING" -> HttpStatusCode.Conflict
+        "PHOTO_VERIFICATION_NOT_VERIFIED" -> HttpStatusCode.Conflict
+        "PHOTO_VERIFICATION_CHALLENGE_NOT_FOUND" -> HttpStatusCode.NotFound
+        "PHOTO_VERIFICATION_SELFIE_NOT_FOUND" -> HttpStatusCode.NotFound
+        "INVALID_PHOTO_VERIFICATION_SELFIE" -> HttpStatusCode.BadRequest
+        "INVALID_PHOTO_VERIFICATION_QUERY" -> HttpStatusCode.BadRequest
+        "PHOTO_VERIFICATION_REASON_REQUIRED" -> HttpStatusCode.BadRequest
         "PROFILE_NOT_FOUND",
         "VERIFICATION_NOT_FOUND",
         -> HttpStatusCode.NotFound

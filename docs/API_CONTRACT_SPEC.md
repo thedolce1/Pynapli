@@ -41,7 +41,10 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 
 ### Grid (`POST /v1/grid/query`)
 
-- Cards stay minimal (id, name, thumbnail, online, distance label, linked-partner mini).
+- Cards stay minimal (id, name, thumbnail, online, distance label, linked-partner mini, `verified`,
+  `coupleVerified`). `coupleVerified` is server-computed: true only while the person and the partner in
+  the mini are both photo-verified, so it is false whenever the mini is hidden. Profile detail
+  (`PublicProfileDto`) carries the same `coupleVerified`.
 - Blocks, privacy and risk apply before cards are returned.
 - Tier volume caps (page size and depth) are enforced server-side. **Cursor tokens carry scope and
   seen-count state**, so a client can't bypass tier depth by changing the requested limit. Grid
@@ -149,6 +152,17 @@ separately.
   authorization and a review reason.
 - `GET /v1/verification/requirements` has no client caller and is frozen.
 
+### Photo verification
+
+- `GET /v1/verification/photo` returns `PhotoVerificationStatusDto` (`none`, `challenge` with the pose,
+  `pending`, `verified`, `rejected` with `rejectionReason` and `retryAvailableAt`).
+- `POST /v1/verification/photo/challenge` issues a random server pose valid 10 minutes (10/hour;
+  `PHOTO_VERIFICATION_PENDING` / `_ALREADY_VERIFIED` 409, `_COOLDOWN` 429).
+- `POST /v1/verification/photo/uploads` returns a signed upload slot for the selfie; the client PUTs the
+  bytes there, then `POST /v1/verification/photo/submit` with `challengeId` + `mediaAssetId` (5/day).
+  A failed submit is not retried blindly: refetch the status (a lost response leaves it pending).
+- The selfie URL is never returned to the client after upload; only admin reviewers get a signed URL.
+
 ### Realtime
 
 Streams: `/v1/presence/stream`, `/v1/activity/stream`, `/v1/messages/stream`, `/v1/psync/stream`.
@@ -161,7 +175,7 @@ is being removed (no client caller).
 
 All admin routes live under `/v1/admin`, require admin auth (roles, MFA) and are audited. They are
 never exposed to app clients. Only the moderation queues (reports, review queue, appeals, risk, age
-review) are active; the other admin endpoints (dashboard, user lookup, subscription support,
+review, photo verification, pending profile photos) are active; the other admin endpoints (dashboard, user lookup, subscription support,
 partner-link review, metrics) are frozen. See
 [ADMIN_MODERATION_CONSOLE_SPEC.md](ADMIN_MODERATION_CONSOLE_SPEC.md).
 

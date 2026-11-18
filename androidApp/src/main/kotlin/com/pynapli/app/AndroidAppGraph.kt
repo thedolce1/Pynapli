@@ -177,8 +177,14 @@ class AndroidAppGraph(
                 realtimeStreams.message,
         )
 
-    /** Routes a picked photo to its album or the open conversation. */
-    val pickedMediaRouter by lazy { PickedMediaRouter(pynapliAppGraph.mediaAlbumsStateHolder, pynapliAppGraph.conversationStateHolder) }
+    /** Routes a picked photo to its album, the open conversation, or a verification selfie. */
+    val pickedMediaRouter by lazy {
+        PickedMediaRouter(
+            pynapliAppGraph.mediaAlbumsStateHolder,
+            pynapliAppGraph.conversationStateHolder,
+            pynapliAppGraph.photoVerificationStateHolder,
+        )
+    }
 
     /** Keeps the device's push registration in step with the session and settings. */
     val pushRegistrationSync = PushRegistrationSync(pushRegistrationCoordinator, authStateHolder, appSettingsStateHolder)

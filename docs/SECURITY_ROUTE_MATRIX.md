@@ -36,6 +36,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `AdminPartnerLinkReviewRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Partner-link review via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `partner_link_review` audit row. |
 | `AdminSubscriptionSupportRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Read-only subscription support view via `requireAdminActor`; additionally requires `X-Admin-Reason` and writes a `subscription_support_view` audit row. Excludes raw purchase tokens/order ids. |
 | `AdminDashboardRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Counts-only backlog dashboard across the reports/appeals/held-message/risk queues via `requireAdminActor`; aggregate counts only, so no `X-Admin-Reason`/audit (the metrics pattern). |
+| `AdminMediaReviewRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Pending profile photo list/approve/reject via `requireAdminActor` (operator-level: no senior role or MFA, these are photos the owner asked to show publicly). Reject needs a reason; decisions write `media_review.approve/reject` audit rows and a rejection sends the owner a system-safety push. |
 | `NotificationRoutes.kt` | User-authenticated | Preferences and device tokens are token-derived. |
 | `PresenceStreamRoutes.kt` | User-authenticated | SSE stream authenticates bearer token and block-filters target updates. |
 | `ProfileRoutes.kt` | User-authenticated | Profile reads/editing use token-derived viewer/owner and block checks. |
@@ -52,6 +53,8 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `TonightFeedRoutes.kt` | User-authenticated | Feed is token-derived and discovery-scoped. |
 | `TonightSessionRoutes.kt` | User-authenticated | Session lifecycle is token-derived and participant-scoped. |
 | `AgeVerificationRoutes.kt` | User/admin mixed | Requirements/status/start require bearer token; start is rate-limited; review requires admin auth. The provider callback is authenticated only by an HMAC-SHA256 signature with its own secret (`PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET`, 5-minute timestamp window) and is not served without one; the admin token is not accepted there. |
+| `PhotoVerificationRoutes.kt` | User-authenticated | Selfie photo verification status/challenge/upload/submit act only on the token-derived user; challenge (10/hour), upload slot (media upload limit) and submit (5/day) are rate-limited. The selfie is a private `verification` media asset: never in an album, never ready/approved, never returned to other users. |
+| `AdminPhotoVerificationRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Queue, approve, reject and revoke all need `requireAdminActor` plus a senior admin and step-up MFA (`X-Admin-MFA`): they reveal selfies and change trust status. The queue needs `X-Admin-Reason` and writes a `photo_verification.queue_view` audit row; decisions write `photo_verification.approve/reject/revoke` audit rows with the reviewer id. Selfie URLs are short-lived signed URLs. |
 
 ## Current Security Coverage
 

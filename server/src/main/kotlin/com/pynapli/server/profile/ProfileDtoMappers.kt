@@ -61,6 +61,7 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
         profilePhotoUrl = profilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
         photoUrls = profilePhotoMediaAssetIds.mapNotNull { mediaAssetUrlResolver?.publicContentUrl(it) },
         verified = verified,
+        coupleVerified = coupleVerified && linkedPartnerUserId != null,
         privateAlbumAccessStatus = privateAlbumAccessStatus,
         linkedPartner =
             linkedPartnerUserId?.let { partnerUserId ->

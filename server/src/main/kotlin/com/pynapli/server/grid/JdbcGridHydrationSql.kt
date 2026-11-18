@@ -23,6 +23,13 @@ internal fun Connection.hydrateGridCards(
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
+               COALESCE(linked_partner.linked_partner_verified, false) AS linked_partner_verified,
+               -- Photo verification (TRUST_AND_SAFETY_SPEC): the owner's badge, and with a verified
+               -- visible partner, the couple badge.
+               EXISTS (
+                   SELECT 1 FROM profiles vp
+                   WHERE vp.user_id = pc.user_id AND vp.verified_at IS NOT NULL
+               ) AS verified,
                -- PLAYING_TONIGHT_SPEC: a live session is the only Tonight signal (the legacy
                -- profiles.tonight_available_until column is no longer read). Per-tile signal only.
                EXISTS (
@@ -58,7 +65,8 @@ internal fun Connection.hydrateGridCards(
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
                    COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
-                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id
+                   linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
+                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified
             FROM user_profile_links upl
             JOIN users linked_user
               ON linked_user.id = upl.linked_user_id
@@ -155,6 +163,8 @@ internal fun Connection.hydrateGridCards(
                                     UUID::class.java,
                                 ),
                             tonightActive = rs.getBoolean("tonight_active"),
+                            verified = rs.getBoolean("verified"),
+                            linkedPartnerVerified = rs.getBoolean("linked_partner_verified"),
                         ),
                     )
                 }

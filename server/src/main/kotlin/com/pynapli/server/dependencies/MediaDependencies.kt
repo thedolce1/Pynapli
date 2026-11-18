@@ -6,24 +6,31 @@ import com.pynapli.server.media.AutoApproveMediaModerationScanner
 import com.pynapli.server.media.CdnMediaAssetUrlResolver
 import com.pynapli.server.media.CdnSignedUrlFactory
 import com.pynapli.server.media.CloudVisionMediaModerationScanner
+import com.pynapli.server.media.CloudVisionSelfieFaceDetector
+import com.pynapli.server.media.GcsMediaObjectDeleter
 import com.pynapli.server.media.GcsV4MediaAssetUrlResolver
 import com.pynapli.server.media.GcsV4MediaUploadSigner
 import com.pynapli.server.media.GcsV4SignedUrlFactory
 import com.pynapli.server.media.JdbcMediaRepository
 import com.pynapli.server.media.LocalDevMediaUploadSigner
 import com.pynapli.server.media.LocalMediaAssetUrlResolver
+import com.pynapli.server.media.LocalMediaObjectDeleter
 import com.pynapli.server.media.LocalMediaUploadStorage
 import com.pynapli.server.media.ManualReviewMediaModerationScanner
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaModerationScanner
+import com.pynapli.server.media.MediaObjectDeleter
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.MediaServiceMessageMediaGateway
+import com.pynapli.server.media.MediaVerificationSelfieGateway
 import com.pynapli.server.media.StaticMediaUploadSigner
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.JdbcReportRepository
 import com.pynapli.server.safety.MediaModerationEscalationService
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RiskService
+import com.pynapli.server.verification.SelfieFaceDetector
+import com.pynapli.server.verification.SelfieMediaGateway
 import java.io.ByteArrayInputStream
 import java.io.FileInputStream
 import java.nio.charset.StandardCharsets
@@ -43,6 +50,9 @@ internal class MediaDependencies(
     val localMediaUploadStorage: LocalMediaUploadStorage?,
     val mediaService: MediaService,
     val messageMediaGateway: com.pynapli.server.messaging.MessageMediaGateway,
+    val selfieMediaGateway: SelfieMediaGateway,
+    // Face counting for verification selfies; only when Cloud Vision moderation is configured.
+    val selfieFaceDetector: SelfieFaceDetector?,
 )
 
 internal fun buildMediaDependencies(
@@ -169,11 +179,47 @@ internal fun buildMediaDependencies(
             moderationScanner = moderationScanner,
             rateLimitService = rateLimitService,
         )
+    // Verification selfies ride the same signer/asset rows; unlike album media the app deletes their
+    // objects itself after the retention window (PhotoVerificationService.purgeExpiredSelfies).
+    val mediaObjectDeleter: MediaObjectDeleter? =
+        when {
+            gcsSignedUrlFactory != null -> GcsMediaObjectDeleter(gcsSignedUrlFactory)
+            localMediaUploadStorage != null -> LocalMediaObjectDeleter(localMediaUploadStorage)
+            else -> null
+        }
+    val selfieMediaGateway =
+        MediaVerificationSelfieGateway(
+            repository = mediaRepository,
+            uploadSigner = uploadSigner,
+            // Direct short-lived GCS signature, never the CDN: an edge-cached selfie would outlive its
+            // retention delete. Local storage serves straight from disk.
+            selfieUrlResolver =
+                gcsSignedUrlFactory?.let { factory ->
+                    GcsV4MediaAssetUrlResolver(
+                        storageBucket = config.mediaStorageBucket,
+                        signedUrlFactory = factory,
+                        ttl = java.time.Duration.ofMinutes(5),
+                    )
+                } ?: mediaAssetUrlResolver.takeIf { localMediaUploadStorage != null },
+            mediaAssetUrlResolver = mediaAssetUrlResolver,
+            objectDeleter = mediaObjectDeleter,
+        )
+    val selfieFaceDetector =
+        if (config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) && mediaSigningCredentials != null) {
+            CloudVisionSelfieFaceDetector(
+                credentials = mediaSigningCredentials,
+                endpoint = config.mediaModerationVisionEndpoint,
+            )
+        } else {
+            null
+        }
     return MediaDependencies(
         mediaAssetUrlResolver = mediaAssetUrlResolver,
         localMediaUploadStorage = localMediaUploadStorage,
         mediaService = mediaService,
         messageMediaGateway = messageMediaGateway,
+        selfieMediaGateway = selfieMediaGateway,
+        selfieFaceDetector = selfieFaceDetector,
     )
 }
 

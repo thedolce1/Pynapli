@@ -58,6 +58,9 @@ data class PublicProfileDto(
     val profilePhotoUrl: String? = null,
     val photoUrls: List<String> = emptyList(),
     val verified: Boolean = false,
+    // This person and the linked partner in [linkedPartner] are both photo-verified (server-computed;
+    // false whenever the partner mini is hidden from this viewer).
+    val coupleVerified: Boolean = false,
     // Live presence at fetch time, hydrated server-side from PresenceService so the peek
     // shows an accurate online dot from any entry point (Grid/Swipe/Activity/Hub) rather
     // than depending on a card the caller may not have. Convenience snapshot — WebSocket

@@ -39,7 +39,12 @@ fun main() {
         )
     val mediaPicker =
         WebMediaPicker(
-            router = PickedMediaRouter(graph.pynapliAppGraph.mediaAlbumsStateHolder, graph.pynapliAppGraph.conversationStateHolder),
+            router =
+                PickedMediaRouter(
+                    graph.pynapliAppGraph.mediaAlbumsStateHolder,
+                    graph.pynapliAppGraph.conversationStateHolder,
+                    graph.pynapliAppGraph.photoVerificationStateHolder,
+                ),
             scope = appScope,
         )
 
@@ -142,6 +147,7 @@ private fun WebAppContent(
                 onUseCurrentLocation = locationAdapter::requestCurrentLocation,
                 onPickMediaForAlbum = mediaPicker::pickForAlbum,
                 onPickConversationPhoto = mediaPicker::pickConversationPhoto,
+                onPickVerificationSelfie = mediaPicker::pickVerificationSelfie,
                 // Founder-locked web behavior: Store is read-only; browsers have no launcher icon.
                 storePurchasesAvailable = false,
                 discreetIconSupported = false,
