@@ -102,14 +102,15 @@ class FavoriteServiceIntegrationTest {
                         """.trimIndent(),
                     )
                 }
-                connection.prepareStatement(
-                    "INSERT INTO favorite_profiles (user_id, favorite_user_id) SELECT ?, id FROM users WHERE id NOT IN (?, ?)",
-                ).use { statement ->
-                    statement.setObject(1, viewer)
-                    statement.setObject(2, viewer)
-                    statement.setObject(3, first)
-                    statement.executeUpdate()
-                }
+                connection
+                    .prepareStatement(
+                        "INSERT INTO favorite_profiles (user_id, favorite_user_id) SELECT ?, id FROM users WHERE id NOT IN (?, ?)",
+                    ).use { statement ->
+                        statement.setObject(1, viewer)
+                        statement.setObject(2, viewer)
+                        statement.setObject(3, first)
+                        statement.executeUpdate()
+                    }
             }
             val service = service()
             service.add(viewer, first.toString())

@@ -9,8 +9,8 @@ import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.ApiFavoritesRepository
 import com.pynapli.app.grid.ApiGridFeedRepository
-import com.pynapli.app.grid.FavoritesStateHolder
 import com.pynapli.app.grid.ApiSavedGridFilterRepository
+import com.pynapli.app.grid.FavoritesStateHolder
 import com.pynapli.app.grid.GridPresenceStreamCoordinator
 import com.pynapli.app.grid.GridSnapshotStore
 import com.pynapli.app.grid.GridStateHolder

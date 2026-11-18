@@ -832,7 +832,10 @@ class GridInstantLoadTest {
 
             stateHolder.clearForSignOut()
 
-            assertTrue(stateHolder.state.value.cards.isEmpty())
+            assertTrue(
+                stateHolder.state.value.cards
+                    .isEmpty(),
+            )
             assertEquals(1, snapshotStore.cleared)
             assertEquals(GridScrollAnchor(), stateHolder.scrollAnchor)
         }

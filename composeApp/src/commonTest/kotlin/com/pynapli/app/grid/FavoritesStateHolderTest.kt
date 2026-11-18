@@ -26,12 +26,20 @@ class FavoritesStateHolderTest {
 
             holder.show()
             assertTrue(holder.state.value.showing)
-            assertEquals(listOf("a"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("a"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
 
             holder.showNearby()
             assertFalse(holder.state.value.showing)
             holder.show()
-            assertEquals(listOf("a", "b"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("a", "b"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
             assertEquals(2, repository.calls.size)
         }
 
@@ -44,7 +52,11 @@ class FavoritesStateHolderTest {
             holder.onFavoriteChanged(FavoriteChange("a", favorite = false))
             holder.removeCardById("b")
 
-            assertEquals(listOf("c"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("c"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
         }
 
     @Test
@@ -62,7 +74,11 @@ class FavoritesStateHolderTest {
 
             holder.loadMore()
 
-            assertEquals(listOf("a", "b", "c"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("a", "b", "c"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
             assertEquals(listOf(null, "next"), repository.calls)
             assertEquals(null, holder.state.value.nextCursor)
         }
@@ -73,7 +89,10 @@ class FavoritesStateHolderTest {
             val holder = FavoritesStateHolder(FakeFavoritesRepository(listOf(GridFeedUi(emptyList()))))
             holder.show()
             assertTrue(holder.state.value.loaded)
-            assertTrue(holder.state.value.cards.isEmpty())
+            assertTrue(
+                holder.state.value.cards
+                    .isEmpty(),
+            )
 
             holder.clear()
             assertEquals(FavoritesUiState(), holder.state.value)
@@ -88,7 +107,10 @@ class FavoritesStateHolderTest {
 
             profile.toggleFavorite()
 
-            assertFalse(profile.state.value.profile!!.favorite)
+            assertFalse(
+                profile.state.value.profile!!
+                    .favorite,
+            )
             assertEquals("Favorites limit reached.", profile.state.value.errorMessage)
         }
 
@@ -105,7 +127,10 @@ class FavoritesStateHolderTest {
             profile.toggleFavorite()
             runCurrent()
 
-            assertTrue(profile.state.value.profile!!.favorite)
+            assertTrue(
+                profile.state.value.profile!!
+                    .favorite,
+            )
             assertEquals(FavoriteChange("target", favorite = true), change)
             assertEquals(listOf("target" to true), repository.calls)
             job.cancel()
