@@ -4,9 +4,14 @@ internal object JdbcActivityFeedSql {
     val ACTIVITY_FEED_QUERY =
         """
         WITH recipient_location AS (
-            SELECT geom
-            FROM user_locations
-            WHERE user_id = ?
+            -- The recipient's effective location (travel point when travelling, else home).
+            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            FROM user_locations ul
+            LEFT JOIN travel_locations tl
+              ON tl.user_id = ul.user_id
+             AND tl.status = 'active'
+             AND tl.active_until IS NULL
+            WHERE ul.user_id = ?
         )
         SELECT ae.id AS event_id,
                ae.event_type,
@@ -26,11 +31,16 @@ internal object JdbcActivityFeedSql {
                album_request.status AS album_request_status,
                like_note.note_text AS note_text,
                actor_settings.show_distance AS actor_show_distance,
+               -- Location privacy (L-10/L-14): the public bucket of the cell-to-cell distance between
+               -- both people's effective locations, so it never moves with a few metres and never
+               -- reveals a traveller's home; nothing at all when the actor hides their distance.
                CASE
                    WHEN actor_settings.show_distance = true
                         AND recipient_location.geom IS NOT NULL
                         AND actor_location.geom IS NOT NULL
-                   THEN ST_Distance(recipient_location.geom, actor_location.geom)
+                   THEN pynapli_public_distance_m(
+                       pynapli_coarse_distance_m(recipient_location.geom, COALESCE(actor_travel.geom, actor_location.geom))
+                   )::double precision
                    ELSE NULL
                END AS distance_meters
         FROM activity_events ae
@@ -56,6 +66,10 @@ internal object JdbcActivityFeedSql {
           ON pair_profile.user_id = pair_user.id
          AND pair_profile.visibility_status = 'visible'
         LEFT JOIN user_locations actor_location ON actor_location.user_id = actor.id
+        LEFT JOIN travel_locations actor_travel
+          ON actor_travel.user_id = actor.id
+         AND actor_travel.status = 'active'
+         AND actor_travel.active_until IS NULL
         LEFT JOIN LATERAL (
             SELECT r.status
             FROM media_album_access_requests r

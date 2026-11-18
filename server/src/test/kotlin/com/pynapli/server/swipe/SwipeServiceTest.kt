@@ -774,9 +774,9 @@ class SwipeServiceTest {
             assertEquals(2, repository.queryDeckCallCount)
             // intents was dealbreaker -> preserved on retry
             assertEquals(setOf("dating"), repository.recordedQueryDeckFilters[1].intents)
-            // distance not dealbreaker -> radius doubled
+            // distance not dealbreaker -> radius doubled, then rounded up to its step (L-09)
             assertEquals(10_000, repository.recordedQueryDeckRadii[0])
-            assertEquals(20_000, repository.recordedQueryDeckRadii[1])
+            assertEquals(25_000, repository.recordedQueryDeckRadii[1])
         }
 
     @Test
@@ -859,8 +859,9 @@ class SwipeServiceTest {
 
             assertEquals(2, repository.queryDeckCallCount)
             assertEquals(10_000, repository.recordedQueryDeckRadii[0])
-            // Distance is not a dealbreaker -> radius doubles (capped at MAX_RADIUS_METERS = 100_000).
-            assertEquals(20_000, repository.recordedQueryDeckRadii[1])
+            // Distance is not a dealbreaker -> radius doubles (capped at MAX_RADIUS_METERS = 100_000)
+            // and is rounded up to its radius step.
+            assertEquals(25_000, repository.recordedQueryDeckRadii[1])
         }
 
     @Test

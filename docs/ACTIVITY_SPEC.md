@@ -666,6 +666,7 @@ Avoid:
 - [x] Activity is not a message inbox.
 - [x] Realtime Activity deltas.
 - [x] OS notification-to-Activity tab deep links with row focus support when the payload includes an Activity event id.
+- [x] Activity row distances follow location privacy: the public bucket of the cell-to-cell distance between both people's effective locations (a traveller's travel point, never their home), and none when the actor hides their distance (`SwipeLocationPrivacyTest`).
 
 ## Do Not Implement
 

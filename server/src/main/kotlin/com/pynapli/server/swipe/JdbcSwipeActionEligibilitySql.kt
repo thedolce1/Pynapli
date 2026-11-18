@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -16,7 +17,7 @@ internal fun Connection.isSwipeActionTargetEligible(
             -- Travel-mode override for viewer side; target-side travel
             -- must mirror queryDeck so dealt visiting cards remain
             -- actionable.
-            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
@@ -49,10 +50,13 @@ internal fun Connection.isSwipeActionTargetEligible(
               AND target_settings.incognito = false
               AND (target_travel.id IS NULL OR target_settings.visible_while_traveling = true)
               AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              -- Index pre-filter padded by the cell slack, then the deck's exact membership: the
+              -- effective location's cell within the radius step.
               AND (
                   ST_DWithin(v.geom, target_location.geom, ?)
                   OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
               )
+              AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, target_location.geom)) <= $radiusMeters
               AND NOT EXISTS (
                   SELECT 1 FROM swipe_actions sa
                   WHERE sa.actor_user_id = ?
@@ -71,8 +75,8 @@ internal fun Connection.isSwipeActionTargetEligible(
         statement.setObject(1, viewerUserId)
         statement.setObject(2, targetUserId)
         statement.setObject(3, targetUserId)
-        statement.setDouble(4, radiusMeters.toDouble())
-        statement.setDouble(5, radiusMeters.toDouble())
+        statement.setDouble(4, radiusMeters + CoarseLocation.CELL_PAD_METERS)
+        statement.setDouble(5, radiusMeters + CoarseLocation.CELL_PAD_METERS)
         statement.setObject(6, viewerUserId)
         statement.setObject(7, viewerUserId)
         statement.executeQuery().use { rs ->
@@ -96,7 +100,7 @@ internal fun Connection.checkSwipeActionPreconditions(
             -- check; if the viewer Liked someone in their travel city
             -- then jumped home, this query still uses the travel point
             -- so the action remains within-radius for the original deck.
-            SELECT COALESCE(tl.geom, ul.geom) AS geom,
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom,
                    tl.id AS travel_location_id
             FROM user_locations ul
             LEFT JOIN travel_locations tl
@@ -153,6 +157,7 @@ internal fun Connection.checkSwipeActionPreconditions(
                       ST_DWithin(v.geom, target_location.geom, ?)
                       OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
                   )
+                  AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, target_location.geom)) <= $radiusMeters
                   AND NOT EXISTS (
                       SELECT 1 FROM swipe_actions sa
                       WHERE sa.actor_user_id = ?
@@ -188,8 +193,8 @@ internal fun Connection.checkSwipeActionPreconditions(
         statement.setTimestamp(7, Timestamp.from(now))
         statement.setObject(8, targetUserId)
         statement.setObject(9, targetUserId)
-        statement.setDouble(10, radiusMeters.toDouble())
-        statement.setDouble(11, radiusMeters.toDouble())
+        statement.setDouble(10, radiusMeters + CoarseLocation.CELL_PAD_METERS)
+        statement.setDouble(11, radiusMeters + CoarseLocation.CELL_PAD_METERS)
         statement.setObject(12, viewerUserId)
         statement.setObject(13, viewerUserId)
         statement.setObject(14, viewerUserId)

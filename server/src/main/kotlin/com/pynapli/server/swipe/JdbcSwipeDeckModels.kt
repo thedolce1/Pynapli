@@ -28,9 +28,10 @@ internal data class DeckHydration(
     val linkedPartnerThumbnailMediaAssetId: UUID?,
 )
 
+/** The viewer's location cell (CoarseLocation.cellKey): hundredths of a degree. */
 internal data class DeckLocationCacheKey(
-    val longitudeE3: Int,
-    val latitudeE3: Int,
+    val cellLongitude: Int,
+    val cellLatitude: Int,
 )
 
 internal data class DeckRankCacheKey(

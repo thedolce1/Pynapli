@@ -85,14 +85,6 @@ internal fun DiscoveryFilters.rankCacheKey(): String =
         append(verifiedPreferred)
     }
 
-internal fun nearestCandidateWindowLimit(
-    limit: Int,
-    filters: DiscoveryFilters,
-): Int {
-    val multiplier = if (filters.hasAdvancedFilters || filters.verifiedPreferred) 20 else 8
-    return (limit * multiplier).coerceIn(limit, 1_500)
-}
-
 internal fun ResultSet.readStringArray(column: String): List<String> {
     val sqlArray = getArray(column) ?: return emptyList()
     return try {

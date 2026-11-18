@@ -585,9 +585,15 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
   for people who hide distance), then a stable tiebreak seeded by the viewer's cell; ranking starts
   at the viewer's cell centre and card distances are cell to cell. A traveller is never ranked by
   their home GPS.
-- [ ] Partial: the deck radius is still applied exactly (not snapped to the Grid's steps), its
-  membership test is raw rather than cell-to-cell, and its rank cache is keyed by a ~111 m bucket
-  rather than the cell.
+- [x] Deck location privacy matches the Grid (L-09/L-10/L-14): the requested (and relaxed) radius
+  is rounded up to the 2/5/10/25/50/100 km steps; membership is the cell-to-cell distance of the
+  candidate's effective location (travel point when travelling) from the viewer's effective cell,
+  after a GiST `ST_DWithin` pre-filter padded by the cell slack, so a traveller is matched only
+  where they travel; the rank cache is keyed by the viewer's cell. The action-eligibility check and
+  rewound cards use the same cell membership and cell-to-cell distance. Proofs:
+  `SwipeLocationPrivacyTest` (two hidden users 300 m apart indistinguishable, 30 m attacker steps
+  change nothing, a requested radius returns exactly its step, a traveller's home never leaks,
+  paging cached and uncached).
 - [x] Travel mode for Swipe and Grid (`travel_locations`, `TravelLocationService`; Select unlimited,
   Social one activation per 30 days); planned trips and "Visiting soon" (`travel_trips`).
 - [x] Dealbreakers (`SwipeDealbreakerKey`: `age`, `distance`, `verified`, `discoveryStyles`,

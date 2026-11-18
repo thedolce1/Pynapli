@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID
 
@@ -9,7 +10,8 @@ internal fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLoca
         SELECT ST_X(geom::geometry) AS longitude,
                ST_Y(geom::geometry) AS latitude
         FROM (
-            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            -- The viewer's cell at their effective location: the rank window depends on nothing finer.
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
@@ -24,65 +26,10 @@ internal fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLoca
             if (!rs.next()) {
                 null
             } else {
-                // Swipe is a recommendation deck, not the exact immediacy grid.
-                // Bucket rank-cache centers to ~100m so nearby viewers share the
-                // expensive spatial rank window while card distances stay close
-                // enough for the swipe UI's coarse labels.
-                DeckLocationCacheKey(
-                    longitudeE3 = Math.round(rs.getDouble("longitude") * 1_000.0).toInt(),
-                    latitudeE3 = Math.round(rs.getDouble("latitude") * 1_000.0).toInt(),
-                )
-            }
-        }
-    }
-
-internal fun Connection.listActiveTravelCandidateUserIdsNear(
-    viewerUserId: UUID,
-    radiusMeters: Int,
-    limit: Int = 2_000,
-): Set<UUID> =
-    prepareStatement(
-        """
-        WITH viewer_location AS (
-            SELECT COALESCE(viewer_travel.geom, ul.geom) AS geom
-            FROM user_locations ul
-            LEFT JOIN travel_locations viewer_travel
-              ON viewer_travel.user_id = ul.user_id
-             AND viewer_travel.status = 'active'
-             AND viewer_travel.active_until IS NULL
-            WHERE ul.user_id = ?
-        )
-        SELECT tl.user_id
-        FROM viewer_location v
-        JOIN travel_locations tl
-          ON tl.status = 'active'
-         AND tl.active_until IS NULL
-         AND ST_DWithin(v.geom, tl.geom, ?)
-        JOIN users u ON u.id = tl.user_id
-        JOIN profiles p ON p.user_id = u.id
-        JOIN discovery_settings ds ON ds.user_id = u.id
-        LEFT JOIN account_risk_states ars ON ars.user_id = u.id
-        WHERE u.id <> ?
-          AND u.status = 'active'
-          AND u.deleted_at IS NULL
-          AND p.visibility_status = 'visible'
-          AND ds.swipe_visible = true
-          AND ds.incognito = false
-          AND ds.visible_while_traveling = true
-          AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
-        ORDER BY v.geom <-> tl.geom
-        LIMIT ?
-        """.trimIndent(),
-    ).use { statement ->
-        statement.setObject(1, viewerUserId)
-        statement.setDouble(2, radiusMeters.toDouble())
-        statement.setObject(3, viewerUserId)
-        statement.setInt(4, limit)
-        statement.executeQuery().use { rs ->
-            buildSet {
-                while (rs.next()) {
-                    add(rs.getObject("user_id", UUID::class.java))
-                }
+                // Keyed by location cell, like the Grid: every viewer in a cell shares one ranked
+                // window, and the window (which is ranked from the cell centre) is exact for each.
+                val (cellLongitude, cellLatitude) = CoarseLocation.cellKey(rs.getDouble("longitude"), rs.getDouble("latitude"))
+                DeckLocationCacheKey(cellLongitude = cellLongitude, cellLatitude = cellLatitude)
             }
         }
     }
@@ -95,7 +42,7 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
     prepareStatement(
         """
         WITH viewer_location AS (
-            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
@@ -148,7 +95,8 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
               WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
                  OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
           )
-          AND ST_DWithin(v.geom, COALESCE(target_travel.geom, ul.geom), ?)
+          -- Same membership as the deck: the effective location's cell within the radius step.
+          AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= ?
         LIMIT ?
         """.trimIndent(),
     ).use { statement ->
@@ -163,23 +111,6 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
                     add(rs.getObject("user_id", UUID::class.java))
                 }
             }
-        }
-    }
-
-internal fun Connection.hasActiveTravelLocations(): Boolean =
-    prepareStatement(
-        """
-        SELECT EXISTS (
-            SELECT 1
-            FROM travel_locations
-            WHERE status = 'active'
-              AND active_until IS NULL
-        )
-        """.trimIndent(),
-    ).use { statement ->
-        statement.executeQuery().use { rs ->
-            rs.next()
-            rs.getBoolean(1)
         }
     }
 

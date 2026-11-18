@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID
 
@@ -13,7 +14,8 @@ internal fun Connection.findLatestRewindableAction(
             -- Travel-mode override for rewindable-action discovery; an
             -- action recorded in travel mode is still rewindable while
             -- the user is in that travel city.
-            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            -- Snapped to the viewer's cell, like the deck (L-10/L-14).
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
@@ -37,7 +39,9 @@ internal fun Connection.findLatestRewindableAction(
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
                ds.show_distance,
-               ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters
+               -- Cell-to-cell distance from the target's effective location, as on the dealt card;
+               -- the card shows none when the owner hides it.
+               pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters
         FROM swipe_actions sa
         JOIN viewer_location v ON true
         JOIN users u
@@ -146,6 +150,7 @@ internal fun Connection.findLatestRewindableAction(
               ST_DWithin(v.geom, ul.geom, ?)
               OR (target_travel.geom IS NOT NULL AND ST_DWithin(v.geom, target_travel.geom, ?))
           )
+          AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= $radiusMeters
           AND NOT EXISTS (
               SELECT 1
               FROM user_blocks ub
@@ -178,8 +183,8 @@ internal fun Connection.findLatestRewindableAction(
         statement.setObject(2, viewerUserId)
         statement.setObject(3, viewerUserId)
         statement.setObject(4, viewerUserId)
-        statement.setDouble(5, radiusMeters.toDouble())
-        statement.setDouble(6, radiusMeters.toDouble())
+        statement.setDouble(5, radiusMeters + CoarseLocation.CELL_PAD_METERS)
+        statement.setDouble(6, radiusMeters + CoarseLocation.CELL_PAD_METERS)
         statement.setObject(7, viewerUserId)
         statement.setObject(8, viewerUserId)
         statement.setObject(9, viewerUserId)

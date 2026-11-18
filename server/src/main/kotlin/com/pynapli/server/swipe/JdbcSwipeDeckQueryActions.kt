@@ -1,6 +1,7 @@
 package com.pynapli.server.swipe
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.profiling.profile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,7 +50,8 @@ internal class JdbcSwipeDeckQueryActions(
                         connection.queryDeckRankCached(
                             viewerLocationKey = viewerLocationKey,
                             viewerUserId = viewerUserId,
-                            radiusMeters = radiusMeters,
+                            // Only the fixed radius steps are ever tested (L-09), whoever calls.
+                            radiusMeters = CoarseLocation.snapRadiusMeters(radiusMeters),
                             limit = limit,
                             filters = filters,
                             excludedTargetUserIds = discoveryExcludedTargetIds,
@@ -112,7 +114,6 @@ internal class JdbcSwipeDeckQueryActions(
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>,
     ): List<DeckRankRow> {
-        val activeTravelLocationsPresent = hasActiveTravelLocations()
         if (filters.linkedOnly == true) {
             val linkedTargetIds = listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters)
             if (linkedTargetIds.isEmpty()) return emptyList()
@@ -124,7 +125,6 @@ internal class JdbcSwipeDeckQueryActions(
                 excludedTargetUserIds = excludedTargetUserIds,
                 userSpecificViewerId = viewerUserId,
                 forcedTargetUserIds = linkedTargetIds,
-                includeTravelLocations = activeTravelLocationsPresent,
             )
         }
 
@@ -136,16 +136,11 @@ internal class JdbcSwipeDeckQueryActions(
                 filters = filters,
                 excludedTargetUserIds = excludedTargetUserIds,
                 userSpecificViewerId = viewerUserId,
-                useNearestCandidateWindow = !activeTravelLocationsPresent,
             )
         }
 
-        val activeTravelTargetIds =
-            if (activeTravelLocationsPresent) {
-                listActiveTravelCandidateUserIdsNear(viewerUserId, radiusMeters)
-            } else {
-                emptySet()
-            }
+        // One ranked window per (viewer cell, radius step, filter class), shared by every viewer in
+        // that cell; this viewer's own exclusions are applied below.
         val cacheWindow = rankCacheWindow.coerceAtLeast(limit)
         val cacheKey =
             DeckRankCacheKey(
@@ -163,48 +158,14 @@ internal class JdbcSwipeDeckQueryActions(
                     filters = filters,
                     excludedTargetUserIds = emptySet(),
                     userSpecificViewerId = null,
-                    useNearestCandidateWindow = true,
                 )
             }
-        val cachedTargetIds = cachedRows.mapTo(mutableSetOf()) { it.userId }
-        val targetIdsForSwipeExclusion = cachedTargetIds + activeTravelTargetIds
-        val swipedTargetIds = listActiveSwipedTargetIds(viewerUserId, targetIdsForSwipeExclusion)
+        val swipedTargetIds = listActiveSwipedTargetIds(viewerUserId, cachedRows.mapTo(mutableSetOf()) { it.userId })
         val excluded = excludedTargetUserIds + swipedTargetIds + viewerUserId
-        val localPage =
-            cachedRows
-                .asSequence()
-                .filterNot { it.userId in excluded }
-                .take(limit)
-                .toList()
-        val travelRows =
-            if (activeTravelTargetIds.isNotEmpty()) {
-                queryDeckRankForcedTargets(
-                    viewerUserId = viewerUserId,
-                    radiusMeters = radiusMeters,
-                    limit = limit,
-                    filters = filters,
-                    excludedTargetUserIds = excluded + localPage.map { it.userId },
-                    userSpecificViewerId = viewerUserId,
-                    forcedTargetUserIds = activeTravelTargetIds - excluded,
-                    includeTravelLocations = true,
-                )
-            } else {
-                emptyList()
-            }
-        val page =
-            if (travelRows.isEmpty()) {
-                localPage
-            } else {
-                (localPage + travelRows)
-                    .distinctBy { it.userId }
-                    .sortedWith(
-                        compareByDescending<DeckRankRow> { it.isBoosted }
-                            .thenByDescending { it.softScore }
-                            .thenBy { it.orderBucket }
-                            .thenBy { it.orderTiebreak },
-                    ).take(limit)
-            }
+        val page = cachedRows.filterNot { it.userId in excluded }.take(limit)
 
+        // A short page from a full window means the next candidates lie beyond it: rank them for
+        // this viewer directly.
         if (page.size >= limit || cachedRows.size < cacheWindow) {
             return page
         }
@@ -216,10 +177,8 @@ internal class JdbcSwipeDeckQueryActions(
             filters = filters,
             excludedTargetUserIds = excludedTargetUserIds,
             userSpecificViewerId = viewerUserId,
-            useNearestCandidateWindow = false,
         )
     }
-
     private fun Connection.listHiddenProfileIds(viewerUserId: UUID): Set<UUID> =
         prepareStatement(
             """

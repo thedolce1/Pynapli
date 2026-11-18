@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
@@ -30,7 +31,9 @@ internal class SwipeDeckQueryAction(
                 maxRadiusMeters = SWIPE_MAX_RADIUS_METERS,
                 maxLimit = SWIPE_MAX_LIMIT,
             )
-        val radiusMeters = deckRequest.radiusMeters
+        // Fixed radius steps (L-09), as in the Grid: a radius between two steps returns its step, so a
+        // slider moved metre by metre can never binary-search where someone is.
+        val radiusMeters = CoarseLocation.snapRadiusMeters(deckRequest.radiusMeters)
         val limit = deckRequest.limit
         val filters = deckRequest.filters
         val policy =
@@ -116,10 +119,12 @@ internal class SwipeDeckQueryAction(
             ) {
                 val relaxedFilters = SwipeDeckRelaxation.relaxFilters(filters, dealbreakerSet)
                 val relaxedRadius =
-                    SwipeDeckRelaxation.relaxRadius(
-                        radiusMeters = radiusMeters,
-                        maxRadiusMeters = SWIPE_MAX_RADIUS_METERS,
-                        dealbreakers = dealbreakerSet,
+                    CoarseLocation.snapRadiusMeters(
+                        SwipeDeckRelaxation.relaxRadius(
+                            radiusMeters = radiusMeters,
+                            maxRadiusMeters = SWIPE_MAX_RADIUS_METERS,
+                            dealbreakers = dealbreakerSet,
+                        ),
                     )
                 val alreadySeen = excludedTargetUserIds + firstPass.cards.mapTo(mutableSetOf()) { it.userId }
                 val secondPass =
