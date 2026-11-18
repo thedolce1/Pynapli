@@ -18,6 +18,8 @@ internal data class DeckRankRow(
     /** L-08 coarse ordering key; see `pynapli_order_bucket_m` (V95). */
     val orderBucket: Int = 0,
     val orderTiebreak: Long = 0,
+    /** 1-based place in the deck's natural order, before any Boost lift. */
+    val naturalRank: Long = 0,
 )
 
 internal data class DeckHydration(

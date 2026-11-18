@@ -19,6 +19,10 @@ import java.util.UUID
  * by [CoarseLocation.CELL_PAD_METERS], so the exact cell-to-cell test never misses anyone; or, with
  * [forcedTargetUserIds], from that id list (linked-only decks).
  *
+ * Returns the first [limit] candidates in natural order (see `natural_rank`) plus up to
+ * [boostedWindow] boosted candidates from anywhere in the radius step, all in natural order;
+ * [SwipeDeckBoostPlacement] then lays out the page.
+ *
  * When [userSpecificViewerId] is null the query is exclusion-free (no self or already-swiped
  * filter), so the window can be cached and shared by every viewer in the same cell, radius step
  * and filter class.
@@ -31,6 +35,7 @@ internal fun Connection.queryDeckRank(
     excludedTargetUserIds: Set<UUID>,
     userSpecificViewerId: UUID?,
     forcedTargetUserIds: Set<UUID>? = null,
+    boostedWindow: Int = limit,
 ): List<DeckRankRow> {
     val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
     val candidateSource =
@@ -211,16 +216,34 @@ $candidateSource
                   ?::boolean = false
                   OR u.id <> ALL(?::uuid[])
               )
+        ),
+        ranked AS (
+            SELECT c.*,
+                   -- L-08 order key: whole-km coarse bucket (distance-independent when hidden) and a
+                   -- stable pseudo-random tiebreak seeded by the viewer's cell.
+                   pynapli_order_bucket_m(c.show_distance, c.distance_meters, ?, 'deck:' || ST_AsText(v.geom::geometry), c.user_id) AS order_bucket,
+                   pynapli_order_tiebreak('deck:' || ST_AsText(v.geom::geometry), c.user_id) AS order_tiebreak
+            FROM candidates c
+            CROSS JOIN viewer_location v
+        ),
+        numbered AS (
+            SELECT r.*,
+                   ROW_NUMBER() OVER (
+                       ORDER BY r.soft_score DESC, r.order_bucket ASC, r.order_tiebreak ASC, r.user_id ASC
+                   ) AS natural_rank,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY r.is_boosted
+                       ORDER BY r.soft_score DESC, r.order_bucket ASC, r.order_tiebreak ASC, r.user_id ASC
+                   ) AS group_rank
+            FROM ranked r
         )
-        SELECT c.*,
-               -- L-08 order key: whole-km coarse bucket (distance-independent when hidden) and a
-               -- stable pseudo-random tiebreak seeded by the viewer's cell.
-               pynapli_order_bucket_m(c.show_distance, c.distance_meters, ?, 'deck:' || ST_AsText(v.geom::geometry), c.user_id) AS order_bucket,
-               pynapli_order_tiebreak('deck:' || ST_AsText(v.geom::geometry), c.user_id) AS order_tiebreak
-        FROM candidates c
-        CROSS JOIN viewer_location v
-        ORDER BY c.soft_score DESC, order_bucket ASC, order_tiebreak ASC, c.user_id ASC
-        LIMIT ?
+        -- The window in natural order, plus the best boosted candidates however far down they sit
+        -- (MONETIZATION_SPEC "Boost": a Boost lifts someone onto the page, SwipeDeckBoostPlacement).
+        SELECT n.*
+        FROM numbered n
+        WHERE n.natural_rank <= ?
+           OR (n.is_boosted AND n.group_rank <= ?)
+        ORDER BY n.natural_rank ASC
         """.trimIndent()
 
     return prepareStatement(sql).use { statement ->
@@ -280,7 +303,9 @@ $candidateSource
         statement.setArray(index++, excludedIds)
         // Order key: radius (hidden placement span).
         statement.setInt(index++, radiusMeters)
+        // The window, and how many boosted candidates beyond it to bring along.
         statement.setInt(index++, limit)
+        statement.setInt(index++, boostedWindow)
         statement.executeDeckRankRows()
-    }.sortedByDescending { it.isBoosted }
+    }
 }

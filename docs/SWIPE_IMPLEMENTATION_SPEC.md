@@ -277,6 +277,21 @@ Rules:
 - Boost should increase impressions, not guarantee matches.
 - Boost results can be reported with honest metrics: profile views, likes, matches.
 
+Current implementation (Swipe):
+
+- A boosted person who passes every filter, block, hidden-profile, risk, visibility and privacy
+  rule, has not already been swiped by the viewer, has not been dealt earlier in the deck session,
+  and is inside the viewer's radius step is brought into the candidate set however far down the
+  ordinary order they sit (the rank query returns its window plus the best boosted candidates in
+  the whole step), and is placed near the top of the page.
+- Cap: while any unboosted card is left, boosted cards go only in the first card of every four
+  (positions 0, 4, 8, ...), so a page holds at most one boosted card in four whether the Boost lifted
+  them or they were near anyway (`SwipeDeckBoostPlacement`). Exception: once no unboosted card is
+  left, the remaining boosted ones follow rather than leaving the deck short.
+- Blocked people are excluded before ranking, so a blocked boosted person never takes a slot.
+- One active Boost per person (V101 partial unique index behind the activation lock; activation
+  expires the person's lapsed Boosts in the same transaction).
+
 ## Passport / Travel Mode
 
 Pynapli should include a travel discovery mode.
@@ -519,6 +534,34 @@ Current implementation note:
 - Server-authoritative Swipe actions now emit Activity rows for normal Likes, Pineapple Likes (with their optional note), and mutual matches after action validation/recording succeeds.
 - Match Activity is written for both matched users.
 - Idempotent Swipe action retries do not create duplicate Activity rows.
+- These Activity rows, the match conversation and the match push are crash-safe: see "Match side
+  effects".
+
+## Match side effects
+
+A Swipe action, a like-back from Activity or a Psync completion that records a like or makes a
+match owes follow-up work: the like in the target's Likes You, the match Activity row for both
+people, the actor's match conversation in Messages, and the match push to the target.
+
+- That work is written to `match_side_effect_outbox` (V100) in the SAME transaction as the like or
+  match, so a crash between the commit and the work can never lose it.
+- Fast path: the request delivers the rows straight after commit and marks them delivered; users
+  see no added latency. A failure there is logged and left in the outbox; it never fails the
+  request.
+- Each new row is leased to the committing request for 60 seconds. `MatchSideEffectDrainWorker`
+  (every 30 s, one replica at a time under `PostgresJobLock`) delivers rows whose lease has passed,
+  claiming them with a lease of its own, backing off exponentially on failure (30 s doubling to an
+  hour) and giving up after 12 attempts (the row stays with its error class for an operator).
+  Delivered rows are pruned after 7 days.
+- Every delivery step is idempotent (Activity rows are unique per pair and type, the conversation
+  is get-or-create, the push carries an idempotency key), so the fast path and the drainer never
+  duplicate. An unmatch deletes the match and any undelivered announcement with it.
+- Opening the match conversation now reports failures (it used to swallow them) so the outbox can
+  retry it. The push is still best effort: the notification service logs and drops its own write
+  errors, so the outbox cannot retry a lost push.
+- Proofs: `MatchSideEffectOutboxIntegrationTest` (crash before delivery, drainer delivers exactly one
+  of each; fast path plus drainer never duplicates; like-back), and the Psync crash case in
+  `PsyncSessionServiceIntegrationTest`.
 
 ## Subscription Gating
 
@@ -580,7 +623,12 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
   (`swipe_actions.consumed_inventory_id`, same transaction).
 - [x] Likes You is represented in Activity.
 - [x] Top Picks exists (frozen).
-- [x] Boost affects ranking without violating filters.
+- [x] Boost is a real lift in Swipe without violating filters: eligible boosted people inside the
+  radius step are pulled onto the page, at most one boosted card in every four (see "Boost / Super
+  Boost"; `SwipeBoostDeckTest`, `SwipeDeckBoostPlacementTest`).
+- [x] Match side effects are crash-safe (outbox V100 + drainer; see "Match side effects").
+- [x] A rewind racing the other person's like (from Swipe or like-back) ends as either a match with
+  the like live or a rewound like with no match, never both (`SwipeConcurrencyIntegrationTest`).
 - [x] Deck order is coarse (L-08): soft score, a whole-km cell-to-cell bucket (distance-independent
   for people who hide distance), then a stable tiebreak seeded by the viewer's cell; ranking starts
   at the viewer's cell centre and card distances are cell to cell. A traveller is never ranked by
@@ -599,7 +647,8 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
 - [x] Dealbreakers (`SwipeDealbreakerKey`: `age`, `distance`, `verified`, `discoveryStyles`,
   `intents`, `linkedOnly`) are hard gates and never relaxed; the filters sheet has a per-section lock.
 - [x] Never-empty deck: `SwipeDeckRelaxation` drops soft filters and doubles the radius (capped) when
-  a deck is below low water; dealbreakers and identity filters (gender/orientation) stay hard.
+  a deck is below low water (the doubled radius is rounded up to its step); dealbreakers and identity
+  filters (gender/orientation) stay hard.
 - [x] Compose stack renders only 2–3 cards; physics-based gestures; image preloading.
 - [x] API load proof (`scripts/swipe-api-load-test.ps1`, 5,000 candidates, 100- and 500-concurrent).
 - [x] Connected Android visual/gesture QA (`scripts/android-swipe-qa.ps1`) and queue QA

@@ -41,6 +41,7 @@ internal fun ResultSet.readDeckRankRow(): DeckRankRow =
         softScore = getInt("soft_score"),
         orderBucket = getInt("order_bucket"),
         orderTiebreak = getLong("order_tiebreak"),
+        naturalRank = getLong("natural_rank"),
     )
 
 internal fun DiscoveryFilters.isRankCacheEligible(): Boolean = linkedOnly == null

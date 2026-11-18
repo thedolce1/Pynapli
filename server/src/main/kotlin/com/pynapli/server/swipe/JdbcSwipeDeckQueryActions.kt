@@ -117,26 +117,21 @@ internal class JdbcSwipeDeckQueryActions(
         if (filters.linkedOnly == true) {
             val linkedTargetIds = listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters)
             if (linkedTargetIds.isEmpty()) return emptyList()
-            return queryDeckRank(
-                viewerUserId = viewerUserId,
-                radiusMeters = radiusMeters,
-                limit = limit,
-                filters = filters.copy(linkedOnly = null),
-                excludedTargetUserIds = excludedTargetUserIds,
-                userSpecificViewerId = viewerUserId,
-                forcedTargetUserIds = linkedTargetIds,
-            )
+            val linkedRows =
+                queryDeckRank(
+                    viewerUserId = viewerUserId,
+                    radiusMeters = radiusMeters,
+                    limit = limit,
+                    filters = filters.copy(linkedOnly = null),
+                    excludedTargetUserIds = excludedTargetUserIds,
+                    userSpecificViewerId = viewerUserId,
+                    forcedTargetUserIds = linkedTargetIds,
+                )
+            return SwipeDeckBoostPlacement.arrange(linkedRows, limit)
         }
 
         if (!filters.isRankCacheEligible() || !deckRankCache.isEnabled()) {
-            return queryDeckRank(
-                viewerUserId = viewerUserId,
-                radiusMeters = radiusMeters,
-                limit = limit,
-                filters = filters,
-                excludedTargetUserIds = excludedTargetUserIds,
-                userSpecificViewerId = viewerUserId,
-            )
+            return SwipeDeckBoostPlacement.arrange(queryDeckRankForViewer(viewerUserId, radiusMeters, limit, filters, excludedTargetUserIds), limit)
         }
 
         // One ranked window per (viewer cell, radius step, filter class), shared by every viewer in
@@ -162,15 +157,29 @@ internal class JdbcSwipeDeckQueryActions(
             }
         val swipedTargetIds = listActiveSwipedTargetIds(viewerUserId, cachedRows.mapTo(mutableSetOf()) { it.userId })
         val excluded = excludedTargetUserIds + swipedTargetIds + viewerUserId
-        val page = cachedRows.filterNot { it.userId in excluded }.take(limit)
+        val remaining = cachedRows.filterNot { it.userId in excluded }
 
-        // A short page from a full window means the next candidates lie beyond it: rank them for
-        // this viewer directly.
-        if (page.size >= limit || cachedRows.size < cacheWindow) {
-            return page
+        // The window (natural ranks 1..cacheWindow) plus the boosted candidates beyond it. Enough of
+        // the window left for a page, or a window that holds everyone in range, serves this viewer;
+        // otherwise the next candidates lie beyond it, so rank them for this viewer directly.
+        val windowRows = cachedRows.count { it.naturalRank <= cacheWindow }
+        val windowRowsLeft = remaining.count { it.naturalRank <= cacheWindow }
+        if (windowRowsLeft >= limit || windowRows < cacheWindow) {
+            return SwipeDeckBoostPlacement.arrange(remaining, limit)
         }
 
-        return queryDeckRank(
+        return SwipeDeckBoostPlacement.arrange(queryDeckRankForViewer(viewerUserId, radiusMeters, limit, filters, excludedTargetUserIds), limit)
+    }
+
+    // Uncached rank for one viewer: self, already-swiped and session exclusions applied in SQL.
+    private fun Connection.queryDeckRankForViewer(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        excludedTargetUserIds: Set<UUID>,
+    ): List<DeckRankRow> =
+        queryDeckRank(
             viewerUserId = viewerUserId,
             radiusMeters = radiusMeters,
             limit = limit,
@@ -178,7 +187,7 @@ internal class JdbcSwipeDeckQueryActions(
             excludedTargetUserIds = excludedTargetUserIds,
             userSpecificViewerId = viewerUserId,
         )
-    }
+
     private fun Connection.listHiddenProfileIds(viewerUserId: UUID): Set<UUID> =
         prepareStatement(
             """

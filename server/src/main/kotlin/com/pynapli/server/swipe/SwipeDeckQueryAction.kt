@@ -91,7 +91,13 @@ internal class SwipeDeckQueryAction(
                 scopeHash = scopeHash,
                 now = now,
             )
-        val excludedTargetUserIds = existingSessionState?.targetUserIds.orEmpty()
+        val blockedRelatedIds =
+            profile("swipe.deck.blocks") {
+                blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
+            }
+        // Blocked people are excluded before ranking, not only from the finished page: a Boost lifts
+        // candidates onto the page, and a blocked one must never take a slot.
+        val excludedTargetUserIds = existingSessionState?.targetUserIds.orEmpty() + blockedRelatedIds
         val startPosition = cursor?.nextPosition ?: 0
 
         val firstPass =
@@ -144,10 +150,7 @@ internal class SwipeDeckQueryAction(
             }
         if (!result.viewerHadLocation) throw SwipeException("LOCATION_REQUIRED")
 
-        val blockedRelatedIds =
-            profile("swipe.deck.blocks") {
-                blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
-            }
+        // Backstop for a repository that does not apply the exclusion set.
         val visible =
             if (blockedRelatedIds.isEmpty()) {
                 result.cards

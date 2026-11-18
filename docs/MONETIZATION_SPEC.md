@@ -281,6 +281,18 @@ Rules:
 - Increases impressions, not guaranteed matches.
 - Results should be reported honestly.
 
+Current implementation:
+
+- One active Boost per person: activation is serialised by an advisory lock, and a partial unique
+  index (V101, `status = 'active'`) backs it up. Activation first expires the person's lapsed Boosts
+  in the same transaction, so a Boost that ran out never blocks the next one.
+- Swipe: a boosted person who passes every filter, block, risk and privacy rule and is inside the
+  viewer's radius step is pulled onto the first page of the deck even when the ordinary order would
+  reach them pages later, and placed near the top: at most one boosted card in every four (positions
+  0, 4, 8, ...), unless no one else is left to show. Already-swiped people and cards dealt earlier
+  in the deck session are never re-dealt. See SWIPE_IMPLEMENTATION_SPEC "Boost / Super Boost".
+- Grid: boosted people sort first within the queried radius (unchanged).
+
 ### Super Boost
 
 Purpose:
@@ -532,6 +544,8 @@ Do not experiment with:
 - [x] Advanced filters are gated.
 - [x] Rewind is gated to Social/Select for latest eligible Like/Pass.
 - [x] Boost inventory exists.
+- [x] One active Boost per person, enforced by the database (V101) as well as the activation lock.
+- [x] A Boost lifts the person onto the first Swipe deck page, capped at one boosted card in four.
 - [x] Pineapple Like inventory exists.
 - [x] Intro Notes merged into Pineapple Like as an optional note (V92; legacy Play SKU credited as Pineapple Likes).
 - [ ] Fake ad slot and "ad-supported"/"No ads" claims removed (in progress).
