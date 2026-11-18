@@ -109,12 +109,9 @@ Current MVP implementation:
 
 Do not merge linked users into a couple card.
 
-If the displayed user supports together-mode interest, the UI may ask after a Like/Super Like:
-
-- Interested in Alex solo
-- Interested in Alex and linked partner
-
-Only show this when relevant. Do not interrupt every swipe.
+A Like never asks "solo or with their partner?" (cut 2026-11-18). Couples who want to choose
+together use Psync, and each person's discovery style says whether they are looking solo, together
+or socially.
 
 ## Swipe Actions
 
@@ -154,18 +151,10 @@ data class SwipeActionRequest(
     val actorUserId: String,
     val targetUserId: String,
     val actionType: SwipeActionType,
-    val intentScope: IntentScope?,
     val noteText: String?,
     val deckSessionId: String,
     val cardToken: String
 )
-
-enum class IntentScope {
-    SOLO,
-    TOGETHER,
-    SOCIAL,
-    ASK_IN_CHAT
-}
 ```
 
 Rules:

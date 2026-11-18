@@ -75,8 +75,9 @@ Answers "who should I intentionally consider?" Slower, curated, lower noise.
 - After a match: chat, invite linked partner, share or request album access.
 - Cards: photo carousel, name, age, distance, linked-partner mini avatar, one short bio line, a few
   tags only on expand.
-- A swipe acts on the individual, never automatically on their partner. If the viewer's settings
-  allow it, ask "solo or with their partner?".
+- A swipe acts on the individual, never automatically on their partner. There is no "solo or with
+  their partner?" prompt after a Like (cut 2026-11-18): Psync and each person's declared discovery
+  style already carry that intent.
 - Ranking must not make users feel secretly throttled; hiding good matches to force payment destroys
   trust. Top Picks is frozen. Engineering: [SWIPE_IMPLEMENTATION_SPEC.md](SWIPE_IMPLEMENTATION_SPEC.md).
 
