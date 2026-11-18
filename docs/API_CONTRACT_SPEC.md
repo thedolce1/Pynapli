@@ -98,6 +98,10 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 
 - Swipe-originated chat requires a match (Pineapple Like note is the exception). Grid chat follows
   recipient settings and risk policy.
+- `DiscoverySettingsDto.gridMessagePolicy` is one of `everyone`, `verified_only` (sender
+  photo-verified), `matches_only`, `no_one`; `PATCH /v1/me/discovery-settings` rejects anything else
+  with `INVALID_GRID_MESSAGE_POLICY`. A refused Grid open is `403 MESSAGING_NOT_ALLOWED` for every
+  option. `PublicProfileDto.allowGridMessages` is computed for the viewer under the same rule.
 - Risk policy can hold outbound first messages for review.
 - Partner invite requires an active link plus partner **and** third-party consent.
   `ConversationDto.partnerInvite` is present while unresolved, with each side's consent status.

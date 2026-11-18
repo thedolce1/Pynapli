@@ -21,6 +21,14 @@ Core rule:
 | Psync together match | Target consent + both linked partners liked | Together-mode chat eligible |
 | Partner invite | All required accepts | Partner joins existing chat |
 
+Grid first-message settings (the recipient's `grid_message_policy`, server-enforced when a Grid
+conversation is opened): everyone, verified members only (sender photo-verified, `profiles.verified_at`),
+matches only, or no one. Blocks and risk gates apply first. Every refusal is the same
+`MESSAGING_NOT_ALLOWED`, so it never reveals which option refused. The setting gates opening only: an
+existing thread keeps working from the inbox. Swipe and Psync match chats (`swipe` origin) never read
+it. The public profile's `allowGridMessages` applies the same rule for the viewer, so the Message
+button matches what the server allows.
+
 ## Thread Types
 
 - Solo thread: two individual users.
@@ -163,7 +171,7 @@ Current implementation note:
 
 ## Implementation Checklist
 
-- [x] Open grid messaging respects recipient settings.
+- [x] Open grid messaging respects recipient settings (everyone, verified members only, matches only, no one; 2026-11-18).
 - [x] Swipe messaging requires mutual match.
 - [x] Intro Notes remain outside chat until accepted/matched.
 - [x] Partner invite requires linked partner and third-party consent.

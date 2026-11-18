@@ -59,8 +59,8 @@ Answers "who is relevant near me right now?" A live directory, not a recommendat
   each showing a small icon for the other. Never merge them. If a partner hides distance, show
   "distance hidden" or nothing.
 - **Users can message from the Grid without matching**, subject to the recipient's message settings
-  (anyone, verified only, matching my intent, nearby only, flirts only, or no Grid messages) and risk
-  policy.
+  (everyone, verified members only, matches only, or no one) and risk policy. Match chats are never
+  affected by this setting.
 - Grid actions: view profile, message, flirt, request or grant album access, block, report, invite a
   linked partner once a chat exists.
 - Hard filters are respected exactly. Engineering: [GRID_IMPLEMENTATION_SPEC.md](GRID_IMPLEMENTATION_SPEC.md).
