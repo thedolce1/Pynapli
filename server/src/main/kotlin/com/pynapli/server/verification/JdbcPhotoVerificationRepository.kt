@@ -440,6 +440,43 @@ class JdbcPhotoVerificationRepository(
                 }
         }
 
+    override suspend fun expireUnreviewed(
+        submittedBefore: Instant,
+        decidedAt: Instant,
+        limit: Int,
+    ): List<StoredSelfie> =
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    WITH expired AS (
+                        UPDATE photo_verifications
+                        SET status = 'expired', decided_at = ?, updated_at = now()
+                        WHERE id IN (
+                            SELECT id FROM photo_verifications
+                            WHERE status = 'pending' AND submitted_at < ?
+                            ORDER BY submitted_at ASC
+                            LIMIT ?
+                            FOR UPDATE SKIP LOCKED
+                        )
+                        AND status = 'pending'
+                        RETURNING media_asset_id
+                    )
+                    SELECT m.id, m.storage_provider, m.storage_bucket, m.storage_object_key, m.content_type
+                    FROM expired e
+                    JOIN media_assets m ON m.id = e.media_asset_id
+                    WHERE m.intended_album_kind = 'verification'
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setTimestamp(1, Timestamp.from(decidedAt))
+                    statement.setTimestamp(2, Timestamp.from(submittedBefore))
+                    statement.setInt(3, limit)
+                    statement.executeQuery().use { rs ->
+                        buildList { while (rs.next()) add(rs.toStoredSelfie()) }
+                    }
+                }
+        }
+
     override suspend fun deleteSelfie(
         mediaAssetId: UUID,
         purgedAt: Instant,

@@ -111,6 +111,17 @@ interface PhotoVerificationRepository {
         limit: Int,
     ): List<StoredSelfie>
 
+    /**
+     * Closes attempts still waiting for review that were submitted before [submittedBefore] (marked
+     * `expired`, decided at [decidedAt], so the person can try again) and returns their selfies for
+     * deletion. Oldest first, at most [limit].
+     */
+    suspend fun expireUnreviewed(
+        submittedBefore: Instant,
+        decidedAt: Instant,
+        limit: Int,
+    ): List<StoredSelfie>
+
     /** Deletes the selfie's asset row and stamps `selfie_purged_at` on the attempt that used it. */
     suspend fun deleteSelfie(
         mediaAssetId: UUID,

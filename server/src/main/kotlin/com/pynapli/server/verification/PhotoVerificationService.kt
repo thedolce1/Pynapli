@@ -202,14 +202,23 @@ class PhotoVerificationService(
      */
     suspend fun purgeExpiredSelfies(): Int {
         val now = clock.instant()
-        val due =
-            repository.selfiesDueForPurge(
-                decidedBefore = now.minus(SELFIE_RETENTION),
-                abandonedBefore = now.minus(ABANDONED_SELFIE_GRACE),
+        // Submissions nobody reviewed within UNREVIEWED_SELFIE_RETENTION are closed (the person can
+        // try again) and their selfie goes now, rather than sitting in storage indefinitely.
+        val unreviewed =
+            repository.expireUnreviewed(
+                submittedBefore = now.minus(UNREVIEWED_SELFIE_RETENTION),
+                decidedAt = now,
                 limit = PURGE_BATCH_SIZE,
             )
+        val due =
+            unreviewed +
+                repository.selfiesDueForPurge(
+                    decidedBefore = now.minus(SELFIE_RETENTION),
+                    abandonedBefore = now.minus(ABANDONED_SELFIE_GRACE),
+                    limit = PURGE_BATCH_SIZE,
+                )
         var purged = 0
-        for (selfie in due) {
+        for (selfie in due.distinctBy { it.mediaAssetId }) {
             if (selfieMedia.deleteStoredObject(selfie)) {
                 repository.deleteSelfie(selfie.mediaAssetId, now)
                 purged++
@@ -340,6 +349,12 @@ class PhotoVerificationService(
 
         /** How long a decided selfie is kept for appeals and audit before it is deleted. */
         val SELFIE_RETENTION: Duration = Duration.ofDays(7)
+
+        /**
+         * A submission still unreviewed after this is closed as expired and its selfie deleted, so a
+         * neglected queue never keeps face photos indefinitely. The person can submit again.
+         */
+        val UNREVIEWED_SELFIE_RETENTION: Duration = Duration.ofDays(30)
 
         /** Uploaded selfies never submitted with an attempt are deleted after this. */
         val ABANDONED_SELFIE_GRACE: Duration = Duration.ofHours(1)
