@@ -190,6 +190,9 @@ class AuthRepositoryTest {
             val apiClient =
                 FakeApiClient(
                     meResult = AppResult.Failure(AppError("UNAUTHENTICATED", "Please sign in again.")),
+                    // The 401 went through refresh-on-401, whose refresh was terminally rejected:
+                    // StoredSessionRefresher clears the store before the 401 reaches this check.
+                    onGetMe = { sessionStore.clear() },
                 )
             val repository = AuthRepository(apiClient, sessionStore)
 
@@ -197,6 +200,44 @@ class AuthRepositoryTest {
 
             assertNull(restored)
             assertNull(sessionStore.currentSession())
+        }
+
+    @Test
+    fun currentSessionValidatedClearsAnInactiveAccountEvenThoughTheSessionIsUnchanged() =
+        runTest {
+            val sessionStore = InMemorySessionStore()
+            sessionStore.save(testSession("access-5", "refresh-5"))
+            val apiClient =
+                FakeApiClient(
+                    meResult = AppResult.Failure(AppError("ACCOUNT_NOT_ACTIVE", "Account not active.")),
+                )
+            val repository = AuthRepository(apiClient, sessionStore)
+
+            val restored = repository.currentSessionValidated()
+
+            assertNull(restored)
+            assertNull(sessionStore.currentSession())
+        }
+
+    @Test
+    fun currentSessionValidatedKeepsTheSessionWhenTheRefreshBehindA401FailedTransiently() =
+        runTest {
+            // Launch with an expired access token: /me answers 401, refresh-on-401 tries to refresh,
+            // and that refresh's response is lost. The refresher leaves the session stored for a
+            // retry (which the server now answers with the same tokens), so it must not be cleared
+            // here either.
+            val sessionStore = InMemorySessionStore()
+            sessionStore.save(testSession("expired-access", "refresh-6"))
+            val apiClient =
+                FakeApiClient(
+                    meResult = AppResult.Failure(AppError("HTTP_401", "Unauthorized")),
+                )
+            val repository = AuthRepository(apiClient, sessionStore)
+
+            val restored = repository.currentSessionValidated()
+
+            assertEquals("refresh-6", restored?.refreshToken)
+            assertEquals("refresh-6", sessionStore.currentSession()?.refreshToken)
         }
 
     @Test

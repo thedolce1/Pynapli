@@ -15,3 +15,10 @@ internal val terminalAuthErrorCodes: Set<String> =
         "ACCOUNT_NOT_ACTIVE",
         "HTTP_401",
     )
+
+/**
+ * The subset of [terminalAuthErrorCodes] that a 401 response maps to. Every shell routes a 401 on an
+ * authenticated call through `StoredSessionRefresher` first, so by the time a caller sees one of these
+ * the refresh has either cleared a dead session or failed transiently and left a live one in place.
+ */
+internal val unauthorizedCodes: Set<String> = setOf("UNAUTHENTICATED", "HTTP_401")
