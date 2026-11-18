@@ -302,6 +302,19 @@ class RefreshRotationIntegrationTest {
         }
 
     @Test
+    fun aReplayCannotResurrectAnExpiredSession() =
+        runBlocking<Unit> {
+            val service = authService()
+            val original = service.signUp()
+            service.refresh(original.refreshToken)
+
+            // The session's refresh lifetime has ended, though the replay grace has not.
+            exec("UPDATE user_sessions SET refresh_expires_at = ? WHERE user_id = ?", java.sql.Timestamp.from(clock.instant()), UUID.fromString(original.user.userId))
+
+            assertEquals("INVALID_REFRESH_TOKEN", assertFailsWith<AuthException> { service.refresh(original.refreshToken) }.code)
+        }
+
+    @Test
     fun aTamperedBlobOrAWrongTokenCannotOpenTheReplay() =
         runBlocking<Unit> {
             val service = authService()

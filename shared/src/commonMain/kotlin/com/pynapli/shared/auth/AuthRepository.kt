@@ -40,7 +40,9 @@ class AuthRepository(
                     // clears the store itself when the server rejects the refresh token. A session still
                     // stored unchanged means that refresh failed transiently (its response was lost, say);
                     // keep it so the next request retries, which the server answers idempotently.
-                    if (latest != null && result.error.code in unauthorizedCodes) return latest
+                    // (A blank stored access token never reaches the server or the refresher, so it
+                    // gets no such benefit of the doubt.)
+                    if (latest != null && latest.accessToken.isNotBlank() && result.error.code in unauthorizedCodes) return latest
                     sessionStore.clear()
                     null
                 } else {

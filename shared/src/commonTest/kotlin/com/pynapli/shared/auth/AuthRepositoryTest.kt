@@ -241,6 +241,42 @@ class AuthRepositoryTest {
         }
 
     @Test
+    fun currentSessionValidatedKeepsTheSessionOnTheServers401CodeToo() =
+        runTest {
+            // The server's 401 body carries UNAUTHENTICATED, not HTTP_401; same transient-refresh case.
+            val sessionStore = InMemorySessionStore()
+            sessionStore.save(testSession("expired-access", "refresh-7"))
+            val apiClient =
+                FakeApiClient(
+                    meResult = AppResult.Failure(AppError("UNAUTHENTICATED", "Please sign in again.")),
+                )
+            val repository = AuthRepository(apiClient, sessionStore)
+
+            val restored = repository.currentSessionValidated()
+
+            assertEquals("refresh-7", restored?.refreshToken)
+            assertEquals("refresh-7", sessionStore.currentSession()?.refreshToken)
+        }
+
+    @Test
+    fun currentSessionValidatedClearsASessionWithNoAccessTokenToSend() =
+        runTest {
+            // A blank access token is rejected locally with UNAUTHENTICATED; no refresh ever ran.
+            val sessionStore = InMemorySessionStore()
+            sessionStore.save(testSession("", "refresh-8"))
+            val apiClient =
+                FakeApiClient(
+                    meResult = AppResult.Failure(AppError("UNAUTHENTICATED", "Please sign in again.")),
+                )
+            val repository = AuthRepository(apiClient, sessionStore)
+
+            val restored = repository.currentSessionValidated()
+
+            assertNull(restored)
+            assertNull(sessionStore.currentSession())
+        }
+
+    @Test
     fun currentSessionValidatedKeepsASessionAnotherTabRotatedMeanwhile() =
         runTest {
             val sessionStore = InMemorySessionStore()
