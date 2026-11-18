@@ -10,7 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 8dp-based spacing scale (docs/DESIGN_TOKENS.md). */
+/** 8dp-based spacing scale (docs/DESIGN_SPEC.md). */
 object PynapliSpacing {
     val xxs = 2.dp
     val xs = 4.dp
@@ -21,7 +21,7 @@ object PynapliSpacing {
     val xxl = 48.dp
 }
 
-/** Layout constants shared across screens (docs/DESIGN_TOKENS.md). */
+/** Layout constants shared across screens (docs/DESIGN_SPEC.md). */
 object PynapliLayout {
     val ScreenPadding = 16.dp
     val GridGap = 2.dp
@@ -131,7 +131,7 @@ object PynapliSheetTokens {
     const val TALL_HEIGHT_FRACTION = 0.94f // profile peek + conversation cover most of the screen
 }
 
-/** Animation durations in milliseconds (docs/DESIGN_TOKENS.md). */
+/** Animation durations in milliseconds (docs/DESIGN_SPEC.md). */
 object PynapliMotion {
     const val FAST = 120
     const val STANDARD = 220
@@ -160,7 +160,7 @@ object PynapliMotion {
     fun popSpringFloat(): FiniteAnimationSpec<Float> = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
 }
 
-/** Grid-tile-specific tokens (docs/DESIGN_TOKENS.md). Tiles are photo-first: no chips/tags. */
+/** Grid-tile-specific tokens (docs/DESIGN_SPEC.md). Tiles are photo-first: no chips/tags. */
 object GridTileTokens {
     const val ASPECT_RATIO = 1f
     val Gap = 2.dp
@@ -171,7 +171,7 @@ object GridTileTokens {
     val BottomGradientHeight = 44.dp
 }
 
-/** Swipe-card-specific tokens (docs/DESIGN_TOKENS.md). */
+/** Swipe-card-specific tokens (docs/DESIGN_SPEC.md). */
 object SwipeCardTokens {
     // Swipe card radius is 16 per the design north-star ("swipe card 16") — the hero card reads as a
     // distinct rounded card, softer than the dense grid tiles (~4) and chrome cards (12/8).

@@ -50,6 +50,9 @@ class AccountDataExportContentsIntegrationTest {
             val (first, second) = listOf(myId, otherId).sortedBy { it.toString() }
             sql("INSERT INTO matches (id, user_a, user_b) VALUES (?, ?, ?)", UUID.randomUUID(), first, second)
             sql("INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id, reason) VALUES (?, ?, ?, 'qa')", UUID.randomUUID(), myId, otherId)
+            sql("INSERT INTO favorite_profiles (user_id, favorite_user_id) VALUES (?, ?)", myId, otherId)
+            // Someone else's star on this person is theirs, and must not show up here.
+            sql("INSERT INTO favorite_profiles (user_id, favorite_user_id) VALUES (?, ?)", otherId, myId)
             sql(
                 "INSERT INTO push_devices (id, user_id, platform, device_token) VALUES (?, ?, 'android', 'secret-push-token-123')",
                 UUID.randomUUID(),
@@ -66,6 +69,7 @@ class AccountDataExportContentsIntegrationTest {
             assertEquals(1, (document["likesAndPasses"] as JsonArray).size)
             assertTrue(text.contains(otherId.toString()), "the match names the other person")
             assertEquals(1, (document["blocks"] as JsonArray).size)
+            assertEquals(1, (document["favorites"] as JsonArray).size)
             assertEquals(1, (document["signIns"] as JsonArray).size)
             assertEquals(1, (document["pushDevices"] as JsonArray).size)
 

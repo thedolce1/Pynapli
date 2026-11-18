@@ -30,7 +30,7 @@ import com.pynapli.app.design.icons.filled.Verified
 /*
  * Small, token-driven primitives shared across Pynapli screens. These mirror the handoff
  * prototype's `primitives.jsx` and exist so feature screens stop hardcoding visual values
- * (per docs/DESIGN_TOKENS.md: "Components consume tokens. Feature screens should not hardcode").
+ * (per docs/DESIGN_SPEC.md: "Components consume tokens. Feature screens should not hardcode").
  */
 
 /**

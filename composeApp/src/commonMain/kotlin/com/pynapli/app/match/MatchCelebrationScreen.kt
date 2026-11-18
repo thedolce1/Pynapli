@@ -44,6 +44,7 @@ import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.rememberPynapliHaptics
+import com.pynapli.app.design.rememberReducedMotion
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -78,8 +79,16 @@ fun MatchCelebrationScreen(
     val scrim = remember(celebration.primaryMatchId) { Animatable(0f) }
     val photos = remember(celebration.primaryMatchId) { Animatable(0f) }
     val copy = remember(celebration.primaryMatchId) { Animatable(0f) }
+    val reducedMotion = rememberReducedMotion()
     LaunchedEffect(celebration.primaryMatchId) {
         haptics.matchSuccess()
+        if (reducedMotion) {
+            // The system asked for less motion: everything is simply there.
+            scrim.snapTo(1f)
+            photos.snapTo(1f)
+            copy.snapTo(1f)
+            return@LaunchedEffect
+        }
         coroutineScope {
             launch { scrim.animateTo(1f, PynapliMotion.standardTween(PynapliMotion.STANDARD)) }
             launch { photos.animateTo(1f, PynapliMotion.popSpringFloat()) }

@@ -119,6 +119,8 @@ class JdbcAccountDataExportArchiver(
                     "SELECT blocked_user_id, reason, created_at FROM user_blocks WHERE blocker_user_id = ? ORDER BY created_at",
                 "hiddenProfiles" to
                     "SELECT hidden_user_id, created_at FROM user_hidden_profiles WHERE hider_user_id = ? ORDER BY created_at",
+                "favorites" to
+                    "SELECT favorite_user_id, created_at FROM favorite_profiles WHERE user_id = ? ORDER BY created_at",
                 "reportsYouFiled" to
                     "SELECT id, reported_user_id, target_type, target_id, category, note, status, created_at FROM safety_reports WHERE reporter_user_id = ? ORDER BY created_at",
                 "appeals" to

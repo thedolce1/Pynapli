@@ -5,9 +5,13 @@ import com.pynapli.app.profile.FavoriteChange
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.PresenceDeltaDto
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 /**
@@ -107,6 +111,21 @@ class FavoritesStateHolder(
             } else {
                 current.copy(cards = current.cards.filterNot { it.id == change.userId })
             }
+        }
+    }
+
+    /** Who the presence stream should watch for this view: its cards, only while it is showing. */
+    val watchedUserIds: Flow<Set<String>> =
+        state
+            .map { ui -> if (ui.showing) ui.cards.mapTo(LinkedHashSet(ui.cards.size)) { it.id } else emptySet() }
+            .distinctUntilChanged()
+
+    /** Someone came online or went offline: flip their dot in place (order waits for the next load). */
+    fun applyPresenceDelta(delta: PresenceDeltaDto) {
+        _state.update { current ->
+            val index = current.cards.indexOfFirst { it.id == delta.userId }
+            if (index < 0 || current.cards[index].online == delta.online) return@update current
+            current.copy(cards = current.cards.toMutableList().also { it[index] = it[index].copy(online = delta.online) })
         }
     }
 

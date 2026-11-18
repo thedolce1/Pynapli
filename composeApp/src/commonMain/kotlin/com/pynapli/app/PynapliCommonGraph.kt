@@ -199,7 +199,7 @@ class PynapliCommonGraph(
     /** The app is visible again (Android onStart, iOS foreground, browser tab shown). */
     suspend fun onAppForegrounded(signedIn: Boolean) = appResumeRefresher.onForeground(signedIn)
 
-    val gridPresenceStreamCoordinator = GridPresenceStreamCoordinator(presenceStreamClient, gridStateHolder)
+    val gridPresenceStreamCoordinator = GridPresenceStreamCoordinator(presenceStreamClient, gridStateHolder, favoritesStateHolder)
 
     val activityRealtimeCoordinator =
         ActivityRealtimeCoordinator(activityStreamClient, activityStateHolder, onMatch = matchCelebrationStateHolder::refresh)

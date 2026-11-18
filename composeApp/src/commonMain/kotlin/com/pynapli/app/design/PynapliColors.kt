@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.Color
  * Canonical Pynapli brand color tokens.
  *
  * Source of truth is the design handoff (`Pynapli-Handoff/components/primitives.jsx`), which
- * refines the original docs/DESIGN_TOKENS.md neutrals toward slightly lifted, warmer-dark
+ * refines the original docs/DESIGN_SPEC.md neutrals toward slightly lifted, warmer-dark
  * surfaces. Dark-first by design: these are the product's default surface/text/accent values.
  * Feature screens and design primitives should consume these (or [PynapliSemantic]) instead of
  * hardcoding hex literals. Theme-aware widgets may still read `MaterialTheme.colorScheme`; these
@@ -114,7 +114,7 @@ object PynapliColorsLight {
 
 /**
  * Semantic aliases over [PynapliColors] so call sites express intent (online/verified/premium)
- * rather than a raw palette name. Mirrors docs/DESIGN_TOKENS.md.
+ * rather than a raw palette name. Mirrors docs/DESIGN_SPEC.md.
  */
 object PynapliSemantic {
     val Online = PynapliColors.Success

@@ -6,6 +6,7 @@ import com.pynapli.app.profile.SamplePublicProfileRepository
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.FavoriteStatusDto
+import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
@@ -57,6 +58,27 @@ class FavoritesStateHolderTest {
                 holder.state.value.cards
                     .map { it.id },
             )
+        }
+
+    @Test
+    fun presenceIsWatchedOnlyWhileShowingAndFlipsTheDotInPlace() =
+        runTest {
+            val holder = FavoritesStateHolder(FakeFavoritesRepository(listOf(GridFeedUi(listOf(card("a"), card("b"))))))
+            assertEquals(emptySet(), holder.watchedUserIds.first())
+
+            holder.show()
+            assertEquals(setOf("a", "b"), holder.watchedUserIds.first())
+
+            holder.applyPresenceDelta(PresenceDeltaDto(userId = "b", online = true, lastActiveAt = ""))
+            holder.applyPresenceDelta(PresenceDeltaDto(userId = "nobody", online = true, lastActiveAt = ""))
+            assertEquals(
+                listOf("a" to false, "b" to true),
+                holder.state.value.cards
+                    .map { it.id to it.online },
+            )
+
+            holder.showNearby()
+            assertEquals(emptySet(), holder.watchedUserIds.first())
         }
 
     @Test
