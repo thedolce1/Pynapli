@@ -639,6 +639,9 @@ Avoid:
 - [x] Repeat views aggregate with cooldown.
 - [x] Flirts appear in Activity, not Messages.
 - [x] Likes You appears in Activity.
+- [x] Likes You (Flirts) and Views render the Grid's own card in the Grid's 3-up layout, with the activity
+  and any Pineapple Like note as a caption; gating is the server's Activity reveal rule, unchanged.
+- [x] A like opened from Likes You offers Like back in the shared profile sheet (Activity's like-back).
 - [x] Pineapple Likes appear in Activity.
 - [x] A Pineapple Like's note appears on the like in Activity, not Messages (Intro Notes merged into Pineapple Like, V92).
 - [x] Matches appear in Activity for both matched users (Matches tab being merged into the Messages new-matches rail).

@@ -153,6 +153,11 @@ cell) only:
 
 Proof: `GridLocationPrivacyTest`, `GridDistancePrivacyTest`, `GridRankCacheCrossViewerTest`.
 
+Favorites follow the same rules without a radius: the displayed distance is the public bucket of the
+cell-to-cell distance (as on profile detail), the order key is that public bucket (never finer than the
+card reads), and someone who hides distance gets a bucket that does not depend on where they are
+(`FavoriteServiceIntegrationTest`).
+
 ## Ranking
 
 Base ranking:
@@ -483,6 +488,20 @@ updates when the app pauses, prefer event deltas over polling.
   widens once to `MAX_RADIUS_METERS` as edge-fill only (`nextCursor = null`). Explicit filters still
   apply; viewer-specific empties (blocks, online-only with nobody online) stay honestly empty.
 - [ ] Larger dense-metro and production-hardware load runs; Redis hit rate under multi-instance load.
+- [x] Favorites (V105): private star in profile detail; `PUT`/`DELETE /v1/favorites/{id}` (idempotent,
+  no activity or notification, cap 500, free) and a paged `GET /v1/favorites` of Grid cards, online first
+  then the public distance bucket; hidden-distance people get a location-independent position; Grid
+  visibility rules on every read (blocks, hides, incognito, banned, deleted, quarantined drop out);
+  sealed viewer-bound cursor (`FavoriteServiceIntegrationTest`). Nearby/Favorites switch on the Grid.
+- [ ] Favorites from a Grid-card long-press (no long-press menu exists); live presence deltas in Favorites.
+- [x] Last seen (V106): profile detail shows a server bucket (`online_now`, `active_15m`, `active_today`,
+  `active_week`) from a throttled heartbeat and session activity; never a timestamp; none for incognito
+  (`LastActiveIntegrationTest`). Not on the card face.
+- [x] Tab return keeps the Grid's cards, order and scroll (quiet refetch only after 15 minutes); a block or
+  hide also leaves the cold-start cache; sign-out or a dead session wipes the Grid and its cache
+  (`GridInstantLoadTest`).
+- [x] A failed next page stops auto-paging and offers Retry; an unfiltered empty Grid shows an empty state
+  (`GridPagingAndEmptyStateTest`).
 ## Do Not Implement
 
 - Do not use offset pagination for live grid pages.
