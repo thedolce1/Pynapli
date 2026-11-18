@@ -415,12 +415,8 @@ class ActivityRepositoryIntegrationTest {
             val after = repository.getActivitySummary(recipient)
             assertEquals(0, after.badgeCount)
             assertEquals(null, after.latestBadgeOccurredAt)
-            assertFalse(
-                repository
-                    .listActivity(ActivityFeedQuery(recipient, setOf("match"), 10, null))
-                    .single()
-                    .seen,
-            )
+            val matchRow = repository.listActivity(ActivityFeedQuery(recipient, setOf("match"), 10, null)).single()
+            assertFalse(matchRow.seen)
         }
 
     @Test
