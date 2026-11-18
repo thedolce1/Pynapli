@@ -34,6 +34,8 @@ internal class JdbcProfileMutationActions(
                             logistics_tags = CASE WHEN ? THEN ?::text[] ELSE logistics_tags END,
                             intents = CASE WHEN ? THEN ?::text[] ELSE intents END,
                             neighborhood = CASE WHEN ? THEN ?::text ELSE neighborhood END,
+                            experience_level = CASE WHEN ? THEN ?::text ELSE experience_level END,
+                            boundaries = CASE WHEN ? THEN ?::text[] ELSE boundaries END,
                             profile_completeness_score = ?,
                             updated_at = now()
                         WHERE user_id = ?
@@ -60,8 +62,12 @@ internal class JdbcProfileMutationActions(
                         statement.setArray(17, connection.toTextArrayOrNull(update.intents))
                         statement.setBoolean(18, update.neighborhoodProvided)
                         statement.setString(19, update.neighborhood)
-                        statement.setInt(20, update.profileCompletenessScore)
-                        statement.setObject(21, userId)
+                        statement.setBoolean(20, update.experienceLevelProvided)
+                        statement.setString(21, update.experienceLevel)
+                        statement.setBoolean(22, update.boundaries != null)
+                        statement.setArray(23, connection.toTextArrayOrNull(update.boundaries))
+                        statement.setInt(24, update.profileCompletenessScore)
+                        statement.setObject(25, userId)
                         if (statement.executeUpdate() == 0) return@withContext null
                     }
             }

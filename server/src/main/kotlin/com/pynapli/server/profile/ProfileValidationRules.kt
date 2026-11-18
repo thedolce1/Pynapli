@@ -1,5 +1,6 @@
 package com.pynapli.server.profile
 
+import com.pynapli.shared.profile.DiscoveryTagTaxonomies
 import com.pynapli.shared.profile.ProfileTaxonomies
 import java.time.LocalDate
 
@@ -56,4 +57,52 @@ internal fun profileCompleteness(
     if (!relationshipContext.isNullOrBlank()) score += 10
     if (!discoveryStyle.isNullOrBlank()) score += 15
     return score.coerceIn(0, 100)
+}
+
+internal data class ParsedLifestyle(
+    val tags: List<String>?,
+    val experienceProvided: Boolean,
+    val experienceLevel: String?,
+)
+
+/**
+ * Splits a profile write into lifestyle tags and the single experience level (V104).
+ * [experienceLevel] wins when sent ("" clears it). Older clients still send the experience as a
+ * token inside [lifestyleTags]: exactly one is taken as the level; both old tokens together are
+ * contradictory and clear the level rather than guess.
+ */
+internal fun parseLifestyle(
+    lifestyleTags: List<String>?,
+    experienceLevel: String?,
+): ParsedLifestyle {
+    val levels = DiscoveryTagTaxonomies.experienceLevels.toSet()
+    val raw =
+        lifestyleTags
+            ?.map { it.trim().lowercase() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+    val legacyLevels = raw?.filter { it in levels }.orEmpty()
+    val tags = raw?.filterNot { it in levels }.cleanTags(DiscoveryTagTaxonomies.lifestyleTags)
+
+    if (experienceLevel != null) {
+        val level = experienceLevel.trim().lowercase().takeIf { it.isNotEmpty() }
+        if (level != null && level !in levels) throw ProfileException("INVALID_PROFILE_TAG")
+        return ParsedLifestyle(tags = tags, experienceProvided = true, experienceLevel = level)
+    }
+    if (legacyLevels.isNotEmpty()) {
+        return ParsedLifestyle(
+            tags = tags,
+            experienceProvided = true,
+            experienceLevel = legacyLevels.singleOrNull(),
+        )
+    }
+    return ParsedLifestyle(tags = tags, experienceProvided = false, experienceLevel = null)
+}
+
+/** Boundary tokens: curated "<item>:<stance>" values, at most one stance per item. */
+internal fun List<String>?.cleanBoundaries(): List<String>? {
+    val cleaned = cleanTags(DiscoveryTagTaxonomies.boundaryTokens) ?: return null
+    val items = cleaned.map { DiscoveryTagTaxonomies.boundaryItemOf(it) }
+    if (items.size != items.toSet().size) throw ProfileException("INVALID_PROFILE_TAG")
+    return cleaned
 }

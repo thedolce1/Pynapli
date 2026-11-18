@@ -127,6 +127,10 @@ class SensitiveLoggingGuardTest {
                 "storageObjectKey",
                 // Sensitive profile tags
                 "lifestyleTags",
+                "experienceLevel",
+                "boundaries",
+                "boundaryItems",
+                "orientations",
             )
     }
 }

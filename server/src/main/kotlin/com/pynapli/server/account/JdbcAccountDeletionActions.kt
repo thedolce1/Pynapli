@@ -239,6 +239,8 @@ internal class JdbcAccountDeletionActions(
                     orientation = NULL,
                     orientation_detail = NULL,
                     lifestyle_tags = NULL,
+                    experience_level = NULL,
+                    boundaries = NULL,
                     logistics_tags = NULL,
                     intents = NULL,
                     updated_at = now()

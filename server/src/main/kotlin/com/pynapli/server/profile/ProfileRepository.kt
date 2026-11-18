@@ -43,6 +43,8 @@ data class ProfileRecord(
     val relationshipContext: String?,
     val discoveryStyle: String,
     val lifestyleTags: List<String> = emptyList(),
+    val experienceLevel: String? = null,
+    val boundaries: List<String> = emptyList(),
     val logisticsTags: List<String> = emptyList(),
     val intents: List<String> = emptyList(),
     val profileCompletenessScore: Int,
@@ -80,6 +82,11 @@ data class PublicProfileRecord(
     val linkedPartnerUserId: UUID? = null,
     val linkedPartnerDisplayName: String? = null,
     val linkedPartnerThumbnailMediaAssetId: UUID? = null,
+    // The visible linked partner's own declared orientation and lifestyle (partner preview).
+    val linkedPartnerOrientation: String? = null,
+    val linkedPartnerOrientationDetail: String? = null,
+    val linkedPartnerExperienceLevel: String? = null,
+    val linkedPartnerLifestyleTags: List<String> = emptyList(),
     // Both this profile and its visible linked partner are photo-verified.
     val coupleVerified: Boolean = false,
     val displayAge: Int?,
@@ -92,6 +99,8 @@ data class PublicProfileRecord(
     val relationshipContext: String?,
     val discoveryStyle: String,
     val lifestyleTags: List<String> = emptyList(),
+    val experienceLevel: String? = null,
+    val boundaries: List<String> = emptyList(),
     val logisticsTags: List<String> = emptyList(),
     val intents: List<String> = emptyList(),
     val distanceMeters: Double?,
@@ -120,6 +129,11 @@ data class ProfileUpdate(
     val neighborhoodProvided: Boolean = false,
     val neighborhood: String? = null,
     val lifestyleTags: List<String>? = null,
+    // Experience level: when experienceLevelProvided is false the stored level is unchanged; a
+    // provided null clears it.
+    val experienceLevelProvided: Boolean = false,
+    val experienceLevel: String? = null,
+    val boundaries: List<String>? = null,
     val logisticsTags: List<String>? = null,
     val intents: List<String>? = null,
 )

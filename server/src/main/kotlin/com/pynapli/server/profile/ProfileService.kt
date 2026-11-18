@@ -76,7 +76,9 @@ class ProfileService(
 
         // PROFILE_SETTINGS_SPEC: high-sensitivity lifestyle terms are age-gated,
         // mirroring the filter-side gate in SavedGridFilterService/deck requests.
-        if (!update.lifestyleTags.isNullOrEmpty()) {
+        // Experience level is a lifestyle term too; boundaries are consent wording (low
+        // sensitivity per LANGUAGE_AND_TAXONOMY_SPEC) and are not gated.
+        if (!update.lifestyleTags.isNullOrEmpty() || update.experienceLevel != null) {
             val current = repository.getMe(userId) ?: throw ProfileException("PROFILE_NOT_FOUND")
             if (!current.profile.ageVerified) throw ProfileException("AGE_VERIFICATION_REQUIRED")
         }
