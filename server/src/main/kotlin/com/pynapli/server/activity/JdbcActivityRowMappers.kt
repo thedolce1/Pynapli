@@ -34,7 +34,6 @@ internal object JdbcActivityRowMappers {
             profileViewCount = rs.getInt("profile_view_count"),
             flirtCount = rs.getInt("flirt_count"),
             likeCount = rs.getInt("like_count"),
-            matchCount = rs.getInt("match_count"),
             albumRequestCount = rs.getInt("album_request_count"),
             partnerInviteCount = rs.getInt("partner_invite_count"),
             latestBadgeOccurredAt = rs.getTimestamp("latest_badge_occurred_at")?.toInstant(),

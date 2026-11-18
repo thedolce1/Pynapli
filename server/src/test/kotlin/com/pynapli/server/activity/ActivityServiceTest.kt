@@ -735,7 +735,6 @@ class ActivityServiceTest {
                                 profileViewCount = 12,
                                 flirtCount = 2,
                                 likeCount = 3,
-                                matchCount = 1,
                                 albumRequestCount = 1,
                                 partnerInviteCount = 1,
                                 latestBadgeOccurredAt = latest,
@@ -750,7 +749,7 @@ class ActivityServiceTest {
             assertEquals(12, response.profileViewCount)
             assertEquals(2, response.flirtCount)
             assertEquals(3, response.likeCount)
-            assertEquals(1, response.matchCount)
+            assertEquals(0, response.matchCount)
             assertEquals(1, response.albumRequestCount)
             assertEquals(1, response.partnerInviteCount)
             assertEquals(latest.toString(), response.latestBadgeOccurredAt)
@@ -866,7 +865,6 @@ private class InMemoryActivityRepository(
             profileViewCount = 0,
             flirtCount = 0,
             likeCount = 0,
-            matchCount = 0,
             albumRequestCount = 0,
             partnerInviteCount = 0,
             latestBadgeOccurredAt = null,

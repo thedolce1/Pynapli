@@ -67,7 +67,6 @@ internal object JdbcActivitySummarySql {
                    WHERE event_type IN ('swipe_like', 'pineapple_like', 'intro_note')
                      AND seen_at IS NULL
                )::integer AS like_count,
-               COUNT(*) FILTER (WHERE event_type = 'match' AND seen_at IS NULL)::integer AS match_count,
                COUNT(*) FILTER (
                    WHERE event_type = 'album_request'
                      AND seen_at IS NULL

@@ -283,7 +283,6 @@ class ActivityRepositoryIntegrationTest {
             assertEquals(1, summary.profileViewCount)
             assertEquals(1, summary.flirtCount)
             assertEquals(2, summary.likeCount)
-            assertEquals(1, summary.matchCount)
             assertEquals(1, summary.albumRequestCount)
             assertEquals(1, summary.partnerInviteCount)
             // flirt + 2 likes + pending album request + partner invite; the visible match is not in it.

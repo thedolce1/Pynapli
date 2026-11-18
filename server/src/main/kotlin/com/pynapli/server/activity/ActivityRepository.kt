@@ -131,7 +131,6 @@ data class ActivitySummaryRecord(
     val profileViewCount: Int,
     val flirtCount: Int,
     val likeCount: Int,
-    val matchCount: Int,
     val albumRequestCount: Int,
     val partnerInviteCount: Int,
     val latestBadgeOccurredAt: Instant?,

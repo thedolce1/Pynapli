@@ -50,7 +50,8 @@ internal class ActivityManagementActions(
             profileViewCount = summary.profileViewCount,
             flirtCount = summary.flirtCount,
             likeCount = summary.likeCount,
-            matchCount = summary.matchCount,
+            // Kept on the wire for installed clients; matches are not counted in Activity any more.
+            matchCount = 0,
             albumRequestCount = summary.albumRequestCount,
             partnerInviteCount = summary.partnerInviteCount,
             latestBadgeOccurredAt = summary.latestBadgeOccurredAt?.toString(),

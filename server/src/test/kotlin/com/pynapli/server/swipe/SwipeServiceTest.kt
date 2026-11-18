@@ -2134,7 +2134,6 @@ private class RecordingActivityRepository : ActivityRepository {
             profileViewCount = 0,
             flirtCount = 0,
             likeCount = 0,
-            matchCount = 0,
             albumRequestCount = 0,
             partnerInviteCount = 0,
             latestBadgeOccurredAt = null,
