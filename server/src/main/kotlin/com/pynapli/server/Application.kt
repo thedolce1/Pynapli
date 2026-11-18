@@ -12,6 +12,7 @@ import com.pynapli.server.auth.configureAuthRoutes
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.dependencies.ServerDependencies
 import com.pynapli.server.dependencies.closeDependenciesOnStop
+import com.pynapli.server.favorites.configureFavoriteRoutes
 import com.pynapli.server.grid.configureGridRoutes
 import com.pynapli.server.grid.configureSavedGridFilterRoutes
 import com.pynapli.server.location.configureLocationRoutes
@@ -184,6 +185,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         blockRepository = dependencies.blockRepository,
     )
     configureGridRoutes(dependencies.authService, dependencies.gridService, dependencies.requestProfilerFactory)
+    dependencies.favoriteService?.let { service -> configureFavoriteRoutes(dependencies.authService, service) }
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
     configureTonightSessionRoutes(dependencies.authService, dependencies.tonightSessionService)
     configureTonightFeedRoutes(dependencies.authService, dependencies.tonightFeedService)

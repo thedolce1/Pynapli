@@ -66,6 +66,11 @@ data class PublicProfileDto(
     // than depending on a card the caller may not have. Convenience snapshot — WebSocket
     // presence deltas remain the live channel for surfaces that subscribe.
     val online: Boolean = false,
+    // Coarse last-seen bucket (LastActiveBucket keys), computed server-side; null when the person is
+    // incognito or was last active more than a week ago. Never an exact timestamp.
+    val lastActive: String? = null,
+    // The viewer has starred this person. Private to the viewer.
+    val favorite: Boolean = false,
     val privateAlbumAccessStatus: String = "none",
     val linkedPartner: LinkedPartnerMiniDto? = null,
     val allowGridMessages: Boolean,

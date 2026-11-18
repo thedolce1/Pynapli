@@ -58,6 +58,10 @@ internal fun gridStatusFor(code: String): HttpStatusCode =
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_GRID_FILTER" -> HttpStatusCode.BadRequest
         "INVALID_GRID_CURSOR" -> HttpStatusCode.BadRequest
+        // Favorites share the Grid's exception type.
+        "PROFILE_NOT_FOUND" -> HttpStatusCode.NotFound
+        "FAVORITES_LIMIT_REACHED" -> HttpStatusCode.Conflict
+        "INVALID_FAVORITE" -> HttpStatusCode.BadRequest
         else -> HttpStatusCode.BadRequest
     }
 

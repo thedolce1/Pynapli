@@ -3,6 +3,7 @@ package com.pynapli.shared.network
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
+import com.pynapli.shared.network.dto.FavoriteStatusDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.SavedGridFilterDto
@@ -16,6 +17,7 @@ import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import io.ktor.http.HttpMethod
 
 /** Ktor implementation of [GridApi], composed into `KtorPynapliApiClient` via delegation. */
@@ -23,6 +25,15 @@ internal class KtorGridApi(
     private val support: KtorApiSupport,
 ) : GridApi {
     override suspend fun queryGrid(request: GridQueryRequestDto): AppResult<GridQueryResponseDto> = support.authSend(HttpMethod.Post, "/v1/grid/query", request)
+
+    override suspend fun listFavorites(cursor: String?): AppResult<GridQueryResponseDto> =
+        support.authGet("/v1/favorites") {
+            cursor?.let { parameter("cursor", it) }
+        }
+
+    override suspend fun addFavorite(userId: String): AppResult<FavoriteStatusDto> = support.authRequest(HttpMethod.Put, "/v1/favorites/$userId")
+
+    override suspend fun removeFavorite(userId: String): AppResult<FavoriteStatusDto> = support.authDelete("/v1/favorites/$userId")
 
     override suspend fun listSavedGridFilters(): AppResult<SavedGridFiltersListDto> = support.authGet("/v1/me/grid-filters")
 

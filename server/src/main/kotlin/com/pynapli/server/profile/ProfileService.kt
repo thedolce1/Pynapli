@@ -1,7 +1,9 @@
 package com.pynapli.server.profile
 
 import com.pynapli.server.activity.ActivityService
+import com.pynapli.server.favorites.FavoriteService
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.presence.LastActiveRepository
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
@@ -12,9 +14,11 @@ import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import com.pynapli.shared.presence.LastActiveBucket
 import kotlinx.coroutines.CoroutineScope
 import java.time.Clock
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 class ProfileService(
     private val repository: ProfileRepository,
@@ -28,6 +32,8 @@ class ProfileService(
     private val bioScanner: ProfileBioScanner = AcceptAllProfileBioScanner,
     profileViewRecordScope: CoroutineScope? = null,
     profileViewRecordConcurrency: Int = 4,
+    private val lastActiveRepository: LastActiveRepository? = null,
+    private val favoriteService: FavoriteService? = null,
 ) {
     private val profileViewRecorder =
         ProfileViewActivityRecorder(
@@ -57,7 +63,34 @@ class ProfileService(
             profileViewRecorder.record(viewerUserId, targetUserId)
         }
         val online = profile("profile.presence") { isOnline(targetUserId) }
-        return profile.copy(online = online)
+        val lastActive = profile("profile.lastActive") { lastActiveBucket(targetUserId, online) }
+        val favorite =
+            profile("profile.favorite") {
+                runCatching { favoriteService?.isFavorite(viewerUserId, targetUserId) }.getOrNull() ?: false
+            }
+        return profile.copy(online = online, lastActive = lastActive, favorite = favorite)
+    }
+
+    /**
+     * Coarse last seen (GRID_IMPLEMENTATION_SPEC "Presence States"): only the bucket key leaves the
+     * server, never the timestamp, and nothing at all for someone browsing incognito. Fails safe to
+     * no label.
+     */
+    private suspend fun lastActiveBucket(
+        targetUserId: UUID,
+        online: Boolean,
+    ): String? {
+        val repository = lastActiveRepository ?: return null
+        val lookup = runCatching { repository.lookup(targetUserId) }.getOrNull() ?: return null
+        if (lookup.hidden) return null
+        val since =
+            lookup.lastActiveAt?.let { at ->
+                java.time.Duration
+                    .between(at, clock.instant())
+                    .toMillis()
+                    .milliseconds
+            }
+        return LastActiveBucket.bucketFor(online = online, sinceLastActive = since)?.key
     }
 
     // Fail-safe presence lookup, mirroring GridService.onlineUserIdsFor: any presence/Redis

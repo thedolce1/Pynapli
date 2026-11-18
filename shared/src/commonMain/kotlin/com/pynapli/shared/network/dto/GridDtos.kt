@@ -66,6 +66,16 @@ data class GridCardDto(
     val coupleVerified: Boolean = false,
 )
 
+/**
+ * Result of starring or un-starring someone (`PUT`/`DELETE /v1/favorites/{userId}`). Both calls are
+ * idempotent. Favorites are private: the other person is never told.
+ */
+@Serializable
+data class FavoriteStatusDto(
+    val userId: String,
+    val favorite: Boolean,
+)
+
 @Serializable
 data class LinkedPartnerMiniDto(
     val userId: String,

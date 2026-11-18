@@ -203,7 +203,7 @@ class GridService(
         // the last kept card; otherwise it resumes past the fetched window (the repository anchor).
         val pageCards = filteredCards.take(limit)
         val moreInFetchedWindow = filteredCards.size > limit
-        val dtoCards = profile("grid.dto") { pageCards.map { it.toDto(onlineUserIds) } }
+        val dtoCards = profile("grid.dto") { pageCards.map { it.toGridCardDto(onlineUserIds, mediaAssetUrlResolver) } }
         val seenCount = (cursor?.seenCount ?: 0) + dtoCards.size
         // A widened fallback page is edge-fill only: do not hand back a cursor scoped to the
         // max radius, since the next request still carries the viewer's narrow radius.
@@ -253,33 +253,6 @@ class GridService(
         if (!verified) throw GridException("AGE_VERIFICATION_REQUIRED")
     }
 
-    private fun GridCardRecord.toDto(onlineUserIds: Set<UUID>): GridCardDto =
-        GridCardDto(
-            userId = userId.toString(),
-            displayName = displayName,
-            visitingFrom = visitingFrom?.toString(),
-            visitingUntil = visitingUntil?.toString(),
-            thumbnailUrl = thumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-            online = userId in onlineUserIds,
-            distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,
-            distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,
-            linkedPartner =
-                linkedPartnerUserId?.let { partnerUserId ->
-                    LinkedPartnerMiniDto(
-                        userId = partnerUserId.toString(),
-                        displayName = linkedPartnerDisplayName,
-                        thumbnailUrl =
-                            linkedPartnerThumbnailMediaAssetId
-                                ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-                    )
-                },
-            rankToken = "grid:v1:$userId",
-            visiting = visiting,
-            tonightActive = tonightActive,
-            verified = verified,
-            coupleVerified = coupleVerified,
-        )
-
     companion object {
         private const val MIN_RADIUS_METERS = 1_000
         private const val MAX_RADIUS_METERS = 100_000
@@ -303,3 +276,37 @@ private fun EntitlementPolicy.remainingGridResults(seenCount: Int): Int =
     } else {
         (gridResultDepthLimit - seenCount).coerceAtLeast(0)
     }
+
+/**
+ * The one Grid card mapping, shared by the Grid and Favorites so both lists return the same minimal
+ * card. Distance is the public bucket of the coarse cell-to-cell distance, and none when hidden.
+ */
+internal fun GridCardRecord.toGridCardDto(
+    onlineUserIds: Set<UUID>,
+    mediaAssetUrlResolver: MediaAssetUrlResolver?,
+): GridCardDto =
+    GridCardDto(
+        userId = userId.toString(),
+        displayName = displayName,
+        visitingFrom = visitingFrom?.toString(),
+        visitingUntil = visitingUntil?.toString(),
+        thumbnailUrl = thumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+        online = userId in onlineUserIds,
+        distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,
+        distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,
+        linkedPartner =
+            linkedPartnerUserId?.let { partnerUserId ->
+                LinkedPartnerMiniDto(
+                    userId = partnerUserId.toString(),
+                    displayName = linkedPartnerDisplayName,
+                    thumbnailUrl =
+                        linkedPartnerThumbnailMediaAssetId
+                            ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                )
+            },
+        rankToken = "grid:v1:$userId",
+        visiting = visiting,
+        tonightActive = tonightActive,
+        verified = verified,
+        coupleVerified = coupleVerified,
+    )
