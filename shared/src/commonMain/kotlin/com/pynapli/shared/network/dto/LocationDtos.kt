@@ -13,12 +13,13 @@ data class UpdateCurrentLocationRequestDto(
     val country: String? = null,
 )
 
+// Acknowledgement of a location write. Carries no coordinates or location bucket of any kind:
+// current location is write-only from the client's side (never echoed back, L-40).
 @Serializable
 data class CurrentLocationDto(
     val updatedAt: String,
     val accuracyMeters: Int? = null,
     val source: String,
-    val geohash: String? = null,
     val city: String? = null,
     val region: String? = null,
     val country: String? = null,

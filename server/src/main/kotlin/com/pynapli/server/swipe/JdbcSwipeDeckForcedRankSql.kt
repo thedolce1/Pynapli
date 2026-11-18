@@ -16,14 +16,14 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
     val sql =
         """
         WITH viewer_location AS (
-            SELECT geom
+            SELECT pynapli_location_cell(geom) AS geom
             FROM user_locations
             WHERE user_id = ?
         ),
         forced_locations AS MATERIALIZED (
             SELECT ul.user_id,
                    ul.geom,
-                   ST_Distance(v.geom, ul.geom) AS distance_meters,
+                   pynapli_coarse_distance_m(v.geom, ul.geom) AS distance_meters,
                    v.geom <-> ul.geom AS distance_order
             FROM viewer_location v
             JOIN user_locations ul
@@ -46,8 +46,13 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
                      AND ba.ends_at > now()
                ) AS is_boosted,
                false AS visiting,
-               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score,
+               -- L-08: coarse order key (km bucket, distance-independent for hidden users) + stable
+               -- pseudo-random tiebreak seeded by the viewer's cell. Never exact distance.
+               pynapli_order_bucket_m(ds.show_distance, fl.distance_meters, $radiusMeters, 'deck:' || ST_AsText(v.geom::geometry), u.id) AS order_bucket,
+               pynapli_order_tiebreak('deck:' || ST_AsText(v.geom::geometry), u.id) AS order_tiebreak
         FROM forced_locations fl
+        CROSS JOIN viewer_location v
         JOIN users u ON u.id = fl.user_id
         JOIN profiles p ON p.user_id = u.id
         JOIN discovery_settings ds ON ds.user_id = u.id
@@ -130,7 +135,7 @@ internal fun Connection.queryDeckRankForcedTargetsLocal(
               ?::boolean = false
               OR u.id <> ALL(?::uuid[])
           )
-        ORDER BY soft_score DESC, fl.distance_order
+        ORDER BY soft_score DESC, order_bucket ASC, order_tiebreak ASC
         LIMIT ?
         """.trimIndent()
 
@@ -209,7 +214,7 @@ internal fun Connection.queryDeckRankForcedTargets(
     val sql =
         """
         WITH viewer_location AS (
-            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
@@ -227,7 +232,7 @@ internal fun Connection.queryDeckRankForcedTargets(
                COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
                p.verified_at IS NOT NULL AS verified,
                ds.show_distance,
-               ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+               pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
                EXISTS (
                    SELECT 1
                    FROM boost_activations ba
@@ -236,7 +241,11 @@ internal fun Connection.queryDeckRankForcedTargets(
                      AND ba.ends_at > now()
                ) AS is_boosted,
                target_travel.id IS NOT NULL AS visiting,
-               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score,
+               -- L-08: coarse order key (km bucket, distance-independent for hidden users) + stable
+               -- pseudo-random tiebreak seeded by the viewer's cell. Never exact distance.
+               pynapli_order_bucket_m(ds.show_distance, pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)), $radiusMeters, 'deck:' || ST_AsText(v.geom::geometry), u.id) AS order_bucket,
+               pynapli_order_tiebreak('deck:' || ST_AsText(v.geom::geometry), u.id) AS order_tiebreak
         FROM viewer_location v
         JOIN forced_targets ft ON true
         JOIN users u ON u.id = ft.user_id
@@ -331,7 +340,7 @@ internal fun Connection.queryDeckRankForcedTargets(
               ?::boolean = false
               OR u.id <> ALL(?::uuid[])
           )
-        ORDER BY soft_score DESC, v.geom <-> COALESCE(target_travel.geom, ul.geom)
+        ORDER BY soft_score DESC, order_bucket ASC, order_tiebreak ASC
         LIMIT ?
         """.trimIndent()
 

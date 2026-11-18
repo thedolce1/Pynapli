@@ -581,6 +581,13 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
 - [x] Likes You is represented in Activity.
 - [x] Top Picks exists (frozen).
 - [x] Boost affects ranking without violating filters.
+- [x] Deck order is coarse (L-08): soft score, a whole-km cell-to-cell bucket (distance-independent
+  for people who hide distance), then a stable tiebreak seeded by the viewer's cell; ranking starts
+  at the viewer's cell centre and card distances are cell to cell. A traveller is never ranked by
+  their home GPS.
+- [ ] Partial: the deck radius is still applied exactly (not snapped to the Grid's steps), its
+  membership test is raw rather than cell-to-cell, and its rank cache is keyed by a ~111 m bucket
+  rather than the cell.
 - [x] Travel mode for Swipe and Grid (`travel_locations`, `TravelLocationService`; Select unlimited,
   Social one activation per 30 days); planned trips and "Visiting soon" (`travel_trips`).
 - [x] Dealbreakers (`SwipeDealbreakerKey`: `age`, `distance`, `verified`, `discoveryStyles`,

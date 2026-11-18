@@ -23,7 +23,7 @@ class LocationService(
     ): CurrentLocationDto {
         validate(request)
         val source = request.source.trim().lowercase()
-        publishSpoofSignalIfImpossible(userId, request, source)
+        publishSpoofSignalIfImpossible(userId, request)
         val update =
             LocationUpdate(
                 latitude = request.latitude,
@@ -40,23 +40,23 @@ class LocationService(
     }
 
     /**
-     * Location-spoofing signal (TRUST_AND_SAFETY_SPEC): a device fix that implies
-     * physically impossible travel versus the previous device fix feeds the risk
+     * Location-spoofing signal (TRUST_AND_SAFETY_SPEC): an update that implies
+     * physically impossible travel versus the previous stored fix feeds the risk
      * model. Signal only — the update itself always proceeds, and any failure in
-     * the risk path must never break location updates. Travel-mode and manual-city
-     * sources are legitimate jumps and are excluded on both sides; the distance
-     * floor keeps GPS jitter and tiny intervals from ever flagging.
+     * the risk path must never break location updates. The client-declared `source`
+     * is NOT trusted to skip the check (L-13: declaring `manual_city` or `travel` used
+     * to bypass it); the only exemption is a Travel mode session the server itself
+     * holds as active. The distance floor keeps GPS jitter and tiny intervals from
+     * ever flagging.
      */
     private suspend fun publishSpoofSignalIfImpossible(
         userId: UUID,
         request: UpdateCurrentLocationRequestDto,
-        source: String,
     ) {
         val publisher = locationRiskSignals ?: return
-        if (source !in DEVICE_FIX_SOURCES) return
         runCatching {
             val previous = repository.getCurrentCoordinates(userId) ?: return
-            if (previous.source !in DEVICE_FIX_SOURCES) return
+            if (previous.travelSessionActive) return
 
             val distanceKm = haversineKm(previous.latitude, previous.longitude, request.latitude, request.longitude)
             if (distanceKm < IMPOSSIBLE_TRAVEL_MIN_DISTANCE_KM) return
@@ -96,7 +96,6 @@ class LocationService(
             updatedAt = updatedAt.toString(),
             accuracyMeters = accuracyMeters,
             source = source,
-            geohash = geohash,
             city = city,
             region = region,
             country = country,
@@ -119,7 +118,6 @@ class LocationService(
 
     companion object {
         private val SOURCES = setOf("gps", "network", "travel", "manual_city")
-        private val DEVICE_FIX_SOURCES = setOf("gps", "network")
 
         // Faster than any commercial flight over a distance no GPS glitch covers.
         const val IMPOSSIBLE_TRAVEL_MIN_DISTANCE_KM = 100.0

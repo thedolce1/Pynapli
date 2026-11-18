@@ -200,7 +200,8 @@ internal class JdbcSwipeDeckQueryActions(
                     .sortedWith(
                         compareByDescending<DeckRankRow> { it.isBoosted }
                             .thenByDescending { it.softScore }
-                            .thenBy { it.distanceMeters },
+                            .thenBy { it.orderBucket }
+                            .thenBy { it.orderTiebreak },
                     ).take(limit)
             }
 

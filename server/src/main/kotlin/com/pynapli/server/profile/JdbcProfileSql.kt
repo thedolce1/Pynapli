@@ -86,19 +86,38 @@ internal object JdbcProfileSql {
                ds.allow_flirts,
                ds.allow_album_requests,
                COALESCE(private_album_access.status, 'none') AS private_album_access_status,
+               -- L-12: cell-to-cell distance between both sides' EFFECTIVE locations (an active
+               -- travel point overrides home on either side), and nothing at all when the owner hides
+               -- distance. Never a raw GPS distance, never a traveller's home.
                CASE
                    WHEN ds.show_distance = true
                         AND viewer_location.geom IS NOT NULL
                         AND target_location.geom IS NOT NULL
-                   THEN ST_Distance(viewer_location.geom, target_location.geom)
+                   THEN pynapli_coarse_distance_m(viewer_location.geom, target_location.geom)
                    ELSE NULL
                END AS distance_meters
         FROM users u
         JOIN profiles p ON p.user_id = u.id
         JOIN discovery_settings ds ON ds.user_id = u.id
         LEFT JOIN account_risk_states target_risk ON target_risk.user_id = u.id
-        LEFT JOIN user_locations viewer_location ON viewer_location.user_id = ?
-        LEFT JOIN user_locations target_location ON target_location.user_id = u.id
+        LEFT JOIN LATERAL (
+            SELECT COALESCE(viewer_travel.geom, viewer_home.geom) AS geom
+            FROM user_locations viewer_home
+            LEFT JOIN travel_locations viewer_travel
+              ON viewer_travel.user_id = viewer_home.user_id
+             AND viewer_travel.status = 'active'
+             AND viewer_travel.active_until IS NULL
+            WHERE viewer_home.user_id = ?
+        ) viewer_location ON true
+        LEFT JOIN LATERAL (
+            SELECT COALESCE(target_travel.geom, target_home.geom) AS geom
+            FROM user_locations target_home
+            LEFT JOIN travel_locations target_travel
+              ON target_travel.user_id = target_home.user_id
+             AND target_travel.status = 'active'
+             AND target_travel.active_until IS NULL
+            WHERE target_home.user_id = u.id
+        ) target_location ON true
         LEFT JOIN LATERAL (
             SELECT CASE
                 WHEN EXISTS (

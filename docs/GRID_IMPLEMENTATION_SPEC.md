@@ -126,9 +126,32 @@ boost state. Authoritative profile state never lives only in Redis.
 
 ### Pagination
 
-Signed, stable cursor pagination. Never offset pagination for the live grid (inserts and removals
-make offset pages unstable). The cursor carries the filter hash, rank position, user-id tie-breaker
-and seen-count state for tier depth.
+Sealed, stable cursor pagination. Never offset pagination for the live grid (inserts and removals
+make offset pages unstable). The cursor carries the filter hash, rank position (boost bucket, order
+bucket, order tiebreak), user-id tie-breaker and seen-count state for tier depth. It is **opaque**:
+AES-256-GCM under a key derived from the cursor secret, random nonce, `g2.` prefix; old `v1.`
+cursors are rejected as `INVALID_GRID_CURSOR`. Pages are at least 12 cards (`MIN_PAGE_SIZE`); only
+the tier depth cap can make a final page shorter.
+
+### Location privacy (load-bearing)
+
+An ordinary account can report any location and read every field, so every Grid observable —
+displayed distance, order, radius membership, cursor — is a function of (viewer cell, target
+cell) only:
+
+- **Cell:** the effective location (active travel point, else home GPS) snapped to a 0.01-degree
+  grid (~1.1 km N-S) by `pynapli_location_cell` (V94). Ranking starts from the viewer's cell centre;
+  the shared rank window is keyed by that cell, so viewers sharing a window share an origin.
+- **Displayed distance:** cell to cell, then bucketed: under 2 km reads "1 km", whole km to 10 km,
+  5 km steps to 50 km, 10 km steps beyond. Deterministic (no per-request noise to average out).
+- **Order:** boost first, then a whole-km bucket of the cell-to-cell distance, then a stable
+  pseudo-random tiebreak seeded by the viewer cell (V95). Someone who hides distance gets an order
+  bucket that does not depend on where they are (uniform over the first min(radius, 25 km)).
+- **Radius:** snapped up to 2, 5, 10, 25, 50 or 100 km; membership is cell-to-cell on the
+  effective location (a traveller matches only where they travel, never by home). The GiST
+  pre-filter pads the radius by 1.6 km of cell slack.
+
+Proof: `GridLocationPrivacyTest`, `GridDistancePrivacyTest`, `GridRankCacheCrossViewerTest`.
 
 ## Ranking
 
@@ -208,8 +231,8 @@ Location should be useful but battery-conscious and privacy-aware.
 - Request fresh location after initial render.
 - Use while-in-use location by default.
 - Avoid continuous exact GPS streaming.
-- Round or fuzz distance.
-- Respect hide-distance settings.
+- Snap to coarse cells and coarse buckets, never per-request noise (see Location privacy).
+- Respect hide-distance settings, including in ordering.
 - Stop active location updates when app backgrounds.
 - Use movement thresholds before sending location updates to backend.
 
@@ -418,7 +441,8 @@ Reward:
 - How the Grid meets the budget: a two-phase query (rank/cap candidate ids, then hydrate only the
   page), covering partial indexes (`V43`), and a shared ranked-candidate cache
   (`GridCandidateRankCache`: in-memory per instance, `RedisGridCandidateRankCache` in production, key
-  `grid:candidates:v1:cell:{lonE3}_{latE3}:radius:{r}:w:{window}:f:{filterHash}`, TTL 5s). The cache
+  `grid:candidates:v2:cell:{lonE2}_{latE2}:radius:{r}:w:{window}:f:{filterHash}` keyed by the
+  viewer's 0.01-degree cell, TTL 5s). The cache
   is exclusion-free: per-viewer blocks/hides are applied after it in `GridService`, and linked-only and
   travel-active viewers bypass it. **The Redis path fails open** to direct queries on any Redis error.
 
@@ -428,9 +452,12 @@ updates when the app pauses, prefer event deltas over polling.
 ## Implementation Checklist
 
 - [x] Lightweight card DTO; full profile endpoint is separate.
-- [x] PostGIS radius query and nearest-neighbor ordering.
+- [x] PostGIS radius query (GiST pre-filter, cell-to-cell membership) with coarse privacy-safe ordering.
 - [x] Redis presence TTLs; ranked-candidate cache (above).
-- [x] Signed stable cursor pagination; tier volume caps with seen-count state in the cursor.
+- [x] Sealed (encrypted) stable cursor pagination, 12-card minimum page; tier volume caps with
+  seen-count state in the cursor.
+- [x] Location privacy: coarse cells, coarse display buckets, coarse order, snapped radius steps,
+  effective-location membership (L-07..L-10, L-14).
 - [x] Redis-backed Grid query rate limiting (`RateLimitService`).
 - [x] Load harness and 500-concurrent proof inside budget (local single instance).
 - [x] Compose grid: stable keys, fixed square cards, `LazyGridState` hoisted to the screen so it

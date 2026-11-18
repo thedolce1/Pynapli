@@ -15,6 +15,9 @@ internal data class DeckRankRow(
     val distanceMeters: Double,
     val isBoosted: Boolean,
     val softScore: Int,
+    /** L-08 coarse ordering key; see `pynapli_order_bucket_m` (V95). */
+    val orderBucket: Int = 0,
+    val orderTiebreak: Long = 0,
 )
 
 internal data class DeckHydration(

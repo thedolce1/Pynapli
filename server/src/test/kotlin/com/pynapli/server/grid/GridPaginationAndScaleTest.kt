@@ -47,9 +47,16 @@ class GridPaginationAndScaleTest :
                         cursor = firstPage.nextCursorAnchor,
                     )
 
-                assertEquals(listOf(firstTarget, secondTarget), firstPage.cards.map { it.userId })
-                assertEquals(GridCursorAnchor(1, firstPage.cards.last().distanceBucketMeters, secondTarget), firstPage.nextCursorAnchor)
-                assertEquals(listOf(thirdTarget), secondPage.cards.map { it.userId })
+                // All three share the viewer's 1 km order bucket, so the order within it is the stable
+                // per-cell pseudo-random tiebreak (L-08): pin the partition and the anchor, not an order.
+                assertEquals(2, firstPage.cards.size)
+                assertEquals(1, secondPage.cards.size)
+                assertEquals(
+                    setOf(firstTarget, secondTarget, thirdTarget),
+                    (firstPage.cards + secondPage.cards).map { it.userId }.toSet(),
+                )
+                val last = firstPage.cards.last()
+                assertEquals(GridCursorAnchor(1, last.orderBucket, last.userId, orderTiebreak = last.orderTiebreak), firstPage.nextCursorAnchor)
                 assertEquals(null, secondPage.nextCursorAnchor)
             }
         }

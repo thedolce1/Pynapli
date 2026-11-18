@@ -37,7 +37,13 @@ data class GridCardRecord(
     val showDistance: Boolean,
     val distanceMeters: Double,
     val boostBucket: Int = 1,
-    val distanceBucketMeters: Int = distanceMeters.toInt(),
+    /**
+     * Ordering bucket (metres, L-08): whole-km coarse distance for people who show distance, a
+     * distance-independent pseudo-random bucket for people who hide it. Never a displayed value.
+     */
+    val orderBucket: Int = distanceMeters.toInt(),
+    /** Stable per-viewer-cell pseudo-random tiebreak inside an [orderBucket]. */
+    val orderTiebreak: Long = 0,
     val linkedPartnerUserId: UUID? = null,
     val linkedPartnerDisplayName: String? = null,
     val linkedPartnerThumbnailMediaAssetId: UUID? = null,
@@ -58,16 +64,19 @@ data class GridCardRecord(
     val tonightActive: Boolean = false,
 )
 
+/** Keyset position: (boostBucket, orderBucket, orderTiebreak, userId). Travels only inside a sealed cursor. */
 data class GridCursorAnchor(
     val boostBucket: Int,
-    val distanceBucketMeters: Int,
+    val orderBucket: Int,
     val userId: UUID,
     val seenCount: Int = 0,
+    val orderTiebreak: Long = 0,
 )
 
 fun GridCardRecord.toCursorAnchor(): GridCursorAnchor =
     GridCursorAnchor(
         boostBucket = boostBucket,
-        distanceBucketMeters = distanceBucketMeters,
+        orderBucket = orderBucket,
         userId = userId,
+        orderTiebreak = orderTiebreak,
     )

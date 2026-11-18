@@ -42,24 +42,20 @@ internal fun Connection.queryDeckRank(
         }
     }
 
-    // KNN spatial ordering via PostGIS `<->` operator. The GiST index on
-    // user_locations.geom can serve the ordering directly when `<->` is the
-    // sole ORDER BY clause - adding a CASE expression or a tiebreaker
-    // forces a full sort and defeats the optimization. So:
-    //   - `is_boosted` is returned as a SELECT column (cheap EXISTS) rather
-    //     than living in the ORDER BY; the Kotlin side re-shuffles boosted
-    //     users to the head of the page (spec L320: boost increases
-    //     impressions, not matches, so prioritizing within the local page
-    //     is sufficient).
-    //   - The previous `u.id ASC` tiebreaker is dropped; ST_Distance ties
-    //     on real coordinates are vanishingly rare and the tiebreaker
-    //     defeats the KNN index scan.
+    // Ordering is coarse (L-08): soft score, then a whole-km cell-to-cell bucket
+    // (distance-independent for people who hide distance), then a stable
+    // pseudo-random tiebreak seeded by the viewer's cell - never exact distance,
+    // which let neighbours who show distance bracket someone who hides it. The
+    // candidate set is bounded by the index-driven ST_DWithin filter, so the sort
+    // stays small. `is_boosted` is returned as a SELECT column (cheap EXISTS) and
+    // the Kotlin side re-shuffles boosted users to the head of the page (spec
+    // L320: boost increases impressions, not matches).
     val sql =
         """
         WITH viewer_location AS (
             -- Passport/travel mode (SWIPE_IMPLEMENTATION_SPEC L339-354): an
             -- active travel_locations row overrides GPS for deck ranking.
-            SELECT COALESCE(tl.geom, ul.geom) AS geom
+            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
@@ -76,7 +72,8 @@ internal fun Connection.queryDeckRank(
                ds.show_distance,
                -- Distance shown to the viewer reflects where the target *appears*
                -- to be - their travel point if active, else their real GPS.
-               ST_Distance(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
+               -- Cell-to-cell distance (AUDIT-10): never the raw GPS distance.
+               pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
                EXISTS (
                    SELECT 1
                    FROM boost_activations ba
@@ -95,7 +92,11 @@ internal fun Connection.queryDeckRank(
                -- B3 relaxed pass (the relaxed filter set drops intents/styles, so
                -- a CASE that piggybacks on the filter param would always score 0).
                -- A v2 would carry separate "ranking hints" alongside filters.
-               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score
+               (CASE WHEN ?::boolean AND p.verified_at IS NOT NULL THEN 1 ELSE 0 END) AS soft_score,
+               -- L-08: coarse order key (km bucket, distance-independent for hidden users) + stable
+               -- pseudo-random tiebreak seeded by the viewer's cell. Never exact distance.
+               pynapli_order_bucket_m(ds.show_distance, pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)), $radiusMeters, 'deck:' || ST_AsText(v.geom::geometry), u.id) AS order_bucket,
+               pynapli_order_tiebreak('deck:' || ST_AsText(v.geom::geometry), u.id) AS order_tiebreak
         FROM viewer_location v
         JOIN user_locations ul ON true
         JOIN users u ON u.id = ul.user_id
@@ -235,11 +236,9 @@ internal fun Connection.queryDeckRank(
               ?::boolean = false
               OR u.id = ANY(?::uuid[])
           )
-        -- KNN ORDER on a COALESCE'd expression can't use the GiST index
-        -- directly, so we accept a small in-memory sort over the (already
-        -- filtered) candidate set. The candidate set is bounded by the
-        -- ST_DWithin filter above, which IS index-driven.
-        ORDER BY soft_score DESC, v.geom <-> COALESCE(target_travel.geom, ul.geom)
+        -- Small in-memory sort over the candidate set already bounded by the
+        -- index-driven ST_DWithin filter above.
+        ORDER BY soft_score DESC, order_bucket ASC, order_tiebreak ASC
         LIMIT ?
         """.trimIndent()
 

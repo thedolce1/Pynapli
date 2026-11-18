@@ -51,11 +51,11 @@ internal class RedisGridCandidateRankCache(
 
     private fun redisKey(key: GridRankCacheKey): String {
         // Spec naming: grid:candidates:v1:cell:{cell}:radius:{radius}:... . The cell
-        // is the coarse E3 lat/lng bucket; the rich filter class is hashed so the
+        // is the viewer's 0.01-degree location cell (v2: ranked from the cell centre); the rich filter class is hashed so the
         // key stays bounded regardless of how many filters are active.
-        val cell = "${key.location.longitudeE3}_${key.location.latitudeE3}"
+        val cell = "${key.location.longitudeE2}_${key.location.latitudeE2}"
         val filterHash = sha256Hex(key.filterKey).take(FILTER_HASH_CHARS)
-        return "grid:candidates:v1:cell:$cell:radius:${key.radiusMeters}:w:${key.window}:f:$filterHash"
+        return "grid:candidates:v2:cell:$cell:radius:${key.radiusMeters}:w:${key.window}:f:$filterHash"
     }
 
     private fun sha256Hex(value: String): String =
@@ -88,9 +88,10 @@ internal object GridRankWindowCodec {
             n = displayName,
             sd = showDistance,
             bb = boostBucket,
-            db = distanceBucketMeters,
+            db = orderBucket,
             dm = distanceMeters,
             v = visiting,
+            tb = orderTiebreak,
         )
 
     private fun CachedGridRankRowDto.toDomain() =
@@ -99,9 +100,10 @@ internal object GridRankWindowCodec {
             displayName = n,
             showDistance = sd,
             boostBucket = bb,
-            distanceBucketMeters = db,
+            orderBucket = db,
             distanceMeters = dm,
             visiting = v,
+            orderTiebreak = tb,
         )
 
     @Serializable
@@ -113,5 +115,6 @@ internal object GridRankWindowCodec {
         val db: Int,
         val dm: Double,
         val v: Boolean,
+        val tb: Long = 0,
     )
 }

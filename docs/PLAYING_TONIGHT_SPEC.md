@@ -82,6 +82,10 @@ Map:
 - Zone-based only.
 - No street-level pins.
 - Default is zone-only.
+- `zoneKey` is the owner's **effective** location (travel point when travelling) on a 0.02-degree
+  grid (`{floor(lon/0.02)}_{floor(lat/0.02)}`, ~2.2 km N-S), and is omitted when the owner hides
+  distance. Feed distance is cell to cell, radius snaps to the Grid steps, a traveller is matched
+  only at the travel point, and order is the Grid's coarse order (never exact distance).
 - Map/list visibility is opt-in per session.
 - Markers are placed only in the part of the map nothing covers (below the top floater, above the
   sheet, beside the side panel), so the viewer's own marker is always visible.

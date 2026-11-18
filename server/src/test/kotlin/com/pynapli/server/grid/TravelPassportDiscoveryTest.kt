@@ -309,10 +309,11 @@ class TravelPassportDiscoveryTest :
             }
         }
 
-        // Pins both sides of the Grid radius OR (home GPS near viewer, OR active travel point near
-        // viewer). Grid narrows candidates with a UNION of two index lookups before applying that OR,
-        // so each side must still match on its own, and a user matching both must appear once.
-        "grid radius matches home or travel point independently and never duplicates" {
+        // A traveller is matched on the Grid only at their EFFECTIVE location (travel point), never by
+        // their home GPS (L-09/L-12: membership near home would reveal where a traveller lives). Grid
+        // narrows candidates with a UNION of two index lookups first, so a user whose home AND travel
+        // point are both near must still appear exactly once.
+        "grid radius matches a traveller only at their travel point and never duplicates" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000e00")
                 val homeNearTravelFar = UUID.fromString("00000000-0000-0000-0000-000000000e01")
@@ -335,7 +336,7 @@ class TravelPassportDiscoveryTest :
                         .cards
                 val ids = cards.map { it.userId }
 
-                assertEquals(setOf(homeNearTravelFar, homeFarTravelNear, bothNear), ids.toSet())
+                assertEquals(setOf(homeFarTravelNear, bothNear), ids.toSet(), "home-near traveller must not match: $ids")
                 assertEquals(ids.size, ids.toSet().size, "a user near on both sides must appear once: $ids")
             }
         }

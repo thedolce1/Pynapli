@@ -102,7 +102,6 @@ private fun testCurrentLocation(): CurrentLocationDto =
         updatedAt = "2026-05-08T00:00:00Z",
         accuracyMeters = 20,
         source = "gps",
-        geohash = "45.50:-73.57",
         city = null,
         region = null,
         country = null,

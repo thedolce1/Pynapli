@@ -4,6 +4,7 @@ import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.discovery.DiscoveryCursorException
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.discoveryFiltersFrom
+import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
@@ -39,7 +40,8 @@ class GridService(
         profile("grid.rateLimit") { requireGridQueryRateLimit(viewerUserId) }
         val radiusMeters =
             profile("grid.radius") {
-                request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS)
+                // L-09: snap UP to a fixed step so the radius cannot be binary-searched.
+                CoarseLocation.snapRadiusMeters(request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS))
             }
         val filters =
             profile("grid.filters") {
@@ -74,7 +76,9 @@ class GridService(
         if (advancedFiltersApplied && !policy.advancedFiltersAllowed) {
             throw GridException("ENTITLEMENT_REQUIRED")
         }
-        val pageLimit = request.limit.coerceIn(1, minOf(MAX_LIMIT, policy.gridPageLimit))
+        // L-07: never fewer than MIN_PAGE_SIZE cards per request (a one-card page lets a client probe
+        // the ranking card by card). Only the tier depth cap below can make a final page shorter.
+        val pageLimit = request.limit.coerceIn(MIN_PAGE_SIZE, maxOf(MIN_PAGE_SIZE, minOf(MAX_LIMIT, policy.gridPageLimit)))
 
         val cursorScopeHash =
             profile("grid.cursorScope") {
@@ -278,6 +282,7 @@ class GridService(
         private const val MIN_RADIUS_METERS = 1_000
         private const val MAX_RADIUS_METERS = 100_000
         private const val MAX_LIMIT = 120
+        const val MIN_PAGE_SIZE = 12
 
         // Online-only over-fetch: presence is filtered after SQL, so fetch this many times the page
         // size (bounded) to fill the page from the online subset without unbounded DB work.

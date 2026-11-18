@@ -994,8 +994,8 @@ class SwipeServiceTest {
 
             assertEquals(1, deck.items.size)
             assertEquals(target.toString(), deck.items.single().userId)
-            assertEquals("800 m", deck.items.single().distanceLabel)
-            assertEquals(800, deck.items.single().distanceMeters)
+            assertEquals("1.0 km", deck.items.single().distanceLabel)
+            assertEquals(1_000, deck.items.single().distanceMeters)
         }
 
     @Test

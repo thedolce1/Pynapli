@@ -22,6 +22,8 @@ data class CurrentCoordinatesRecord(
     val longitude: Double,
     val source: String,
     val updatedAt: Instant,
+    /** The server's own record of an active Travel mode session (never the client's declared source). */
+    val travelSessionActive: Boolean = false,
 )
 
 data class LocationUpdate(

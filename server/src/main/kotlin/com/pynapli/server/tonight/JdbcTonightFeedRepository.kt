@@ -1,6 +1,7 @@
 package com.pynapli.server.tonight
 
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.distance.CoarseLocation
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
@@ -16,7 +17,9 @@ import javax.sql.DataSource
  *
  * Per-viewer block/hidden filtering and zone/distance/online resolution happen in
  * [TonightFeedService] (same split the Grid uses). No location ever leaves here in
- * precise form — only the raw distance + coarse E3 lat/lon for the zone bucket.
+ * precise form (L-11): the owner's EFFECTIVE location (travel point when travelling) is
+ * only ever read as a cell-to-cell distance from the viewer's cell and as a coarse zone
+ * index on a [ZONE_DEGREES] grid; radius membership is cell-to-cell too.
  */
 class JdbcTonightFeedRepository(
     private val dataSource: DataSource,
@@ -30,13 +33,20 @@ class JdbcTonightFeedRepository(
     ): List<TonightFeedRow> =
         dataSource.withConnection { connection ->
             connection.prepareStatement(SQL).use { statement ->
-                statement.setObject(1, viewerUserId) // viewer_location CTE
-                statement.setTimestamp(2, Timestamp.from(now)) // ts.expires_at > ?
-                statement.setObject(3, viewerUserId) // owner.id <> ?
-                statement.setDouble(4, radiusMeters.toDouble()) // ST_DWithin radius
-                statement.setString(5, intent) // intent filter sentinel
-                statement.setString(6, intent) // intent filter value
-                statement.setInt(7, limit)
+                val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
+                var index = 1
+                statement.setObject(index++, viewerUserId) // viewer_location CTE
+                statement.setDouble(index++, ZONE_DEGREES) // zone x
+                statement.setDouble(index++, ZONE_DEGREES) // zone y
+                statement.setInt(index++, radiusMeters) // order bucket: hidden placement span
+                statement.setTimestamp(index++, Timestamp.from(now)) // ts.expires_at > ?
+                statement.setObject(index++, viewerUserId) // owner.id <> ?
+                statement.setDouble(index++, paddedRadius) // index pre-filter, home
+                statement.setDouble(index++, paddedRadius) // index pre-filter, travel point
+                statement.setDouble(index++, radiusMeters.toDouble()) // exact cell-to-cell radius
+                statement.setString(index++, intent) // intent filter sentinel
+                statement.setString(index++, intent) // intent filter value
+                statement.setInt(index++, limit)
                 statement.executeQuery().use { rs ->
                     buildList {
                         while (rs.next()) {
@@ -54,8 +64,8 @@ class JdbcTonightFeedRepository(
                                     ownerDistanceMeters = rs.getDouble("owner_distance_meters"),
                                     ownerThumbnailMediaAssetId =
                                         rs.getObject("owner_thumbnail_media_asset_id", UUID::class.java),
-                                    ownerLatE3 = rs.getInt("owner_lat_e3"),
-                                    ownerLonE3 = rs.getInt("owner_lon_e3"),
+                                    ownerZoneX = rs.getInt("owner_zone_x"),
+                                    ownerZoneY = rs.getInt("owner_zone_y"),
                                     partnerUserId = rs.getObject("partner_user_id", UUID::class.java),
                                     partnerDisplayName = rs.getString("partner_display_name"),
                                     partnerThumbnailMediaAssetId =
@@ -68,7 +78,10 @@ class JdbcTonightFeedRepository(
             }
         }
 
-    private companion object {
+    companion object {
+        /** Zone grid for the Tonight map: 0.02 degree (~2.2 km north-south), coarser than a distance cell. */
+        const val ZONE_DEGREES: Double = 0.02
+
         // Profile-photo LATERAL identical to the Grid's hydration block (same album/
         // asset gates + ordering), parameterized on the candidate user id column.
         private fun profilePhotoLateral(ownerColumn: String): String =
@@ -93,12 +106,12 @@ class JdbcTonightFeedRepository(
             LIMIT 1
             """.trimIndent()
 
-        val SQL =
+        private val SQL =
             """
             WITH viewer_location AS (
                 -- Passport/travel mode: an active travel_locations row overrides the
-                -- viewer's real GPS for discovery (same CTE the Grid uses).
-                SELECT COALESCE(tl.geom, ul.geom) AS geom
+                -- viewer's real GPS for discovery, snapped to the viewer's cell (as the Grid).
+                SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
                 FROM user_locations ul
                 LEFT JOIN travel_locations tl
                   ON tl.user_id = ul.user_id
@@ -126,9 +139,17 @@ class JdbcTonightFeedRepository(
                    owner_user.id AS owner_user_id,
                    COALESCE(NULLIF(owner_profile.display_name, ''), 'Pynapli User') AS owner_display_name,
                    owner_ds.show_distance AS owner_show_distance,
-                   ST_Distance(v.geom, owner_ul.geom) AS owner_distance_meters,
-                   ROUND(ST_Y(owner_ul.geom::geometry) * 1000)::integer AS owner_lat_e3,
-                   ROUND(ST_X(owner_ul.geom::geometry) * 1000)::integer AS owner_lon_e3,
+                   pynapli_coarse_distance_m(v.geom, COALESCE(owner_travel.geom, owner_ul.geom)) AS owner_distance_meters,
+                   floor(ST_X(COALESCE(owner_travel.geom, owner_ul.geom)::geometry) / ?)::integer AS owner_zone_x,
+                   floor(ST_Y(COALESCE(owner_travel.geom, owner_ul.geom)::geometry) / ?)::integer AS owner_zone_y,
+                   pynapli_order_bucket_m(
+                       owner_ds.show_distance,
+                       pynapli_coarse_distance_m(v.geom, COALESCE(owner_travel.geom, owner_ul.geom)),
+                       ?,
+                       'tonight:' || ST_AsText(v.geom::geometry),
+                       owner_user.id
+                   ) AS order_bucket,
+                   pynapli_order_tiebreak('tonight:' || ST_AsText(v.geom::geometry), owner_user.id) AS order_tiebreak,
                    owner_photo.media_asset_id AS owner_thumbnail_media_asset_id,
                    partner.partner_user_id,
                    partner.partner_display_name,
@@ -142,6 +163,10 @@ class JdbcTonightFeedRepository(
             JOIN profiles owner_profile ON owner_profile.user_id = owner_user.id
             JOIN discovery_settings owner_ds ON owner_ds.user_id = owner_user.id
             JOIN user_locations owner_ul ON owner_ul.user_id = owner_user.id
+            LEFT JOIN travel_locations owner_travel
+              ON owner_travel.user_id = owner_user.id
+             AND owner_travel.status = 'active'
+             AND owner_travel.active_until IS NULL
             LEFT JOIN account_risk_states owner_risk ON owner_risk.user_id = owner_user.id
             LEFT JOIN LATERAL (
                 ${profilePhotoLateral("owner_user.id")}
@@ -179,9 +204,19 @@ class JdbcTonightFeedRepository(
               AND owner_ds.grid_visible = true
               AND owner_ds.incognito = false
               AND COALESCE(owner_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-              AND ST_DWithin(v.geom, owner_ul.geom, ?)
+              -- Same travel opt-out the Grid honours.
+              AND (owner_travel.id IS NULL OR owner_ds.visible_while_traveling = true)
+              -- Index-friendly padded pre-filter, then exact cell-to-cell membership of the
+              -- owner's EFFECTIVE location (a traveller is never matched by their home).
+              AND (
+                  ST_DWithin(v.geom, owner_ul.geom, ?)
+                  OR (owner_travel.geom IS NOT NULL AND ST_DWithin(v.geom, owner_travel.geom, ?))
+              )
+              AND pynapli_coarse_distance_m(v.geom, COALESCE(owner_travel.geom, owner_ul.geom)) <= ?
               AND (?::text IS NULL OR ts.intent = ?::text)
-            ORDER BY owner_distance_meters ASC, ts.id ASC
+            -- L-08 ordering: coarse km bucket (distance-independent for owners who hide it),
+            -- then a stable pseudo-random tiebreak; never exact distance.
+            ORDER BY order_bucket ASC, order_tiebreak ASC, ts.id ASC
             LIMIT ?
             """.trimIndent()
     }

@@ -68,8 +68,9 @@ class GridServiceTest {
             assertEquals(1, response.items.size)
             assertEquals(targetId.toString(), response.items.first().userId)
             assertEquals("Alex", response.items.first().displayName)
-            assertEquals("1.2 km", response.items.first().distanceLabel)
-            assertEquals(1_200, response.items.first().distanceMeters)
+            // AUDIT-10: anything under 2 km reads as the coarse "1 km" bucket.
+            assertEquals("1.0 km", response.items.first().distanceLabel)
+            assertEquals(1_000, response.items.first().distanceMeters)
             assertEquals(false, response.items.first().online)
             assertNull(response.items.first().thumbnailUrl)
         }
@@ -352,8 +353,8 @@ class GridServiceTest {
         runBlocking {
             val viewerId = UUID.randomUUID()
             val repository = LimitAwareGridRepository(totalCards = 100)
-            // Every 4th candidate is online (25%). Filling a 10-card online page therefore needs
-            // ~40 candidates — far more than an un-over-fetched page of 10 would surface (~3 online).
+            // Every 4th candidate is online (25%). Filling a 12-card online page therefore needs
+            // ~48 candidates — far more than an un-over-fetched page of 12 would surface (~3 online).
             val onlineIds =
                 (0 until 100 step 4)
                     .map { UUID.nameUUIDFromBytes("grid-limit-card-$it".toByteArray()) }
@@ -365,17 +366,17 @@ class GridServiceTest {
                     subscriptionService = paidSubscriptionService(viewerId, SubscriptionTier.SOCIAL),
                 )
 
-            val response = service.queryGrid(viewerId, GridQueryRequestDto(onlineOnly = true, limit = 10))
+            val response = service.queryGrid(viewerId, GridQueryRequestDto(onlineOnly = true, limit = 12))
 
             // The page fills to the requested size; without over-fetch it would have been ~3.
-            assertEquals(10, response.items.size)
+            assertEquals(12, response.items.size)
             // Every returned card is online.
             assertEquals(
                 emptyList(),
                 response.items.map { UUID.fromString(it.userId) }.filterNot { it in onlineIds },
             )
             // The repository was asked for more than the page size (the over-fetch).
-            assertTrue(repository.receivedLimits.first() > 10)
+            assertTrue(repository.receivedLimits.first() > 12)
             // Pagination still advances (a next cursor is issued for the remaining online candidates).
             assertTrue(response.nextCursor != null)
         }
@@ -440,6 +441,40 @@ class GridServiceTest {
             assertEquals(emptyList(), repository.receivedLimits)
         }
 
+    // L-07: a page of one card per request would let a client walk the Grid card by card; the
+    // server enforces a minimum page size (the free tier's final short page is still allowed).
+    @Test
+    fun queryGridRaisesTinyPageRequestsToTheMinimumPageSize() =
+        runBlocking {
+            val repository = LimitAwareGridRepository(totalCards = 40)
+            val service = GridService(repository)
+
+            val first = service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(limit = 1))
+            service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(limit = 0))
+            service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(limit = -5))
+
+            assertEquals(listOf(12, 12, 12), repository.receivedLimits)
+            assertEquals(12, first.items.size)
+        }
+
+    @Test
+    fun queryGridAllowsAShortFinalPageUnderTheFreeTierDepthCap() =
+        runBlocking {
+            val viewerId = UUID.randomUUID()
+            val repository = LimitAwareGridRepository(totalCards = 200)
+            // Free tier: 60 results deep. Pages of 25 -> 25, 25, then a short final page of 10.
+            val service = GridService(repository, subscriptionService = freeSubscriptionService())
+
+            val first = service.queryGrid(viewerId, GridQueryRequestDto(limit = 25))
+            val second = service.queryGrid(viewerId, GridQueryRequestDto(limit = 25, cursor = assertNotNull(first.nextCursor)))
+            val third = service.queryGrid(viewerId, GridQueryRequestDto(limit = 25, cursor = assertNotNull(second.nextCursor)))
+
+            assertEquals(listOf(25, 25, 10), repository.receivedLimits)
+            assertEquals(10, third.items.size)
+            assertNull(third.nextCursor)
+            assertEquals(true, third.resultLimitReached)
+        }
+
     @Test
     fun queryGridReturnsSignedCursorAndPassesDecodedAnchorToRepository() =
         runBlocking {
@@ -448,7 +483,7 @@ class GridServiceTest {
             val anchor =
                 GridCursorAnchor(
                     boostBucket = 1,
-                    distanceBucketMeters = 1_240,
+                    orderBucket = 1_240,
                     userId = targetId,
                 )
             val repository =
@@ -462,7 +497,7 @@ class GridServiceTest {
                                     displayName = "Alex",
                                     showDistance = true,
                                     distanceMeters = 1_240.0,
-                                    distanceBucketMeters = 1_240,
+                                    orderBucket = 1_240,
                                 ),
                             ),
                         nextCursorAnchor = anchor,
@@ -494,13 +529,13 @@ class GridServiceTest {
                                         displayName = "Alex",
                                         showDistance = true,
                                         distanceMeters = 1_240.0,
-                                        distanceBucketMeters = 1_240,
+                                        orderBucket = 1_240,
                                     ),
                                 ),
                             nextCursorAnchor =
                                 GridCursorAnchor(
                                     boostBucket = 1,
-                                    distanceBucketMeters = 1_240,
+                                    orderBucket = 1_240,
                                     userId = targetId,
                                 ),
                         ),
@@ -511,7 +546,7 @@ class GridServiceTest {
             val nextCursor = assertNotNull(firstPage.nextCursor)
             val error =
                 assertFailsWith<GridException> {
-                    service.queryGrid(viewerId, GridQueryRequestDto(limit = 2, cursor = nextCursor))
+                    service.queryGrid(viewerId, GridQueryRequestDto(limit = 24, cursor = nextCursor))
                 }
 
             assertEquals("INVALID_GRID_CURSOR", error.code)
@@ -534,13 +569,13 @@ class GridServiceTest {
                                         displayName = "Alex",
                                         showDistance = true,
                                         distanceMeters = 1_240.0,
-                                        distanceBucketMeters = 1_240,
+                                        orderBucket = 1_240,
                                     ),
                                 ),
                             nextCursorAnchor =
                                 GridCursorAnchor(
                                     boostBucket = 1,
-                                    distanceBucketMeters = 1_240,
+                                    orderBucket = 1_240,
                                     userId = targetId,
                                 ),
                         ),
@@ -548,7 +583,8 @@ class GridServiceTest {
                 )
 
             val firstPage = service.queryGrid(viewerId, GridQueryRequestDto(limit = 1))
-            val tamperedCursor = assertNotNull(firstPage.nextCursor).dropLast(1) + "x"
+            val issued = assertNotNull(firstPage.nextCursor)
+            val tamperedCursor = issued.dropLast(1) + if (issued.last() == 'x') 'y' else 'x'
             val error =
                 assertFailsWith<GridException> {
                     service.queryGrid(viewerId, GridQueryRequestDto(limit = 1, cursor = tamperedCursor))
@@ -589,11 +625,11 @@ class GridServiceTest {
                                 "Far Alex",
                                 showDistance = true,
                                 distanceMeters = 80_000.0,
-                                distanceBucketMeters = 80_000,
+                                orderBucket = 80_000,
                             ),
                         ),
                     nextCursorAnchorAtMax =
-                        GridCursorAnchor(boostBucket = 0, distanceBucketMeters = 80_000, userId = targetId),
+                        GridCursorAnchor(boostBucket = 0, orderBucket = 80_000, userId = targetId),
                 )
             val service = GridService(repository)
 
@@ -690,7 +726,7 @@ private class LimitAwareGridRepository(
                 displayName = "Grid $index",
                 showDistance = true,
                 distanceMeters = index.toDouble(),
-                distanceBucketMeters = index,
+                orderBucket = index,
             )
         }
 
@@ -703,7 +739,7 @@ private class LimitAwareGridRepository(
     ): GridQueryResult {
         receivedLimits += limit
         receivedCursors += cursor
-        val startIndex = cursor?.distanceBucketMeters?.plus(1) ?: 0
+        val startIndex = cursor?.orderBucket?.plus(1) ?: 0
         val page = cards.drop(startIndex).take(limit)
         val hasMore = cards.size > startIndex + limit
         return GridQueryResult(

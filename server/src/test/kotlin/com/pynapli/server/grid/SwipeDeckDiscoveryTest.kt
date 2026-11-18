@@ -736,9 +736,10 @@ class SwipeDeckDiscoveryTest :
 
                 val repository = JdbcSwipeRepository(dataSource)
 
-                // Without the preference: nearest (unverified) ranks first.
+                // Without the preference both are in the same 1 km order bucket, so their order is the
+                // stable pseudo-random tiebreak, not exact distance (L-08).
                 val unboosted = repository.queryDeck(viewer, radiusMeters = 100_000, limit = 10).cards
-                assertEquals(listOf(unverifiedTarget, verifiedTarget), unboosted.map { it.userId })
+                assertEquals(setOf(unverifiedTarget, verifiedTarget), unboosted.map { it.userId }.toSet())
 
                 // With verifiedPreferred=true: verified outranks unverified despite being farther.
                 val preferred =

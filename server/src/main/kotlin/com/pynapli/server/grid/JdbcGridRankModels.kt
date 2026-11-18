@@ -15,8 +15,9 @@ internal data class GridRankRow(
     val displayName: String,
     val showDistance: Boolean,
     val boostBucket: Int,
-    val distanceBucketMeters: Int,
+    val orderBucket: Int,
     val distanceMeters: Double,
+    val orderTiebreak: Long = 0,
     val visiting: Boolean,
 )
 
@@ -32,11 +33,17 @@ internal data class GridHydration(
     val tonightActive: Boolean = false,
 )
 
-/** Coarse location bucket (lat/lng rounded to E3 ~= 111m) — copy of Swipe's `DeckLocationCacheKey`. */
+/**
+ * The viewer's location CELL (effective location snapped to the 0.01-degree grid, in hundredths of a
+ * degree). The rank window is ranked from this cell's centre, so every viewer sharing the key gets
+ * byte-identical distances and order (L-14); it also seeds the ordering tiebreak ([orderSeed]).
+ */
 internal data class GridLocationCacheKey(
-    val longitudeE3: Int,
-    val latitudeE3: Int,
-)
+    val longitudeE2: Int,
+    val latitudeE2: Int,
+) {
+    val orderSeed: String get() = "cell:${longitudeE2}_$latitudeE2"
+}
 
 /** Cache key for the ranked candidate window — copy of Swipe's `DeckRankCacheKey`. */
 internal data class GridRankCacheKey(

@@ -69,7 +69,14 @@ class JdbcLocationRepository(
                     SELECT ST_Y(geom::geometry) AS latitude,
                            ST_X(geom::geometry) AS longitude,
                            location_source,
-                           updated_at
+                           updated_at,
+                           EXISTS (
+                               SELECT 1
+                               FROM travel_locations tl
+                               WHERE tl.user_id = user_locations.user_id
+                                 AND tl.status = 'active'
+                                 AND tl.active_until IS NULL
+                           ) AS travel_session_active
                     FROM user_locations
                     WHERE user_id = ?
                     """.trimIndent(),
@@ -84,6 +91,7 @@ class JdbcLocationRepository(
                                 longitude = rs.getDouble("longitude"),
                                 source = rs.getString("location_source"),
                                 updatedAt = rs.getTimestamp("updated_at").toInstant(),
+                                travelSessionActive = rs.getBoolean("travel_session_active"),
                             )
                         }
                     }
