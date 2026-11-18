@@ -39,7 +39,9 @@ PostGIS and Redis from `docker-compose.yml`. Run/seed steps are the `local-dev` 
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes to `main`/`develop` and on every PR:
+`.github/workflows/ci.yml` runs on pull requests (not for docs-only changes) and by hand
+(`gh workflow run CI`); it no longer runs on pushes to `main`, because the pre-push hook already
+runs the gates locally. A newer push to the same PR cancels the run in progress. It runs:
 
 - **Format (Spotless)**: `spotlessCheck` with `ratchetFrom = "origin/main"` (needs `fetch-depth: 0`
   plus an explicit `git fetch origin main`). ktlint via Spotless; detekt deferred until a

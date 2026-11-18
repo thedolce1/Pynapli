@@ -11,9 +11,19 @@ on:
         description: 'Debug APK WebSocket base URL matching the API host'
         required: false
         default: 'ws://10.0.2.2:8080'
-  push:
-    branches: [main, develop]
+  # No push trigger: the pre-push hook already runs the gates locally on every push, so running
+  # them again on main only spent minutes. CI is the Linux cross-check for pull requests, and can
+  # be started by hand for main (Actions > CI > Run workflow, or `gh workflow run CI`).
   pull_request:
+    # Documentation-only changes build nothing.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+
+# A newer push to the same pull request or ref replaces the run in progress.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   format:

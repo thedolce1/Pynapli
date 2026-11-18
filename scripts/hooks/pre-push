@@ -2,7 +2,7 @@
 #
 # Pynapli pre-push gate.
 #
-# CI (GitHub Actions) runs on main and is the Linux cross-check; the local
+# CI (GitHub Actions) runs on pull requests and by hand, as the Linux cross-check; the local
 # verify scripts are what stands between a regression and main (no branch protection) — and they only run
 # if someone remembers. This hook removes the remembering.
 #
