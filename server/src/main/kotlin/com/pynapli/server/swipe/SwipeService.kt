@@ -33,7 +33,12 @@ class SwipeService(
     matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
 ) {
     private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
-    private val sideEffects = SwipeActionSideEffects(activityService, notificationPublisher, matchConversationOpener)
+    private val sideEffects =
+        SwipeActionSideEffects(
+            repository = repository,
+            delivery = MatchSideEffectDelivery(activityService, notificationPublisher, matchConversationOpener),
+            clock = clock,
+        )
     private val deckPageBuilder = SwipeDeckPageBuilder(deckTokenCodec, dtoMapper)
     private val deckQuery =
         SwipeDeckQueryAction(
@@ -108,14 +113,9 @@ class SwipeService(
         val result =
             repository.likeBack(UUID.randomUUID(), viewerUserId, targetUserId, travelLocationId)
                 ?: throw SwipeException("LIKE_BACK_NOT_AVAILABLE")
-        if (result.newlyRecorded) {
-            sideEffects.recordActivityForAction(viewerUserId, targetUserId, com.pynapli.shared.network.dto.SwipeAction.LIKE, result.match)
-        }
+        sideEffects.deliver(result, actorUserId = viewerUserId, targetUserId = targetUserId, action = com.pynapli.shared.network.dto.SwipeAction.LIKE)
         val match = result.match
-        if (match != null) {
-            sideEffects.notifyMatch(viewerUserId, targetUserId, match)
-            if (result.newlyRecorded) productMetrics?.record(com.pynapli.server.metrics.ProductMetrics.MATCH_CREATED)
-        }
+        if (match != null && result.newlyRecorded) productMetrics?.record(com.pynapli.server.metrics.ProductMetrics.MATCH_CREATED)
         return SwipeActionResponseDto(recorded = true, match = match?.toDto(viewerUserId))
     }
 }

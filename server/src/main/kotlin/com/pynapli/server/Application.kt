@@ -92,6 +92,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.mediaCleanupWorker?.start()
     dependencies.tonightSessionExpiryWorker.start()
     dependencies.psyncSessionExpiryWorker?.start()
+    dependencies.matchSideEffectDrainWorker?.start()
     dependencies.psyncPresenceWatcher?.start()
     dependencies.travelTripWorker?.start()
     dependencies.accountDataExportWorker?.start()

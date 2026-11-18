@@ -80,27 +80,26 @@ class MessagingService(
     /**
      * Get or create the swipe-origin direct conversation for a new match and tell both people's
      * Messages to refetch. A conversation that already exists (they talked from the Grid) is reused.
-     * Blocked pairs get nothing. Errors are swallowed: the match itself already stands.
+     * Blocked pairs get nothing. A failure is thrown: the caller delivers this through the match
+     * side-effect outbox, which keeps it for a retry (the match itself already stands).
      */
     suspend fun openMatchConversation(
         userA: UUID,
         userB: UUID,
     ) {
         if (userA == userB) return
-        runCatching {
-            val conversation =
-                repository.getOrCreateDirectConversation(
-                    viewerUserId = userA,
-                    targetUserId = userB,
-                    origin = MATCH_CONVERSATION_ORIGIN,
-                ) ?: return
-            realtimePublisher.publishDelta(
-                type = MessageDeltaType.CONVERSATION_UPDATED,
-                conversationId = conversation.conversationId,
-                participants = conversation.participants,
-                statuses = MessagingParticipantStatuses.visible,
-            )
-        }
+        val conversation =
+            repository.getOrCreateDirectConversation(
+                viewerUserId = userA,
+                targetUserId = userB,
+                origin = MATCH_CONVERSATION_ORIGIN,
+            ) ?: return
+        realtimePublisher.publishDelta(
+            type = MessageDeltaType.CONVERSATION_UPDATED,
+            conversationId = conversation.conversationId,
+            participants = conversation.participants,
+            statuses = MessagingParticipantStatuses.visible,
+        )
     }
 
     suspend fun listConversations(

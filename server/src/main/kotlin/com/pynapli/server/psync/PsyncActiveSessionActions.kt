@@ -2,6 +2,7 @@ package com.pynapli.server.psync
 
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
+import com.pynapli.server.swipe.MatchSideEffectDelivery
 import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.shared.network.dto.PsyncActionResponseDto
 import com.pynapli.shared.network.dto.PsyncDeckResponseDto
@@ -28,6 +29,7 @@ internal class PsyncActiveSessionActions(
     private val travelLocationRepository: com.pynapli.server.location.TravelLocationRepository?,
     private val subscriptionService: com.pynapli.server.subscriptions.SubscriptionService?,
     private val deckTokenCodec: SwipeDeckTokenCodec,
+    private val sideEffectDelivery: MatchSideEffectDelivery,
     private val clock: Clock,
 ) {
     /**
@@ -180,8 +182,12 @@ internal class PsyncActiveSessionActions(
 
     /** Post-commit fan-out for a resolved session. Every step is idempotent on a re-complete. */
     private suspend fun announceResolved(completed: PsyncSessionRepository.CompleteOutcome.Completed) {
-        events.emitMatchActivity(completed.resolvedMatches)
-        events.emitDeliveredLikes(completed.deliveredLikes, completed.session.id)
+        // Matches and delivered likes: written to the match side-effect outbox in the completion
+        // transaction, delivered here, and by the drainer if this never runs.
+        val effects =
+            completed.sideEffects
+                ?: PsyncSideEffectPlans.forCompletion(completed.session.id, completed.resolvedMatches, completed.deliveredLikes)
+        sideEffectDelivery.deliverNow(effects) { ids -> repository.markSideEffectsDelivered(ids, clock.instant()) }
         pineappleRefunds.sweep()
         events.emitDelta(completed.session.id, PsyncBroadcaster.SESSION_COMPLETED, completed.session.allParticipantIds())
         // Idempotent per (recipient, type, session).

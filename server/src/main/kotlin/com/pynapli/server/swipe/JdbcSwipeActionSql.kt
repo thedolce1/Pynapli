@@ -32,13 +32,13 @@ internal fun Connection.recordSwipeActionTransaction(
             // inventory error for an action that succeeded.
             findSwipeActionById(actionId, actorUserId)?.let { existing ->
                 rollback()
-                return SwipeActionResult(recorded = existing.rewoundAt == null, match = existing.match, newlyRecorded = false)
+                return SwipeActionResult(recorded = existing.rewoundAt == null, match = existing.match, newlyRecorded = false, sideEffects = emptyList())
             }
             val spentId =
                 consumePremiumInventoryRecordReturningId(actorUserId, spendInventory.inventoryType, now)
                     ?: run {
                         rollback()
-                        return SwipeActionResult(recorded = false, match = null, newlyRecorded = false, inventoryUnavailable = true)
+                        return SwipeActionResult(recorded = false, match = null, newlyRecorded = false, inventoryUnavailable = true, sideEffects = emptyList())
                     }
             if (spendInventory.storesInventoryId) inventoryId = spentId
         }
@@ -51,14 +51,20 @@ internal fun Connection.recordSwipeActionTransaction(
                 recorded = existing != null,
                 match = existing?.match,
                 newlyRecorded = false,
+                // Whoever recorded it first owns its side effects (already in the outbox).
+                sideEffects = emptyList(),
             )
         }
 
         val match = createMatchForMutualPositiveSwipe(actorUserId, targetUserId, action, matchIdFactory)
+        // Crash-safe side effects: what this like or match owes is written in this same
+        // transaction, so it can't be lost between the commit and its delivery.
+        val sideEffects = MatchSideEffectPlans.forSwipe(actorUserId, targetUserId, action, match)
+        insertMatchSideEffects(sideEffects, now)
         afterInsert()
 
         commit()
-        return SwipeActionResult(recorded = true, match = match)
+        return SwipeActionResult(recorded = true, match = match, sideEffects = sideEffects)
     }
 }
 
@@ -74,6 +80,7 @@ internal fun Connection.likeBackTransaction(
     targetUserId: UUID,
     travelLocationId: UUID?,
     matchIdFactory: () -> UUID,
+    now: Instant = Instant.now(),
 ): SwipeActionResult? {
     inTransaction {
         lockPairForTransaction(SWIPE_PAIR_LOCK_NAMESPACE, viewerUserId, targetUserId)
@@ -93,8 +100,12 @@ internal fun Connection.likeBackTransaction(
         }
         val inserted = insertSwipeAction(actionId, viewerUserId, targetUserId, "like", null, null, travelLocationId)
         val match = upsertMatch(viewerUserId, targetUserId, matchIdFactory)
+        // The like goes to Likes You only when it is new; the match is announced either way (a
+        // repeat is harmless: every delivery step is idempotent).
+        val sideEffects = MatchSideEffectPlans.forSwipe(viewerUserId, targetUserId, "like", match, likeNewlyRecorded = inserted)
+        insertMatchSideEffects(sideEffects, now)
         commit()
-        return SwipeActionResult(recorded = true, match = match, newlyRecorded = inserted)
+        return SwipeActionResult(recorded = true, match = match, newlyRecorded = inserted, sideEffects = sideEffects)
     }
 }
 

@@ -510,6 +510,65 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "a Psync match whose completion committed before a crash is still announced by the drainer" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+                val target = UUID.randomUUID()
+                dataSource.insertUserWithProfile(target, "Target")
+                dataSource.setTogetherEnabled(target)
+                dataSource.insertSwipeLike(target, initiator)
+                val messaging =
+                    com.pynapli.server.messaging.MessagingService(
+                        com.pynapli.server.messaging
+                            .JdbcMessagingRepository(dataSource),
+                    )
+                val activity =
+                    com.pynapli.server.activity.ActivityService(
+                        repository =
+                            com.pynapli.server.activity
+                                .JdbcActivityRepository(dataSource),
+                    )
+                val repository = JdbcPsyncSessionRepository(dataSource)
+                val svc =
+                    PsyncSessionService(
+                        repository = repository,
+                        deckGenerator =
+                            object : com.pynapli.server.psync.PsyncDeckGenerator {
+                                override suspend fun rankCandidates(
+                                    viewerUserId: UUID,
+                                    filters: com.pynapli.shared.network.dto.SwipeDeckRequestDto,
+                                    limit: Int,
+                                ) = listOf(
+                                    com.pynapli.shared.network.dto
+                                        .SwipeCardDto(userId = target.toString(), displayName = "Target", rankToken = "r"),
+                                )
+                            },
+                        activityService = activity,
+                        matchConversationOpener = messaging.matchConversationOpener,
+                    )
+                val sessionId = svc.activeSessionOver(initiator, partner, target)
+                svc.actOnSingle(sessionId, initiator, "like")
+                // The partner's like and the completion commit; the process dies before announcing.
+                val now = java.time.Instant.now()
+                repository.recordAction(sessionId, partner, target, "like", now)
+                repository.complete(sessionId, partner, now)
+                assertEquals(0, dataSource.swipeConversationsBetween(initiator, target))
+
+                val drainer =
+                    com.pynapli.server.swipe.MatchSideEffectDrainer(
+                        dataSource,
+                        com.pynapli.server.swipe.MatchSideEffectDelivery(activity, null, messaging.matchConversationOpener),
+                        java.time.Clock.offset(java.time.Clock.systemUTC(), java.time.Duration.ofMinutes(5)),
+                    )
+                drainer.drainOnce()
+                drainer.drainOnce()
+
+                assertEquals(1, dataSource.swipeConversationsBetween(initiator, target))
+                assertEquals(1, dataSource.swipeConversationsBetween(partner, target))
+                assertEquals(0, dataSource.swipeConversationsBetween(initiator, partner))
+            }
+        }
+
         // ---- Session limits per tier ---------------------------------------------------
 
         "a Free initiator can start one session per 24 hours; unstarted invites don't count" {

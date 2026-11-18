@@ -1,67 +1,33 @@
 package com.pynapli.server.swipe
 
-import com.pynapli.server.activity.ActivityService
-import com.pynapli.server.notifications.NotificationEventDraft
-import com.pynapli.server.notifications.NotificationKind
-import com.pynapli.server.notifications.NotificationPublisher
-import com.pynapli.server.profiling.profile
-import com.pynapli.shared.network.dto.SwipeAction
+import java.time.Clock
 import java.util.UUID
 
+/**
+ * Fast path for a recorded swipe's side effects: delivers what the record transaction wrote to the
+ * match side-effect outbox and marks it delivered, so the user sees Likes You, the match
+ * conversation and the push with no added latency. Anything that fails here stays in the outbox
+ * for [MatchSideEffectDrainer].
+ */
 internal class SwipeActionSideEffects(
-    private val activityService: ActivityService?,
-    private val notificationPublisher: NotificationPublisher?,
-    private val matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
+    private val repository: SwipeRepository,
+    private val delivery: MatchSideEffectDelivery,
+    private val clock: Clock,
 ) {
-    suspend fun recordActivityForAction(
-        viewerUserId: UUID,
+    suspend fun deliver(
+        result: SwipeActionResult,
+        actorUserId: UUID,
         targetUserId: UUID,
         action: String,
-        match: MatchRecord?,
     ) {
-        val activity = activityService ?: return
-        profile("swipe.action.activity") {
-            when (action) {
-                SwipeAction.LIKE -> activity.recordSwipeInterest(viewerUserId, targetUserId, "swipe_like")
-                SwipeAction.PINEAPPLE_LIKE ->
-                    activity.recordSwipeInterest(
-                        viewerUserId,
-                        targetUserId,
-                        "pineapple_like",
-                    )
-                else -> Unit
-            }
-            match?.let { activity.recordMatch(it.userA, it.userB, it.matchId) }
-        }
-    }
-
-    suspend fun notifyMatch(
-        viewerUserId: UUID,
-        targetUserId: UUID,
-        match: MatchRecord,
-    ) {
-        // The match belongs in both people's Messages (new-matches rail) straight away.
-        profile("swipe.action.matchConversation") {
-            matchConversationOpener?.openForMatch(viewerUserId, targetUserId)
-        }
-        profile("swipe.action.notify") {
-            notificationPublisher?.enqueue(
-                NotificationEventDraft(
-                    recipientUserId = targetUserId,
-                    actorUserId = viewerUserId,
-                    kind = NotificationKind.MATCH,
-                    subjectId = match.matchId,
-                    idempotencyKey = "match:${match.matchId}:$targetUserId",
-                    payload =
-                        mapOf(
-                            // Matches live in the Messages new-matches rail, not an Activity tab.
-                            "target" to "messages",
-                            "activityEventType" to "match",
-                            "matchId" to match.matchId.toString(),
-                            "matchedUserId" to viewerUserId.toString(),
-                        ),
-                ),
-            )
-        }
+        val effects =
+            result.sideEffects
+                // A repository without an outbox: plan the same effects and deliver them in-process.
+                ?: if (result.newlyRecorded) {
+                    MatchSideEffectPlans.forSwipe(actorUserId, targetUserId, action, result.match)
+                } else {
+                    listOfNotNull(result.match?.let { MatchSideEffectPlans.matchAnnouncement(actorUserId, targetUserId, it.matchId) })
+                }
+        delivery.deliverNow(effects) { ids -> repository.markSideEffectsDelivered(ids, clock.instant()) }
     }
 }

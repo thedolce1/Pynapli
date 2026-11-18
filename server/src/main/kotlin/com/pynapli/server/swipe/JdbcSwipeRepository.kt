@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.db.withConnection
 import com.pynapli.server.discovery.DiscoveryFilters
 import java.time.Duration
 import java.time.Instant
@@ -7,7 +8,7 @@ import java.util.UUID
 import javax.sql.DataSource
 
 class JdbcSwipeRepository(
-    dataSource: DataSource,
+    private val dataSource: DataSource,
     rankCacheTtl: Duration = Duration.ofSeconds(5),
     rankCacheMaxEntries: Int = 128,
     rankCacheWindow: Int = 128,
@@ -216,4 +217,12 @@ class JdbcSwipeRepository(
             card = card,
             rewoundAt = rewoundAt,
         )
+
+    override suspend fun markSideEffectsDelivered(
+        ids: List<UUID>,
+        now: Instant,
+    ) {
+        if (ids.isEmpty()) return
+        dataSource.withConnection { connection -> connection.markMatchSideEffectsDelivered(ids, now) }
+    }
 }

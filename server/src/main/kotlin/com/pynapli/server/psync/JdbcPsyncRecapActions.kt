@@ -2,6 +2,7 @@ package com.pynapli.server.psync
 
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.psync.PsyncSessionRepository.CompleteOutcome
+import com.pynapli.server.swipe.insertMatchSideEffects
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -28,7 +29,7 @@ internal suspend fun DataSource.completePsyncSession(
                 // Idempotent: matches were already resolved on a prior completion. Return no
                 // resolved matches so the service does not re-emit Activity/notifications.
                 if (session.status == PSYNC_STATUS_COMPLETED) {
-                    return@inTransaction CompleteOutcome.Completed(session, emptyList())
+                    return@inTransaction CompleteOutcome.Completed(session, emptyList(), sideEffects = emptyList())
                 }
                 if (session.status != PSYNC_STATUS_ACTIVE && session.status != PSYNC_STATUS_PAUSED) {
                     return@inTransaction CompleteOutcome.InvalidState
@@ -36,11 +37,15 @@ internal suspend fun DataSource.completePsyncSession(
 
                 val resolved = connection.resolveMatches(session, matchIdFactory)
                 connection.setSessionStatus(sessionId, PSYNC_STATUS_COMPLETED, endedAt = now)
+                // Crash-safe side effects: the matches' announcements and the delivered likes are
+                // written in this same transaction, so a crash before delivery can't lose them.
+                val sideEffects = PsyncSideEffectPlans.forCompletion(sessionId, resolved.matches, resolved.deliveredLikes)
+                connection.insertMatchSideEffects(sideEffects, now)
 
                 val updated =
                     connection.loadSession(json, sessionId)
                         ?: return@inTransaction CompleteOutcome.SessionNotFound
-                CompleteOutcome.Completed(updated, resolved.matches, resolved.deliveredLikes)
+                CompleteOutcome.Completed(updated, resolved.matches, resolved.deliveredLikes, sideEffects)
             }
         }
     }

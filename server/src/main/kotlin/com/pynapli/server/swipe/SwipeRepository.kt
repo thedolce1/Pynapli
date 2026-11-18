@@ -201,6 +201,12 @@ interface SwipeRepository {
         card: SwipeDeckSessionCardRecord,
         rewoundAt: Instant,
     ): Boolean
+
+    /** Marks outbox rows delivered by the request's fast path. No-op for a repository without an outbox. */
+    suspend fun markSideEffectsDelivered(
+        ids: List<UUID>,
+        now: Instant,
+    ) = Unit
 }
 
 data class SwipeDeckResult(
@@ -272,6 +278,12 @@ data class SwipeActionResult(
     val newlyRecorded: Boolean = recorded,
     /** The swipe needed paid inventory and the actor had none left; nothing was recorded. */
     val inventoryUnavailable: Boolean = false,
+    /**
+     * The side effects this call wrote to the match side-effect outbox in its own transaction, for
+     * the caller to deliver right after commit. Null when the repository keeps no outbox (in-memory
+     * test fakes): the service then plans the same effects itself and delivers them in-process.
+     */
+    val sideEffects: List<MatchSideEffect>? = null,
 )
 
 /** Paid inventory a swipe spends inside its own record transaction. */

@@ -4,6 +4,9 @@ import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
+import com.pynapli.server.swipe.MatchSideEffect
+import com.pynapli.server.swipe.MatchSideEffectKind
+import com.pynapli.server.swipe.MatchSideEffectPlans
 import java.time.Clock
 import java.util.UUID
 
@@ -12,7 +15,6 @@ internal class PsyncSessionEvents(
     private val notificationPublisher: NotificationPublisher?,
     private val broadcaster: PsyncBroadcaster?,
     private val clock: Clock,
-    private val matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
 ) {
     /** Fan out a convenience realtime delta to [recipients] (no-op without a broadcaster). */
     suspend fun emitDelta(
@@ -75,59 +77,43 @@ internal class PsyncSessionEvents(
             ),
         )
     }
+}
 
-    /**
-     * Surface delivered Psync likes in each target's Likes You. A like only one partner made reads
-     * as that person's ordinary like. When both partners liked the same person, each like is tagged
-     * with the other partner so the target sees one "liked you together" row (PSYNC_SPEC pair
-     * presentation); both remain real likes the target can answer. Passes are never delivered.
-     */
-    suspend fun emitDeliveredLikes(
-        likes: List<PsyncDeliveredLike>,
-        sessionId: UUID? = null,
-    ) {
-        val activity = activityService ?: return
-        val likersByTarget = likes.groupBy { it.targetUserId }.mapValues { (_, byTarget) -> byTarget.map { it.actorUserId }.distinct() }
-        for (like in likes) {
-            val eventType = if (like.action == "pineapple_like") "pineapple_like" else "swipe_like"
-            val partner = likersByTarget[like.targetUserId].orEmpty().singleOrNull { it != like.actorUserId }
-            activity.recordSwipeInterest(
-                actorUserId = like.actorUserId,
-                targetUserId = like.targetUserId,
-                eventType = eventType,
-                pairUserId = partner?.takeIf { sessionId != null },
-                pairSessionId = sessionId.takeIf { partner != null },
-            )
-        }
-    }
-
-    /**
-     * Replay resolved matches into the existing match pipeline post-commit. Psync never streams
-     * individual swipes — only the resolved match outcome surfaces.
-     */
-    suspend fun emitMatchActivity(matches: List<PsyncResolvedMatch>) {
-        val activity = activityService ?: return
-        for (match in matches) {
+/**
+ * The side effects a Psync completion owes, written to the match side-effect outbox in the
+ * completion transaction (SWIPE_IMPLEMENTATION_SPEC "Match side effects"). Psync never streams
+ * individual swipes: only resolved matches and delivered likes surface.
+ */
+internal object PsyncSideEffectPlans {
+    fun forCompletion(
+        sessionId: UUID,
+        matches: List<PsyncResolvedMatch>,
+        deliveredLikes: List<PsyncDeliveredLike>,
+    ): List<MatchSideEffect> =
+        buildList {
             // Each partner's match is their own conversation (no silent partner adds, PSYNC_SPEC).
-            matchConversationOpener?.openForMatch(match.partnerUserId, match.targetUserId)
-            activity.recordMatch(match.partnerUserId, match.targetUserId, match.matchId)
-            notificationPublisher?.enqueue(
-                NotificationEventDraft(
-                    recipientUserId = match.targetUserId,
-                    actorUserId = match.partnerUserId,
-                    kind = NotificationKind.MATCH,
-                    subjectId = match.matchId,
-                    idempotencyKey = "match:${match.matchId}:${match.targetUserId}",
-                    payload =
-                        mapOf(
-                            // Matches live in the Messages new-matches rail, not an Activity tab.
-                            "target" to "messages",
-                            "activityEventType" to "match",
-                            "matchId" to match.matchId.toString(),
-                            "matchedUserId" to match.partnerUserId.toString(),
-                        ),
-                ),
-            )
+            for (match in matches) {
+                add(MatchSideEffectPlans.matchAnnouncement(match.partnerUserId, match.targetUserId, match.matchId))
+            }
+            // Delivered likes go to each target's Likes You. A like only one partner made reads as
+            // that person's ordinary like. When both partners liked the same person, each like is
+            // tagged with the other partner so the target sees one "liked you together" row
+            // (PSYNC_SPEC pair presentation); both remain real likes the target can answer.
+            val likersByTarget =
+                deliveredLikes.groupBy { it.targetUserId }.mapValues { (_, byTarget) -> byTarget.map { it.actorUserId }.distinct() }
+            for (like in deliveredLikes) {
+                val partner = likersByTarget[like.targetUserId].orEmpty().singleOrNull { it != like.actorUserId }
+                add(
+                    MatchSideEffect(
+                        id = UUID.randomUUID(),
+                        kind = MatchSideEffectKind.SWIPE_INTEREST,
+                        actorUserId = like.actorUserId,
+                        targetUserId = like.targetUserId,
+                        eventType = if (like.action == "pineapple_like") "pineapple_like" else "swipe_like",
+                        pairUserId = partner,
+                        pairSessionId = sessionId.takeIf { partner != null },
+                    ),
+                )
+            }
         }
-    }
 }

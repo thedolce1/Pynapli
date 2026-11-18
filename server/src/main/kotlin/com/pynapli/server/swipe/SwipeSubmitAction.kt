@@ -122,22 +122,8 @@ internal class SwipeSubmitAction(
         if (result.inventoryUnavailable) {
             throw SwipeException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
         }
-        if (result.newlyRecorded) {
-            sideEffects.recordActivityForAction(
-                viewerUserId = viewerUserId,
-                targetUserId = targetUserId,
-                action = action,
-                match = result.match,
-            )
-        }
+        sideEffects.deliver(result, actorUserId = viewerUserId, targetUserId = targetUserId, action = action)
         val match = result.match
-        if (match != null) {
-            sideEffects.notifyMatch(
-                viewerUserId = viewerUserId,
-                targetUserId = targetUserId,
-                match = match,
-            )
-        }
 
         return SwipeActionResponseDto(
             recorded = result.recorded,

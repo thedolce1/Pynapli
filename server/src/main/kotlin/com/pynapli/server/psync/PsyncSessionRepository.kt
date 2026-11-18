@@ -216,6 +216,12 @@ interface PsyncSessionRepository {
         matchIdFactory: () -> UUID = UUID::randomUUID,
     ): CompleteOutcome
 
+    /** Marks match side-effect outbox rows delivered by the fast path. No-op without an outbox. */
+    suspend fun markSideEffectsDelivered(
+        ids: List<UUID>,
+        now: Instant,
+    ) = Unit
+
     /** Resolved match outcomes for a session (display names joined). */
     suspend fun listSessionMatches(sessionId: UUID): List<PsyncSessionMatch>
 
@@ -290,6 +296,12 @@ interface PsyncSessionRepository {
             // Likes this completion delivered to targets who have not liked back yet (empty on an
             // idempotent re-complete), replayed post-commit into the targets' Likes You.
             val deliveredLikes: List<PsyncDeliveredLike> = emptyList(),
+            /**
+             * What this completion wrote to the match side-effect outbox in its own transaction (empty
+             * on an idempotent re-complete). Null for a repository without an outbox (test fakes):
+             * the service plans the same effects from [resolvedMatches] and [deliveredLikes].
+             */
+            val sideEffects: List<com.pynapli.server.swipe.MatchSideEffect>? = null,
         ) : CompleteOutcome
 
         object SessionNotFound : CompleteOutcome

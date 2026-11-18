@@ -2,6 +2,7 @@ package com.pynapli.server.dependencies
 
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.db.PostgresJobLock
 import com.pynapli.server.location.TravelLocationRepository
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.notifications.NotificationService
@@ -18,6 +19,9 @@ import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.JdbcSwipeRepository
 import com.pynapli.server.swipe.JdbcTopPicksRepository
+import com.pynapli.server.swipe.MatchSideEffectDelivery
+import com.pynapli.server.swipe.MatchSideEffectDrainWorker
+import com.pynapli.server.swipe.MatchSideEffectDrainer
 import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.swipe.TopPicksService
@@ -35,6 +39,7 @@ internal class SwipeDependencies(
     val psyncSessionService: PsyncSessionService,
     val psyncSessionExpiryWorker: PsyncSessionExpiryWorker,
     val topPicksService: TopPicksService,
+    val matchSideEffectDrainWorker: MatchSideEffectDrainWorker,
 )
 
 internal fun buildSwipeDependencies(
@@ -104,5 +109,17 @@ internal fun buildSwipeDependencies(
         // their likes are still delivered. Requests do the same sweep, so 5 minutes is plenty.
         psyncSessionExpiryWorker = PsyncSessionExpiryWorker(psyncSessionService, intervalMillis = 5 * 60 * 1000L),
         topPicksService = topPicksService,
+        // Delivers match side effects (Activity rows, match conversation, match push) whose request
+        // died between its commit and its fast-path delivery. One replica per tick.
+        matchSideEffectDrainWorker =
+            MatchSideEffectDrainWorker(
+                drainer =
+                    MatchSideEffectDrainer(
+                        dataSource = dataSource,
+                        delivery = MatchSideEffectDelivery(activityService, notificationService, matchConversationOpener),
+                    ),
+                intervalMillis = 30 * 1000L,
+                jobLock = PostgresJobLock(dataSource),
+            ),
     )
 }

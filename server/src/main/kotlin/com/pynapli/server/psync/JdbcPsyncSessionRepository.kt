@@ -1,10 +1,12 @@
 package com.pynapli.server.psync
 
+import com.pynapli.server.db.withConnection
 import com.pynapli.server.psync.PsyncSessionRepository.ActiveLink
 import com.pynapli.server.psync.PsyncSessionRepository.CompleteOutcome
 import com.pynapli.server.psync.PsyncSessionRepository.MutateOutcome
 import com.pynapli.server.psync.PsyncSessionRepository.RecordActionOutcome
 import com.pynapli.server.psync.PsyncSessionRepository.StartOutcome
+import com.pynapli.server.swipe.markMatchSideEffectsDelivered
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.util.UUID
@@ -134,6 +136,14 @@ class JdbcPsyncSessionRepository(
         now: Instant,
         matchIdFactory: () -> UUID,
     ): CompleteOutcome = dataSource.completePsyncSession(json, sessionId, userId, now, matchIdFactory)
+
+    override suspend fun markSideEffectsDelivered(
+        ids: List<UUID>,
+        now: Instant,
+    ) {
+        if (ids.isEmpty()) return
+        dataSource.withConnection { connection -> connection.markMatchSideEffectsDelivered(ids, now) }
+    }
 
     override suspend fun listSessionMatches(sessionId: UUID): List<PsyncSessionMatch> = dataSource.listPsyncSessionMatches(sessionId)
 

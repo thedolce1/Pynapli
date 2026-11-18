@@ -145,6 +145,7 @@ class ServerDependencies(
     val tonightSessionExpiryWorker: TonightSessionExpiryWorker,
     val psyncSessionService: PsyncSessionService,
     val psyncSessionExpiryWorker: PsyncSessionExpiryWorker? = null,
+    val matchSideEffectDrainWorker: com.pynapli.server.swipe.MatchSideEffectDrainWorker? = null,
     val psyncPresenceWatcher: com.pynapli.server.psync.PsyncPresenceWatcher? = null,
     val ageVerificationService: AgeVerificationService,
     val accountLifecycleService: AccountLifecycleService,
@@ -163,6 +164,7 @@ class ServerDependencies(
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
         runCatching { psyncSessionExpiryWorker?.close() }
+        runCatching { matchSideEffectDrainWorker?.close() }
         runCatching { psyncPresenceWatcher?.close() }
         runCatching { travelTripWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
@@ -454,6 +456,7 @@ class ServerDependencies(
                 tonightSessionExpiryWorker = tonight.tonightSessionExpiryWorker,
                 psyncSessionService = swipe.psyncSessionService,
                 psyncSessionExpiryWorker = swipe.psyncSessionExpiryWorker,
+                matchSideEffectDrainWorker = swipe.matchSideEffectDrainWorker,
                 psyncPresenceWatcher =
                     com.pynapli.server.psync.PsyncPresenceWatcher(
                         dataSource = database.dataSource,
