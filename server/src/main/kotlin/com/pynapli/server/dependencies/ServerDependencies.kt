@@ -405,6 +405,8 @@ class ServerDependencies(
                     faceDetector = media.selfieFaceDetector,
                     rateLimitService = core.rateLimitService,
                     notificationPublisher = core.notificationService,
+                    // Approval lowers account risk once (TRUST_AND_SAFETY_SPEC).
+                    verificationRiskSignals = core.riskService,
                 )
             // Selfie retention runs with the media cleanup sweep (same switch and interval).
             val photoVerificationRetentionWorker =

@@ -60,6 +60,12 @@ interface LocationRiskSignalPublisher {
 interface VerificationRiskSignalPublisher {
     /** Successful age verification lowers risk (TRUST_AND_SAFETY_SPEC). */
     suspend fun recordAgeVerificationPassed(userId: UUID)
+
+    /**
+     * An approved selfie photo verification lowers risk (TRUST_AND_SAFETY_SPEC "Photo verification
+     * reduces score"), once per account however many times it is approved.
+     */
+    suspend fun recordPhotoVerificationPassed(userId: UUID) = Unit
 }
 
 interface DeviceRiskSignalPublisher {
@@ -242,6 +248,20 @@ class RiskService(
         )
     }
 
+    override suspend fun recordPhotoVerificationPassed(userId: UUID) {
+        // Same event shape as age verification, but recorded at most once per account: a revoke
+        // followed by a new approval must not subtract again.
+        val result =
+            repository.recordEventOnce(
+                userId = userId,
+                actorUserId = null,
+                source = SOURCE_VERIFICATION,
+                reason = REASON_PHOTO_VERIFIED,
+                delta = PHOTO_VERIFIED_DELTA,
+            ) ?: return
+        travelEnforcement?.onTierChanged(userId, result.state.tier)
+    }
+
     override suspend fun recordDeviceAccountFarm(
         userId: UUID,
         distinctAccountCount: Int,
@@ -281,6 +301,10 @@ class RiskService(
         // Verification lowers risk (TRUST_AND_SAFETY_SPEC): the score floor stays
         // at 0 in the repository, so this can never go negative overall.
         const val AGE_VERIFIED_DELTA = -20
+
+        // The spec gives no amount for photo verification; it matches age verification.
+        const val PHOTO_VERIFIED_DELTA = -20
+        const val REASON_PHOTO_VERIFIED = "verification.photo_verified"
 
         fun reportDelta(category: String): Int =
             when (category) {

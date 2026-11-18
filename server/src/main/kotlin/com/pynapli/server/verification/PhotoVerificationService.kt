@@ -5,6 +5,7 @@ import com.pynapli.server.notifications.NotificationKind
 import com.pynapli.server.notifications.NotificationPublisher
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
+import com.pynapli.server.safety.VerificationRiskSignalPublisher
 import com.pynapli.shared.network.dto.CreatePhotoVerificationUploadRequestDto
 import com.pynapli.shared.network.dto.MEDIA_IMAGE_MAX_BYTES
 import com.pynapli.shared.network.dto.PhotoVerificationChallengeDto
@@ -37,6 +38,8 @@ class PhotoVerificationService(
     private val notificationPublisher: NotificationPublisher? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val poseRandom: Random = SecureRandom().asKotlinRandom(),
+    // Approval lowers account risk once (TRUST_AND_SAFETY_SPEC "Photo verification reduces score").
+    private val verificationRiskSignals: VerificationRiskSignalPublisher? = null,
 ) {
     suspend fun status(userId: UUID): PhotoVerificationStatusDto {
         repository.facePhotoVerifiedAt(userId)?.let { verifiedAt ->
@@ -156,6 +159,7 @@ class PhotoVerificationService(
         val record =
             repository.approve(verificationId, actorId, note, clock.instant())
                 ?: throw notPendingOrMissing(verificationId)
+        publishVerifiedRiskSignal(record.userId)
         notifyDecision(record.userId, record.verificationId, "approved")
         return record.toDecisionDto()
     }
@@ -251,6 +255,19 @@ class PhotoVerificationService(
         action: String,
     ) {
         if (rateLimitService?.check(userId, action)?.allowed == false) throw VerificationException("RATE_LIMITED")
+    }
+
+    // Verification lowers risk (TRUST_AND_SAFETY_SPEC), as age verification does; a risk-path failure
+    // must never break the verification decision itself.
+    private suspend fun publishVerifiedRiskSignal(userId: UUID) {
+        val publisher = verificationRiskSignals ?: return
+        try {
+            publisher.recordPhotoVerificationPassed(userId)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            logger.warn("Photo verification risk signal failed: {}", error.javaClass.simpleName)
+        }
     }
 
     // A push is a courtesy on top of the decision; it must never undo or fail it.

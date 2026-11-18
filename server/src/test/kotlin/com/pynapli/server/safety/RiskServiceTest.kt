@@ -232,6 +232,19 @@ private class InMemoryRiskRepository : RiskRepository {
         return RiskMutationRecord(event = event, state = state)
     }
 
+    override suspend fun recordEventOnce(
+        userId: UUID,
+        actorUserId: UUID?,
+        source: String,
+        reason: String,
+        delta: Int,
+        metadataJson: String,
+        eventIdFactory: () -> UUID,
+    ): RiskMutationRecord? {
+        if (events.any { it.userId == userId && it.reason == reason }) return null
+        return recordEvent(userId, actorUserId, source, reason, delta, metadataJson, eventIdFactory)
+    }
+
     override suspend fun recordReportEvent(
         userId: UUID,
         reporterUserId: UUID,

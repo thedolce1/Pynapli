@@ -516,6 +516,33 @@ Recommended score decay:
 - Risk score decays slowly toward 0 after normal activity.
 - Severe reasons should not decay without manual review.
 
+Implemented (`safety/RiskDecayPolicy.kt`, `JdbcRiskRepository`, migration V109):
+
+- The score is stored in two parts: `decayable_points` (minor, behavioural points) and the rest, which
+  never decays. Only **rate-limit hits** (`rate_limit.*`) are decayable today; the list is an
+  allow-list in `RiskDecayPolicy.DECAYABLE_SOURCES`. Reports, message-review holds, media moderation,
+  location (impossible travel, repeated Travel switching), device/account-farm signals, verification
+  events and every admin action are non-decaying, as is any source added later until it is classed
+  deliberately. Whether message-review holds, repeated Travel switching or unconfirmed reports should
+  also decay is an open founder question.
+- Rate: 1 decayable point per day, linear (engineering choice; the spec gives no rate). A few
+  rate-limit hits (2 to 6 points each) clear within a week.
+- Lazy, no background job: due decay is applied under the account's row lock whenever its risk state
+  is written or read through `RiskService.getState` / `RiskPolicyService`, the tier is recomputed from
+  the new score, and each application is written to `account_risk_events` as `decay.minor`. Decay can
+  take an account out of watch or friction (or further, if its score was all minor points). Discovery
+  SQL and the admin queue read the stored tier, so an account untouched since its points fell due keeps
+  the older tier there until its next read or write.
+- Admin set-tier, lock and ban set the score absolutely and zero `decayable_points`, so decay never
+  takes an account below an admin-set score; only minor points recorded after the admin action decay.
+- Verification reductions come off the decayable part first, then the rest; the total drops by the full
+  amount and is floored at 0.
+- Points recorded before V109 were not backfilled: they stay non-decaying.
+- Photo verification reduces score: an approved selfie verification records `verification.photo_verified`
+  (-20, the same as age verification; the spec gives no amount) at most once per account, so a revoke
+  and re-approval never subtracts twice. Couple verification has no approval path of its own (it is
+  derived from both partners' photo verification) and gets no separate reduction.
+
 Support signal:
 
 - A coherent support request should be treated as a false-positive signal, not proof, because some bad actors will also contact support.
@@ -616,7 +643,8 @@ Important:
 - [x] Location spoofing signals exist.
 - [x] Partner subscription abuse cooldown exists.
 - [x] Selfie photo verification: server pose challenge, private selfie, optional face-count check, senior-admin decision with audit, revoke, rate limits and selfie retention.
-- [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; the account score stays floored at 0.
+- [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; an approved photo verification publishes a -20 risk event once per account; the account score stays floored at 0.
+- [x] Risk score decay: rate-limit points decay 1 per day (lazily, ledgered as `decay.minor`); severe, report, other signal and admin-set points never decay.
 - [ ] Partial: appeal review flow, admin roles and step-up MFA exist; support review workflow, account notices and senior-review separation remain.
 - [x] Moderator dashboard requirements are tracked.
 - [x] False-positive metrics exist.

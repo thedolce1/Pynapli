@@ -15,6 +15,21 @@ interface RiskRepository {
     ): RiskMutationRecord
 
     /**
+     * Records the event only if the account has never had an event with this [reason] (a one-time
+     * adjustment such as the photo-verification reduction). Returns null, changing nothing, when it
+     * already has. Concurrent calls for the same account are serialized on its risk row.
+     */
+    suspend fun recordEventOnce(
+        userId: UUID,
+        actorUserId: UUID?,
+        source: String,
+        reason: String,
+        delta: Int,
+        metadataJson: String = "{}",
+        eventIdFactory: () -> UUID = UUID::randomUUID,
+    ): RiskMutationRecord?
+
+    /**
      * Records a user report's risk event under [ReportScoringPolicy] (TRUST_AND_SAFETY_SPEC, AUDIT-15):
      * the delta actually applied may be smaller than [requestedDelta], or zero. The event is always
      * written, with the requested and counted deltas in its metadata, so moderators see every report.
@@ -29,6 +44,7 @@ interface RiskRepository {
         eventIdFactory: () -> UUID = UUID::randomUUID,
     ): RiskMutationRecord
 
+    /** The account's risk state, with any decay that has fallen due applied first (RiskDecayPolicy). */
     suspend fun getState(userId: UUID): AccountRiskStateRecord?
 }
 
