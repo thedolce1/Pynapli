@@ -38,6 +38,7 @@ import kotlin.test.assertNull
  */
 class RefreshRotationIntegrationTest {
     private val dataSource = PynapliTestDatabase.dataSource
+
     // Whole seconds: Postgres keeps microseconds, so a sub-microsecond start could round a stored expiry
     // past the instant the boundary test compares it with.
     private val clock = RefreshTestClock(Instant.now().truncatedTo(ChronoUnit.SECONDS))
@@ -47,8 +48,7 @@ class RefreshRotationIntegrationTest {
         PynapliTestDatabase.reset()
     }
 
-    private fun authService(repository: AuthRepository = JdbcAuthRepository(dataSource)) =
-        AuthService(repository, passwordHasher = PasswordHasher(iterations = 1_000), clock = clock)
+    private fun authService(repository: AuthRepository = JdbcAuthRepository(dataSource)) = AuthService(repository, passwordHasher = PasswordHasher(iterations = 1_000), clock = clock)
 
     private suspend fun AuthService.signUp(): AuthSessionDto = signupEmail("rotation@example.com", PASSWORD, "1990-01-01", true, true, true, deviceId = "web", platform = "web", appVersion = "1.0")
 

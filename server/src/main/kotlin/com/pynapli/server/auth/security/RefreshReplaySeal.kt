@@ -2,6 +2,7 @@ package com.pynapli.server.auth.security
 
 import java.security.GeneralSecurityException
 import java.security.MessageDigest
+import java.security.ProviderException
 import java.security.SecureRandom
 import java.util.UUID
 import javax.crypto.Cipher
@@ -51,7 +52,9 @@ internal object RefreshReplaySeal {
         nonce: ByteArray,
         ciphertext: ByteArray,
     ): Pair<String, String>? {
-        if (nonce.size != NONCE_BYTES) return null
+        // A blob shorter than its own tag cannot be genuine (and the JDK throws a ProviderException,
+        // not a GeneralSecurityException, when asked to open one).
+        if (nonce.size != NONCE_BYTES || ciphertext.size <= TAG_BITS / 8) return null
         val plaintext =
             try {
                 val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -61,6 +64,8 @@ internal object RefreshReplaySeal {
             } catch (_: GeneralSecurityException) {
                 return null
             } catch (_: IllegalArgumentException) {
+                return null
+            } catch (_: ProviderException) {
                 return null
             }
         val parts = plaintext.toString(Charsets.UTF_8).split(SEPARATOR)
