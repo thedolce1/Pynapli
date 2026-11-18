@@ -21,6 +21,9 @@ data class GridUiState(
     val verificationMessage: String? = null,
     val errorCode: String? = null,
     val errorMessage: String? = null,
+    // False only from app start (or sign-out) until the cold-start cache has been read: the body stays
+    // a plain background meanwhile, so a cached Grid paints without a skeleton flashing first.
+    val cacheChecked: Boolean = true,
 ) {
     val verificationRequired: Boolean get() = verificationMessage != null
 }

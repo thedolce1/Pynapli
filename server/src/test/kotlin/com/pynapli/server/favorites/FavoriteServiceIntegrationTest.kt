@@ -75,6 +75,22 @@ class FavoriteServiceIntegrationTest {
         }
 
     @Test
+    fun deletingAnAccountRemovesItsFavoritesBothWays() =
+        runBlocking {
+            val viewer = user("Viewer")
+            val target = user("Target")
+            val service = service()
+            service.add(viewer, target.toString())
+            service.add(target, viewer.toString())
+
+            com.pynapli.server.account
+                .JdbcAccountDeletionActions(dataSource)
+                .deleteAccount(target)
+
+            assertEquals(0, dataSource.count("SELECT count(*) FROM favorite_profiles"))
+        }
+
+    @Test
     fun selfMissingAndBlockedTargetsAreRefused() =
         runBlocking {
             val viewer = user("Viewer")

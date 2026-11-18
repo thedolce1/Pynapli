@@ -175,6 +175,14 @@ class ProfileDetailStateHolder(
 
     private val _favoriteChanges = MutableSharedFlow<FavoriteChange>(extraBufferCapacity = 8)
 
+    private val _removedProfiles = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /**
+     * People blocked, hidden or reported from any sheet (Grid, Swipe, Activity, Messages, Psync), so
+     * lists kept across tabs (the Grid, Favorites) drop them even when the sheet wasn't theirs.
+     */
+    val removedProfiles: SharedFlow<String> = _removedProfiles.asSharedFlow()
+
     /** Confirmed star/un-star events, so the Favorites view can add or drop a card without a refetch. */
     val favoriteChanges: SharedFlow<FavoriteChange> = _favoriteChanges.asSharedFlow()
 
@@ -266,6 +274,7 @@ class ProfileDetailStateHolder(
                         blockedTargetUserId = targetUserId,
                     )
                 }
+                _removedProfiles.tryEmit(targetUserId)
             }
 
             is AppResult.Failure -> {
@@ -301,6 +310,7 @@ class ProfileDetailStateHolder(
                         hiddenTargetUserId = targetUserId,
                     )
                 }
+                _removedProfiles.tryEmit(targetUserId)
             }
 
             is AppResult.Failure -> {
@@ -390,6 +400,7 @@ class ProfileDetailStateHolder(
         // action uses, so every surface drops their card.
         val reported = _state.value.reportedTargetUserId
         _state.value = ProfileDetailUiState(hiddenTargetUserId = reported)
+        reported?.let { _removedProfiles.tryEmit(it) }
     }
 
     companion object {

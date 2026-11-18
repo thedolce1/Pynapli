@@ -65,12 +65,21 @@ fun GridScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stateHolder) {
+        // Travel switched on or off (from Swipe) while the Grid was away: the cards are another place's.
+        val leftWith = stateHolder.travelKeyWhenLeft
+        if (leftWith != null && leftWith != travelState.current.travelKey()) stateHolder.invalidate()
         stateHolder.primeFromCacheThenLoad()
     }
 
     // Leaving the tab disposes this screen; keep both grids' scroll for the way back.
     DisposableEffect(gridState, favoritesGridState) {
         onDispose {
+            stateHolder.travelKeyWhenLeft =
+                travelLocationStateHolder
+                    ?.state
+                    ?.value
+                    ?.current
+                    .travelKey()
             stateHolder.rememberScroll(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
             if (favoritesGridState != null) {
                 favoritesStateHolder?.rememberScroll(favoritesGridState.firstVisibleItemIndex, favoritesGridState.firstVisibleItemScrollOffset)
@@ -215,3 +224,5 @@ fun GridScreen(
         )
     }
 }
+
+private fun com.pynapli.shared.network.dto.TravelLocationDto?.travelKey(): String = this?.let { "${it.city}|${it.latitude}|${it.longitude}|${it.activeFrom}" } ?: "none"

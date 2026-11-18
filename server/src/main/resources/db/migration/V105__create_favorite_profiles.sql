@@ -4,7 +4,7 @@
 -- the favorited person can never read this table through any route. A favorite of someone who later
 -- blocks, hides, goes incognito, is banned or deletes their account stays stored but drops out of the
 -- Favorites list (the list applies the same visibility rules as the Grid on every read). Account
--- deletion removes the rows through the cascades.
+-- deletion (a soft delete) removes the rows in both directions (JdbcAccountDeletionActions).
 CREATE TABLE IF NOT EXISTS favorite_profiles (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     favorite_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

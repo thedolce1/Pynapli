@@ -79,6 +79,13 @@ fun PynapliApp(
         // Signed out, session died, or a cold start whose stored session is gone: forget this
         // account's Grid (in memory and the cold-start cache) and Favorites. Waits for the session
         // check so a cold start with a live session keeps its instant cached Grid.
+        // Blocked, hidden or reported anywhere: the Grid and Favorites (kept across tabs) drop them.
+        LaunchedEffect(graph.profileDetailStateHolder) {
+            graph.profileDetailStateHolder.removedProfiles.collect { userId ->
+                graph.gridStateHolder.removeCardById(userId)
+                graph.favoritesStateHolder?.removeCardById(userId)
+            }
+        }
         LaunchedEffect(authState.isCheckingSession, authState.session == null) {
             if (!authState.isCheckingSession && authState.session == null) {
                 graph.gridStateHolder.clearForSignOut()
