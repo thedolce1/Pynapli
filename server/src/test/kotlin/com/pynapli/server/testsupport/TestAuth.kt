@@ -2,6 +2,7 @@ package com.pynapli.server.testsupport
 
 import com.pynapli.server.auth.AuthRepository
 import com.pynapli.server.auth.EmailIdentityRecord
+import com.pynapli.server.auth.RefreshReplayRecord
 import com.pynapli.server.auth.SessionRecord
 import com.pynapli.server.auth.UserRecord
 import com.pynapli.server.auth.security.PasswordHash
@@ -57,7 +58,12 @@ internal class SingleSessionAuthRepository(
         refreshTokenHash: String,
         accessExpiresAt: Instant,
         refreshExpiresAt: Instant,
+        replayNonce: ByteArray,
+        replayCiphertext: ByteArray,
+        replayExpiresAt: Instant,
     ): SessionRecord? = null
+
+    override suspend fun findRefreshReplay(previousRefreshTokenHash: String): RefreshReplayRecord? = null
 
     override suspend fun revokeSession(sessionId: UUID): Boolean = false
 }

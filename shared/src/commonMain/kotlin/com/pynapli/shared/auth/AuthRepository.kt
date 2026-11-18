@@ -36,6 +36,13 @@ class AuthRepository(
                     // tab meanwhile; only a rejection of the session still stored means it is dead.
                     val latest = sessionStore.currentSession()
                     if (latest != null && latest.refreshToken != session.refreshToken) return latest
+                    // A 401 has already been through the refresh-on-401 path, and StoredSessionRefresher
+                    // clears the store itself when the server rejects the refresh token. A session still
+                    // stored unchanged means that refresh failed transiently (its response was lost, say);
+                    // keep it so the next request retries, which the server answers idempotently.
+                    // (A blank stored access token never reaches the server or the refresher, so it
+                    // gets no such benefit of the doubt.)
+                    if (latest != null && latest.accessToken.isNotBlank() && result.error.code in unauthorizedCodes) return latest
                     sessionStore.clear()
                     null
                 } else {

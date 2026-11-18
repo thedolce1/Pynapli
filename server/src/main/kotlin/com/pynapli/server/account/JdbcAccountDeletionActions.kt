@@ -1,5 +1,6 @@
 package com.pynapli.server.account
 
+import com.pynapli.server.auth.CLEAR_REFRESH_REPLAY_SQL
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
 import java.sql.Connection
@@ -355,7 +356,8 @@ internal class JdbcAccountDeletionActions(
             .prepareStatement(
                 """
                 UPDATE user_sessions
-                SET revoked_at = now()
+                SET revoked_at = now(),
+                    $CLEAR_REFRESH_REPLAY_SQL
                 WHERE user_id = ?
                   AND revoked_at IS NULL
                 """.trimIndent(),

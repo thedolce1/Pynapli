@@ -152,8 +152,10 @@ class JdbcSignedInDevicesRepository(
             if (sessionHash == keepAccessTokenHash) return@withConnection RevokeResult.IsCurrent
             val updated =
                 connection
-                    .prepareStatement("UPDATE user_sessions SET revoked_at = now() WHERE id = ? AND user_id = ? AND revoked_at IS NULL")
-                    .use { statement ->
+                    .prepareStatement(
+                        "UPDATE user_sessions SET revoked_at = now(), $CLEAR_REFRESH_REPLAY_SQL " +
+                            "WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
+                    ).use { statement ->
                         statement.setObject(1, sessionId)
                         statement.setObject(2, userId)
                         statement.executeUpdate()
@@ -168,7 +170,8 @@ class JdbcSignedInDevicesRepository(
         dataSource.withConnection { connection ->
             connection
                 .prepareStatement(
-                    "UPDATE user_sessions SET revoked_at = now() WHERE user_id = ? AND revoked_at IS NULL AND access_token_hash <> ?",
+                    "UPDATE user_sessions SET revoked_at = now(), $CLEAR_REFRESH_REPLAY_SQL " +
+                        "WHERE user_id = ? AND revoked_at IS NULL AND access_token_hash <> ?",
                 ).use { statement ->
                     statement.setObject(1, userId)
                     statement.setString(2, keepAccessTokenHash)

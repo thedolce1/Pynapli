@@ -44,6 +44,11 @@ interface AuthRepository {
      * Compare-and-swap rotation: succeeds only while [presentedRefreshTokenHash] is still the
      * session's current refresh token, so a refresh token is exchangeable exactly once even under
      * concurrent requests. Returns null when the session was revoked or already rotated.
+     *
+     * In the same write, [presentedRefreshTokenHash] becomes the session's previous refresh token and
+     * the sealed copy of the tokens this rotation issues ([replayNonce], [replayCiphertext], openable
+     * only with the consumed token) is stored until [replayExpiresAt], replacing any earlier one. See
+     * [findRefreshReplay].
      */
     suspend fun rotateSession(
         sessionId: UUID,
@@ -52,10 +57,30 @@ interface AuthRepository {
         refreshTokenHash: String,
         accessExpiresAt: Instant,
         refreshExpiresAt: Instant,
+        replayNonce: ByteArray,
+        replayCiphertext: ByteArray,
+        replayExpiresAt: Instant,
     ): SessionRecord?
+
+    /**
+     * The unrevoked session whose most recent rotation consumed the refresh token hashing to
+     * [previousRefreshTokenHash], with the sealed tokens that rotation issued. Never changes the row.
+     */
+    suspend fun findRefreshReplay(previousRefreshTokenHash: String): RefreshReplayRecord?
 
     suspend fun revokeSession(sessionId: UUID): Boolean
 }
+
+/**
+ * A session's sealed refresh replay: [nonce] and [ciphertext] (AES-GCM, key derived from the consumed
+ * refresh token, which is not stored) and the end of its grace. Not a data class: it holds arrays.
+ */
+class RefreshReplayRecord(
+    val session: SessionRecord,
+    val nonce: ByteArray,
+    val ciphertext: ByteArray,
+    val replayExpiresAt: Instant,
+)
 
 data class UserRecord(
     val id: UUID,

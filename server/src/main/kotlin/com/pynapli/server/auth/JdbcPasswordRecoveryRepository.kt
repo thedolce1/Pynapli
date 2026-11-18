@@ -185,7 +185,8 @@ class JdbcPasswordRecoveryRepository(
         prepareStatement(
             """
             UPDATE user_sessions
-            SET revoked_at = now()
+            SET revoked_at = now(),
+                $CLEAR_REFRESH_REPLAY_SQL
             WHERE user_id = ?
               AND revoked_at IS NULL
               AND (?::text IS NULL OR access_token_hash <> ?)
@@ -194,6 +195,14 @@ class JdbcPasswordRecoveryRepository(
             statement.setObject(1, userId)
             statement.setString(2, keepAccessTokenHash)
             statement.setString(3, keepAccessTokenHash)
+            statement.executeUpdate()
+        }
+        // The session kept on a password change stays signed in, but the refresh token it consumed
+        // last (possibly the reason for the change) must not get its tokens back during the grace.
+        prepareStatement(
+            "UPDATE user_sessions SET $CLEAR_REFRESH_REPLAY_SQL WHERE user_id = ? AND previous_refresh_token_hash IS NOT NULL",
+        ).use { statement ->
+            statement.setObject(1, userId)
             statement.executeUpdate()
         }
     }
