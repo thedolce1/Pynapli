@@ -139,6 +139,6 @@ private val birthdatePattern = Regex("""\d{4}-\d{2}-\d{2}""")
 
 private val discoveryStyles = setOf("solo", "together", "both", "social", "ask_in_chat")
 
-internal val gridMessagePolicies = setOf("everyone", "matches_only", "no_one")
+internal val gridMessagePolicies = setOf("everyone", "verified_only", "matches_only", "no_one")
 
 internal val partnerVisibilities = setOf("public", "matches_only", "verified_only", "hidden")
