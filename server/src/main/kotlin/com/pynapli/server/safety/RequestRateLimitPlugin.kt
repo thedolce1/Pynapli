@@ -180,7 +180,15 @@ internal data class RequestLimitRule(
     ): Boolean = requestMethod == method && path.matches(requestPath)
 
     fun subjectSuffix(requestPath: String): String? =
-        if (perPathObject) path.matchEntire(requestPath)?.groupValues?.getOrNull(1)?.let { "obj:$it" } else null
+        if (perPathObject) {
+            path
+                .matchEntire(requestPath)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.let { "obj:$it" }
+        } else {
+            null
+        }
 }
 
 private const val ID = "[^/]+"

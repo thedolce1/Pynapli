@@ -15,13 +15,13 @@ import com.pynapli.server.profile.ProfileException
 import com.pynapli.server.profilelink.ProfileLinkException
 import com.pynapli.server.psync.PsyncException
 import com.pynapli.server.safety.AppCheckException
+import com.pynapli.server.safety.RequestBodyCapExceeded
 import com.pynapli.server.safety.SafetyException
 import com.pynapli.server.savedfilters.SavedFilterException
 import com.pynapli.server.subscriptions.SubscriptionException
 import com.pynapli.server.swipe.SwipeException
 import com.pynapli.server.swipe.TopPicksException
 import com.pynapli.server.tonight.TonightSessionException
-import com.pynapli.server.safety.RequestBodyCapExceeded
 import com.pynapli.server.verification.VerificationException
 import com.pynapli.shared.network.dto.ApiErrorDto
 import io.ktor.http.HttpStatusCode

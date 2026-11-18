@@ -168,6 +168,7 @@ class RequestRateLimitPluginTest {
                     post("/v1/messages/threads/{id}/media") { call.respond("sent") }
                 }
             }
+
             suspend fun send(
                 thread: String,
                 kind: String = "messages",

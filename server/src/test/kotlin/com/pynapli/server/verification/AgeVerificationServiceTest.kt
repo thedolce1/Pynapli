@@ -4,6 +4,8 @@ import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.server.testsupport.testServerConfig
+import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
+import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -11,8 +13,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
-import com.pynapli.shared.network.dto.AgeVerificationCallbackRequestDto
-import com.pynapli.shared.network.dto.StartAgeVerificationRequestDto
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
 import java.time.Instant
@@ -185,6 +185,7 @@ class AgeVerificationServiceTest {
                 )
             }
             val body = """{"userId":"$userId","provider":"persona","providerReference":"ref-1","status":"verified"}"""
+
             suspend fun callback(
                 timestamp: Long?,
                 signature: String?,

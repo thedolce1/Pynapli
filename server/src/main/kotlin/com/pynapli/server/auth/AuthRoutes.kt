@@ -121,13 +121,13 @@ private suspend fun AuthService.loginEmail(
     request: EmailLoginRequestDto,
     clientIp: String,
 ) = loginEmail(
-        email = request.email,
-        password = request.password,
-        deviceId = request.deviceId,
-        platform = request.platform,
-        appVersion = request.appVersion,
-        clientIp = clientIp,
-    )
+    email = request.email,
+    password = request.password,
+    deviceId = request.deviceId,
+    platform = request.platform,
+    appVersion = request.appVersion,
+    clientIp = clientIp,
+)
 
 fun authStatusFor(code: String): HttpStatusCode =
     when (code) {

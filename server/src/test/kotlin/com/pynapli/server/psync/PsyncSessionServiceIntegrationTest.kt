@@ -1782,7 +1782,11 @@ private fun countingRateLimiter(): com.pynapli.server.safety.RateLimitService =
                     .RateLimitCounter(count = next, ttlSeconds = windowSeconds)
             }
 
-            override suspend fun current(key: String) = counts[key]?.let { com.pynapli.server.safety.RateLimitCounter(count = it, ttlSeconds = 60) }
+            override suspend fun current(key: String) =
+                counts[key]?.let {
+                    com.pynapli.server.safety
+                        .RateLimitCounter(count = it, ttlSeconds = 60)
+                }
         },
     )
 
