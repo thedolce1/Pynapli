@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.grid.insertDiscoverableUser
 import com.pynapli.server.subscriptions.JdbcSubscriptionRepository
 import com.pynapli.server.subscriptions.SubscriptionService
@@ -63,6 +64,47 @@ class SwipeConcurrencyIntegrationTest :
                     if (dataSource.countMatchesBetween(a, b) != 1) wrong++
                 }
                 assertEquals(0, wrong, "iterations out of $iterations with no match after a mutual like")
+            }
+        }
+
+        "a rewind racing the other person's like back ends as either a match or a rewound like, never both" {
+            runBlocking {
+                val repository = JdbcSwipeRepository(dataSource)
+                var wrong = 0
+                repeat(iterations) { iteration ->
+                    val (viewer, target) = seedPair(iteration)
+                    val likeId = UUID.randomUUID()
+                    assertTrue(repository.recordSwipeAction(likeId, viewer, target, SwipeAction.LIKE).recorded)
+                    raceTogether(
+                        { repository.rewindIntoFreshCard(likeId, viewer, target) },
+                        { repository.recordSwipeAction(UUID.randomUUID(), target, viewer, SwipeAction.LIKE) },
+                    )
+                    val matched = dataSource.countMatchesBetween(viewer, target) == 1
+                    val likeRewound = dataSource.isRewound(likeId)
+                    // Allowed: (match, like still live) or (no match, like rewound).
+                    if (matched == likeRewound) wrong++
+                }
+                assertEquals(0, wrong, "iterations out of $iterations that ended with a match on a rewound like (or neither)")
+            }
+        }
+
+        "a rewind racing a like-back from Activity ends as either a match or a rewound like, never both" {
+            runBlocking {
+                val repository = JdbcSwipeRepository(dataSource)
+                var wrong = 0
+                repeat(iterations) { iteration ->
+                    val (viewer, target) = seedPair(iteration)
+                    val likeId = UUID.randomUUID()
+                    assertTrue(repository.recordSwipeAction(likeId, viewer, target, SwipeAction.LIKE).recorded)
+                    raceTogether(
+                        { repository.rewindIntoFreshCard(likeId, viewer, target) },
+                        { repository.likeBack(UUID.randomUUID(), target, viewer, travelLocationId = null) },
+                    )
+                    val matched = dataSource.countMatchesBetween(viewer, target) == 1
+                    val likeRewound = dataSource.isRewound(likeId)
+                    if (matched == likeRewound) wrong++
+                }
+                assertEquals(0, wrong, "iterations out of $iterations that ended with a match on a rewound like (or neither)")
             }
         }
 
@@ -270,6 +312,64 @@ internal fun DataSource.liveActionCount(
                 }
             }
     }
+
+private fun DataSource.isRewound(actionId: UUID): Boolean =
+    connection.use { c ->
+        c.prepareStatement("SELECT rewound_at IS NOT NULL FROM swipe_actions WHERE id = ?").use { s ->
+            s.setObject(1, actionId)
+            s.executeQuery().use { rs ->
+                rs.next()
+                rs.getBoolean(1)
+            }
+        }
+    }
+
+/** Rewinds [actionId] straight through the repository, re-dealing the card the way Rewind does. */
+internal suspend fun SwipeRepository.rewindIntoFreshCard(
+    actionId: UUID,
+    viewer: UUID,
+    target: UUID,
+): Boolean {
+    val codec = SwipeDeckTokenCodec()
+    val now = Instant.now()
+    val filters = DiscoveryFilters()
+    val scopeHash = SwipeDeckTokenCodec.deckScopeHash(viewer, SWIPE_MAX_RADIUS_METERS, 1, filters)
+    val session = codec.issueDeckSession(viewerUserId = viewer, scopeHash = scopeHash, now = now)
+    val cardToken =
+        codec.issueCardToken(
+            deckSessionId = session.deckSessionId,
+            viewerUserId = viewer,
+            targetUserId = target,
+            scopeHash = scopeHash,
+            generatedAt = session.generatedAt,
+            expiresAt = session.expiresAt,
+            position = 0,
+        )
+    return rewindSwipeAction(
+        actionId = actionId,
+        actorUserId = viewer,
+        targetUserId = target,
+        session =
+            session.toSwipeDeckSessionRecord(
+                viewerUserId = viewer,
+                scopeHash = scopeHash,
+                radiusMeters = SWIPE_MAX_RADIUS_METERS,
+                pageLimit = 1,
+                filterPayload = filters.toPersistedJson(),
+            ),
+        card =
+            SwipeDeckSessionCardRecord(
+                cardId = UUID.randomUUID(),
+                sessionId = session.sessionId,
+                viewerUserId = viewer,
+                targetUserId = target,
+                cardTokenHash = codec.tokenHash(cardToken),
+                position = 0,
+                dealtAt = now,
+            ),
+        rewoundAt = now,
+    )
+}
 
 internal fun DataSource.countMatchesBetween(
     a: UUID,
