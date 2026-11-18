@@ -87,6 +87,8 @@ internal class JdbcGridRepository(
                             linkedPartnerThumbnailMediaAssetId = h?.linkedPartnerThumbnailMediaAssetId,
                             visiting = row.visiting,
                             tonightActive = h?.tonightActive ?: false,
+                            verified = h?.verified ?: false,
+                            coupleVerified = h?.coupleVerified ?: false,
                         )
                     }
 
@@ -146,6 +148,8 @@ internal class JdbcGridRepository(
                                 linkedPartnerThumbnailMediaAssetId = h?.linkedPartnerThumbnailMediaAssetId,
                                 visitingFrom = from,
                                 visitingUntil = until,
+                                verified = h?.verified ?: false,
+                                coupleVerified = h?.coupleVerified ?: false,
                             )
                         },
                 )

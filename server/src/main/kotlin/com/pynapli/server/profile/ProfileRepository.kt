@@ -80,6 +80,8 @@ data class PublicProfileRecord(
     val linkedPartnerUserId: UUID? = null,
     val linkedPartnerDisplayName: String? = null,
     val linkedPartnerThumbnailMediaAssetId: UUID? = null,
+    // Both this profile and its visible linked partner are photo-verified.
+    val coupleVerified: Boolean = false,
     val displayAge: Int?,
     val bio: String? = null,
     val neighborhood: String? = null,

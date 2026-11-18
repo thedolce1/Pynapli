@@ -18,6 +18,7 @@ internal fun ResultSet.toPublicProfileRecord(): PublicProfileRecord {
         profilePhotoMediaAssetId = getObject("profile_photo_media_asset_id", UUID::class.java),
         profilePhotoMediaAssetIds = getUuidList("profile_photo_ids"),
         verified = getBoolean("verified"),
+        coupleVerified = getBoolean("couple_verified"),
         linkedPartnerUserId = getObject("linked_partner_user_id", UUID::class.java),
         linkedPartnerDisplayName = getString("linked_partner_display_name"),
         linkedPartnerThumbnailMediaAssetId = getObject("linked_partner_thumbnail_media_asset_id", UUID::class.java),

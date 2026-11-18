@@ -276,6 +276,8 @@ class GridService(
             rankToken = "grid:v1:$userId",
             visiting = visiting,
             tonightActive = tonightActive,
+            verified = verified,
+            coupleVerified = coupleVerified,
         )
 
     companion object {

@@ -355,6 +355,13 @@ Rules:
 - `Verified only` is hard.
 - `Verified preferred` is ranking weight.
 - Verification should be a trust signal, not a guarantee of safety.
+- "Verified" means **selfie photo verification** approved by a reviewer (TRUST_AND_SAFETY_SPEC
+  "Photo Verification"): profiles.verified_at and ace_photo_verified_at, both written on approval.
+  "Face photo verified" is the same signal today; "Age verified" is the separate age check.
+- The filter is **individual**: "Verified only" keeps a person who is verified, single or linked. There
+  is no "verified couples only" option, so a linked person whose partner is unverified still matches.
+  Couples show a separate **couple verified** badge only when both linked partners are verified and
+  the partner is visible to the viewer (coupleVerified on Grid cards and profile detail).
 
 ### Dealbreakers
 

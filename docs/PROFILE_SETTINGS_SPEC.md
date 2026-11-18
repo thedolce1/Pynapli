@@ -157,6 +157,10 @@ Partner management includes:
 - Show partner to verified users only
 - Hide partner
 
+"Verified users" means viewers whose selfie photo verification was approved (`profiles.verified_at`);
+revoking a viewer's verification closes it again. The couple verified badge follows the same
+visibility: a hidden partner is never revealed through it.
+
 ### Partner Chat Invite Settings
 
 - Allow partner invites from my chats

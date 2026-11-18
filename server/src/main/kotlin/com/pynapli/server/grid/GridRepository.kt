@@ -56,6 +56,8 @@ data class GridCardRecord(
     // An announced planned trip bringing this person to the viewer's area ("Visiting soon").
     val visitingFrom: java.time.LocalDate? = null,
     val visitingUntil: java.time.LocalDate? = null,
+    val verified: Boolean = false,
+    val coupleVerified: Boolean = false,
     /**
      * Individual has a live Playing Tonight session (PLAYING_TONIGHT_SPEC). Drives a
      * subtle per-tile indicator; hydrated per page (not part of the shared rank cache)
