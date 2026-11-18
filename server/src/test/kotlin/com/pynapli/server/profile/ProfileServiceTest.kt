@@ -563,6 +563,18 @@ class ProfileServiceTest {
         }
 
     @Test
+    fun aStoredKeyTheTaxonomyDroppedDoesNotBlockAnUnrelatedSave() =
+        runBlocking {
+            val userId = UUID.randomUUID()
+            val service = ProfileService(InMemoryProfileRepository(userId, storedGender = "open"), clock)
+
+            val saved = service.updateProfile(userId, UpdateProfileRequestDto(bio = "Hello"))
+
+            assertEquals("Hello", saved.profile.bio)
+            assertEquals(null, saved.profile.gender)
+        }
+
+    @Test
     fun omittedBioAndTagsLeaveStoredValuesUnchangedWhileEmptyClears() =
         runBlocking {
             val userId = UUID.randomUUID()
@@ -662,6 +674,7 @@ private class InMemoryProfileRepository(
     private val linkedPartnerDisplayName: String? = "Noa",
     private val linkedPartnerThumbnailMediaAssetId: UUID? = null,
     ageVerified: Boolean = false,
+    storedGender: String? = null,
 ) : ProfileRepository {
     var updateProfileCalls = 0
         private set
@@ -676,7 +689,7 @@ private class InMemoryProfileRepository(
                     displayName = null,
                     birthdate = null,
                     displayAge = null,
-                    gender = null,
+                    gender = storedGender,
                     orientation = null,
                     relationshipContext = null,
                     discoveryStyle = "social",
