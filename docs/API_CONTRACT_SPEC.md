@@ -125,9 +125,18 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 - Several invites can be open in one conversation (added 2026-11-19). `ConversationDto.partnerInvites`
   (list, empty from older servers) carries every open invite the viewer is party to; `partnerInvite`
   stays for older clients as the one the viewer answers first. `POST .../partner-invite/accept` and
-  `.../decline` take an optional `?inviteId=` naming the invite a third party answers; without it the
-  server resolves it (an invitee's own invite, else the newest invite the caller can approve). An
-  invited person naming another invite gets `PARTNER_INVITE_NOT_FOUND`.
+  `.../decline` take an optional `?inviteId=` naming the invite a third party answers. Without it the
+  server acts on the caller's own open invite, treats a repeat after the caller's own invite was
+  resolved as an idempotent accept (a decline is refused), and otherwise acts only when exactly one
+  open invite awaits the caller's approval. An invited person naming another invite, an id from another
+  conversation, or an ambiguous id-less call gets `PARTNER_INVITE_NOT_FOUND`. An invite that would make
+  someone active next to a person they are blocked with gets `MESSAGING_NOT_ALLOWED`. An invited
+  (not yet active) viewer's `participants` hold only the active participants and themselves, with
+  `invitedByUserId` only on their own row; their `partnerInvites` hold only their own invite. An
+  invitee's `partnerStatus` goes back to `pending` when someone else joins or an active person leaves.
+  Re-inviting within 24 hours of a decline by either side is `PARTNER_INVITE_COOLDOWN`;
+  `ConversationDto.ownPartnerInviteCoolingDown` (read mark only, null elsewhere and from older servers)
+  says so for the viewer's own partner so clients hide the manual Invite button.
 - `ConversationDto.partnerOffers` (added 2026-11-18, optional; sent on
   `POST /v1/messages/threads/{id}/read` only, which every client open and refresh ends with; null
   elsewhere and from older servers) is the per-viewer "Bring your partner" offer on a matched

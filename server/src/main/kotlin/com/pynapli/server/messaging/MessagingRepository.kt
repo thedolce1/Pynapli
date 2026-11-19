@@ -115,6 +115,12 @@ interface MessagingRepository {
         conversation: ConversationRecord,
     ): ConversationPartnerOffersRecord? = null
 
+    /** Whether the viewer's own partner is in this thread's 24-hour invite cooldown (after a decline). */
+    suspend fun isOwnPartnerInviteCoolingDown(
+        viewerUserId: UUID,
+        conversationId: UUID,
+    ): Boolean = false
+
     /**
      * Sets the caller's disappearing-messages timer ([expirySeconds] null = off) and records a
      * system message describing the change, in one transaction. Returns the refreshed detail
@@ -156,6 +162,8 @@ data class ConversationRecord(
     val newMatch: Boolean = false,
     // The viewer's "Bring your partner" offer; set on the read mark (POST .../read) only.
     val partnerOffers: ConversationPartnerOffersRecord? = null,
+    // The viewer's own partner is in this thread's invite cooldown; read mark only (null elsewhere).
+    val ownPartnerInviteCoolingDown: Boolean? = null,
 )
 
 data class ConversationPartnerOffersRecord(

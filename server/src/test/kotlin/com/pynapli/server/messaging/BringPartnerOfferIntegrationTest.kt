@@ -85,6 +85,20 @@ class BringPartnerOfferIntegrationTest {
         return invites.single { it.invitedPartnerUserId == partner.toString() }.inviteId
     }
 
+    /** Alex still has their own offer (Jo), and nobody else's partner is named. */
+    private fun assertOnlyOwnOffer(offers: ConversationPartnerOffersDto?) {
+        assertEquals(jo.toString(), offers?.bringPartner?.partnerUserId)
+        assertTrue(offers?.participantPartners.orEmpty().isEmpty())
+    }
+
+    private suspend fun MessagingService.statusOf(
+        user: UUID,
+        conversationId: String,
+    ): String? {
+        val participants = getConversationDetail(alex, conversationId).conversation.participants
+        return participants.singleOrNull { it.userId == user.toString() }?.status
+    }
+
     private fun sql(statementText: String) {
         dataSource.connection.use { connection ->
             connection.createStatement().use { it.executeUpdate(statementText) }
@@ -156,7 +170,10 @@ class BringPartnerOfferIntegrationTest {
             service.acceptPartnerInvite(jo, conversationId)
             service.acceptPartnerInvite(riley, conversationId)
             service.acceptPartnerInvite(sam, conversationId, joInvite)
-            val all = service.acceptPartnerInvite(alex, conversationId, rileyInvite)
+            service.acceptPartnerInvite(alex, conversationId, rileyInvite)
+            // Jo joined after Riley said yes: Riley must say yes again, knowing Jo is there.
+            assertEquals(ConversationParticipantStatus.INVITED, service.statusOf(riley, conversationId))
+            val all = service.acceptPartnerInvite(riley, conversationId)
             assertEquals(
                 setOf(ConversationParticipantStatus.ACTIVE),
                 all.conversation.participants.map { it.status }.toSet(),
@@ -178,6 +195,9 @@ class BringPartnerOfferIntegrationTest {
             assertEquals(riley.toString(), service.offers(sam, conversationId)?.bringPartner?.partnerUserId)
             // Jo is no longer named to Sam either.
             assertTrue(service.offers(sam, conversationId)?.participantPartners.orEmpty().isEmpty())
+            // And the manual button stays hidden for Alex during the cooldown (server-decided).
+            assertEquals(true, service.markConversationRead(alex, conversationId).ownPartnerInviteCoolingDown)
+            assertEquals(false, service.markConversationRead(sam, conversationId).ownPartnerInviteCoolingDown)
         }
 
     @Test
@@ -187,9 +207,7 @@ class BringPartnerOfferIntegrationTest {
             val conversationId = service.matchConversation(alex, sam)
             sql("UPDATE discovery_settings SET partner_visibility = 'hidden' WHERE user_id = '$sam'")
 
-            val alexOffers = service.offers(alex, conversationId)
-            assertEquals(jo.toString(), alexOffers?.bringPartner?.partnerUserId)
-            assertTrue(alexOffers?.participantPartners.orEmpty().isEmpty())
+            assertOnlyOwnOffer(service.offers(alex, conversationId))
             // Sam still sees their own partner.
             assertEquals(riley.toString(), service.offers(sam, conversationId)?.bringPartner?.partnerUserId)
         }
@@ -200,7 +218,7 @@ class BringPartnerOfferIntegrationTest {
             val service = service()
             val conversationId = service.matchConversation(alex, sam)
             sql("UPDATE discovery_settings SET partner_visibility = 'verified_only' WHERE user_id = '$sam'")
-            assertTrue(service.offers(alex, conversationId)?.participantPartners.orEmpty().isEmpty())
+            assertOnlyOwnOffer(service.offers(alex, conversationId))
 
             sql("UPDATE profiles SET verified_at = now() WHERE user_id = '$alex'")
             assertEquals(
@@ -229,7 +247,66 @@ class BringPartnerOfferIntegrationTest {
             val conversationId = service.matchConversation(alex, sam)
             sql("UPDATE discovery_settings SET incognito = true WHERE user_id = '$riley'")
 
-            assertTrue(service.offers(alex, conversationId)?.participantPartners.orEmpty().isEmpty())
+            assertOnlyOwnOffer(service.offers(alex, conversationId))
+        }
+
+    @Test
+    fun aRiskRestrictedPartnerIsNeverNamed() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.matchConversation(alex, sam)
+            sql("INSERT INTO account_risk_states (user_id, score, tier) VALUES ('$riley', 90, 'quarantine')")
+
+            assertOnlyOwnOffer(service.offers(alex, conversationId))
+        }
+
+    @Test
+    fun aRiskRestrictedViewerIsNotOfferedTheirPartner() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.matchConversation(alex, sam)
+            sql("INSERT INTO account_risk_states (user_id, score, tier) VALUES ('$alex', 90, 'quarantine')")
+
+            assertNull(service.offers(alex, conversationId)?.bringPartner)
+        }
+
+    @Test
+    fun aPartnerWithAHiddenProfileIsNeverNamed() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.matchConversation(alex, sam)
+            sql("UPDATE profiles SET visibility_status = 'hidden' WHERE user_id = '$riley'")
+
+            assertOnlyOwnOffer(service.offers(alex, conversationId))
+        }
+
+    @Test
+    fun aPartnerWhoBlockedTheViewerIsNotNamedAndDoesNotCostTheViewerTheirOffer() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.matchConversation(alex, sam)
+            dataSource.insertBlock(blockerUserId = riley, blockedUserId = alex)
+
+            // Like the Grid partner mini: Riley is simply not shown to Alex, so Alex's own offer stays.
+            assertOnlyOwnOffer(service.offers(alex, conversationId))
+            // Sam (Riley's partner) would put Riley and Alex together: no offer for Sam.
+            assertNull(service.offers(sam, conversationId))
+        }
+
+    @Test
+    fun theJoinedPartnerSeesTheOtherVisiblePartnerNoted() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.matchConversation(alex, sam)
+            service.inviteLinkedPartnerToConversation(alex, conversationId)
+            service.acceptPartnerInvite(sam, conversationId)
+            service.acceptPartnerInvite(jo, conversationId)
+
+            // Jo is active now: no offer of their own (Alex is here) and Riley is named by Sam's setting.
+            val joOffers = assertNotNull(service.offers(jo, conversationId))
+            assertNull(joOffers.bringPartner)
+            assertEquals(sam.toString(), joOffers.participantPartners.single().participantUserId)
+            assertEquals("Riley", joOffers.participantPartners.single().partnerDisplayName)
         }
 
     @Test
@@ -238,8 +315,7 @@ class BringPartnerOfferIntegrationTest {
             val service = service()
             val conversationId = service.matchConversation(alex, sam)
             dataSource.insertHiddenProfile(hiderUserId = alex, hiddenUserId = riley)
-
-            assertTrue(service.offers(alex, conversationId)?.participantPartners.orEmpty().isEmpty())
+            assertOnlyOwnOffer(service.offers(alex, conversationId))
         }
 
     @Test
@@ -250,7 +326,10 @@ class BringPartnerOfferIntegrationTest {
             dataSource.insertBlock(blockerUserId = jo, blockedUserId = sam)
 
             assertNull(service.offers(alex, conversationId))
-            assertNull(service.offers(sam, conversationId))
+            // Jo blocked Sam, so Jo is not shown to Sam at all (partner-mini rule): Sam keeps their own offer.
+            val samOffers = service.offers(sam, conversationId)
+            assertEquals(riley.toString(), samOffers?.bringPartner?.partnerUserId)
+            assertTrue(samOffers?.participantPartners.orEmpty().isEmpty())
             val refusal =
                 assertFailsWith<MessagingException> {
                     service.inviteLinkedPartnerToConversation(alex, conversationId)
@@ -309,6 +388,30 @@ class BringPartnerOfferIntegrationTest {
             assertNull(service.offers(sam, joSam))
             assertEquals(2, service.getConversationDetail(sam, alexSam).conversation.partnerInvites.size)
             assertTrue(service.getConversationDetail(sam, joSam).conversation.partnerInvites.isEmpty())
+        }
+
+    @Test
+    fun thePsyncRuleFollowsTheRecordedMatchNotTheCouplesCurrentLink() =
+        runBlocking {
+            val service = service()
+            val alexSam = service.matchConversation(alex, sam)
+            val joSam = service.matchConversation(jo, sam)
+            sql("UPDATE conversations SET created_at = created_at - interval '1 second' WHERE id = '$alexSam'")
+            recordTogetherMatch(initiator = alex, partner = jo, target = sam)
+
+            // The couple unlink: Sam's view of the second conversation must not change with that.
+            sql("UPDATE user_profile_links SET status = 'unlinked', unlinked_at = now() WHERE user_id IN ('$alex', '$jo')")
+            assertNull(service.offers(sam, joSam))
+
+            // Alex and Sam unmatch: the first conversation no longer counts, so the second one offers.
+            sql(
+                """
+                DELETE FROM matches
+                WHERE LEAST(user_a, user_b) = LEAST('$alex'::uuid, '$sam'::uuid)
+                  AND GREATEST(user_a, user_b) = GREATEST('$alex'::uuid, '$sam'::uuid)
+                """.trimIndent(),
+            )
+            assertEquals(riley.toString(), service.offers(sam, joSam)?.bringPartner?.partnerUserId)
         }
 
     @Test

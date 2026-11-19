@@ -79,6 +79,10 @@ data class ConversationDto(
     // sent on the read mark (POST .../read, which every open ends with) only. Null when there is nothing to
     // offer, and from a server that predates it; clients then render the conversation as before.
     val partnerOffers: ConversationPartnerOffersDto? = null,
+    // Server-decided, read mark only: the viewer's own partner may not be invited into this thread
+    // again yet (24 hours after a decline by either side), so the manual Invite button stays hidden.
+    // Null elsewhere and from older servers: the button shows as before.
+    val ownPartnerInviteCoolingDown: Boolean? = null,
 )
 
 /**

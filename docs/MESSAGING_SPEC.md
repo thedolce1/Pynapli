@@ -85,7 +85,7 @@ Rules:
 
 Recommended cooldown:
 
-- If the third party denies a partner invite, require a 24-hour cooldown before re-inviting that same partner to that same thread.
+- If the third party or the invited partner denies a partner invite, require a 24-hour cooldown before re-inviting that same partner to that same thread (implemented for both, 2026-11-19).
 
 ### Several invites at once (2026-11-19)
 
@@ -98,15 +98,37 @@ answered on its own (`partner_chat_invites` already allowed one open invite per 
   awaiting their approval, else the newest); with one open invite it is that invite, as before.
 - Accept and decline resolve the invite on the server. An invitee answers their own invite (they have
   at most one open per thread) and nothing else. Anyone else approves or declines as the third party
-  the invite named by the optional `inviteId` query parameter, or without it (older clients) the newest
-  open invite they can approve, preferring one still waiting for a third party.
+  the invite named by the optional `inviteId` query parameter (an id from another conversation is
+  refused). Without an id (older clients): a repeat by someone whose own invite here was resolved after
+  a still-open invite was created is a retry of their own answer (a lost response): an accept succeeds
+  without changing anything, a decline is refused; otherwise the call acts only when exactly one open
+  invite awaits this caller's approval, and is refused (`PARTNER_INVITE_NOT_FOUND`) when there are none
+  or several. So a retry never approves someone else's invite.
 - **Approval rule as implemented (unchanged):** the third-party approval of an invite comes from any
   one active participant who is not that invite's inviter. Invited people are not active, so an invited
   person never approves another invite, and two partners invited at the same time cannot approve each
   other in. The spec's "the other parties approve" (every one of them) is not what the code does.
-- Declines, the 24-hour cooldown after a third-party decline, blocks, `RISK_RESTRICTED` and the switch
-  to a group conversation work per invite exactly as for a single invite; declining one invite leaves
-  any other open invite untouched.
+- **An acceptance is for the group as it was.** An invitee who said yes and is still waiting for the
+  chat's approval is set back to pending, in the same transaction, whenever the people already in the
+  chat change: someone else becomes active (an invite completes) or an active person leaves. They must
+  accept again, seeing who is there now, or decline. A new invite alone does not reset anyone: invited
+  people are not shown to other invitees (below), so it does not change what they agreed to.
+- **No joining blocked people.** The transaction that makes an invitee active re-checks blocks, either
+  way, between them and every active participant and every other open invitee, and refuses with the
+  generic `MESSAGING_NOT_ALLOWED` (nothing changes) if there is one.
+- **What an invited person sees.** Until they are active, an invited person sees only the active
+  participants and their own invite: never the other open invitees, nor who invited anyone else
+  (`invitedByUserId` is omitted for others). This holds for the thread detail, the read mark, the inbox
+  row and the `partnerInvites` list; Activity rows and pushes only ever name their own inviter. Once
+  active they see everyone, including "Riley, invited by Sam": that is intended, since inviting a
+  partner into a chat is the inviter's own choice to show the link to the people in it.
+- **Cooldown after either decline.** A decline by the invited partner or by the third party starts a
+  24-hour cooldown for that partner in that thread; re-inviting is refused with
+  `PARTNER_INVITE_COOLDOWN`. The read mark tells the inviter's client
+  (`ConversationDto.ownPartnerInviteCoolingDown`) to hide the manual Invite button meanwhile.
+- Blocks, `RISK_RESTRICTED` and the switch to a group conversation work per invite exactly as for a
+  single invite; declining one invite leaves any other open invite untouched. A person a block hides
+  the thread from cannot accept, approve or decline in it.
 
 ### Bring your partner (shortcut, 2026-11-18; parallel 2026-11-19)
 
@@ -125,33 +147,47 @@ actions (Send a message, Keep swiping): partner invites live in the conversation
 - **Another participant's partner (`participantPartners`):** a note, "Sam is linked with Riley. Ask Sam
   if Riley would like to join.", shown only where Sam's `partner_visibility` already shows Riley to the
   viewer (public; verified-only to a photo-verified viewer; matches-only to a match; hidden never),
-  and Riley is active, visible, not incognito, not quarantined/terminated and not hidden by the viewer.
-  No action: only Sam can invite Riley.
+  and Riley is active, visible, not incognito, not quarantined/terminated, not hidden by the viewer and
+  not blocked either way with the viewer (the Grid/Swipe partner-mini rule). No action: only Sam can
+  invite Riley.
 - **Only on a match:** the conversation's direct pair has a `matches` row (it survives the switch to a
   group), and the viewer is an active participant.
 - **In parallel:** another open invite does not hide the offer; see "Several invites at once".
 - **Final once used:** a partner who has had any invite to the thread (pending, accepted or declined)
-  is never offered or named there again. Declining stays quiet; the manual button is unchanged.
+  is never offered or named there again. Declining stays quiet, and for 24 hours after a decline the
+  manual button is hidden too (server-decided, `ownPartnerInviteCoolingDown`).
 - **Blocks:** a block in either direction between any two of the people who would be in the thread
   (current active and invited participants plus every partner this viewer would be offered or shown)
-  removes the whole offer for that viewer, without saying who blocked whom; the invite itself is still
-  refused with the generic `MESSAGING_NOT_ALLOWED` when the invitee and a participant are blocked. A
-  partner hidden from the viewer is left out of every check, so it can never change what they see.
+  removes the whole offer for that viewer, without saying who blocked whom. A partner the viewer may
+  not see (hidden, incognito, blocked with the viewer, and so on) is left out of every check, so their
+  blocks never change what the viewer sees. The chrome then falls back to exactly what a viewer with no
+  offer for any other reason sees (the small Invite partner button), and an invite that a block refuses
+  gets the same generic `MESSAGING_NOT_ALLOWED` as before.
+- **What the offer reveals.** It names only partners the viewer could already see on that person's card.
+  Its absence on a match is shared by several ordinary reasons (the viewer is risk-restricted, the
+  partner was invited before, this is the later Psync conversation, or a block), so it does not say
+  which. What stays inferable, and was before this feature: a viewer who knows none of the other reasons
+  applies can conclude that some block exists among the people involved, never who; and the manual
+  invite's `MESSAGING_NOT_ALLOWED` still tells the inviter that their partner and someone in the chat
+  are blocked, as it always has (the refusal itself cannot be hidden without inviting silently).
 - **Risk:** a quarantined or terminated viewer is not offered their partner (the invite would be refused
   with `RISK_RESTRICTED`).
 - **One group per Psync together match:** a together match opens one conversation per partner with the
   target, so offers appear only in the one opened first, for everyone in it, from the start; the second
-  offers nothing while the two are still linked. The four never get two groups or duplicate invites.
-  Only a recorded together match (`psync_session_matches`) counts: everyone in it already knows the
-  pair, so the rule reveals nothing, and one partner's private solo match never changes the other
-  partner's offers.
+  offers nothing while the first still has its match. The four never get two groups or duplicate
+  invites. Only a recorded together match (`psync_session_matches`, with the session's two partners as
+  recorded at match time) counts: everyone in it already knows the pair, and the rule ignores whether
+  the two are still linked, so it reveals nothing about their link later; one partner's private solo
+  match never changes the other partner's offers.
 
 Four people (couple + couple) after a match, both invites sent in parallel: Alex opens the match (1)
 and taps Invite Jo (1); Sam opens it (1), approves Jo (1) and taps Invite Riley (1); Alex approves Riley
 (1, in the thread already open); Jo opens the invite (1) and accepts (1); Riley opens it (1) and accepts
-(1): 10 taps in two rounds (invites, then answers in any order). Before, invites ran one after the other:
-11 taps in three rounds, with Alex reopening the thread to approve Riley. Of the 10, six are decisions
-that must stay (two invites, two approvals, two accepts) and four are navigation (each person opening).
+(1): 10 taps in two rounds (invites, then answers). Before, invites ran one after the other: 11 taps in
+three rounds, with Alex reopening the thread to approve Riley. Of the 10, six are decisions that must
+stay (two invites, two approvals, two accepts) and four are navigation (each person opening). If an
+invitee says yes before the other partner has joined, their yes is reset when that partner joins and
+they accept once more (one extra tap, deliberately: they now see who is there).
 
 
 ## Media And Private Albums
@@ -257,7 +293,7 @@ Current implementation note:
 
 - Linked-partner chat invites emit `partner_chat_invite` Activity rows for the invited partner after the messaging repository creates the invite.
 - Partner invite consent is tracked in `partner_chat_invites`: the linked partner can accept first, but remains an invited participant until the existing third party also approves.
-- If the existing third party declines, the invited partner is removed from the thread context and a 24-hour cooldown blocks re-inviting that same partner to that same thread.
+- If the existing third party declines, or the invited partner declines, the invited partner is removed from the thread context and a 24-hour cooldown blocks re-inviting that same partner to that same thread.
 - Messages inbox rows and the conversation sheet surface the correct state: Accept/Decline, waiting for chat approval, waiting for partner response, or pending.
 - Own-message deletion uses the existing retained message row: `deleted_at` is set, the original body is not returned to normal clients, and every participant sees a neutral deleted-message placeholder.
 - Message/conversation realtime now uses authenticated `/v1/messages/stream` WebSocket deltas for `message_created`, `message_deleted`, `message_read`, `conversation_updated`, `typing_started`, and `typing_stopped`.

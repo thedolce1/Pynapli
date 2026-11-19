@@ -110,6 +110,8 @@ internal class MessagingPartnerConversationActions(
         val detailBeforeDecline =
             repository.getConversationDetail(userId, conversationId, limit = 1)
                 ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+        // A thread hidden from this person by a block is not theirs to act on (as for accept and detail).
+        conversationGuard.requireVisibleToViewer(detailBeforeDecline.conversation, userId, "PARTNER_INVITE_NOT_FOUND")
         if (!repository.declinePartnerInvite(userId, conversationId, inviteId)) {
             throw MessagingException("PARTNER_INVITE_NOT_FOUND")
         }

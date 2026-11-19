@@ -63,6 +63,7 @@ internal class MessagingDtoMapper(
             messageExpirySeconds = record.viewerExpirySeconds,
             effectiveMessageExpirySeconds = record.effectiveExpirySeconds,
             newMatch = record.newMatch,
+            ownPartnerInviteCoolingDown = record.ownPartnerInviteCoolingDown,
             partnerOffers =
                 record.partnerOffers?.let { offers ->
                     ConversationPartnerOffersDto(

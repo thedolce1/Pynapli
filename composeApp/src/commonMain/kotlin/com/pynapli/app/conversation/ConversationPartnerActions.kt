@@ -73,7 +73,9 @@ internal fun ConversationPartnerActions(
             !partnerAlreadyInThread &&
             !state.isViewerInvited &&
             !state.isLeaving &&
-            offer?.bringPartnerName == null
+            offer?.bringPartnerName == null &&
+            // Server-decided: no manual re-invite during the cooldown after a decline.
+            conversation.ownPartnerInviteCoolingDown != true
     val showLeave =
         showLeaveAction &&
             conversation.kind == "group" &&

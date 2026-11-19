@@ -75,14 +75,17 @@ internal suspend fun DataSource.acceptMessagingPartnerInvite(
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection.inTransaction {
-                val (invite, userRole) =
-                    connection.resolvePartnerInviteAction(userId, conversationId, inviteId)
-                        ?: run {
-                            connection.rollback()
-                            return@withContext null
-                        }
-
-                connection.acceptOpenPartnerInvite(conversationId, userId, invite, userRole)
+                when (val action = connection.resolvePartnerInviteAction(userId, conversationId, inviteId)) {
+                    null -> {
+                        connection.rollback()
+                        return@withContext null
+                    }
+                    // A lost response's retry: already done, answer with the thread as it is.
+                    PartnerInviteAction.OwnInviteAlreadyResolved -> Unit
+                    // Throws MESSAGING_NOT_ALLOWED (rolled back) when activating would put blocked people together.
+                    is PartnerInviteAction.Respond ->
+                        connection.acceptOpenPartnerInvite(conversationId, userId, action.invite, action.role)
+                }
                 val detail =
                     connection.loadConversation(userId, conversationId)?.let { conversation ->
                         val page =
@@ -113,14 +116,13 @@ internal suspend fun DataSource.declineMessagingPartnerInvite(
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection.inTransaction {
-                val (invite, userRole) =
-                    connection.resolvePartnerInviteAction(userId, conversationId, inviteId)
-                        ?: run {
-                            connection.rollback()
-                            return@withContext false
-                        }
+                val action = connection.resolvePartnerInviteAction(userId, conversationId, inviteId)
+                if (action !is PartnerInviteAction.Respond) {
+                    connection.rollback()
+                    return@withContext false
+                }
 
-                connection.declineOpenPartnerInvite(conversationId, invite, userRole)
+                connection.declineOpenPartnerInvite(conversationId, action.invite, action.role)
                 connection.commit()
                 true
             }
@@ -133,8 +135,17 @@ internal suspend fun DataSource.leaveMessagingConversation(
 ): Boolean =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
-            val updated = connection.leaveConversationParticipant(userId, conversationId)
-            if (updated > 0) connection.touchConversation(conversationId)
-            updated > 0
+            connection.inTransaction {
+                // Lock the open invites first, in the same order accept/decline do.
+                connection.loadOpenPartnerInvites(conversationId, forUpdate = true)
+                val wasActive = connection.participantStatus(conversationId, userId) == ParticipantStatus.Active
+                val updated = connection.leaveConversationParticipant(userId, conversationId)
+                if (updated > 0) {
+                    connection.touchConversation(conversationId)
+                    // The people a waiting invitee agreed to join changed: they must say yes again.
+                    if (wasActive) connection.resetWaitingPartnerAcceptances(conversationId)
+                }
+                updated > 0
+            }
         }
     }

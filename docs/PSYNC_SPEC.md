@@ -297,8 +297,12 @@ two conversations, no invites). "Bring your partner" (MESSAGING_SPEC) makes offe
 opened first: there the initiating partner can bring the other and the target can bring their own
 partner, at the same time; the second conversation offers nothing to either of its people, so the four
 never end up with two groups or duplicate invites. Every join is still the ordinary partner invite
-with its accepts. The rule keys on the recorded together match, which all three already know about, so
-it reveals nothing and does not depend on anyone's partner visibility.
+with its accepts. The rule keys on the together match as recorded at match time (the session's two
+partners), which all three already know about, and on the first conversation still having its match;
+it ignores whether the couple are still linked, so it never shows the target a later link change, and
+it does not depend on anyone's partner visibility. Each invitee's accept counts only for the group as
+it was: if the other partner joins first, an earlier yes is reset and given again (MESSAGING_SPEC
+"Several invites at once").
 
 Solo passthrough chat:
 

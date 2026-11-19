@@ -105,10 +105,13 @@ class ConversationPartnerOfferTest {
             ConversationPartnerOffersDto(
                 bringPartner = ConversationBringPartnerDto(partnerUserId = "jo", partnerDisplayName = "Jo"),
             )
-        val open = requireNotNull(stateFor(offers).detail)
+        val openDetail = requireNotNull(stateFor(offers).detail)
+        val open = openDetail.copy(conversation = openDetail.conversation.copy(ownPartnerInviteCoolingDown = true))
         val olderPage = requireNotNull(stateFor(offers = null).detail)
 
-        assertEquals(offers, open.withPrependedPage(olderPage).conversation.partnerOffers)
+        val merged = open.withPrependedPage(olderPage).conversation
+        assertEquals(offers, merged.partnerOffers)
+        assertEquals(true, merged.ownPartnerInviteCoolingDown)
     }
 
     private fun stateFor(

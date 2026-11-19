@@ -116,6 +116,11 @@ class JdbcMessagingRepository(
         conversation: ConversationRecord,
     ): ConversationPartnerOffersRecord? = dataSource.loadMessagingPartnerOffers(viewerUserId, conversation)
 
+    override suspend fun isOwnPartnerInviteCoolingDown(
+        viewerUserId: UUID,
+        conversationId: UUID,
+    ): Boolean = dataSource.isOwnPartnerInviteCoolingDown(viewerUserId, conversationId)
+
     override suspend fun sendMediaMessage(
         userId: UUID,
         conversationId: UUID,

@@ -80,6 +80,14 @@ internal suspend fun DataSource.loadMessagingPartnerOffers(
         connection.use { connection -> connection.loadPartnerOffers(viewerUserId, conversation) }
     }
 
+internal suspend fun DataSource.isOwnPartnerInviteCoolingDown(
+    viewerUserId: UUID,
+    conversationId: UUID,
+): Boolean =
+    withContext(Dispatchers.IO) {
+        connection.use { connection -> connection.isOwnPartnerInviteCoolingDown(viewerUserId, conversationId) }
+    }
+
 internal suspend fun DataSource.getActiveLinkedPartnerUserId(userId: UUID): UUID? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->

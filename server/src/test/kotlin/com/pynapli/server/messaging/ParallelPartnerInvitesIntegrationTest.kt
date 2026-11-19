@@ -185,9 +185,10 @@ class ParallelPartnerInvitesIntegrationTest {
             assertEquals(emptyList<PartnerChatInviteDto>(), service.invites(alex, conversationId))
             val cooldown = assertFailsWith<MessagingException> { service.inviteLinkedPartnerToConversation(alex, conversationId) }
             assertEquals("PARTNER_INVITE_COOLDOWN", cooldown.code)
-            // Riley's decline was the invitee's own, so Sam may invite Riley again.
-            service.inviteLinkedPartnerToConversation(sam, conversationId)
-            assertEquals(riley.toString(), service.inviteFor(riley, conversationId)?.invitedPartnerUserId)
+            // Riley's own decline starts the same cooldown: Sam cannot re-invite Riley straight away.
+            val rileyCooldown =
+                assertFailsWith<MessagingException> { service.inviteLinkedPartnerToConversation(sam, conversationId) }
+            assertEquals("PARTNER_INVITE_COOLDOWN", rileyCooldown.code)
         }
 
     @Test

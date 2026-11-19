@@ -165,11 +165,22 @@ internal fun Connection.loadConversation(
         loadOpenPartnerInvites(conversationId, forUpdate = false).filter { invite ->
             viewerActive || invite.invitedPartnerUserId == userId
         }
+    // An invited (not yet active) person sees only who is already in the chat and their own invite:
+    // never the other open invitees nor who invited anyone else, which would reveal links others hide.
+    // Everyone is shown once they are active (an inviter reveals the link to the chat by inviting).
+    val visibleParticipants =
+        if (viewerActive) {
+            participants
+        } else {
+            participants
+                .filter { it.userId == userId || it.status == "active" }
+                .map { if (it.userId == userId) it else it.copy(invitedByUserId = null) }
+        }
     return ConversationRecord(
         conversationId = conversationId,
         kind = kind ?: return null,
         origin = origin ?: return null,
-        participants = participants,
+        participants = visibleParticipants,
         lastMessage = loadLastMessage(userId, conversationId, effectiveExpirySeconds),
         unreadCount = loadUnreadCount(userId, conversationId),
         updatedAt = updatedAt ?: return null,

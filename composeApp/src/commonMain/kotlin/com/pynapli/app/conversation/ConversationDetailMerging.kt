@@ -49,9 +49,13 @@ internal suspend fun ConversationDetailDto.withReadConversation(
 
 internal fun ConversationDetailDto.withPrependedPage(page: ConversationDetailDto): ConversationDetailDto =
     copy(
-        // An older page is a plain detail read; the offer comes with the read mark, so keep it.
+        // An older page is a plain detail read; the offer and cooldown come with the read mark, so keep them.
         conversation =
-            page.conversation.copy(partnerOffers = page.conversation.partnerOffers ?: conversation.partnerOffers),
+            page.conversation.copy(
+                partnerOffers = page.conversation.partnerOffers ?: conversation.partnerOffers,
+                ownPartnerInviteCoolingDown =
+                    page.conversation.ownPartnerInviteCoolingDown ?: conversation.ownPartnerInviteCoolingDown,
+            ),
         messages = mergeMessages(page.messages + messages),
         nextCursor = page.nextCursor,
     )
