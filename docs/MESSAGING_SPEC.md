@@ -54,8 +54,12 @@ as `ConversationDto.newMatch`; clients render it and do not infer it from origin
 - **Match with people who had already talked** (a Grid conversation reused by the match): in each
   person's rail until that person opens the conversation. Opening marks it read
   (`POST /v1/messages/threads/{id}/read`), which records the acknowledgement
-  (`match_inbox_acknowledgements`, V115). Each person clears their own; it never comes back. The match
-  moves the reused conversation up to the match time so it is on the first inbox page.
+  (`match_inbox_acknowledgements`, V115). Each person clears their own; new messages never bring it
+  back. (One edge: if every message in a matched thread is purged after disappearing-message expiry,
+  the thread is empty again and returns to both rails as a fresh match, as it did before the flag.)
+  The match moves the reused conversation up to the match time so it is on the first inbox page.
+- Opening means marking read, so a match on a thread that is already open (the open-thread refresh
+  marks it read) is acknowledged without a separate tap.
 - A message from either side after the match moves it into the conversation list for both.
 - Blocks drop the whole conversation from the inbox, rail item included. An unmatch deletes the match,
   which ends it. Deleted, banned and hidden counterparts are handled exactly as for the conversation.
