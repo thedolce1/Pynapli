@@ -42,6 +42,7 @@ import com.pynapli.app.media.MediaAlbumsStateHolder
 import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.app.messages.MessagesScreen
 import com.pynapli.app.messages.MessagesStateHolder
+import com.pynapli.app.messages.isNewMatch
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.onboarding.PhotoNudgeBanner
 import com.pynapli.app.profile.ProfileDetailSheet
@@ -457,6 +458,9 @@ private fun ColumnScope.MessagesTabContent(
                         conversation = conversation,
                         viewerUserId = authState.session?.userId,
                     )
+                    // Opening marks it read, which the server counts as acting on a new match: refetch
+                    // so the rail shows the server's answer (canonical HTTP, no local guess).
+                    if (conversation.isNewMatch()) messagesStateHolder.refreshSilently()
                 }
             },
         )

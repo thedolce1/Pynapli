@@ -39,6 +39,34 @@ button matches what the server allows.
 
 No thread type is a shared account. Participants are always individual accounts.
 
+## New-Matches Rail
+
+The rail at the top of Messages is the only persistent place a new match shows (matches are not in
+the Activity badge, and the Messages badge counts unread messages). The server decides it, per viewer,
+as `ConversationDto.newMatch`; clients render it and do not infer it from origin or last message.
+
+- A direct conversation is a new match for the viewer when the pair has a match, nothing the viewer
+  can see has been posted since the match, and either the conversation has no messages at all, or
+  the viewer has not yet acknowledged this match.
+- **Fresh match (no messages):** in both people's rails until the first message, opened or not (the
+  behaviour before the flag). Both people see it: a matched pair's conversation is listed for both even
+  while empty (before, only its creator, the person whose swipe made the match, saw it).
+- **Match with people who had already talked** (a Grid conversation reused by the match): in each
+  person's rail until that person opens the conversation. Opening marks it read
+  (`POST /v1/messages/threads/{id}/read`), which records the acknowledgement
+  (`match_inbox_acknowledgements`, V115). Each person clears their own; new messages never bring it
+  back. (One edge: if every message in a matched thread is purged after disappearing-message expiry,
+  the thread is empty again and returns to both rails as a fresh match, as it did before the flag.)
+  The match moves the reused conversation up to the match time so it is on the first inbox page.
+- Opening means marking read, so a match on a thread that is already open (the open-thread refresh
+  marks it read) is acknowledged without a separate tap.
+- A message from either side after the match moves it into the conversation list for both.
+- Blocks drop the whole conversation from the inbox, rail item included. An unmatch deletes the match,
+  which ends it. Deleted, banned and hidden counterparts are handled exactly as for the conversation.
+- The rail reveals only that the two matched, which both already know. Matches made before V115 count
+  as acknowledged; those still without messages show as before.
+- Clients refetch the inbox after opening a rail item; WebSocket deltas stay a refetch hint.
+
 ## Partner Invite Flow
 
 Rules:
@@ -187,6 +215,7 @@ Current implementation note:
 - [x] Server owns message permissions.
 - [x] Message/conversation realtime refetches canonical HTTP state.
 - [x] A new match appears in both people's Messages straight away. (Swipe and Psync matches get-or-create the swipe-origin direct conversation (`MatchConversationOpener`, implemented by `MessagingService`) and push a `conversation_updated` delta to both, so the match shows in the new-matches rail without anyone tapping Message first. A conversation that already exists is reused; a blocked pair gets none; a Psync together match opens each partner's own conversation and never adds the partner.)
+- [x] The server decides the new-matches rail (`ConversationDto.newMatch`, per viewer): a fresh match shows for both people until the first message, and a match that reuses an existing Grid conversation shows for each person until they open it (V115 `match_inbox_acknowledgements`; `MatchInboxRailIntegrationTest`, `NewMatchesRailTest`). Before this, the non-creator never saw an empty match conversation, and a match with an existing Grid thread never reached the rail.
 
 ## Do Not Implement
 

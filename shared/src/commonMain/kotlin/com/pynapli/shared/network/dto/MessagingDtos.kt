@@ -67,6 +67,10 @@ data class ConversationDto(
     // conversation (strictest of all active participants; what messages actually expire on).
     val messageExpirySeconds: Int? = null,
     val effectiveMessageExpirySeconds: Int? = null,
+    // Server-decided: this conversation belongs in the viewer's Messages new-matches rail (a match the
+    // viewer has not acted on yet; MESSAGING_SPEC "New-matches rail"). Per viewer. Null only from a
+    // server that predates the field, where clients fall back to swipe origin + no last message.
+    val newMatch: Boolean? = null,
 )
 
 @Serializable

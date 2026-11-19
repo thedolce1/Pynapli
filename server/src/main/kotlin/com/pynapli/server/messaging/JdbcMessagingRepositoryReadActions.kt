@@ -45,6 +45,8 @@ internal suspend fun DataSource.markMessagingConversationRead(
         connection.use { connection ->
             val updatedRows = connection.markRead(userId, conversationId)
             if (updatedRows == 0) return@withContext null
+            // Opening a conversation marks it read: that is the viewer acting on a new match.
+            connection.acknowledgeMatchInInbox(userId, conversationId)
             connection.loadConversation(userId, conversationId)
         }
     }

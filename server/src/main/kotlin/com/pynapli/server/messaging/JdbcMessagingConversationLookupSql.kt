@@ -22,6 +22,7 @@ internal fun Connection.listConversationIds(
           AND (
            c.created_by_user_id = ?
            OR viewer_cp.invitation_status = 'invited'
+           OR $MATCHED_DIRECT_CONVERSATION_CLAUSE
            OR EXISTS (
                SELECT 1
                FROM messages m
@@ -168,6 +169,7 @@ internal fun Connection.loadConversation(
         partnerInvite = loadOpenPartnerInvite(conversationId, forUpdate = false),
         viewerExpirySeconds = participants.firstOrNull { it.userId == userId }?.messageExpirySeconds,
         effectiveExpirySeconds = effectiveExpirySeconds,
+        newMatch = loadNewMatch(userId, conversationId),
     )
 }
 

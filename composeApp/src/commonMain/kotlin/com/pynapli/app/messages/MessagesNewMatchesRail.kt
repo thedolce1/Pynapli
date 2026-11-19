@@ -44,12 +44,17 @@ internal object NewMatchesRailTags {
 }
 
 /**
- * A swipe match creates a conversation immediately, so "new matches" are simply swipe-origin
- * conversations with no messages yet. Surfacing them as a Tinder-style horizontal rail at the top
- * of Messages (founder direction, 2026-06-07) replaces the old Activity Matches tab and nudges the
- * user to send the first message.
+ * New matches ride a Tinder-style horizontal rail at the top of Messages (founder direction,
+ * 2026-06-07). The server decides which conversations are new matches for this viewer
+ * ([ConversationDto.newMatch]: a match with no messages yet, or a match with people you had already
+ * talked to, until you open it). A server that predates the field sends null: fall back to the old
+ * rule, swipe-origin conversations with no messages yet.
  */
-internal fun ConversationDto.isNewMatch(): Boolean = origin == "swipe" && lastMessage == null
+internal fun ConversationDto.isNewMatch(): Boolean = newMatch ?: (origin == "swipe" && lastMessage == null)
+
+/** Splits the inbox into rail items (first) and list rows (second), keeping the server's order. */
+internal fun List<ConversationDto>.partitionNewMatches(): Pair<List<ConversationDto>, List<ConversationDto>> =
+    partition { conversation -> conversation.isNewMatch() }
 
 @Composable
 internal fun MessagesNewMatchesRail(
