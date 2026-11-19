@@ -242,6 +242,39 @@ class MatchInboxRailIntegrationTest {
         }
 
     @Test
+    fun aChatPhotoEndsTheMatchForBoth() =
+        runBlocking {
+            val service = service()
+            val repository = JdbcMessagingRepository(dataSource)
+            dataSource.insertMatch(avery, blake)
+            service.openMatchConversation(avery, blake)
+            val conversationId = service.inbox(avery).single().conversationId
+            val photoId = UUID.randomUUID()
+            dataSource.execute(
+                "INSERT INTO media_assets (id, owner_user_id, media_type, storage_provider, storage_bucket, storage_object_key, content_type, byte_size) " +
+                    "VALUES (?, ?, 'image', 'local', 'test', ?, 'image/jpeg', 10)",
+                photoId,
+                avery,
+                "key-$photoId",
+            )
+
+            repository.sendMediaMessage(
+                userId = avery,
+                conversationId = UUID.fromString(conversationId),
+                mediaAssetId = photoId,
+                contentType = "image/jpeg",
+                pixelWidth = 10,
+                pixelHeight = 10,
+                body = "",
+            )
+
+            assertEquals(false, service.railFlag(avery, conversationId))
+            assertEquals(false, service.railFlag(blake, conversationId))
+            purgeAllMessages(conversationId)
+            assertEquals(false, service.railFlag(blake, conversationId))
+        }
+
+    @Test
     fun aHeldMessageClearsOnlyItsSenderUntilReleasedThenBothForGood() =
         runBlocking {
             val service = service()
