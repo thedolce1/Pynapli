@@ -2,6 +2,7 @@ package com.pynapli.server.moderation
 
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.messaging.consumeMatchInInbox
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Timestamp
@@ -116,6 +117,9 @@ class JdbcMessageModerationRepository(
                 }
             updateQueueStatus(messageId, queueStatus, reviewedAt)
             if (queueStatus == "released") {
+                // The released message is now visible to both: it ends a match's new-matches rail
+                // item for both people, in this transaction.
+                consumeMatchInInbox(queued.conversationId)
                 touchConversation(queued.conversationId)
             }
             insertAdminAuditLog(

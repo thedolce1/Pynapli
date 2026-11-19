@@ -123,7 +123,8 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 - `ConversationDto.newMatch` (Boolean, added 2026-11-18) is the server's per-viewer answer to "does
   this conversation belong in my new-matches rail". Clients render it and never infer it; `null` only
   comes from an older server, where clients fall back to `origin == "swipe" && lastMessage == null`.
-  `POST /v1/messages/threads/{id}/read` (opening the thread) is what acknowledges a match. Rules:
+  `POST /v1/messages/threads/{id}/read` (opening the thread) clears a match on a thread with history
+  for the opener; any message that becomes visible in the thread clears it for both, for good. Rules:
   [MESSAGING_SPEC.md](MESSAGING_SPEC.md) "New-matches rail".
 - Typing (`{ isTyping }`) is Select-only and silently no-ops without entitlement.
 - **Read receipts are server-masked:** a Social/Select sender sees `read` only when every active

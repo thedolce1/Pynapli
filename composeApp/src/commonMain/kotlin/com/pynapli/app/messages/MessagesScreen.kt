@@ -194,7 +194,7 @@ private fun MessagesScreenContent(
                                 contentType = "new-matches-only-hint",
                             ) {
                                 Text(
-                                    text = "Say hi to your new matches to start a conversation.",
+                                    text = newMatches.newMatchesHint(),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodyMedium,
                                     modifier =

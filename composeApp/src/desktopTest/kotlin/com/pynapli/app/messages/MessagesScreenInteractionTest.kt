@@ -17,6 +17,7 @@ import com.pynapli.shared.network.dto.ConversationListResponseDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
+import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import com.pynapli.shared.network.dto.PartnerChatInviteStatus
 import kotlin.test.Test
@@ -180,6 +181,61 @@ class MessagesScreenInteractionTest {
             waitUntil(timeoutMillis = 5_000) { repository.listCount == 1 }
             onNodeWithTag(NewMatchesRailTags.RAIL).assertExists()
             onNodeWithText("Say hi to your new matches to start a conversation.").assertExists()
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun aMatchWithChatHistoryRidesTheRailWithoutSayHiAndOpensOnTap() =
+        runComposeUiTest {
+            // They talked from the Grid, then matched: the server flags it, though it has messages.
+            val matchConversation =
+                ConversationDto(
+                    conversationId = "grid-match-conv",
+                    kind = "direct",
+                    origin = "grid",
+                    participants =
+                        listOf(
+                            ConversationParticipantDto("viewer", "You", status = ConversationParticipantStatus.ACTIVE),
+                            ConversationParticipantDto("nico", "Nico", status = ConversationParticipantStatus.ACTIVE),
+                        ),
+                    lastMessage =
+                        MessageDto(
+                            messageId = "m1",
+                            conversationId = "grid-match-conv",
+                            senderUserId = "nico",
+                            body = "Hey",
+                            createdAt = "2026-05-22T13:00:00Z",
+                            status = "visible",
+                            deliveryStatus = "sent",
+                        ),
+                    unreadCount = 0,
+                    updatedAt = "2026-05-22T14:00:00Z",
+                    newMatch = true,
+                )
+            val repository = StaticMessagesRepository(listOf(matchConversation))
+            val stateHolder = MessagesStateHolder(repository)
+            val opened = mutableListOf<String>()
+
+            setContent {
+                PynapliTheme(themeMode = "dark") {
+                    Box(modifier = Modifier.size(width = 390.dp, height = 844.dp)) {
+                        MessagesScreen(
+                            viewerUserId = "viewer",
+                            onThreadSelected = { opened += it.conversationId },
+                            stateHolder = stateHolder,
+                        )
+                    }
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000) { repository.listCount == 1 }
+            onNodeWithTag(NewMatchesRailTags.avatar("grid-match-conv")).assertExists()
+            onNodeWithTag(MessagesTestTags.row("grid-match-conv")).assertDoesNotExist()
+            onNodeWithText("Say hi to your new matches to start a conversation.").assertDoesNotExist()
+            onNodeWithText(NewMatchesHint.OPEN).assertExists()
+
+            onNodeWithTag(NewMatchesRailTags.avatar("grid-match-conv")).performClick()
+            waitUntil(timeoutMillis = 5_000) { opened == listOf("grid-match-conv") }
         }
 }
 

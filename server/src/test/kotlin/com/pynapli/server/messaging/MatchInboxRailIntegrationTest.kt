@@ -2,12 +2,16 @@ package com.pynapli.server.messaging
 
 import com.pynapli.server.grid.insertDiscoverableUser
 import com.pynapli.server.grid.insertMatch
+import com.pynapli.server.moderation.JdbcMessageModerationRepository
+import com.pynapli.server.retention.DataRetentionService
 import com.pynapli.server.safety.JdbcBlockRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
+import com.pynapli.shared.network.dto.MessageExpiryOption
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import kotlinx.coroutines.runBlocking
+import java.time.Duration
 import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.BeforeTest
@@ -160,6 +164,146 @@ class MatchInboxRailIntegrationTest {
             assertNull(service.inbox(blake).singleOrNull { it.conversationId == conversationId })
         }
 
+    /**
+     * Runs the real retention job over [conversationId] with every user message expired: a short
+     * timer on both participants, the messages backdated past it, and no grace.
+     */
+    private suspend fun purgeAllMessages(conversationId: String) {
+        val id = UUID.fromString(conversationId)
+        dataSource.execute("UPDATE conversation_participants SET message_expiry_seconds = 3600 WHERE conversation_id = ?", id)
+        dataSource.execute("UPDATE messages SET created_at = now() - interval '2 days' WHERE conversation_id = ?", id)
+        DataRetentionService(dataSource, expiredMessageGrace = Duration.ZERO).runOnce()
+        assertEquals(0, dataSource.messageCount(id), "the purge must leave the thread empty")
+    }
+
+    @Test
+    fun aFreshMatchThatWasMessagedNeverReturnsAfterThePurge() =
+        runBlocking {
+            val service = service()
+            dataSource.insertMatch(avery, blake)
+            service.openMatchConversation(avery, blake)
+            val conversationId = service.inbox(avery).single().conversationId
+            service.sendMessage(avery, conversationId, SendMessageRequestDto(body = "Hi!"))
+            service.sendMessage(blake, conversationId, SendMessageRequestDto(body = "Hey"))
+
+            purgeAllMessages(conversationId)
+
+            assertEquals(false, service.railFlag(avery, conversationId))
+            assertEquals(false, service.railFlag(blake, conversationId))
+        }
+
+    @Test
+    fun aMatchOnAGridThreadNeverReturnsAfterThePurge() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.gridConversationWithHistory()
+            dataSource.insertMatch(avery, blake)
+            service.openMatchConversation(avery, blake)
+            // Avery opens it; Blake never does, but writes after the match.
+            service.markConversationRead(avery, conversationId)
+            service.sendMessage(blake, conversationId, SendMessageRequestDto(body = "We matched"))
+
+            purgeAllMessages(conversationId)
+
+            assertEquals(false, service.railFlag(avery, conversationId))
+            assertEquals(false, service.railFlag(blake, conversationId))
+        }
+
+    @Test
+    fun aNeverMessagedMatchStillShowsAfterAnUnrelatedPurge() =
+        runBlocking {
+            val service = service()
+            dataSource.insertMatch(avery, casey)
+            service.openMatchConversation(casey, avery)
+            val matchConversationId = service.inbox(casey).single().conversationId
+            // Casey opens the empty match: it stays in the rail until someone writes.
+            service.markConversationRead(casey, matchConversationId)
+            val otherConversationId = service.gridConversationWithHistory()
+
+            purgeAllMessages(otherConversationId)
+
+            assertEquals(true, service.railFlag(avery, matchConversationId))
+            assertEquals(true, service.railFlag(casey, matchConversationId))
+        }
+
+    @Test
+    fun aDisappearingTimerNoticeEndsTheMatchForBoth() =
+        runBlocking {
+            val service = service()
+            dataSource.insertMatch(avery, blake)
+            service.openMatchConversation(avery, blake)
+            val conversationId = service.inbox(avery).single().conversationId
+
+            // The timer change posts a visible system notice, which counts as a message.
+            service.setConversationExpiry(avery, conversationId, MessageExpiryOption.OneDay)
+
+            assertEquals(false, service.railFlag(avery, conversationId))
+            assertEquals(false, service.railFlag(blake, conversationId))
+        }
+
+    @Test
+    fun aChatPhotoEndsTheMatchForBoth() =
+        runBlocking {
+            val service = service()
+            val repository = JdbcMessagingRepository(dataSource)
+            dataSource.insertMatch(avery, blake)
+            service.openMatchConversation(avery, blake)
+            val conversationId = service.inbox(avery).single().conversationId
+            val photoId = UUID.randomUUID()
+            dataSource.execute(
+                "INSERT INTO media_assets (id, owner_user_id, media_type, storage_provider, storage_bucket, storage_object_key, content_type, byte_size) " +
+                    "VALUES (?, ?, 'image', 'local', 'test', ?, 'image/jpeg', 10)",
+                photoId,
+                avery,
+                "key-$photoId",
+            )
+
+            repository.sendMediaMessage(
+                userId = avery,
+                conversationId = UUID.fromString(conversationId),
+                mediaAssetId = photoId,
+                contentType = "image/jpeg",
+                pixelWidth = 10,
+                pixelHeight = 10,
+                body = "",
+            )
+
+            assertEquals(false, service.railFlag(avery, conversationId))
+            assertEquals(false, service.railFlag(blake, conversationId))
+            purgeAllMessages(conversationId)
+            assertEquals(false, service.railFlag(blake, conversationId))
+        }
+
+    @Test
+    fun aHeldMessageClearsOnlyItsSenderUntilReleasedThenBothForGood() =
+        runBlocking {
+            val service = service()
+            val repository = JdbcMessagingRepository(dataSource)
+            dataSource.insertMatch(avery, blake)
+            service.openMatchConversation(avery, blake)
+            val conversationId = service.inbox(avery).single().conversationId
+            val held =
+                repository.sendMessage(
+                    userId = avery,
+                    conversationId = UUID.fromString(conversationId),
+                    body = "Find me at https://example.com",
+                    moderationStatus = MessageModerationStatus.HELD,
+                    bodyFingerprint = "rail-held-fingerprint",
+                    safetyReason = MessageSafetyReason.LINK_FIRST_MESSAGE,
+                )!!
+
+            // Avery sees their own held message; Blake sees nothing yet, so Blake's match stays.
+            assertEquals(false, service.railFlag(avery, conversationId))
+            assertEquals(true, service.railFlag(blake, conversationId))
+
+            JdbcMessageModerationRepository(dataSource).releaseHeldMessage(held.messageId, "moderator-1", "false positive")
+            assertEquals(false, service.railFlag(blake, conversationId))
+
+            purgeAllMessages(conversationId)
+            assertEquals(false, service.railFlag(avery, conversationId))
+            assertEquals(false, service.railFlag(blake, conversationId))
+        }
+
     @Test
     fun anUnmatchedPairIsNeverANewMatch() =
         runBlocking {
@@ -178,3 +322,26 @@ class MatchInboxRailIntegrationTest {
             assertNull(service.railFlag(blake, emptyGridConversationId))
         }
 }
+
+private fun DataSource.execute(
+    sql: String,
+    vararg args: Any?,
+) {
+    connection.use { connection ->
+        connection.prepareStatement(sql).use { statement ->
+            args.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
+            statement.executeUpdate()
+        }
+    }
+}
+
+private fun DataSource.messageCount(conversationId: UUID): Int =
+    connection.use { connection ->
+        connection.prepareStatement("SELECT COUNT(*) FROM messages WHERE conversation_id = ?").use { statement ->
+            statement.setObject(1, conversationId)
+            statement.executeQuery().use { rs ->
+                rs.next()
+                rs.getInt(1)
+            }
+        }
+    }

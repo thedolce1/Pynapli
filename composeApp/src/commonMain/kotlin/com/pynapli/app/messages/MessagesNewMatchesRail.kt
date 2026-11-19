@@ -52,6 +52,18 @@ internal object NewMatchesRailTags {
  */
 internal fun ConversationDto.isNewMatch(): Boolean = newMatch ?: (origin == "swipe" && lastMessage == null)
 
+internal object NewMatchesHint {
+    const val SAY_HI = "Say hi to your new matches to start a conversation."
+    const val OPEN = "Tap a new match to open your conversation."
+}
+
+/**
+ * The hint under a rail-only inbox. "Say hi" only fits when every match is still empty; a match with
+ * someone you had already talked to has history, so the hint just points at opening it.
+ */
+internal fun List<ConversationDto>.newMatchesHint(): String =
+    if (all { match -> match.lastMessage == null }) NewMatchesHint.SAY_HI else NewMatchesHint.OPEN
+
 /** Splits the inbox into rail items (first) and list rows (second), keeping the server's order. */
 internal fun List<ConversationDto>.partitionNewMatches(): Pair<List<ConversationDto>, List<ConversationDto>> =
     partition { conversation -> conversation.isNewMatch() }
