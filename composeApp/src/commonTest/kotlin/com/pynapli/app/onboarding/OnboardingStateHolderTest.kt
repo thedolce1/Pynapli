@@ -12,7 +12,11 @@ import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
+import com.pynapli.shared.network.dto.EmailSignupCodeResentDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.EmailSignupResendRequestDto
+import com.pynapli.shared.network.dto.EmailSignupStartedDto
+import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.ProfileDto
@@ -144,7 +148,7 @@ class OnboardingStateHolderTest {
         }
 
     @Test
-    fun submitAccountSuccessEntersPostAuthStepsAndMarksInProgress() =
+    fun submitAccountStartsTheSignUpAndMovesToTheCodeStepWithoutASession() =
         runTest {
             val fixture = Fixture()
             fixture.advanceToAccount(day = "29", month = "02", year = "2000")
@@ -160,11 +164,178 @@ class OnboardingStateHolderTest {
             assertTrue(request.acceptedTerms)
             assertTrue(request.acceptedPrivacy)
 
+            val state = fixture.onboarding.state.value
+            assertEquals(OnboardingStep.VerifyEmail, state.step)
+            assertEquals("new@pynapli.local", state.email)
+            assertEquals("", state.password, "the password is not kept once the sign-up has started")
+            // No account and no session until the emailed code checks out.
+            assertNull(fixture.auth.state.value.session)
+            assertTrue(fixture.progressStore.progress.completed)
+            assertEquals("new@pynapli.local", fixture.progressStore.progress.pendingSignupEmail)
+            assertEquals("signup-token", fixture.progressStore.progress.pendingSignupToken)
+            assertEquals(fixture.nowMillis, fixture.progressStore.progress.pendingSignupStartedAtEpochMs)
+        }
+
+    @Test
+    fun theRightCodeCreatesTheSessionAndEntersThePostAuthSteps() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            fixture.onboarding.updateSignupCode("12 34-56x")
+            fixture.onboarding.verifySignupCode()
+
+            assertEquals(
+                EmailSignupVerifyRequestDto("new@pynapli.local", "123456", "signup-token", null, "test", "0.0.0"),
+                fixture.authApi.verifyRequests.single(),
+            )
             assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
-            assertEquals("", fixture.onboarding.state.value.password)
             assertNotNull(fixture.auth.state.value.session)
             assertFalse(fixture.progressStore.progress.completed)
             assertEquals("user-1", fixture.progressStore.progress.userId)
+            assertNull(fixture.progressStore.progress.pendingSignupEmail)
+            assertNull(fixture.progressStore.progress.pendingSignupToken)
+        }
+
+    @Test
+    fun aShortCodeIsCaughtBeforeTheServer() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            fixture.onboarding.updateSignupCode("123")
+            fixture.onboarding.verifySignupCode()
+
+            assertEquals("Enter the 6-digit code from the email.", fixture.onboarding.state.value.errorMessage)
+            assertTrue(fixture.authApi.verifyRequests.isEmpty())
+        }
+
+    @Test
+    fun aWrongOrExpiredCodeStaysOnTheCodeStepAndANewCodeRecovers() =
+        runTest {
+            val wrongThenRight = ArrayDeque(listOf(false, true))
+            val fixture =
+                Fixture(
+                    authApi =
+                        FakeAuthApi(
+                            verifyResult = {
+                                if (wrongThenRight.removeFirst()) {
+                                    AppResult.Success(testSessionDto())
+                                } else {
+                                    AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right or has expired. Check the newest email, or send a new code."))
+                                }
+                            },
+                        ),
+                )
+            fixture.startSignup()
+
+            fixture.onboarding.updateSignupCode("000000")
+            fixture.onboarding.verifySignupCode()
+
+            val failed = fixture.onboarding.state.value
+            assertEquals(OnboardingStep.VerifyEmail, failed.step)
+            assertEquals("That code isn't right or has expired. Check the newest email, or send a new code.", failed.errorMessage)
+            assertEquals("", failed.signupCode)
+            assertNull(fixture.auth.state.value.session)
+            assertEquals("signup-token", fixture.progressStore.progress.pendingSignupToken)
+
+            fixture.onboarding.resendSignupCode()
+
+            assertEquals(EmailSignupResendRequestDto("new@pynapli.local", "signup-token", null), fixture.authApi.resendRequests.single())
+            assertEquals(OnboardingStateHolder.RESENT_NOTICE, fixture.onboarding.state.value.signupNotice)
+            assertNull(fixture.onboarding.state.value.errorMessage)
+
+            fixture.onboarding.updateSignupCode("654321")
+            fixture.onboarding.verifySignupCode()
+            assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun useADifferentEmailDropsTheStartedSignUp() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            fixture.onboarding.useDifferentEmail()
+
+            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+            assertNull(fixture.progressStore.progress.pendingSignupEmail)
+            assertNull(fixture.progressStore.progress.pendingSignupToken)
+            // Nothing left to verify with: a stray verify restarts instead of calling the server.
+            fixture.onboarding.updateSignupCode("123456")
+            fixture.onboarding.verifySignupCode()
+            assertTrue(fixture.authApi.verifyRequests.isEmpty())
+        }
+
+    @Test
+    fun anAppKilledBeforeTheCodeReopensTheCodeStepForThatAddress() =
+        runTest {
+            val fixture =
+                Fixture(
+                    progressStore =
+                        InMemoryProgressStore(
+                            OnboardingProgress(
+                                pendingSignupEmail = "new@pynapli.local",
+                                pendingSignupToken = "stored-token",
+                                pendingSignupStartedAtEpochMs = NOW_MILLIS - 60 * 60 * 1_000,
+                            ),
+                        ),
+                )
+
+            fixture.onboarding.resumePendingSignupIfNeeded()
+
+            val state = fixture.onboarding.state.value
+            assertTrue(state.active)
+            assertEquals(OnboardingStep.VerifyEmail, state.step)
+            assertEquals("new@pynapli.local", state.email)
+            assertEquals("", state.password)
+
+            fixture.onboarding.updateSignupCode("123456")
+            fixture.onboarding.verifySignupCode()
+            assertEquals("stored-token", fixture.authApi.verifyRequests.single().signupToken)
+            assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun aSignUpOlderThanTheServerKeepsItRestartsCleanly() =
+        runTest {
+            val fixture =
+                Fixture(
+                    progressStore =
+                        InMemoryProgressStore(
+                            OnboardingProgress(
+                                pendingSignupEmail = "new@pynapli.local",
+                                pendingSignupToken = "stored-token",
+                                pendingSignupStartedAtEpochMs = NOW_MILLIS - OnboardingStateHolder.PENDING_SIGNUP_LIFETIME_MILLIS - 1,
+                            ),
+                        ),
+                )
+
+            fixture.onboarding.resumePendingSignupIfNeeded()
+
+            assertFalse(fixture.onboarding.state.value.active)
+            assertNull(fixture.progressStore.progress.pendingSignupEmail)
+            assertNull(fixture.progressStore.progress.pendingSignupToken)
+        }
+
+    @Test
+    fun signingInAnotherWayDropsAWaitingSignUp() =
+        runTest {
+            val fixture =
+                Fixture(
+                    progressStore =
+                        InMemoryProgressStore(
+                            OnboardingProgress(pendingSignupEmail = "new@pynapli.local", pendingSignupToken = "stored-token", pendingSignupStartedAtEpochMs = NOW_MILLIS),
+                        ),
+                )
+            fixture.signIn()
+
+            fixture.onboarding.resumePendingSignupIfNeeded()
+            assertFalse(fixture.onboarding.state.value.active, "a signed-in device never reopens the code step")
+            fixture.onboarding.resumeIfNeeded()
+
+            assertFalse(fixture.onboarding.state.value.active)
+            assertNull(fixture.progressStore.progress.pendingSignupToken)
         }
 
     @Test
@@ -175,22 +346,23 @@ class OnboardingStateHolderTest {
                     authApi =
                         FakeAuthApi(
                             signupResult = {
-                                AppResult.Failure(AppError("EMAIL_TAKEN", "Email already registered."))
+                                AppResult.Failure(AppError("RATE_LIMITED", "Too many actions. Try again later."))
                             },
                         ),
                 )
             fixture.advanceToAccount()
-            fixture.onboarding.updateEmail("taken@pynapli.local")
+            fixture.onboarding.updateEmail("new@pynapli.local")
             fixture.onboarding.updatePassword("LongEnoughPassword1!")
 
             fixture.onboarding.submitAccount()
 
             val state = fixture.onboarding.state.value
             assertEquals(OnboardingStep.Account, state.step)
-            assertEquals("Email already registered.", state.errorMessage)
+            assertEquals("Too many actions. Try again later.", state.errorMessage)
             assertFalse(state.isSubmitting)
-            // Failed signup must not arm the resume flow.
+            // Failed signup must not arm either resume flow.
             assertTrue(fixture.progressStore.progress.completed)
+            assertNull(fixture.progressStore.progress.pendingSignupToken)
         }
 
     @Test
@@ -389,6 +561,7 @@ class OnboardingStateHolderTest {
 
     private inner class Fixture(
         val progressStore: InMemoryProgressStore = InMemoryProgressStore(),
+        val nowMillis: Long = NOW_MILLIS,
         val authApi: FakeAuthApi = FakeAuthApi(),
         val profileRepository: FakeOnboardingProfileRepository = FakeOnboardingProfileRepository(),
         val sessionStore: InMemorySessionStore = InMemorySessionStore(),
@@ -410,6 +583,7 @@ class OnboardingStateHolderTest {
                 profileRepository = profileRepository,
                 progressStore = progressStore,
                 todayProvider = { today },
+                nowEpochMillis = { nowMillis },
             )
 
         fun enterDob(
@@ -432,6 +606,14 @@ class OnboardingStateHolderTest {
             enterDob(day, month, year)
             onboarding.confirmDob()
             onboarding.acceptPolicies()
+        }
+
+        /** Drives the stepper to the code step for new@pynapli.local. */
+        suspend fun startSignup() {
+            advanceToAccount()
+            onboarding.updateEmail("new@pynapli.local")
+            onboarding.updatePassword("LongEnoughPassword1!")
+            onboarding.submitAccount()
         }
 
         /** Puts a live session into the auth state without going through signup. */
@@ -482,15 +664,30 @@ private fun meDto(displayName: String?) =
 
 private val unimplemented = AppError("UNIMPLEMENTED", "Not implemented.")
 
+private const val NOW_MILLIS = 1_781_000_000_000L
+
 private class FakeAuthApi(
-    private val signupResult: () -> AppResult<AuthSessionDto> = { AppResult.Success(testSessionDto()) },
+    private val signupResult: () -> AppResult<EmailSignupStartedDto> = { AppResult.Success(EmailSignupStartedDto(signupToken = "signup-token")) },
+    private val verifyResult: (EmailSignupVerifyRequestDto) -> AppResult<AuthSessionDto> = { AppResult.Success(testSessionDto()) },
 ) : AuthApi {
     var lastSignupRequest: EmailSignupRequestDto? = null
         private set
+    val verifyRequests = mutableListOf<EmailSignupVerifyRequestDto>()
+    val resendRequests = mutableListOf<EmailSignupResendRequestDto>()
 
-    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> {
+    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<EmailSignupStartedDto> {
         lastSignupRequest = request
         return signupResult()
+    }
+
+    override suspend fun verifyEmailSignup(request: EmailSignupVerifyRequestDto): AppResult<AuthSessionDto> {
+        verifyRequests += request
+        return verifyResult(request)
+    }
+
+    override suspend fun resendEmailSignupCode(request: EmailSignupResendRequestDto): AppResult<EmailSignupCodeResentDto> {
+        resendRequests += request
+        return AppResult.Success(EmailSignupCodeResentDto(sent = true))
     }
 
     override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> = AppResult.Failure(unimplemented)

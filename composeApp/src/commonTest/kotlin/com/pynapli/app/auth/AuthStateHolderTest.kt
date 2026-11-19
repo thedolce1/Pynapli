@@ -13,6 +13,7 @@ import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.EmailSignupStartedDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.PasswordChangedDto
@@ -190,6 +191,30 @@ class AuthStateHolderTest {
             observer.cancel()
         }
 
+    @Test
+    fun theLegacyInlineCreateAccountFormNeverStartsASignUp() =
+        runTest {
+            val api = FakeAuthApi()
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+            holder.switchMode(AuthMode.CreateAccount)
+            holder.updateEmail("new@pynapli.local")
+            holder.updatePassword("a-long-password-1")
+            holder.updateBirthdate("1990-01-01")
+            holder.updateAcceptedAgeAndTerms(true)
+
+            holder.submit()
+
+            // It has no code step, so it must not send anyone a code it can't take back.
+            assertEquals(0, api.signups)
+            assertFalse(holder.state.value.authenticated)
+            assertTrue(holder.state.value.errorMessage.orEmpty().isNotEmpty())
+        }
+
     private fun session(): AuthSessionDto =
         AuthSessionDto(
             accessToken = "access",
@@ -247,7 +272,13 @@ private class FakeAuthApi(
         return resetResult
     }
 
-    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> = fail()
+    var signups = 0
+        private set
+
+    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<EmailSignupStartedDto> {
+        signups++
+        return fail()
+    }
 
     override suspend fun refreshSession(request: RefreshSessionRequestDto): AppResult<AuthSessionDto> = fail()
 

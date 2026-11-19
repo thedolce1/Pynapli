@@ -60,7 +60,8 @@ import com.pynapli.shared.core.config.LegalLinks
 /**
  * The DOB-first signup stepper (ONBOARDING_AUTH_SPEC), aligned to the founder's
  * Grindr reference capture (2026-06-10): typed DD/MM/YYYY birthday fields, a
- * dedicated policies step with read links and one Accept, then email+password,
+ * dedicated policies step with read links and one Accept, then email+password, the
+ * emailed 6-digit code ("Check your email"; the account only exists once it checks out),
  * location, and a single consolidated "Your profile" step (photo + display name).
  * Driven entirely by [OnboardingStateHolder] state; platform work (OS location
  * prompt, photo picker) arrives via callbacks.
@@ -81,6 +82,10 @@ fun OnboardingFlowScreen(
     onEmailChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     onSubmitAccount: () -> Unit,
+    onSignupCodeChanged: (String) -> Unit,
+    onVerifySignupCode: () -> Unit,
+    onResendSignupCode: () -> Unit,
+    onUseDifferentEmail: () -> Unit,
     onShareLocation: () -> Unit,
     onContinueFromLocation: () -> Unit,
     onDisplayNameChanged: (String) -> Unit,
@@ -154,6 +159,15 @@ fun OnboardingFlowScreen(
                     onPasswordChanged = onPasswordChanged,
                     onSubmitAccount = onSubmitAccount,
                     onBackToPolicies = onBackToPolicies,
+                )
+
+            OnboardingStep.VerifyEmail ->
+                VerifyEmailStep(
+                    state = state,
+                    onSignupCodeChanged = onSignupCodeChanged,
+                    onVerifySignupCode = onVerifySignupCode,
+                    onResendSignupCode = onResendSignupCode,
+                    onUseDifferentEmail = onUseDifferentEmail,
                 )
 
             OnboardingStep.Location ->
@@ -399,6 +413,63 @@ private fun AccountStep(
     }
 }
 
+/**
+ * "Check your email". The copy is true whether or not the address already has an account (the
+ * server sends a code to a new address and a sign-in note to an existing one, and answers the
+ * same), so nothing on this screen tells anyone which it was. The code field is the same field
+ * the reset-password screen uses: label, digits only, six long.
+ */
+@Composable
+private fun VerifyEmailStep(
+    state: OnboardingUiState,
+    onSignupCodeChanged: (String) -> Unit,
+    onVerifySignupCode: () -> Unit,
+    onResendSignupCode: () -> Unit,
+    onUseDifferentEmail: () -> Unit,
+) {
+    StepTitle(
+        title = "Check your email",
+        subtitle =
+            "If ${state.email} can be used for a new account, we've sent a 6-digit code to it. " +
+                "It works for 30 minutes. If that address already has an account, the email says how to sign in instead.",
+    )
+    Spacer(modifier = Modifier.height(20.dp))
+    OutlinedTextField(
+        value = state.signupCode,
+        onValueChange = onSignupCodeChanged,
+        label = { Text("6-digit code") },
+        singleLine = true,
+        enabled = !state.isSubmitting,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        colors = onboardingTextFieldColors(),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    state.signupNotice?.let { notice ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = notice,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    StepError(state.errorMessage)
+    Spacer(modifier = Modifier.height(20.dp))
+    SubmittingButton(
+        text = "Verify",
+        isSubmitting = state.isSubmitting,
+        onClick = onVerifySignupCode,
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    TextButton(onClick = onResendSignupCode, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
+        Text("Send a new code")
+    }
+    TextButton(onClick = onUseDifferentEmail, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
+        Text("Use a different email")
+    }
+}
+
 @Composable
 private fun LocationStep(
     locationState: LocationUiState,
@@ -625,6 +696,7 @@ private val progressSteps =
         OnboardingStep.Dob,
         OnboardingStep.Policies,
         OnboardingStep.Account,
+        OnboardingStep.VerifyEmail,
         OnboardingStep.Location,
         OnboardingStep.Profile,
     )

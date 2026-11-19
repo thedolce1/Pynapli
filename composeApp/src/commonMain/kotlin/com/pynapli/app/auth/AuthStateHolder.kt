@@ -1,9 +1,11 @@
 package com.pynapli.app.auth
 
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.APPEAL_REASON_MAX_LENGTH
+import com.pynapli.shared.network.dto.EmailSignupStartedDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -208,11 +210,11 @@ class AuthStateHolder(
     }
 
     /**
-     * Onboarding signup (ONBOARDING_AUTH_SPEC): the stepper collects DOB on its own
-     * wheel and Terms/Privacy as separate explicit acceptances, so this entry point
-     * takes them individually instead of the legacy single combined checkbox. On
-     * success the session lands in [state] exactly like [submit].
-     * Returns true when the account was created and the session is live.
+     * Starts onboarding sign-up (ONBOARDING_AUTH_SPEC, "Membership privacy"): the stepper collects DOB
+     * and Terms/Privacy as separate explicit acceptances, so this entry point takes them individually.
+     * No session yet: the server emails a code (and answers the same whether or not the address
+     * already has an account). Returns the started sign-up (keep its token for [verifySignup] and
+     * [resendSignupCode]), or null with the error in [state].
      */
     suspend fun signupWithDetails(
         email: String,
@@ -221,8 +223,8 @@ class AuthStateHolder(
         confirmedAdult: Boolean,
         acceptedTerms: Boolean,
         acceptedPrivacy: Boolean,
-    ): Boolean {
-        if (state.value.isSubmitting) return false
+    ): EmailSignupStartedDto? {
+        if (state.value.isSubmitting) return null
         val normalizedEmail = email.trim()
         _state.update { it.copy(isSubmitting = true, errorMessage = null, mode = AuthMode.CreateAccount) }
         val result =
@@ -239,6 +241,41 @@ class AuthStateHolder(
             )
         return when (result) {
             is AppResult.Success -> {
+                _state.update { it.copy(email = normalizedEmail, password = "", isSubmitting = false, errorMessage = null) }
+                result.value
+            }
+
+            is AppResult.Failure -> {
+                _state.update { it.copy(isSubmitting = false, errorMessage = result.error.message) }
+                null
+            }
+        }
+    }
+
+    /**
+     * Finishes sign-up with the emailed code; on success the account exists and the session lands in
+     * [state] exactly like a sign-in. Returns true when the session is live.
+     */
+    suspend fun verifySignup(
+        email: String,
+        code: String,
+        signupToken: String,
+    ): Boolean {
+        if (state.value.isSubmitting) return false
+        val normalizedEmail = email.trim()
+        _state.update { it.copy(isSubmitting = true, errorMessage = null) }
+        return when (
+            val result =
+                authRepository.verifyEmailSignup(
+                    email = normalizedEmail,
+                    code = code,
+                    signupToken = signupToken,
+                    platform = platform,
+                    appVersion = appVersion,
+                    deviceId = deviceIdOrNull,
+                )
+        ) {
+            is AppResult.Success -> {
                 _state.update {
                     it.copy(
                         email = normalizedEmail,
@@ -252,12 +289,27 @@ class AuthStateHolder(
             }
 
             is AppResult.Failure -> {
-                _state.update {
-                    it.copy(
-                        isSubmitting = false,
-                        errorMessage = result.error.message,
-                    )
-                }
+                _state.update { it.copy(isSubmitting = false, errorMessage = result.error.message) }
+                false
+            }
+        }
+    }
+
+    /** Asks for a new sign-up code. The answer is the same whether or not one is sent. */
+    suspend fun resendSignupCode(
+        email: String,
+        signupToken: String,
+    ): Boolean {
+        if (state.value.isSubmitting) return false
+        _state.update { it.copy(isSubmitting = true, errorMessage = null) }
+        return when (val result = authRepository.resendEmailSignupCode(email.trim(), signupToken, deviceIdOrNull)) {
+            is AppResult.Success -> {
+                _state.update { it.copy(isSubmitting = false) }
+                true
+            }
+
+            is AppResult.Failure -> {
+                _state.update { it.copy(isSubmitting = false, errorMessage = result.error.message) }
                 false
             }
         }
@@ -313,18 +365,9 @@ class AuthStateHolder(
         val result =
             when (mode) {
                 AuthMode.SignIn, AuthMode.ResetPassword -> authRepository.loginEmail(normalizedEmail, password, platform, appVersion, deviceIdOrNull)
-                AuthMode.CreateAccount ->
-                    authRepository.signupEmail(
-                        email = normalizedEmail,
-                        password = password,
-                        birthdate = cleanBirthdate,
-                        confirmedAdult = acceptedAgeAndTerms,
-                        acceptedTerms = acceptedAgeAndTerms,
-                        acceptedPrivacy = acceptedAgeAndTerms,
-                        platform = platform,
-                        appVersion = appVersion,
-                        deviceId = deviceIdOrNull,
-                    )
+                // The legacy inline form has no code step, and every shell builds the onboarding
+                // stepper (which has one), so this form never starts a sign-up itself any more.
+                AuthMode.CreateAccount -> AppResult.Failure(AppError(code = "SIGNUP_NEEDS_STEPPER", message = LEGACY_SIGNUP_MESSAGE))
             }
 
         when (result) {
@@ -368,6 +411,7 @@ class AuthStateHolder(
     private companion object {
         private const val RESET_CODE_LENGTH = 6
         private const val MIN_APPEAL_REASON = 10
+        private const val LEGACY_SIGNUP_MESSAGE = "Creating an account isn't available from this screen. Restart the app and choose Create account."
         private val birthdatePattern = Regex("""\d{4}-\d{2}-\d{2}""")
     }
 }
