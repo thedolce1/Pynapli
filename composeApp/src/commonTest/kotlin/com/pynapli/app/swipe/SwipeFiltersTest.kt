@@ -51,17 +51,15 @@ class SwipeFiltersTest {
     }
 
     @Test
-    fun verifiedCouplesSharesTheVerifiedLock() {
-        val locked =
-            SwipeFilters(verifiedCouples = false, dealbreakers = setOf(SwipeDealbreakerKey.VERIFIED))
-                .withVerifiedCouplesToggled()
-        assertTrue(locked.verifiedCouples)
-        assertTrue(SwipeDealbreakerKey.VERIFIED in locked.dealbreakers)
+    fun verifiedCouplesNeverTouchesTheVerifiedLock() {
+        // It never relaxes on the server, so toggling it neither adds nor drops a lock.
+        val unlocked = SwipeFilters().withVerifiedCouplesToggled()
+        assertTrue(unlocked.verifiedCouples)
+        assertFalse(SwipeDealbreakerKey.VERIFIED in unlocked.dealbreakers)
 
-        // Turning it off while "Verified only" is off drops the lock; with "Verified only" on it stays.
-        assertFalse(SwipeDealbreakerKey.VERIFIED in locked.withVerifiedCouplesToggled().dealbreakers)
-        val stillVerifiedOnly = locked.copy(verifiedOnly = true).withVerifiedCouplesToggled()
-        assertTrue(SwipeDealbreakerKey.VERIFIED in stillVerifiedOnly.dealbreakers)
+        val locked = SwipeFilters(verifiedOnly = true, dealbreakers = setOf(SwipeDealbreakerKey.VERIFIED))
+        assertEquals(locked.dealbreakers, locked.withVerifiedCouplesToggled().dealbreakers)
+        assertEquals(locked.dealbreakers, locked.withVerifiedCouplesToggled().withVerifiedCouplesToggled().dealbreakers)
     }
 
     @Test

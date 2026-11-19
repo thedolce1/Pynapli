@@ -1,6 +1,7 @@
 package com.pynapli.server.verification
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.JdbcGridRepository
 import com.pynapli.server.grid.insertActiveProfileLink
 import com.pynapli.server.grid.insertBlock
@@ -8,8 +9,13 @@ import com.pynapli.server.grid.insertDiscoverableUser
 import com.pynapli.server.grid.insertHiddenProfile
 import com.pynapli.server.grid.markProfileVerified
 import com.pynapli.server.grid.setRiskState
+import com.pynapli.server.safety.JdbcBlockRepository
 import com.pynapli.server.swipe.JdbcSwipeRepository
+import com.pynapli.server.swipe.SwipeService
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.shared.network.dto.GridQueryRequestDto
+import com.pynapli.shared.network.dto.SwipeDealbreakerKey
+import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import kotlinx.coroutines.runBlocking
 import java.time.Duration
 import java.util.UUID
@@ -22,8 +28,9 @@ import kotlin.test.assertTrue
 /**
  * "Verified couples only" (FILTERS_SPEC Verified) on Grid and Swipe. The filter must mean exactly
  * the couple-verified badge for this viewer: every card it returns shows the badge, and every card
- * that shows the badge is returned. Exercised at repository level so Swipe's thin-deck relaxation
- * (which drops unlocked verified filters) does not blur the predicate itself.
+ * that shows the badge is returned. The predicate is exercised at repository level; the
+ * thin-deck tests go through SwipeService / GridService to prove relaxation and widening never
+ * drop it (founder rule 2026-11-18).
  */
 class VerifiedCouplesFilterIntegrationTest {
     private val dataSource: DataSource = PynapliTestDatabase.dataSource
@@ -132,6 +139,79 @@ class VerifiedCouplesFilterIntegrationTest {
             assertTrue(world.c in swipeOf(swipeReversed, neighbour, DiscoveryFilters()))
         }
 
+    @Test
+    fun aThinSwipeDeckNeverRelaxesTheFilterWithOrWithoutTheVerifiedLock() =
+        runBlocking {
+            val world = seedWorld()
+            val service =
+                SwipeService(JdbcSwipeRepository(dataSource), blockRepository = JdbcBlockRepository(dataSource))
+            val linkedLocks = setOf(SwipeDealbreakerKey.VERIFIED, SwipeDealbreakerKey.LINKED_ONLY)
+            val expected = world.expectedSwipe.map { it.toString() }.toSet()
+            // Five matches against a low-water mark of ten, and a radius below the maximum, so the
+            // relaxed retry (filters + doubled radius) runs every time.
+            val base = SwipeDeckRequestDto(radiusMeters = 25_000, limit = 30, verifiedCouplesOnly = true)
+            val requests =
+                listOf(
+                    base,
+                    base.copy(dealbreakers = setOf(SwipeDealbreakerKey.VERIFIED)),
+                    // Linked-only path (listLinkedCandidateUserIdsNear + forced ids); its relaxed retry
+                    // drops linkedOnly and runs the normal path, still with the filter.
+                    base.copy(linkedOnly = true),
+                    base.copy(linkedOnly = true, dealbreakers = linkedLocks),
+                )
+            requests.forEach { request ->
+                val items = service.queryDeck(world.viewer, request).items
+                assertTrue(items.all { it.coupleVerified }, "every card must show the couple badge: $request")
+                assertEquals(expected, items.map { it.userId }.toSet(), "$request")
+            }
+        }
+
+    @Test
+    fun aThinSwipeDeckStillRelaxesVerifiedOnlyAsBefore() =
+        runBlocking {
+            val viewer = person("Viewer")
+            val verified = person("Vera").also { dataSource.markProfileVerified(it) }
+            val unverified = person("Una")
+            val service = SwipeService(JdbcSwipeRepository(dataSource))
+
+            // One verified match is below the low-water mark, so the unlocked filter relaxes.
+            val unlocked = SwipeDeckRequestDto(radiusMeters = 25_000, limit = 30, verifiedOnly = true)
+            val relaxed =
+                service
+                    .queryDeck(viewer, unlocked)
+                    .items
+                    .map { it.userId }
+                    .toSet()
+            assertEquals(setOf(verified, unverified).map { it.toString() }.toSet(), relaxed)
+
+            // Locked (with distance), it holds.
+            val locked =
+                SwipeDeckRequestDto(
+                    radiusMeters = 25_000,
+                    limit = 30,
+                    verifiedOnly = true,
+                    dealbreakers = setOf(SwipeDealbreakerKey.VERIFIED, SwipeDealbreakerKey.DISTANCE),
+                )
+            assertEquals(listOf(verified.toString()), service.queryDeck(viewer, locked).items.map { it.userId })
+        }
+
+    @Test
+    fun gridWideningKeepsTheFilter() =
+        runBlocking {
+            val viewer = person("Viewer")
+            // Near: an unverified couple. Far (~30 km): a verified couple and an unverified couple.
+            couple("Near", verified1 = false, verified2 = false)
+            val (far1, far2) = couple("Far", verified1 = true, verified2 = true, longitudeShift = FAR_SHIFT)
+            couple("FarUnverified", verified1 = false, verified2 = false, longitudeShift = FAR_SHIFT)
+            val service = GridService(JdbcGridRepository(dataSource))
+
+            // Nothing within 5 km passes, so GridService widens to the maximum radius with the same filters.
+            val request = GridQueryRequestDto(radiusMeters = 5_000, verifiedCouplesOnly = true)
+            val widened = service.queryGrid(viewer, request)
+            assertEquals(setOf(far1, far2).map { it.toString() }.toSet(), widened.items.map { it.userId }.toSet())
+            assertTrue(widened.items.all { it.coupleVerified })
+        }
+
     // --- fixtures ---------------------------------------------------------------------------------
 
     private class World(
@@ -213,11 +293,15 @@ class VerifiedCouplesFilterIntegrationTest {
 
     private var nextOffset = 0
 
-    private fun person(name: String): UUID {
+    private fun person(
+        name: String,
+        longitudeShift: Double = 0.0,
+    ): UUID {
         val id = UUID.randomUUID()
         nextOffset += 1
-        // All within a few hundred metres of the viewer.
-        dataSource.insertDiscoverableUser(id, name, age = 35, longitude = -122.0841 + nextOffset * 0.0002, latitude = 37.4220)
+        // Within a few hundred metres of the viewer unless shifted.
+        val longitude = -122.0841 + nextOffset * 0.0002 + longitudeShift
+        dataSource.insertDiscoverableUser(id, name, age = 35, longitude = longitude, latitude = 37.4220)
         return id
     }
 
@@ -225,9 +309,10 @@ class VerifiedCouplesFilterIntegrationTest {
         name: String,
         verified1: Boolean,
         verified2: Boolean,
+        longitudeShift: Double = 0.0,
     ): Pair<UUID, UUID> {
-        val first = person("${name}1")
-        val second = person("${name}2")
+        val first = person("${name}1", longitudeShift)
+        val second = person("${name}2", longitudeShift)
         dataSource.insertActiveProfileLink(first, second)
         dataSource.insertActiveProfileLink(second, first)
         if (verified1) dataSource.markProfileVerified(first)
@@ -283,6 +368,9 @@ class VerifiedCouplesFilterIntegrationTest {
 
     private companion object {
         const val RADIUS = 100_000
+
+        // About 30 km east at this latitude: outside 5 km, inside the 100 km widened Grid radius.
+        const val FAR_SHIFT = 0.34
     }
 }
 

@@ -62,14 +62,30 @@ class VerifiedCouplesFilterContractTest {
     }
 
     @Test
-    fun relaxesLikeVerifiedOnlyUnderTheVerifiedLock() {
-        assertTrue(SwipeDeckRelaxation.hasRelaxableFilters(on, 100_000, 100_000, dealbreakers = emptySet()))
-        assertFalse(SwipeDeckRelaxation.relaxFilters(on, dealbreakers = emptySet()).verifiedCouplesOnly)
+    fun neverRelaxesLockedOrNot() {
+        // Founder rule 2026-11-18: a trust filter, never relaxed. On its own (radius at max) it gives
+        // a thin deck nothing to relax.
+        assertFalse(SwipeDeckRelaxation.hasRelaxableFilters(on, 100_000, 100_000, dealbreakers = emptySet()))
+        val everyStep = listOf(emptySet<String>(), setOf(SwipeDealbreakerKey.VERIFIED), SwipeDealbreakerKey.ALL)
+        everyStep.forEach { locks ->
+            assertTrue(SwipeDeckRelaxation.relaxFilters(on, dealbreakers = locks).verifiedCouplesOnly)
+        }
+        // Relaxing everything else around it (linkedOnly, verifiedOnly, intents, radius) still keeps it.
+        val busy = on.copy(linkedOnly = true, verifiedOnly = true, intents = setOf("dating"))
+        assertTrue(SwipeDeckRelaxation.hasRelaxableFilters(busy, 25_000, 100_000, dealbreakers = emptySet()))
+        val relaxed = SwipeDeckRelaxation.relaxFilters(busy, dealbreakers = emptySet())
+        assertTrue(relaxed.verifiedCouplesOnly)
+        assertNull(relaxed.linkedOnly)
+        assertFalse(relaxed.verifiedOnly)
+    }
 
+    @Test
+    fun verifiedOnlyStillRelaxesAsBefore() {
+        val verifiedOnly = DiscoveryFilters(verifiedOnly = true)
+        assertTrue(SwipeDeckRelaxation.hasRelaxableFilters(verifiedOnly, 100_000, 100_000, dealbreakers = emptySet()))
+        assertFalse(SwipeDeckRelaxation.relaxFilters(verifiedOnly, dealbreakers = emptySet()).verifiedOnly)
         val locked = setOf(SwipeDealbreakerKey.VERIFIED)
-        val allLocked = locked + SwipeDealbreakerKey.DISTANCE
-        assertFalse(SwipeDeckRelaxation.hasRelaxableFilters(on, 100_000, 100_000, dealbreakers = allLocked))
-        assertTrue(SwipeDeckRelaxation.relaxFilters(on, dealbreakers = locked).verifiedCouplesOnly)
+        assertTrue(SwipeDeckRelaxation.relaxFilters(verifiedOnly, dealbreakers = locked).verifiedOnly)
     }
 
     @Test

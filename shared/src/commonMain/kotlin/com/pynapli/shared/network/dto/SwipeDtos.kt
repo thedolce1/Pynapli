@@ -70,8 +70,8 @@ data class SwipeDeckRequestDto(
     // Distinct from verifiedOnly (hard filter).
     val verifiedPreferred: Boolean = false,
     // "Verified couples only": only people whose couple-verified badge shows for this viewer (both
-    // linked partners selfie-verified, partner visible). Independent of linkedOnly; relaxes with the
-    // "verified" dealbreaker like verifiedOnly. Old clients omit it.
+    // linked partners selfie-verified, partner visible). Independent of linkedOnly. Always hard: a thin
+    // deck never relaxes it, with or without the "verified" dealbreaker. Old clients omit it.
     val verifiedCouplesOnly: Boolean = false,
 )
 

@@ -50,20 +50,14 @@ internal fun EmptyDeck(
     onRefresh: () -> Unit,
     onOpenFilters: () -> Unit,
     onOpenTravel: () -> Unit = {},
+    verifiedCouplesOnly: Boolean = false,
 ) {
+    val copy = emptyDeckCopy(filtersActive = filtersActive, verifiedCouplesOnly = verifiedCouplesOnly)
     SwipeDeckStatus(
         icon = Icons.Filled.Style,
         iconTint = MaterialTheme.colorScheme.primary,
-        title =
-            when {
-                filtersActive -> "No one else matches your filters"
-                else -> "You've seen everyone nearby"
-            },
-        message =
-            when {
-                filtersActive -> "Widen distance or drop a dealbreaker to see more people, or swipe another city with Travel mode."
-                else -> "New people join every day. Widen your search, or swipe another city with Travel mode."
-            },
+        title = copy.title,
+        message = copy.message,
         modifier = Modifier.testTag(SwipeTestTags.EMPTY_DECK),
     ) {
         Button(
@@ -97,6 +91,39 @@ internal fun EmptyDeck(
         }
     }
 }
+
+internal data class EmptyDeckCopy(
+    val title: String,
+    val message: String,
+)
+
+/**
+ * Empty-deck words. "Verified couples only" is never relaxed by the server, so with it on the deck
+ * says plainly that no verified couples are nearby, rather than hinting at dealbreakers.
+ */
+internal fun emptyDeckCopy(
+    filtersActive: Boolean,
+    verifiedCouplesOnly: Boolean,
+): EmptyDeckCopy =
+    when {
+        verifiedCouplesOnly ->
+            EmptyDeckCopy(
+                title = "No verified couples nearby yet",
+                message =
+                    "Only couples where both partners are selfie-verified show here. Widen distance or " +
+                        "change filters, or swipe another city with Travel mode.",
+            )
+        filtersActive ->
+            EmptyDeckCopy(
+                title = "No one else matches your filters",
+                message = "Widen distance or drop a dealbreaker to see more people, or swipe another city with Travel mode.",
+            )
+        else ->
+            EmptyDeckCopy(
+                title = "You've seen everyone nearby",
+                message = "New people join every day. Widen your search, or swipe another city with Travel mode.",
+            )
+    }
 
 /**
  * A full-deck load failure. Offline gets its own words: saved swipes are not lost (the crash-safe

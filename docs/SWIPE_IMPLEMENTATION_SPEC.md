@@ -390,7 +390,9 @@ A fresh deck never feels dead because filters were left at defaults or the area 
    doubled (capped; not if `distance` is a dealbreaker).
 
 Relaxation never touches dealbreakers or identity filters (gender, orientation): a relaxed deck must
-never show people the viewer explicitly excluded. A deck that stays small after relaxation shows the
+never show people the viewer explicitly excluded. "Verified couples only" (`verifiedCouplesOnly`) is
+never relaxed either, locked or not (a trust filter, founder decision 2026-11-18); "Verified only"
+still relaxes unless the `verified` lock is on. A deck that stays small after relaxation shows the
 empty-state copy rather than a silent blank. This mirrors the Grid's widen-on-empty fallback.
 
 ## Deck Session
@@ -657,8 +659,8 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
   relaxed; the filters sheet has a per-section lock. The locks are part of the deck scope hash, so a
   paging cursor cannot cross a change of locks.
 - [x] Never-empty deck: `SwipeDeckRelaxation` drops soft filters and doubles the radius (capped) when
-  a deck is below low water (the doubled radius is rounded up to its step); dealbreakers and identity
-  filters (gender/orientation) stay hard.
+  a deck is below low water (the doubled radius is rounded up to its step); dealbreakers, identity
+  filters (gender/orientation) and "Verified couples only" stay hard.
 - [x] Compose stack renders only 2–3 cards; physics-based gestures; image preloading.
 - [x] Tinder-grade card feel: grab-point pivot, velocity fling, fling-speed exit, next card rising,
   LIKE / NOPE / PINEAPPLE stamps, button exits, directional Rewind, threshold/commit/match haptics
