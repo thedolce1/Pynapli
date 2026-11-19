@@ -93,11 +93,15 @@ function Assert-Success {
     }
 }
 
+# Accounts come from the local-only dev sign-up route: the public /v1/auth/email/signup now only
+# emails a code (ONBOARDING_AUTH_SPEC, "Membership privacy"). The dev route creates a verified
+# account at once and answers 409 for an existing one; it exists only on a PYNAPLI_ENV=local server
+# with the "log" mailer (a 404 here means the server isn't one).
 function Get-DemoSession {
     param([string]$Email)
 
     $deviceId = "demo-$($Email.Split('@')[0])-$script:RunId"
-    $signup = Invoke-PynapliJson -Method POST -Path "/v1/auth/email/signup" -Body @{
+    $signup = Invoke-PynapliJson -Method POST -Path "/v1/dev/auth/email/signup" -Body @{
         email = $Email
         password = $Password
         birthdate = "1990-01-01"

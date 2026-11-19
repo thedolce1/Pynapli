@@ -1,6 +1,7 @@
 ﻿# Connected-Android QA for the DOB-first signup stepper (ONBOARDING_AUTH_SPEC, Grindr-reference
 # flow). Proves the happy path end-to-end on a real emulator: Create account -> typed DD/MM/YYYY
-# birthday -> policies step (single Accept) -> email+password -> denied location permission
+# birthday -> policies step (single Accept) -> email+password -> emailed 6-digit code (read from the
+# local-only dev code lookup, as a developer would read .pynapli-local-mail) -> denied location permission
 # (useful error + skip) -> mid-signup force-stop resume at the consolidated Profile step ->
 # display name (photo skipped) -> first grid with no error text -> next-session bounded photo
 # nudge that dismisses. Mirrors scripts/android-notification-permission-qa.ps1.
@@ -163,6 +164,31 @@ function Dismiss-NotificationPromptIfPresent {
     }
 }
 
+function Get-SignupCode {
+    # The code is written off the request path, so poll the local-only dev lookup
+    # (POST /v1/dev/auth/email/signup/latest-code). It exists only on a PYNAPLI_ENV=local
+    # server with PYNAPLI_PASSWORD_RESET_MAILER=log; anywhere else this fails loudly.
+    param([string]$Email)
+
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        try {
+            $result = Invoke-RestMethod `
+                -Method POST `
+                -Uri "$BaseUrl/v1/dev/auth/email/signup/latest-code" `
+                -ContentType "application/json" `
+                -Body (@{ email = $Email } | ConvertTo-Json) `
+                -TimeoutSec 5
+        } catch {
+            throw "Dev sign-up code lookup failed ($($_.Exception.Message)). It needs a local server (PYNAPLI_ENV=local, PYNAPLI_PASSWORD_RESET_MAILER=log)."
+        }
+        if (-not [string]::IsNullOrWhiteSpace([string]$result.code)) {
+            return [string]$result.code
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    throw "No sign-up code was sent to $Email within 15 seconds."
+}
+
 function Write-Summary {
     param([hashtable]$Summary)
 
@@ -286,6 +312,18 @@ $accountXml = Dump-Ui "03_account" -Keep
 $accountShot = Save-Screen "03_account"
 Tap-ExactText "Create account"
 
+# --- Code step: no session exists yet; the emailed code creates the account ---
+Wait-ForAnyText @("Check your email") 30 | Out-Null
+$codeXml = Dump-Ui "03b_check_email" -Keep
+Assert-NoAppErrorText $codeXml "Check-your-email step"
+$signupCode = Get-SignupCode $signupEmail
+Write-Host "[ok] Sign-up code received from the local dev mailer"
+Enter-Text "6-digit code" $signupCode
+Hide-Keyboard
+$codeShot = Save-Screen "03b_check_email"
+Tap-ExactText "Verify"
+
+# The session (and with it the OS notification prompt) only exists after the code is verified.
 Dismiss-NotificationPromptIfPresent
 
 # --- Location step: deny the OS prompt, expect a useful error ---
@@ -352,6 +390,7 @@ Write-Summary @{
         dob = $dobShot
         policies = $policiesShot
         account = $accountShot
+        checkEmail = $codeShot
         location = $locationShot
         locationPrompt = $locationPromptShot
         locationDenied = $locationDeniedShot
