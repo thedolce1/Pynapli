@@ -609,6 +609,18 @@ VALUES
     ('$convId'::uuid, '$viewerId'::uuid, 'member', now() - interval '7 minutes', NULL, now() - interval '7 minutes', 'active', NULL, NULL, NULL),
     ('$convId'::uuid, '$matchId'::uuid, 'member', now() - interval '7 minutes', NULL, now() - interval '7 minutes', 'active', NULL, NULL, NULL)
 ON CONFLICT (conversation_id, user_id) DO NOTHING;
+
+-- The server decides what is a new match from the matches row (MESSAGING_SPEC "New-Matches Rail"),
+-- so the rail needs a real match, and a re-run clears any "seen" state left by an earlier demo.
+INSERT INTO matches (id, user_a, user_b, created_at)
+VALUES (gen_random_uuid(), LEAST('$viewerId'::uuid, '$matchId'::uuid), GREATEST('$viewerId'::uuid, '$matchId'::uuid), now() - interval '7 minutes')
+ON CONFLICT (user_a, user_b) DO NOTHING;
+
+DELETE FROM match_inbox_acknowledgements
+WHERE match_id IN (
+    SELECT id FROM matches
+    WHERE user_a = LEAST('$viewerId'::uuid, '$matchId'::uuid) AND user_b = GREATEST('$viewerId'::uuid, '$matchId'::uuid)
+);
 "@
     if (Invoke-DemoSql -Sql $sql -Action "Swipe match ($CityCode)") {
         Write-Host "  [ok] No-message swipe match for the New Matches rail ($CityCode)"

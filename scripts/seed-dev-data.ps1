@@ -677,6 +677,18 @@ VALUES
     ('00000000-0000-0000-0000-0000000095a1'::uuid, '$viewerId'::uuid, 'member', now() - interval '9 minutes', NULL, now() - interval '9 minutes', 'active', NULL, NULL, NULL),
     ('00000000-0000-0000-0000-0000000095a1'::uuid, '$noaId'::uuid, 'member', now() - interval '9 minutes', NULL, now() - interval '9 minutes', 'active', NULL, NULL, NULL)
 ON CONFLICT (conversation_id, user_id) DO NOTHING;
+
+-- The server decides what is a new match from the matches row (MESSAGING_SPEC "New-Matches Rail"),
+-- so the rail needs a real match, and a re-run clears any "seen" state left by earlier QA.
+INSERT INTO matches (id, user_a, user_b, created_at)
+VALUES ('00000000-0000-0000-0000-0000000095a2'::uuid, LEAST('$viewerId'::uuid, '$noaId'::uuid), GREATEST('$viewerId'::uuid, '$noaId'::uuid), now() - interval '9 minutes')
+ON CONFLICT (user_a, user_b) DO NOTHING;
+
+DELETE FROM match_inbox_acknowledgements
+WHERE match_id IN (
+    SELECT id FROM matches
+    WHERE user_a = LEAST('$viewerId'::uuid, '$noaId'::uuid) AND user_b = GREATEST('$viewerId'::uuid, '$noaId'::uuid)
+);
 "@
 
     $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $sql 2>&1
