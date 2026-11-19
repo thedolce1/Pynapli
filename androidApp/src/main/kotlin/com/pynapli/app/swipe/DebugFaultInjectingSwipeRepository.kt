@@ -19,8 +19,6 @@ class DebugFaultInjectingSwipeRepository(
 
     override suspend fun loadDeck(request: SwipeDeckRequestDto): AppResult<SwipeDeckUi> = delegate.loadDeck(request)
 
-    override suspend fun loadTopPicks(): AppResult<SwipeDeckUi> = delegate.loadTopPicks()
-
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
         if (DebugQaFlags.isDebuggable(appContext)) {
             val remainingFailures = preferences.getInt(DebugQaFlags.KEY_FAIL_NEXT_SWIPE_ACTIONS, 0)

@@ -20,7 +20,6 @@ import com.pynapli.server.safety.SafetyException
 import com.pynapli.server.savedfilters.SavedFilterException
 import com.pynapli.server.subscriptions.SubscriptionException
 import com.pynapli.server.swipe.SwipeException
-import com.pynapli.server.swipe.TopPicksException
 import com.pynapli.server.tonight.TonightSessionException
 import com.pynapli.server.verification.VerificationException
 import com.pynapli.shared.network.dto.ApiErrorDto
@@ -119,18 +118,6 @@ fun Application.configureStatusPages() {
         exception<SavedFilterException> { call, cause ->
             call.respond(
                 status = savedFilterStatusFor(cause.code),
-                message =
-                    ApiErrorDto(
-                        code = cause.code,
-                        message = userSafeMessage(cause.code),
-                        requestId = call.requestIdOrUnknown(),
-                    ),
-            )
-        }
-
-        exception<TopPicksException> { call, cause ->
-            call.respond(
-                status = topPicksStatusFor(cause.code),
                 message =
                     ApiErrorDto(
                         code = cause.code,

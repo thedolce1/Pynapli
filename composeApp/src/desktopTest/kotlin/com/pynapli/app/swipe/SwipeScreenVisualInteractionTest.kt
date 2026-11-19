@@ -165,15 +165,6 @@ private class StaticSwipeVisualRepository(
             ),
         )
 
-    override suspend fun loadTopPicks(): AppResult<SwipeDeckUi> =
-        AppResult.Success(
-            SwipeDeckUi(
-                deckSessionId = "visual-picks",
-                cards = cards,
-                nextCursor = null,
-            ),
-        )
-
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> {
         submittedActions += action
         return AppResult.Success(null)

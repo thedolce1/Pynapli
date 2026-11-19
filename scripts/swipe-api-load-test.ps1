@@ -9,7 +9,6 @@ param(
     [int]$DeckFilterBudgetP95Ms = 500,
     [int]$DeckFilterRelaxedBudgetP95Ms = 1500,
     [int]$DeckPageBudgetP95Ms = 800,
-    [int]$TopPicksBudgetP95Ms = 1000,
     [int]$BoostDeckBudgetP95Ms = 800,
     [int]$TravelSetBudgetP95Ms = 500,
     [int]$TravelDeckBudgetP95Ms = 1000,
@@ -184,15 +183,6 @@ WHERE user_a IN (SELECT user_id FROM load_run_users)
 DELETE FROM swipe_actions
 WHERE actor_user_id IN (SELECT user_id FROM load_run_users)
    OR target_user_id IN (SELECT user_id FROM load_run_users);
-
-DELETE FROM top_pick_session_cards
-WHERE session_id IN (
-    SELECT id FROM top_pick_sessions
-    WHERE user_id IN (SELECT user_id FROM load_run_users)
-);
-
-DELETE FROM top_pick_sessions
-WHERE user_id IN (SELECT user_id FROM load_run_users);
 
 DELETE FROM swipe_deck_cards
 WHERE viewer_user_id IN (SELECT user_id FROM load_run_users);
@@ -584,8 +574,6 @@ ANALYZE media_assets;
 ANALYZE swipe_actions;
 ANALYZE swipe_deck_sessions;
 ANALYZE swipe_deck_cards;
-ANALYZE top_pick_sessions;
-ANALYZE top_pick_session_cards;
 ANALYZE matches;
 ANALYZE travel_locations;
 "@
@@ -663,7 +651,6 @@ function Write-ScenarioSummary {
         swipe_deck_filtered = $DeckFilterBudgetP95Ms
         swipe_deck_filtered_relaxed = $DeckFilterRelaxedBudgetP95Ms
         swipe_deck_page2 = $DeckPageBudgetP95Ms
-        swipe_top_picks = $TopPicksBudgetP95Ms
         swipe_deck_boosted = $BoostDeckBudgetP95Ms
         travel_set = $TravelSetBudgetP95Ms
         swipe_deck_travel = $TravelDeckBudgetP95Ms
@@ -1150,8 +1137,6 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
 
         $itemCount = if ($null -ne $bodyObject -and $null -ne $bodyObject.items) {
             @($bodyObject.items).Count
-        } elseif ($null -ne $bodyObject -and $null -ne $bodyObject.picks) {
-            @($bodyObject.picks).Count
         } else {
             $null
         }
@@ -1258,12 +1243,6 @@ $results = $sessions | ForEach-Object -ThrottleLimit $ConcurrentUsers -Parallel 
                 verifiedPreferred = $true
             }
         $records.Add($boosted.Record)
-
-        $topPicks = Invoke-LoadRequest `
-            -Scenario "swipe_top_picks" `
-            -Method GET `
-            -Path "/v1/swipe/picks"
-        $records.Add($topPicks.Record)
     }
 
     # Submit one Like + one Pass against the first two cards from the initial deck.
@@ -1422,7 +1401,6 @@ $parameters = [pscustomobject]@{
         deckFilterP95Ms = $DeckFilterBudgetP95Ms
         deckFilterRelaxedP95Ms = $DeckFilterRelaxedBudgetP95Ms
         deckPageP95Ms = $DeckPageBudgetP95Ms
-        topPicksP95Ms = $TopPicksBudgetP95Ms
         boostDeckP95Ms = $BoostDeckBudgetP95Ms
         travelSetP95Ms = $TravelSetBudgetP95Ms
         travelDeckP95Ms = $TravelDeckBudgetP95Ms

@@ -579,7 +579,6 @@ Do not necessarily count:
 
 - Every single view
 - Repeated view spam
-- Expired pick reminders
 
 Use separate in-screen counts for views.
 

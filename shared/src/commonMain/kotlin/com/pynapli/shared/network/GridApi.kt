@@ -12,14 +12,13 @@ import com.pynapli.shared.network.dto.SavedGridFiltersListDto
 import com.pynapli.shared.network.dto.SavedSwipeFilterDto
 import com.pynapli.shared.network.dto.SavedSwipeFiltersListDto
 import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
-import com.pynapli.shared.network.dto.TopPicksResponseDto
 import com.pynapli.shared.network.dto.TravelLocationDto
 import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
 
 /**
  * Grid/discovery slice of the API surface, split out of the monolithic [PynapliApiClient]
  * (which now composes the per-feature interfaces). Covers grid queries, saved grid/swipe
- * filters, top picks, and travel location. Signatures are unchanged.
+ * filters, and travel location. Signatures are unchanged.
  */
 interface GridApi {
     suspend fun queryGrid(request: GridQueryRequestDto = GridQueryRequestDto()): AppResult<GridQueryResponseDto>
@@ -44,8 +43,6 @@ interface GridApi {
     suspend fun createSavedSwipeFilter(request: CreateSavedSwipeFilterRequestDto): AppResult<SavedSwipeFilterDto>
 
     suspend fun deleteSavedSwipeFilter(id: String): AppResult<Unit>
-
-    suspend fun getTopPicks(): AppResult<TopPicksResponseDto>
 
     suspend fun getTravelLocation(): AppResult<TravelLocationDto?>
 

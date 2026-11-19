@@ -79,7 +79,7 @@ Current Swipe coverage:
 - The test captures pixels and checks for the intended visual signature: subdued dark surface, tonal card body, readable text/icons, Pynapli gold accent, and Like action accent.
 - The test also clicks Like and Pass through the real action buttons and verifies the deck advances, then opens the Pineapple Like sheet, types a note and verifies the Pineapple Like is sent with it.
 - `SwipeImagePrefetchPlannerTest` verifies the active/near-next Swipe image prefetch window, URL ordering, and deduplication.
-- `scripts/swipe-api-load-test.ps1` now exercises the Ktor Swipe API against a dense local dataset, including core deck/action/rewind flows and optional Boost, Top Picks, and Travel scenarios.
+- `scripts/swipe-api-load-test.ps1` now exercises the Ktor Swipe API against a dense local dataset, including core deck/action/rewind flows and optional Boost and Travel scenarios.
 - `scripts/android-swipe-qa.ps1` runs the installed Android app against local Ktor, captures Swipe screenshots/XML, verifies structural golden signatures, opens filters and travel mode, opens the linked-partner preview, opens the Intro Note dialog, and proves left/right Swipe gestures advance the visible deck. Latest emulator proof: `artifacts/android-swipe-qa/20260518-214507`.
 - `scripts/android-swipe-queue-qa.ps1` runs the installed Android app against local Ktor, verifies Swipe opens with real seeded data, checks a linked Swipe card, injects a recoverable Swipe action failure, force-stops/relaunches the app, verifies the pending action survives process death, then retries and clears the queue. Latest emulator proof: `artifacts/android-swipe-queue-qa/20260518-212037`.
 
@@ -203,7 +203,7 @@ Current local Swipe API harness:
 .\scripts\swipe-api-load-test.ps1 -CandidateCount 5000 -ViewerCount 100 -ConcurrentUsers 100 -OnlineCandidateCount 1000 -BoostedCandidateCount 200 -ServerProfile -FailOnBudget
 ```
 
-The harness uses real Ktor endpoints with mixed Free/Social/Select viewers. Core scenarios cover first deck, filtered deck, relaxed filtered deck, page two, Like, Pass, Rewind, and presence. Extended scenarios add Boosted deck ranking, Top Picks, Travel activation, and Travel deck reads; use `-SkipExtendedScenarios` for a high-concurrency core proof.
+The harness uses real Ktor endpoints with mixed Free/Social/Select viewers. Core scenarios cover first deck, filtered deck, relaxed filtered deck, page two, Like, Pass, Rewind, and presence. Extended scenarios add Boosted deck ranking, Travel activation, and Travel deck reads; use `-SkipExtendedScenarios` for a high-concurrency core proof.
 
 Latest 2026-05-18 Swipe API proof runs:
 

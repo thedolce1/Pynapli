@@ -31,7 +31,7 @@ every change must keep.
 | Profile and discovery | `profiles` (incl. structured lifestyle/logistics/intent tags), `discovery_settings`, `saved_grid_filters`, `saved_swipe_filters` |
 | Location and travel | `user_locations`, `travel_locations`, `travel_trips`, `travel_places`, `travel_places_dataset` |
 | Partner linking | `user_profile_links`, `linked_partner_benefits` (no writer; the partner benefit is computed live from links + subscriptions) |
-| Swipe | `swipe_deck_sessions`, `swipe_deck_cards`, `swipe_actions`, `matches`, `top_pick_sessions`, `top_pick_session_cards` (Top Picks is frozen) |
+| Swipe | `swipe_deck_sessions`, `swipe_deck_cards`, `swipe_actions`, `matches` |
 | Psync | `psync_sessions`, `psync_session_participants`, `psync_session_cards`, `psync_session_actions`, `psync_session_matches` |
 | Playing Tonight | `tonight_sessions`, `tonight_session_participants` |
 | Messaging | `conversations`, `conversation_participants`, `direct_conversations`, `messages`, `message_media_reveals`, `message_review_queue`, `partner_chat_invites` |

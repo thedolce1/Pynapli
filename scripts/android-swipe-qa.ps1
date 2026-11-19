@@ -161,9 +161,6 @@ BEGIN
         RETURN;
     END IF;
 
-    DELETE FROM top_pick_sessions
-    WHERE user_id = viewer_id;
-
     DELETE FROM matches
     WHERE user_a = viewer_id OR user_b = viewer_id;
 
@@ -183,7 +180,7 @@ END $$;
     if ($LASTEXITCODE -ne 0) {
         throw "Dev Swipe state reset failed: $output"
     }
-    Write-Host "[ok] Reset dev Swipe decisions, matches, deck sessions, Top Picks, and travel state for dev@pynapli.local"
+    Write-Host "[ok] Reset dev Swipe decisions, matches, deck sessions, and travel state for dev@pynapli.local"
 }
 
 function Start-App {

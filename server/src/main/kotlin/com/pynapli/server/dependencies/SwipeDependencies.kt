@@ -18,27 +18,24 @@ import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.JdbcSwipeRepository
-import com.pynapli.server.swipe.JdbcTopPicksRepository
 import com.pynapli.server.swipe.MatchSideEffectDelivery
 import com.pynapli.server.swipe.MatchSideEffectDrainWorker
 import com.pynapli.server.swipe.MatchSideEffectDrainer
 import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.server.swipe.SwipeService
-import com.pynapli.server.swipe.TopPicksService
 import javax.sql.DataSource
 
 /**
  * Swipe subsystem wiring extracted from `ServerDependencies.fromEnvironment` to keep the DI root a
  * thin orchestrator. Builds the swipe service, the Psync session service (whose deck generator wraps
- * the swipe service), and the top-picks service; all three are consumed only by the
- * `ServerDependencies` constructor, so the shared upstream dependencies are threaded in as
+ * the swipe service), the match-celebration service and the match side-effect drain worker; all
+ * are consumed only by the `ServerDependencies` constructor, so the shared upstream dependencies are threaded in as
  * parameters. Behavior matches the original inline construction.
  */
 internal class SwipeDependencies(
     val swipeService: SwipeService,
     val psyncSessionService: PsyncSessionService,
     val psyncSessionExpiryWorker: PsyncSessionExpiryWorker,
-    val topPicksService: TopPicksService,
     val matchCelebrationService: com.pynapli.server.swipe.MatchCelebrationService,
     val matchSideEffectDrainWorker: MatchSideEffectDrainWorker,
 )
@@ -94,22 +91,12 @@ internal fun buildSwipeDependencies(
             riskPolicyService = riskPolicyService,
             subscriptionService = subscriptionService,
         )
-    val topPicksService =
-        TopPicksService(
-            topPicksRepository = JdbcTopPicksRepository(dataSource),
-            swipeRepository = swipeRepository,
-            subscriptionService = subscriptionService,
-            presenceService = presenceService,
-            mediaAssetUrlResolver = mediaAssetUrlResolver,
-            deckTokenCodec = SwipeDeckTokenCodec(config.swipeDeckTokenSecret),
-        )
     return SwipeDependencies(
         swipeService = swipeService,
         psyncSessionService = psyncSessionService,
         // Closes out sessions nobody comes back to (abandoned mid-deck, partner link ended) so
         // their likes are still delivered. Requests do the same sweep, so 5 minutes is plenty.
         psyncSessionExpiryWorker = PsyncSessionExpiryWorker(psyncSessionService, intervalMillis = 5 * 60 * 1000L),
-        topPicksService = topPicksService,
         matchCelebrationService =
             com.pynapli.server.swipe.MatchCelebrationService(
                 repository =

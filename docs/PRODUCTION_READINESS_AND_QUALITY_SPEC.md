@@ -216,9 +216,9 @@ Connected Android rendering QA now exists through `scripts/android-grid-qa.ps1` 
 
 ## Swipe Scale Requirements
 
-Swipe must stay server-authoritative without feeling network-bound. The server owns deck eligibility, card tokens, action idempotency, match creation, premium inventory, Top Picks, Boost, and Travel semantics; the client can animate optimistically but reconciles with the API.
+Swipe must stay server-authoritative without feeling network-bound. The server owns deck eligibility, card tokens, action idempotency, match creation, premium inventory, Boost, and Travel semantics; the client can animate optimistically but reconciles with the API.
 
-Current status: `scripts/swipe-api-load-test.ps1` exercises real Ktor endpoints with mixed Free/Social/Select users and a 5,000-candidate dense dataset. The harness now supports extended Boost, Top Picks, and Travel scenarios, writes artifacts, fails on unexpected scenario failures, and can run core-only at higher concurrency.
+Current status: `scripts/swipe-api-load-test.ps1` exercises real Ktor endpoints with mixed Free/Social/Select users and a 5,000-candidate dense dataset. The harness now supports extended Boost and Travel scenarios, writes artifacts, fails on unexpected scenario failures, and can run core-only at higher concurrency.
 
 Latest 2026-05-18 proof:
 

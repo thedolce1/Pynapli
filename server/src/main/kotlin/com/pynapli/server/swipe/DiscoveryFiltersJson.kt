@@ -5,8 +5,7 @@ import com.pynapli.server.discovery.DiscoveryFilters
 /**
  * Serializes a `DiscoveryFilters` to the canonical JSON payload persisted on
  * `swipe_deck_sessions.filter_payload`. Used by both the live deck path and the
- * Top Picks backing-session path so both produce identical scope hashes when
- * given the same filter set.
+ * rewind path so both produce identical scope hashes when given the same filter set.
  */
 internal fun DiscoveryFilters.toPersistedJson(): String =
     buildString {

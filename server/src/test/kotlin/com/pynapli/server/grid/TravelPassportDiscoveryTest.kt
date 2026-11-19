@@ -65,7 +65,7 @@ class TravelPassportDiscoveryTest :
 
         "visible_while_traveling=false hides travel-mode targets from every discovery surface" {
             // PROFILE_SETTINGS_SPEC L221-245: opt-out makes a travel-mode target
-            // invisible to Grid AND Swipe AND Top Picks. Existing default true
+            // invisible to Grid AND Swipe. Existing default true
             // keeps them visible (already covered by the prior visiting test).
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000aa0")

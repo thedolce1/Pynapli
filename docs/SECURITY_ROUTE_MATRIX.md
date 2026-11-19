@@ -51,7 +51,6 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `MatchCelebrationRoutes.kt` | User-authenticated | Token-derived; lists and marks only the caller's own matches (unseen list hides blocked, hidden and gone profiles); marking is idempotent. |
 | `SavedSwipeFilterRoutes.kt` | User-authenticated | Saved filters are owner-scoped and entitlement-gated. |
 | `SwipeRoutes.kt` | User-authenticated | Deck/action/rewind/like-back are token-derived; actions require server-dealt card/session tokens and are rate-limited/idempotent. |
-| `TopPicksRoutes.kt` | User-authenticated | Picks are token-derived and backed by persisted swipe deck sessions. |
 | `TonightFeedRoutes.kt` | User-authenticated | Feed is token-derived and discovery-scoped. |
 | `TonightSessionRoutes.kt` | User-authenticated | Session lifecycle is token-derived and participant-scoped. |
 | `AgeVerificationRoutes.kt` | User/admin mixed | Requirements/status/start require bearer token; start is rate-limited; review requires admin auth. The provider callback is authenticated only by an HMAC-SHA256 signature with its own secret (`PYNAPLI_AGE_VERIFICATION_CALLBACK_SECRET`, 5-minute timestamp window) and is not served without one; the admin token is not accepted there. |

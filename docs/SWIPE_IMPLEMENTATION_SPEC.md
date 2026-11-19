@@ -236,12 +236,6 @@ Behavior:
 
 Pynapli should place Likes You primarily in Activity, with entry points from Swipe.
 
-## Top Picks / Curated Picks
-
-**Frozen** (2026-11-17): not part of the product definition. The code (`GET /v1/swipe/picks`,
-`top_pick_sessions`, one free Pick per day, a daily set for paid tiers, 24h refresh) stays but gets no
-further investment, and it should not be advertised as a paid perk.
-
 ## Boost / Super Boost
 
 Swipe Boost is visibility acceleration.
@@ -541,7 +535,6 @@ Swipe should feed Activity:
 - Someone Super/Pineapple Liked you
 - Someone sent a Pineapple Like with a note (the note shows on the like)
 - You matched
-- Your Pick expires soon
 
 Activity handles FOMO. Swipe should stay focused on decisions.
 
@@ -638,7 +631,6 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
   actions. **Pineapple Like inventory is refunded atomically** with the rewind
   (`swipe_actions.consumed_inventory_id`, same transaction).
 - [x] Likes You is represented in Activity.
-- [x] Top Picks exists (frozen).
 - [x] Boost is a real lift in Swipe without violating filters: eligible boosted people inside the
   radius step are pulled onto the page, at most one boosted card in every four (see "Boost / Super
   Boost"; `SwipeBoostDeckTest`, `SwipeDeckBoostPlacementTest`).

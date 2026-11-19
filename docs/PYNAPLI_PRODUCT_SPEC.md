@@ -79,7 +79,7 @@ Answers "who should I intentionally consider?" Slower, curated, lower noise.
   their partner?" prompt after a Like (cut 2026-11-18): Psync and each person's declared discovery
   style already carry that intent.
 - Ranking must not make users feel secretly throttled; hiding good matches to force payment destroys
-  trust. Top Picks is frozen. Engineering: [SWIPE_IMPLEMENTATION_SPEC.md](SWIPE_IMPLEMENTATION_SPEC.md).
+  trust. Top Picks was removed (2026-11). Engineering: [SWIPE_IMPLEMENTATION_SPEC.md](SWIPE_IMPLEMENTATION_SPEC.md).
 
 ## Filters
 

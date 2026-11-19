@@ -217,7 +217,6 @@ Subscription management includes:
 - Boost inventory
 - Pineapple Like/Super Like inventory
 - Intro Note inventory
-- Extra Picks inventory
 
 ### Linked Partner Subscription Benefit
 
@@ -390,7 +389,6 @@ Notification categories:
 - Flirts
 - Album requests
 - Partner invites
-- Picks expiring
 - Safety/account
 
 Detail levels:

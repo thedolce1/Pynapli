@@ -54,7 +54,6 @@ import com.pynapli.server.subscriptions.configureSubscriptionRoutes
 import com.pynapli.server.swipe.configureMatchCelebrationRoutes
 import com.pynapli.server.swipe.configureSavedSwipeFilterRoutes
 import com.pynapli.server.swipe.configureSwipeRoutes
-import com.pynapli.server.swipe.configureTopPicksRoutes
 import com.pynapli.server.tonight.configureTonightFeedRoutes
 import com.pynapli.server.tonight.configureTonightSessionRoutes
 import com.pynapli.server.verification.configureAdminPhotoVerificationRoutes
@@ -217,11 +216,6 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     )
     configureSavedSwipeFilterRoutes(dependencies.authService, dependencies.savedSwipeFilterService)
     dependencies.matchCelebrationService?.let { configureMatchCelebrationRoutes(dependencies.authService, it) }
-    configureTopPicksRoutes(
-        authService = dependencies.authService,
-        topPicksService = dependencies.topPicksService,
-        requestProfilerFactory = dependencies.requestProfilerFactory,
-    )
 }
 
 private const val SHUTDOWN_GRACE_MS = 3_000L

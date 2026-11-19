@@ -8,7 +8,6 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 data class SwipeUiState(
     val deckSessionId: String? = null,
     val cards: List<SwipeCardDto> = emptyList(),
-    val topPicksMode: Boolean = false,
     val filters: List<SwipeFilterUi> = defaultSwipeFilters,
     val swipeFilters: SwipeFilters = SwipeFilters.defaults,
     val isLoading: Boolean = false,
