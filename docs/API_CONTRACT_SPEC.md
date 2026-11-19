@@ -136,7 +136,7 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
   [{ participantUserId, partnerDisplayName }]` names another participant's linked partner the viewer is
   already allowed to see, display only. Another open invite does not hide it. Absent once that partner
   has had any invite to the thread, on any block among the would-be participants, and in the later of
-  two matched conversations of the same couple pair (Psync together match). Rules: [MESSAGING_SPEC.md](MESSAGING_SPEC.md) "Partner
+  a Psync together match's two conversations. Rules: [MESSAGING_SPEC.md](MESSAGING_SPEC.md) "Partner
   Invite Flow".
 - `ConversationDto.newMatch` (Boolean, added 2026-11-18) is the server's per-viewer answer to "does
   this conversation belong in my new-matches rail". Clients render it and never infer it; `null` only

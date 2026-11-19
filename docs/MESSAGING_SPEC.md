@@ -139,13 +139,12 @@ actions (Send a message, Keep swiping): partner invites live in the conversation
   partner hidden from the viewer is left out of every check, so it can never change what they see.
 - **Risk:** a quarantined or terminated viewer is not offered their partner (the invite would be refused
   with `RISK_RESTRICTED`).
-- **One group per couple pair:** a matched conversation offers nothing when a candidate partner of one
-  of its pair already has a matched conversation with the other that was opened first. A Psync together
-  match opens one conversation per partner with the target, so offers appear in the first one only,
-  for everyone in it, from the start; the four never get two groups or duplicate invites. Only partners
-  the viewer may see count, so a partner hidden from the viewer cannot reveal itself through this rule;
-  the cost is that when one partner of a couple hides their link from the target, the target is offered
-  their own partner in both conversations (the couple's own offers still appear in one).
+- **One group per Psync together match:** a together match opens one conversation per partner with the
+  target, so offers appear only in the one opened first, for everyone in it, from the start; the second
+  offers nothing while the two are still linked. The four never get two groups or duplicate invites.
+  Only a recorded together match (`psync_session_matches`) counts: everyone in it already knows the
+  pair, so the rule reveals nothing, and one partner's private solo match never changes the other
+  partner's offers.
 
 Four people (couple + couple) after a match, both invites sent in parallel: Alex opens the match (1)
 and taps Invite Jo (1); Sam opens it (1), approves Jo (1) and taps Invite Riley (1); Alex approves Riley

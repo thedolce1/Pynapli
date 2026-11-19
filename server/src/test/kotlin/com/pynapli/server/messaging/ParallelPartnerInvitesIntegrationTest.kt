@@ -76,7 +76,8 @@ class ParallelPartnerInvitesIntegrationTest {
         conversationId: String,
     ): String? =
         getConversationDetail(alex, conversationId)
-            .conversation.participants
+            .conversation
+            .participants
             .singleOrNull { it.userId == user.toString() }
             ?.status
 

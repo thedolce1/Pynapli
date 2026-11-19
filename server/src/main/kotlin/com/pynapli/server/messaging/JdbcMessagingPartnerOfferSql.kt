@@ -20,10 +20,11 @@ import java.util.UUID
  *  - a block exists in either direction between any two of the people who would end up together (the
  *    present participants and every candidate). A partner hidden from the viewer is never a candidate,
  *    so it cannot change what the viewer sees;
- *  - the conversation is the later of two matched conversations of the same couple pair: a candidate
- *    partner of one of the pair already has a matched conversation with the other that was opened
- *    first (a Psync together match opens one per partner with the target). Offers then appear only in
- *    the first, so the four end up in one group, not two.
+ *  - the conversation is the later of a Psync together match's two conversations: a together match
+ *    (psync_session_matches) opens one conversation per still-linked partner with the target, and
+ *    offers appear only in the one opened first, so the four end up in one group, not two. Only a
+ *    together match counts: everyone in it already knows the pair, so the rule reveals nothing (a solo
+ *    match of one partner stays private and never suppresses the other's offers).
  */
 internal fun Connection.loadPartnerOffers(
     viewerUserId: UUID,
@@ -144,20 +145,25 @@ private val PARTNER_OFFER_QUERY =
     AND NOT EXISTS (
         SELECT 1
         FROM pair
-        JOIN candidates known ON known.owner_user_id IN (pair.user_a_id, pair.user_b_id)
+        JOIN psync_session_matches together
+          ON together.kind = 'together'
+         AND together.target_user_id IN (pair.user_a_id, pair.user_b_id)
+        JOIN psync_session_participants this_partner
+          ON this_partner.session_id = together.session_id
+         AND this_partner.user_id IN (pair.user_a_id, pair.user_b_id)
+         AND this_partner.user_id <> together.target_user_id
+        JOIN psync_session_participants other_partner
+          ON other_partner.session_id = together.session_id
+         AND other_partner.user_id <> this_partner.user_id
+        JOIN user_profile_links still_linked
+          ON still_linked.user_id = this_partner.user_id
+         AND still_linked.linked_user_id = other_partner.user_id
+         AND still_linked.status = 'active'
+         AND still_linked.unlinked_at IS NULL
         JOIN direct_conversations sibling
-          ON LEAST(sibling.user_a_id, sibling.user_b_id) = LEAST(
-                 known.partner_user_id,
-                 CASE WHEN known.owner_user_id = pair.user_a_id THEN pair.user_b_id ELSE pair.user_a_id END
-             )
-         AND GREATEST(sibling.user_a_id, sibling.user_b_id) = GREATEST(
-                 known.partner_user_id,
-                 CASE WHEN known.owner_user_id = pair.user_a_id THEN pair.user_b_id ELSE pair.user_a_id END
-             )
+          ON LEAST(sibling.user_a_id, sibling.user_b_id) = LEAST(other_partner.user_id, together.target_user_id)
+         AND GREATEST(sibling.user_a_id, sibling.user_b_id) = GREATEST(other_partner.user_id, together.target_user_id)
         JOIN conversations sibling_conversation ON sibling_conversation.id = sibling.conversation_id
-        JOIN matches sibling_match
-          ON LEAST(sibling_match.user_a, sibling_match.user_b) = LEAST(sibling.user_a_id, sibling.user_b_id)
-         AND GREATEST(sibling_match.user_a, sibling_match.user_b) = GREATEST(sibling.user_a_id, sibling.user_b_id)
         WHERE (sibling_conversation.created_at, sibling_conversation.id) < (pair.created_at, pair.id)
     )
     ORDER BY owner_user_id

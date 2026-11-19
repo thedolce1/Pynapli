@@ -131,14 +131,14 @@ internal fun ConversationPartnerActions(
     }
     val statusShown =
         partnerAcceptedWaiting || state.isViewerInvited || thirdPartyApprovalNeeded || waitingForPartner || inviterWaiting
+    val hasActions =
+        offer != null || showInvitePartner || showLeave || partnerFeedback != null ||
+            state.isInvitingPartner || state.isLeaving
     // With a "Bring your partner" offer the actions show beside any open invite's status, so each side
     // can bring their own partner while the other side's invite is still open.
+    val showActions = hasActions && (offer != null || !statusShown)
     when {
-        (offer != null || !statusShown) &&
-            (
-                offer != null || showInvitePartner || showLeave || partnerFeedback != null ||
-                    state.isInvitingPartner || state.isLeaving
-            ) -> {
+        showActions -> {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 offer?.participantPartnerNotes?.forEach { note ->
                     Text(

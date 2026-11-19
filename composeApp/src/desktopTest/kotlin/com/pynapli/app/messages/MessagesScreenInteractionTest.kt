@@ -250,12 +250,18 @@ private class StaticMessagesRepository(
         return AppResult.Success(ConversationListResponseDto(items = conversations))
     }
 
-    override suspend fun acceptPartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationDetailDto> =
+    override suspend fun acceptPartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationDetailDto> =
         AppResult.Success(
             ConversationDetailDto(conversation = conversations.first { it.conversationId == conversationId }, messages = emptyList()),
         )
 
-    override suspend fun declinePartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
+    override suspend fun declinePartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
 }
 
 private class ThirdPartyInviteMessagesRepository : MessagesRepository {
@@ -271,7 +277,10 @@ private class ThirdPartyInviteMessagesRepository : MessagesRepository {
         return AppResult.Success(ConversationListResponseDto(items = listOf(conversation)))
     }
 
-    override suspend fun acceptPartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationDetailDto> {
+    override suspend fun acceptPartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationDetailDto> {
         acceptCount += 1
         conversation =
             conversation.copy(
@@ -288,7 +297,10 @@ private class ThirdPartyInviteMessagesRepository : MessagesRepository {
         return AppResult.Success(ConversationDetailDto(conversation = conversation, messages = emptyList()))
     }
 
-    override suspend fun declinePartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
+    override suspend fun declinePartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
 }
 
 private fun pendingThirdPartyApprovalConversation(): ConversationDto =

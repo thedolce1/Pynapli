@@ -294,6 +294,7 @@ class BringPartnerOfferIntegrationTest {
             val alexSam = service.matchConversation(alex, sam)
             val joSam = service.matchConversation(jo, sam)
             sql("UPDATE conversations SET created_at = created_at - interval '1 second' WHERE id = '$alexSam'")
+            recordTogetherMatch(initiator = alex, partner = jo, target = sam)
 
             // Offers live in the first conversation only, for everyone in it.
             assertEquals(jo.toString(), service.offers(alex, alexSam)?.bringPartner?.partnerUserId)
@@ -309,4 +310,47 @@ class BringPartnerOfferIntegrationTest {
             assertEquals(2, service.getConversationDetail(sam, alexSam).conversation.partnerInvites.size)
             assertTrue(service.getConversationDetail(sam, joSam).conversation.partnerInvites.isEmpty())
         }
+
+    @Test
+    fun aPartnersPrivateSoloMatchNeverSuppressesTheOtherPartnersOffer() =
+        runBlocking {
+            val service = service()
+            // Alex matched Sam on their own, earlier; Jo matches Sam later. No together match.
+            val alexSam = service.matchConversation(alex, sam)
+            val joSam = service.matchConversation(jo, sam)
+            sql("UPDATE conversations SET created_at = created_at - interval '1 second' WHERE id = '$alexSam'")
+
+            // Jo's offer must not hint that Alex already matched Sam.
+            assertEquals(alex.toString(), service.offers(jo, joSam)?.bringPartner?.partnerUserId)
+            assertEquals(jo.toString(), service.offers(alex, alexSam)?.bringPartner?.partnerUserId)
+        }
+
+    /** The rows a Psync together match leaves (PsyncMatchResolution): a session of the pair, a together row. */
+    private fun recordTogetherMatch(
+        initiator: UUID,
+        partner: UUID,
+        target: UUID,
+    ) {
+        val sessionId = UUID.randomUUID()
+        sql(
+            """
+            INSERT INTO psync_sessions (id, partner_link_id, initiator_user_id, status, deck_size, expires_at)
+            SELECT '$sessionId', id, '$initiator', 'completed', 10, now() + interval '1 day'
+            FROM user_profile_links WHERE user_id = '$initiator' AND linked_user_id = '$partner'
+            """.trimIndent(),
+        )
+        sql(
+            """
+            INSERT INTO psync_session_participants (session_id, user_id, role, consent_status, approved)
+            VALUES ('$sessionId', '$initiator', 'initiator', 'accepted', true),
+                   ('$sessionId', '$partner', 'partner', 'accepted', true)
+            """.trimIndent(),
+        )
+        sql(
+            """
+            INSERT INTO psync_session_matches (id, session_id, target_user_id, kind, owner_user_id, match_id)
+            VALUES ('${UUID.randomUUID()}', '$sessionId', '$target', 'together', NULL, NULL)
+            """.trimIndent(),
+        )
+    }
 }
