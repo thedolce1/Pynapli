@@ -108,13 +108,16 @@ answered on its own (`partner_chat_invites` already allowed one open invite per 
   to a group conversation work per invite exactly as for a single invite; declining one invite leaves
   any other open invite untouched.
 
-### Bring your partner (shortcut, 2026-11-18)
+### Bring your partner (shortcut, 2026-11-18; parallel 2026-11-19)
 
 A server-decided offer that makes the invite above obvious on a match; it is not a second consent
-path. `GET /v1/messages/threads/{id}` (and the read mark the client applies after it) carries `ConversationDto.partnerOffers` for the viewer
-(`JdbcMessagingPartnerOfferSql`), and the conversation chrome renders it in place of the small
-"Invite partner" button (no new surface, notification or badge; without the field the chrome is as before).
-The match moment keeps its two actions (Send a message, Keep swiping): partner invites live in the conversation.
+path. The read mark every client open and refresh ends with (`POST /v1/messages/threads/{id}/read`)
+carries `ConversationDto.partnerOffers` for the viewer, computed in one query
+(`JdbcMessagingPartnerOfferSql`); the plain detail read and the inbox list do not. The conversation
+chrome renders it in place of the small "Invite partner" button, beside any open invite's status, so
+each side can bring their own partner while the other side's invite is still open (no new surface,
+notification or badge; without the field the chrome is as before). The match moment keeps its two
+actions (Send a message, Keep swiping): partner invites live in the conversation.
 
 - **Own partner (`bringPartner`):** "Bring Jo into this chat?" with one "Invite Jo" button, which is the
   ordinary `POST .../partner-invite`. The partner and a third party still accept exactly as above.
@@ -126,9 +129,7 @@ The match moment keeps its two actions (Send a message, Keep swiping): partner i
   No action: only Sam can invite Riley.
 - **Only on a match:** the conversation's direct pair has a `matches` row (it survives the switch to a
   group), and the viewer is an active participant.
-- **One invite at a time:** no offer while any invite is open in the thread. Accept and decline act on
-  the newest open invite, so two open invites would leave the earlier invitee unable to respond until
-  the later one resolves (the manual flow can still create that; known gap).
+- **In parallel:** another open invite does not hide the offer; see "Several invites at once".
 - **Final once used:** a partner who has had any invite to the thread (pending, accepted or declined)
   is never offered or named there again. Declining stays quiet; the manual button is unchanged.
 - **Blocks:** a block in either direction between any two of the people who would be in the thread
@@ -136,17 +137,23 @@ The match moment keeps its two actions (Send a message, Keep swiping): partner i
   removes the whole offer for that viewer, without saying who blocked whom; the invite itself is still
   refused with the generic `MESSAGING_NOT_ALLOWED` when the invitee and a participant are blocked. A
   partner hidden from the viewer is left out of every check, so it can never change what they see.
-- **One group per couple pair:** no offer in a conversation when another conversation that has had a
-  partner invite already holds these people (only them and their linked partners, each of them there
-  in person or through their partner). A Psync together match opens one conversation per partner with
-  the target; once one grows, the other stops offering, including to the target, and the target's own
-  partner is offered in the group only.
+- **Risk:** a quarantined or terminated viewer is not offered their partner (the invite would be refused
+  with `RISK_RESTRICTED`).
+- **One group per couple pair:** a matched conversation offers nothing when a candidate partner of one
+  of its pair already has a matched conversation with the other that was opened first. A Psync together
+  match opens one conversation per partner with the target, so offers appear in the first one only,
+  for everyone in it, from the start; the four never get two groups or duplicate invites. Only partners
+  the viewer may see count, so a partner hidden from the viewer cannot reveal itself through this rule;
+  the cost is that when one partner of a couple hides their link from the target, the target is offered
+  their own partner in both conversations (the couple's own offers still appear in one).
 
-Four people (couple + couple) still need every individual accept, one invite at a time: Alex opens the
-match and taps Invite Jo (2), Sam opens and approves (2), Jo opens and accepts (2), Sam taps Invite
-Riley (1), Alex or Jo opens and approves (2), Riley opens and accepts (2): 11 taps, the same minimum as
-the manual button. The shortcut saves discovery (a named, explained offer instead of a small button
-that also shows where an invite would be refused), not taps or rounds.
+Four people (couple + couple) after a match, both invites sent in parallel: Alex opens the match (1)
+and taps Invite Jo (1); Sam opens it (1), approves Jo (1) and taps Invite Riley (1); Alex approves Riley
+(1, in the thread already open); Jo opens the invite (1) and accepts (1); Riley opens it (1) and accepts
+(1): 10 taps in two rounds (invites, then answers in any order). Before, invites ran one after the other:
+11 taps in three rounds, with Alex reopening the thread to approve Riley. Of the 10, six are decisions
+that must stay (two invites, two approvals, two accepts) and four are navigation (each person opening).
+
 
 ## Media And Private Albums
 

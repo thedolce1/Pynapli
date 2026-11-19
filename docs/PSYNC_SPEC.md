@@ -293,10 +293,12 @@ Partner invite rules still apply:
 - Blocks override all match/chat state.
 
 Today a together match opens each partner's own direct conversation with the target (two match rows,
-two conversations, no invites). "Bring your partner" (MESSAGING_SPEC) offers each partner their own
-partner in their conversation; once one of them invites, the other conversation stops offering (to
-both its people), and the target's partner is then offered in the group only, so the four never end
-up with two groups or duplicate invites. Every join is still the ordinary partner invite with its accepts.
+two conversations, no invites). "Bring your partner" (MESSAGING_SPEC) makes offers only in the one
+opened first: there the initiating partner can bring the other and the target can bring their own
+partner, at the same time; the second conversation offers nothing to either of its people, so the four
+never end up with two groups or duplicate invites. Every join is still the ordinary partner invite
+with its accepts. (If a partner hides their link from the target, the target's own offer can also
+appear in the second conversation; hiding it there would reveal the link.)
 
 Solo passthrough chat:
 

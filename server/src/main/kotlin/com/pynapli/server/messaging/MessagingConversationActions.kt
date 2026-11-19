@@ -90,13 +90,7 @@ internal class MessagingConversationActions(
             repository.getConversationDetail(userId, conversationId, limit, before)
                 ?: throw MessagingException("CONVERSATION_NOT_FOUND")
         conversationGuard.requireVisibleToViewer(detail.conversation, userId)
-        // The canonical detail read (and the read mark after it) carry the "Bring your partner" offer;
-        // clients refetch both after every realtime delta. Internal guard reads skip the extra queries.
-        val partnerOffers = repository.loadPartnerOffers(userId, detail.conversation)
-        return dtoMapper.toDto(
-            detail.copy(conversation = detail.conversation.copy(partnerOffers = partnerOffers)),
-            userId,
-        )
+        return dtoMapper.toDto(detail, userId)
     }
 
     suspend fun markConversationRead(
@@ -115,8 +109,8 @@ internal class MessagingConversationActions(
                 statuses = MessagingParticipantStatuses.active,
             )
         }
-        // Clients replace the open thread's conversation with this response after every detail read,
-        // so it carries the same "Bring your partner" offer as the detail.
+        // Every client open and refresh of a thread ends with this read mark, whose conversation replaces
+        // the open one, so only it carries the "Bring your partner" offer (one query per open).
         val partnerOffers = repository.loadPartnerOffers(userId, conversation)
         return dtoMapper.toDto(conversation.copy(partnerOffers = partnerOffers), userId)
     }

@@ -24,8 +24,8 @@ import kotlin.test.assertTrue
 
 /**
  * "Bring your partner" (MESSAGING_SPEC "Partner Invite Flow"): a server-decided, read-only offer on a
- * matched conversation. Using it is the ordinary partner invite, with the same accepts.
- * Alex is linked with Jo; Sam is linked with Riley; Alex and Sam match.
+ * matched conversation, carried by the read mark every open ends with. Using it is the ordinary partner
+ * invite, and both sides can use it at once. Alex is linked with Jo; Sam with Riley; Alex and Sam match.
  */
 class BringPartnerOfferIntegrationTest {
     private val dataSource: DataSource = PynapliTestDatabase.dataSource
@@ -65,15 +65,25 @@ class BringPartnerOfferIntegrationTest {
     ): String {
         dataSource.insertMatch(userA, userB)
         openMatchConversation(userA, userB)
-        return listConversations(userA).items.single { conversation ->
-            conversation.participants.any { it.userId == userB.toString() }
-        }.conversationId
+        return listConversations(userA)
+            .items
+            .single { conversation -> conversation.participants.any { it.userId == userB.toString() } }
+            .conversationId
     }
 
+    /** What the client sees: every open and refresh ends with the read mark, which carries the offer. */
     private suspend fun MessagingService.offers(
         userId: UUID,
         conversationId: String,
-    ): ConversationPartnerOffersDto? = getConversationDetail(userId, conversationId).conversation.partnerOffers
+    ): ConversationPartnerOffersDto? = markConversationRead(userId, conversationId).partnerOffers
+
+    private suspend fun MessagingService.inviteIdFor(
+        partner: UUID,
+        conversationId: String,
+    ): String {
+        val invites = getConversationDetail(alex, conversationId).conversation.partnerInvites
+        return invites.single { it.invitedPartnerUserId == partner.toString() }.inviteId
+    }
 
     private fun sql(statementText: String) {
         dataSource.connection.use { connection ->
@@ -97,13 +107,9 @@ class BringPartnerOfferIntegrationTest {
             assertEquals(riley.toString(), samOffers.bringPartner?.partnerUserId)
             assertEquals("Jo", samOffers.participantPartners.single().partnerDisplayName)
 
-            // The read mark the client applies after opening carries the same offer.
-            assertEquals(
-                jo.toString(),
-                service.markConversationRead(alex, conversationId).partnerOffers?.bringPartner?.partnerUserId,
-            )
-            // The inbox list does not carry it.
+            // Only the read mark carries it: not the inbox list, not the plain detail read.
             assertNull(service.listConversations(alex).items.single().partnerOffers)
+            assertNull(service.getConversationDetail(alex, conversationId).conversation.partnerOffers)
         }
 
     @Test
@@ -122,7 +128,7 @@ class BringPartnerOfferIntegrationTest {
         }
 
     @Test
-    fun usingTheOfferCreatesOnlyTheManualInviteAndEveryoneStillAccepts() =
+    fun bothSidesCanBringTheirPartnerAtOnceAndEveryoneStillAccepts() =
         runBlocking {
             val service = service()
             val conversationId = service.matchConversation(alex, sam)
@@ -134,46 +140,44 @@ class BringPartnerOfferIntegrationTest {
             assertEquals(jo.toString(), invite.invitedPartnerUserId)
             assertEquals(PartnerChatInviteStatus.PENDING, invite.partnerStatus)
             assertEquals(PartnerChatInviteStatus.PENDING, invite.thirdPartyStatus)
-            assertEquals(
-                ConversationParticipantStatus.INVITED,
-                invited.participants.single { it.userId == jo.toString() }.status,
-            )
             assertNull(invited.participants.firstOrNull { it.userId == riley.toString() })
-            // One invite at a time: no offer for anyone while it is open.
-            assertNull(service.offers(alex, conversationId))
-            assertNull(service.offers(sam, conversationId))
-
-            // The same two accepts as today.
-            service.acceptPartnerInvite(sam, conversationId)
-            val joined = service.acceptPartnerInvite(jo, conversationId)
-            assertEquals(
-                ConversationParticipantStatus.ACTIVE,
-                joined.conversation.participants.single { it.userId == jo.toString() }.status,
-            )
-
-            // Jo's invite exists: Alex is not offered Jo again; Sam can now bring Riley.
+            // Alex is not offered Jo again; Sam can bring Riley straight away, without waiting.
             assertNull(service.offers(alex, conversationId)?.bringPartner)
             assertEquals(riley.toString(), service.offers(sam, conversationId)?.bringPartner?.partnerUserId)
 
-            // Riley declines: quiet and final, the offer never returns.
             service.inviteLinkedPartnerToConversation(sam, conversationId)
-            service.declinePartnerInvite(riley, conversationId)
-            assertNull(service.offers(sam, conversationId))
+            assertEquals(2, service.getConversationDetail(alex, conversationId).conversation.partnerInvites.size)
             assertNull(service.offers(alex, conversationId))
-            assertNull(service.offers(jo, conversationId))
+            assertNull(service.offers(sam, conversationId))
+
+            // Every individual accept, in any order; nothing joined until then.
+            val joInvite = service.inviteIdFor(jo, conversationId)
+            val rileyInvite = service.inviteIdFor(riley, conversationId)
+            service.acceptPartnerInvite(jo, conversationId)
+            service.acceptPartnerInvite(riley, conversationId)
+            service.acceptPartnerInvite(sam, conversationId, joInvite)
+            val all = service.acceptPartnerInvite(alex, conversationId, rileyInvite)
+            assertEquals(
+                setOf(ConversationParticipantStatus.ACTIVE),
+                all.conversation.participants.map { it.status }.toSet(),
+            )
+            assertEquals(4, all.conversation.participants.size)
+            listOf(alex, sam, jo, riley).forEach { assertNull(service.offers(it, conversationId)) }
         }
 
     @Test
-    fun aDeclinedOwnInviteIsNotOfferedAgain() =
+    fun aDeclineIsFinalForThatOfferAndLeavesTheOtherSideAlone() =
         runBlocking {
             val service = service()
             val conversationId = service.matchConversation(alex, sam)
             service.inviteLinkedPartnerToConversation(alex, conversationId)
-            service.declinePartnerInvite(sam, conversationId)
+            service.declinePartnerInvite(jo, conversationId)
 
-            // Sam's own offer for Riley stays; Alex's for Jo is gone for good.
+            // Jo declined: Alex is never offered Jo here again; Sam's offer is unaffected.
             assertNull(service.offers(alex, conversationId)?.bringPartner)
             assertEquals(riley.toString(), service.offers(sam, conversationId)?.bringPartner?.partnerUserId)
+            // Jo is no longer named to Sam either.
+            assertTrue(service.offers(sam, conversationId)?.participantPartners.orEmpty().isEmpty())
         }
 
     @Test
@@ -199,7 +203,10 @@ class BringPartnerOfferIntegrationTest {
             assertTrue(service.offers(alex, conversationId)?.participantPartners.orEmpty().isEmpty())
 
             sql("UPDATE profiles SET verified_at = now() WHERE user_id = '$alex'")
-            assertEquals("Riley", service.offers(alex, conversationId)?.participantPartners?.single()?.partnerDisplayName)
+            assertEquals(
+                "Riley",
+                service.offers(alex, conversationId)?.participantPartners?.single()?.partnerDisplayName,
+            )
         }
 
     @Test
@@ -209,7 +216,10 @@ class BringPartnerOfferIntegrationTest {
             val conversationId = service.matchConversation(alex, sam)
             sql("UPDATE discovery_settings SET partner_visibility = 'matches_only' WHERE user_id = '$sam'")
 
-            assertEquals("Riley", service.offers(alex, conversationId)?.participantPartners?.single()?.partnerDisplayName)
+            assertEquals(
+                "Riley",
+                service.offers(alex, conversationId)?.participantPartners?.single()?.partnerDisplayName,
+            )
         }
 
     @Test
@@ -233,11 +243,10 @@ class BringPartnerOfferIntegrationTest {
         }
 
     @Test
-    fun aBlockBetweenAnyTwoWouldBeParticipantsStopsTheOfferAndTheInvite() =
+    fun aBlockBetweenAnInviteeAndAParticipantStopsTheOfferAndTheInvite() =
         runBlocking {
             val service = service()
             val conversationId = service.matchConversation(alex, sam)
-            // Jo blocked Sam: Alex is not offered Jo, and the invite itself is refused generically.
             dataSource.insertBlock(blockerUserId = jo, blockedUserId = sam)
 
             assertNull(service.offers(alex, conversationId))
@@ -278,27 +287,26 @@ class BringPartnerOfferIntegrationTest {
         }
 
     @Test
-    fun aPsyncTogetherMatchGetsOneGroupNotTwo() =
+    fun aPsyncTogetherMatchOffersInOneConversationOnly() =
         runBlocking {
             val service = service()
             // A Psync together match: Alex and Jo each match Sam and get their own conversation with Sam.
             val alexSam = service.matchConversation(alex, sam)
             val joSam = service.matchConversation(jo, sam)
+            sql("UPDATE conversations SET created_at = created_at - interval '1 second' WHERE id = '$alexSam'")
+
+            // Offers live in the first conversation only, for everyone in it.
             assertEquals(jo.toString(), service.offers(alex, alexSam)?.bringPartner?.partnerUserId)
-            assertEquals(alex.toString(), service.offers(jo, joSam)?.bringPartner?.partnerUserId)
-
-            service.inviteLinkedPartnerToConversation(alex, alexSam)
-
-            // Jo's own conversation with Sam stops offering anything, to Jo or to Sam.
-            assertNull(service.offers(jo, joSam))
-            assertNull(service.offers(sam, joSam))
-
-            service.acceptPartnerInvite(sam, alexSam)
-            service.acceptPartnerInvite(jo, alexSam)
-
-            // The remaining step, Sam's partner, is offered in the group only.
             assertEquals(riley.toString(), service.offers(sam, alexSam)?.bringPartner?.partnerUserId)
-            assertNull(service.offers(sam, joSam))
             assertNull(service.offers(jo, joSam))
+            assertNull(service.offers(sam, joSam))
+
+            // Both bring their partner at once; no second group, no duplicate invite.
+            service.inviteLinkedPartnerToConversation(alex, alexSam)
+            service.inviteLinkedPartnerToConversation(sam, alexSam)
+            assertNull(service.offers(jo, joSam))
+            assertNull(service.offers(sam, joSam))
+            assertEquals(2, service.getConversationDetail(sam, alexSam).conversation.partnerInvites.size)
+            assertTrue(service.getConversationDetail(sam, joSam).conversation.partnerInvites.isEmpty())
         }
 }

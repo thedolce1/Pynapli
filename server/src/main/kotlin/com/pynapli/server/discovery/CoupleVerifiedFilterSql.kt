@@ -62,24 +62,39 @@ object CoupleVerifiedFilterSql {
                           WHERE cv_hidden.hider_user_id = ?::uuid
                             AND cv_hidden.hidden_user_id = cv_user.id
                       )
-                      AND (
-                          $settings.partner_visibility = 'public'
-                          OR (
-                              $settings.partner_visibility = 'verified_only'
-                              AND EXISTS (
-                                  SELECT 1 FROM profiles cv_viewer
-                                  WHERE cv_viewer.user_id = ?::uuid AND cv_viewer.verified_at IS NOT NULL
-                              )
-                          )
-                          OR (
-                              $settings.partner_visibility = 'matches_only'
-                              AND EXISTS (
-                                  SELECT 1 FROM matches cv_match
-                                  WHERE LEAST(cv_match.user_a, cv_match.user_b) = LEAST(?::uuid, $user.id)
-                                    AND GREATEST(cv_match.user_a, cv_match.user_b) = GREATEST(?::uuid, $user.id)
-                              )
-                          )
-                      )
+                      AND ${ownerShowsPartnerToViewer(settings = settings, owner = "$user.id")}
+                )
+            )
+        )
+        """.trimIndent()
+
+    /**
+     * The owner's partner_visibility allows this viewer to see their linked partner: public; verified
+     * only when the viewer is photo-verified; matches only when the viewer and the owner have matched;
+     * hidden never. [settings] is the owner's `discovery_settings` alias and [owner] the owner's id
+     * expression. Three viewer placeholders, in order: verified check, then the match LEAST/GREATEST.
+     * Shared with the messaging "Bring your partner" offer (JdbcMessagingPartnerOfferSql).
+     */
+    fun ownerShowsPartnerToViewer(
+        settings: String,
+        owner: String,
+    ): String =
+        """
+        (
+            $settings.partner_visibility = 'public'
+            OR (
+                $settings.partner_visibility = 'verified_only'
+                AND EXISTS (
+                    SELECT 1 FROM profiles pv_viewer
+                    WHERE pv_viewer.user_id = ?::uuid AND pv_viewer.verified_at IS NOT NULL
+                )
+            )
+            OR (
+                $settings.partner_visibility = 'matches_only'
+                AND EXISTS (
+                    SELECT 1 FROM matches pv_match
+                    WHERE LEAST(pv_match.user_a, pv_match.user_b) = LEAST(?::uuid, $owner)
+                      AND GREATEST(pv_match.user_a, pv_match.user_b) = GREATEST(?::uuid, $owner)
                 )
             )
         )

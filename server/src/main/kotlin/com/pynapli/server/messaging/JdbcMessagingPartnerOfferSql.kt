@@ -1,311 +1,164 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import java.sql.Connection
 import java.util.UUID
 
 /*
  * "Bring your partner" (MESSAGING_SPEC "Partner Invite Flow"): a per-viewer, read-only offer on a
- * matched conversation. It never creates anything: the own-partner offer is acted on through the
- * existing POST .../partner-invite, with its existing accept/decline and third-party approval, and the
- * other person's partner is only named, never invitable by the viewer. Every gate below only narrows
- * what the manual invite would allow.
+ * matched conversation, computed in one query. Acting on it is the ordinary partner invite; several
+ * invites can be open at once, so each person can bring their own partner straight after a match.
  *
- * No offer at all when:
- *  - the viewer is not an active participant, or the conversation's direct pair has no match;
- *  - any partner invite is open in the conversation (accept/decline act on the newest open invite
- *    only, so the offer keeps invites one at a time);
- *  - a block exists in either direction between any two of the people who would end up in it: the
- *    present (active and invited) participants plus every partner this viewer would be offered or
- *    shown. Partners hidden from the viewer are left out of this and every other check, so a hidden
- *    partner never changes what the viewer sees;
- *  - a sibling conversation already holds these people (Psync: each partner's own conversation with
- *    the same target) and has had a partner invite: one group per couple-pair, never two.
- * A partner is offered (own) or named (another participant's) only when they are not in the
- * conversation and have never been invited to it (pending, accepted or declined: declining is final
- * for the offer). Another participant's partner is named only where that participant's
- * partner_visibility already shows them to the viewer (the Grid/Swipe partner-mini rule).
+ * Candidates are the linked partners of the conversation's active participants who are not in it and
+ * have never been invited to it (pending, accepted or declined: declining is final for the offer):
+ *  - the viewer's own partner (offered; not while the viewer is risk-restricted, like the invite);
+ *  - another participant's partner the viewer may see (named only): the owner's partner_visibility
+ *    allows this viewer (CoupleVerifiedFilterSql.ownerShowsPartnerToViewer), and the partner is
+ *    visible, not incognito, not quarantined/terminated and not hidden by the viewer.
+ * Nothing is offered unless the viewer is an active participant of a matched pair's conversation, and
+ * nothing at all when:
+ *  - a block exists in either direction between any two of the people who would end up together (the
+ *    present participants and every candidate). A partner hidden from the viewer is never a candidate,
+ *    so it cannot change what the viewer sees;
+ *  - the conversation is the later of two matched conversations of the same couple pair: a candidate
+ *    partner of one of the pair already has a matched conversation with the other that was opened
+ *    first (a Psync together match opens one per partner with the target). Offers then appear only in
+ *    the first, so the four end up in one group, not two.
  */
 internal fun Connection.loadPartnerOffers(
     viewerUserId: UUID,
     conversation: ConversationRecord,
 ): ConversationPartnerOffersRecord? {
-    if (conversation.partnerInvite != null) return null
-    val activeUserIds =
-        conversation.participants
-            .filter { it.status == PARTICIPANT_ACTIVE }
-            .map { it.userId }
-            .distinct()
-    if (viewerUserId !in activeUserIds) return null
-    if (!isMatchedDirectConversation(conversation.conversationId)) return null
-
-    val partners = loadActiveLinkedPartners(activeUserIds)
-    if (partners.isEmpty()) return null
-    val presentUserIds = conversation.participants.map { it.userId }.toSet()
-    val everInvited = loadEverInvitedPartnerIds(conversation.conversationId)
-
-    fun isNewToConversation(partner: LinkedPartnerRow): Boolean =
-        partner.userId != viewerUserId &&
-            partner.userId !in presentUserIds &&
-            partner.userId !in everInvited
-
-    val viewerPartner = partners[viewerUserId]
-    val bringPartner =
-        viewerPartner?.takeIf { isNewToConversation(it) && !isSocialActionRestricted(viewerUserId) }
-    // Other participants' partners this viewer may see, keyed by that participant.
-    val visibleOtherPartners =
-        activeUserIds
-            .filter { it != viewerUserId && it != viewerPartner?.userId }
-            .mapNotNull { participantUserId ->
-                partners[participantUserId]
-                    ?.takeIf { isNewToConversation(it) }
-                    ?.takeIf { isPartnerVisibleToViewer(viewerUserId, participantUserId, it.userId) }
-                    ?.let { participantUserId to it }
-            }.toMap()
-    if (bringPartner == null && visibleOtherPartners.isEmpty()) return null
-
-    val wouldBeInConversation =
-        presentUserIds + listOfNotNull(bringPartner?.userId) + visibleOtherPartners.values.map { it.userId }
-    if (anyBlockAmong(wouldBeInConversation)) return null
-    val knownPartners =
-        buildMap<UUID, UUID> {
-            viewerPartner?.let { put(viewerUserId, it.userId) }
-            visibleOtherPartners.forEach { (participantUserId, partner) -> put(participantUserId, partner.userId) }
-        }
-    if (hasProgressedSiblingConversation(conversation.conversationId, activeUserIds, knownPartners)) return null
-    return ConversationPartnerOffersRecord(
-        bringPartner = bringPartner?.let { BringPartnerOfferRecord(it.userId, it.displayName) },
-        participantPartners =
-            visibleOtherPartners.map { (participantUserId, partner) ->
-                ParticipantPartnerOfferRecord(participantUserId, partner.displayName)
-            },
-    )
-}
-
-private const val PARTICIPANT_ACTIVE = "active"
-
-private data class LinkedPartnerRow(
-    val userId: UUID,
-    val displayName: String,
-)
-
-private fun Connection.isMatchedDirectConversation(conversationId: UUID): Boolean =
-    prepareStatement(
-        """
-        SELECT EXISTS (
-            SELECT 1
-            FROM direct_conversations dc
-            JOIN matches mt
-              ON LEAST(mt.user_a, mt.user_b) = LEAST(dc.user_a_id, dc.user_b_id)
-             AND GREATEST(mt.user_a, mt.user_b) = GREATEST(dc.user_a_id, dc.user_b_id)
-            WHERE dc.conversation_id = ?
-        )
-        """.trimIndent(),
-    ).use { statement ->
-        statement.setObject(1, conversationId)
-        statement.executeQuery().use { rs ->
-            rs.next()
-            rs.getBoolean(1)
-        }
-    }
-
-/** Same link rule as [loadActiveLinkedPartnerUserId] (what the manual invite uses), for several users. */
-private fun Connection.loadActiveLinkedPartners(userIds: List<UUID>): Map<UUID, LinkedPartnerRow> =
-    prepareStatement(
-        """
-        SELECT upl.user_id,
-               upl.linked_user_id,
-               COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS display_name
-        FROM user_profile_links upl
-        JOIN users linked_user
-          ON linked_user.id = upl.linked_user_id
-         AND linked_user.status = 'active'
-         AND linked_user.deleted_at IS NULL
-        JOIN profiles linked_profile ON linked_profile.user_id = linked_user.id
-        WHERE upl.user_id = ANY(?)
-          AND upl.status = 'active'
-          AND upl.unlinked_at IS NULL
-        ORDER BY upl.user_id, upl.accepted_at DESC NULLS LAST, upl.id
-        """.trimIndent(),
-    ).use { statement ->
-        statement.setArray(1, createArrayOf("uuid", userIds.toTypedArray()))
-        statement.executeQuery().use { rs ->
-            buildMap<UUID, LinkedPartnerRow> {
-                while (rs.next()) {
-                    val ownerUserId = rs.getObject("user_id", UUID::class.java)
-                    if (ownerUserId !in this) {
-                        put(
-                            ownerUserId,
-                            LinkedPartnerRow(
-                                userId = rs.getObject("linked_user_id", UUID::class.java),
-                                displayName = rs.getString("display_name"),
+    val rows =
+        prepareStatement(PARTNER_OFFER_QUERY).use { statement ->
+            var index = 1
+            statement.setObject(index++, conversation.conversationId) // present
+            statement.setObject(index++, conversation.conversationId) // pair
+            repeat(VIEWER_PLACEHOLDERS) { statement.setObject(index++, viewerUserId) }
+            statement.executeQuery().use { rs ->
+                buildList {
+                    while (rs.next()) {
+                        add(
+                            Triple(
+                                rs.getObject("owner_user_id", UUID::class.java),
+                                rs.getObject("partner_user_id", UUID::class.java),
+                                rs.getString("partner_name"),
                             ),
                         )
                     }
                 }
             }
         }
-    }
-
-private fun Connection.loadEverInvitedPartnerIds(conversationId: UUID): Set<UUID> =
-    prepareStatement(
-        "SELECT DISTINCT invited_partner_user_id FROM partner_chat_invites WHERE thread_id = ?",
-    ).use { statement ->
-        statement.setObject(1, conversationId)
-        statement.executeQuery().use { rs ->
-            buildSet {
-                while (rs.next()) add(rs.getObject(1, UUID::class.java))
-            }
-        }
-    }
-
-private fun Connection.anyBlockAmong(userIds: Set<UUID>): Boolean =
-    prepareStatement(
-        """
-        SELECT EXISTS (
-            SELECT 1 FROM user_blocks
-            WHERE blocker_user_id = ANY(?)
-              AND blocked_user_id = ANY(?)
-        )
-        """.trimIndent(),
-    ).use { statement ->
-        val array = createArrayOf("uuid", userIds.toTypedArray())
-        statement.setArray(1, array)
-        statement.setArray(2, array)
-        statement.executeQuery().use { rs ->
-            rs.next()
-            rs.getBoolean(1)
-        }
-    }
-
-/** Mirrors RiskPolicyService.isSocialActionRestricted, which refuses the manual invite. */
-private fun Connection.isSocialActionRestricted(userId: UUID): Boolean =
-    prepareStatement(
-        "SELECT EXISTS (SELECT 1 FROM account_risk_states WHERE user_id = ? AND tier IN ('quarantine', 'terminate'))",
-    ).use { statement ->
-        statement.setObject(1, userId)
-        statement.executeQuery().use { rs ->
-            rs.next()
-            rs.getBoolean(1)
-        }
-    }
-
-/**
- * Whether [ownerUserId]'s linked partner [partnerUserId] is shown to [viewerUserId]: the partner-mini
- * rule of CoupleVerifiedFilterSql without its verified conditions (active, visible, not incognito, not
- * quarantined/terminated, not hidden by the viewer, and the owner's partner_visibility allows this
- * viewer; 'hidden' never). Blocks are checked separately across everyone in the conversation.
- */
-private fun Connection.isPartnerVisibleToViewer(
-    viewerUserId: UUID,
-    ownerUserId: UUID,
-    partnerUserId: UUID,
-): Boolean =
-    prepareStatement(
-        """
-        SELECT EXISTS (
-            SELECT 1
-            FROM users partner_user
-            JOIN profiles partner_profile ON partner_profile.user_id = partner_user.id
-            JOIN discovery_settings partner_ds ON partner_ds.user_id = partner_user.id
-            JOIN discovery_settings owner_ds ON owner_ds.user_id = ?
-            LEFT JOIN account_risk_states partner_risk ON partner_risk.user_id = partner_user.id
-            WHERE partner_user.id = ?
-              AND partner_user.status = 'active'
-              AND partner_user.deleted_at IS NULL
-              AND partner_profile.visibility_status = 'visible'
-              AND partner_ds.incognito = false
-              AND COALESCE(partner_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-              AND NOT EXISTS (
-                  SELECT 1 FROM user_hidden_profiles hidden
-                  WHERE hidden.hider_user_id = ?
-                    AND hidden.hidden_user_id = partner_user.id
-              )
-              AND (
-                  owner_ds.partner_visibility = 'public'
-                  OR (
-                      owner_ds.partner_visibility = 'verified_only'
-                      AND EXISTS (
-                          SELECT 1 FROM profiles viewer_profile
-                          WHERE viewer_profile.user_id = ? AND viewer_profile.verified_at IS NOT NULL
-                      )
-                  )
-                  OR (
-                      owner_ds.partner_visibility = 'matches_only'
-                      AND EXISTS (
-                          SELECT 1 FROM matches mm
-                          WHERE LEAST(mm.user_a, mm.user_b) = LEAST(?::uuid, ?::uuid)
-                            AND GREATEST(mm.user_a, mm.user_b) = GREATEST(?::uuid, ?::uuid)
-                      )
-                  )
-              )
-        )
-        """.trimIndent(),
-    ).use { statement ->
-        statement.setObject(1, ownerUserId)
-        statement.setObject(2, partnerUserId)
-        statement.setObject(3, viewerUserId)
-        statement.setObject(4, viewerUserId)
-        statement.setObject(5, viewerUserId)
-        statement.setObject(6, ownerUserId)
-        statement.setObject(7, viewerUserId)
-        statement.setObject(8, ownerUserId)
-        statement.executeQuery().use { rs ->
-            rs.next()
-            rs.getBoolean(1)
-        }
-    }
-
-/**
- * Another conversation that has had a partner invite and already holds this conversation's people:
- * only them and their linked partners, with every active participant here present there in person or
- * through their partner. A Psync together match opens one conversation per partner with the same
- * target; once one of them grows, the other stops offering, so the four never get two groups.
- * [knownPartners] (participant to partner) holds only links this viewer may see.
- */
-private fun Connection.hasProgressedSiblingConversation(
-    conversationId: UUID,
-    activeUserIds: List<UUID>,
-    knownPartners: Map<UUID, UUID>,
-): Boolean {
-    val couplePeople = (activeUserIds + knownPartners.values).toSet()
-    val membersBySibling =
-        prepareStatement(
-            """
-            SELECT cp.conversation_id, cp.user_id
-            FROM conversation_participants cp
-            WHERE cp.conversation_id <> ?
-              AND cp.left_at IS NULL
-              AND cp.invitation_status IN ('active', 'invited')
-              AND cp.conversation_id IN (
-                  SELECT pci.thread_id
-                  FROM partner_chat_invites pci
-                  JOIN conversation_participants anchor
-                    ON anchor.conversation_id = pci.thread_id
-                   AND anchor.user_id = ANY(?)
-                   AND anchor.left_at IS NULL
-                   AND anchor.invitation_status IN ('active', 'invited')
-                  WHERE pci.thread_id <> ?
-              )
-            """.trimIndent(),
-        ).use { statement ->
-            statement.setObject(1, conversationId)
-            statement.setArray(2, createArrayOf("uuid", couplePeople.toTypedArray()))
-            statement.setObject(3, conversationId)
-            statement.executeQuery().use { rs ->
-                val rows = mutableMapOf<UUID, MutableSet<UUID>>()
-                while (rs.next()) {
-                    rows
-                        .getOrPut(rs.getObject("conversation_id", UUID::class.java)) { mutableSetOf() }
-                        .add(rs.getObject("user_id", UUID::class.java))
-                }
-                rows
-            }
-        }
-    return membersBySibling.values.any { members ->
-        couplePeople.containsAll(members) &&
-            activeUserIds.all { userId ->
-                val partnerUserId = knownPartners[userId]
-                userId in members || (partnerUserId != null && partnerUserId in members)
-            }
-    }
+    if (rows.isEmpty()) return null
+    val (own, others) = rows.partition { (ownerUserId, _, _) -> ownerUserId == viewerUserId }
+    return ConversationPartnerOffersRecord(
+        bringPartner =
+            own.firstOrNull()?.let { (_, partnerUserId, name) -> BringPartnerOfferRecord(partnerUserId, name) },
+        participantPartners =
+            others.map { (ownerUserId, _, name) -> ParticipantPartnerOfferRecord(ownerUserId, name) },
+    )
 }
+
+// Viewer is active, own partner, other partner, hidden-by-viewer, then ownerShowsPartnerToViewer's three.
+private const val VIEWER_PLACEHOLDERS = 7
+
+private val PARTNER_OFFER_QUERY =
+    """
+    WITH present AS (
+        SELECT user_id, invitation_status
+        FROM conversation_participants
+        WHERE conversation_id = ?
+          AND left_at IS NULL
+          AND invitation_status IN ('active', 'invited')
+    ),
+    pair AS (
+        SELECT dc.user_a_id, dc.user_b_id, c.created_at, c.id
+        FROM direct_conversations dc
+        JOIN conversations c ON c.id = dc.conversation_id
+        JOIN matches mt
+          ON LEAST(mt.user_a, mt.user_b) = LEAST(dc.user_a_id, dc.user_b_id)
+         AND GREATEST(mt.user_a, mt.user_b) = GREATEST(dc.user_a_id, dc.user_b_id)
+        WHERE dc.conversation_id = ?
+          AND EXISTS (SELECT 1 FROM present WHERE user_id = ? AND invitation_status = 'active')
+    ),
+    candidates AS (
+        SELECT owner_cp.user_id AS owner_user_id,
+               upl.linked_user_id AS partner_user_id,
+               COALESCE(NULLIF(partner_profile.display_name, ''), 'Pynapli User') AS partner_name
+        FROM present owner_cp
+        JOIN pair ON true
+        JOIN user_profile_links upl
+          ON upl.user_id = owner_cp.user_id
+         AND upl.status = 'active'
+         AND upl.unlinked_at IS NULL
+        JOIN users partner_user
+          ON partner_user.id = upl.linked_user_id
+         AND partner_user.status = 'active'
+         AND partner_user.deleted_at IS NULL
+        JOIN profiles partner_profile ON partner_profile.user_id = partner_user.id
+        LEFT JOIN discovery_settings partner_ds ON partner_ds.user_id = partner_user.id
+        LEFT JOIN discovery_settings owner_ds ON owner_ds.user_id = owner_cp.user_id
+        LEFT JOIN account_risk_states partner_risk ON partner_risk.user_id = partner_user.id
+        WHERE owner_cp.invitation_status = 'active'
+          AND upl.linked_user_id NOT IN (SELECT user_id FROM present)
+          AND NOT EXISTS (
+              SELECT 1 FROM partner_chat_invites pci
+              WHERE pci.thread_id = pair.id
+                AND pci.invited_partner_user_id = upl.linked_user_id
+          )
+          AND (
+              (
+                  owner_cp.user_id = ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM account_risk_states viewer_risk
+                      WHERE viewer_risk.user_id = owner_cp.user_id
+                        AND viewer_risk.tier IN ('quarantine', 'terminate')
+                  )
+              )
+              OR (
+                  owner_cp.user_id <> ?
+                  AND partner_profile.visibility_status = 'visible'
+                  AND partner_ds.incognito = false
+                  AND COALESCE(partner_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_hidden_profiles hidden
+                      WHERE hidden.hider_user_id = ?
+                        AND hidden.hidden_user_id = partner_user.id
+                  )
+                  AND ${CoupleVerifiedFilterSql.ownerShowsPartnerToViewer(settings = "owner_ds", owner = "owner_cp.user_id")}
+              )
+          )
+    ),
+    people AS (
+        SELECT user_id FROM present
+        UNION
+        SELECT partner_user_id FROM candidates
+    )
+    SELECT owner_user_id, partner_user_id, partner_name
+    FROM candidates
+    WHERE NOT EXISTS (
+        SELECT 1 FROM user_blocks ub
+        WHERE ub.blocker_user_id IN (SELECT user_id FROM people)
+          AND ub.blocked_user_id IN (SELECT user_id FROM people)
+    )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM pair
+        JOIN candidates known ON known.owner_user_id IN (pair.user_a_id, pair.user_b_id)
+        JOIN direct_conversations sibling
+          ON LEAST(sibling.user_a_id, sibling.user_b_id) = LEAST(
+                 known.partner_user_id,
+                 CASE WHEN known.owner_user_id = pair.user_a_id THEN pair.user_b_id ELSE pair.user_a_id END
+             )
+         AND GREATEST(sibling.user_a_id, sibling.user_b_id) = GREATEST(
+                 known.partner_user_id,
+                 CASE WHEN known.owner_user_id = pair.user_a_id THEN pair.user_b_id ELSE pair.user_a_id END
+             )
+        JOIN conversations sibling_conversation ON sibling_conversation.id = sibling.conversation_id
+        JOIN matches sibling_match
+          ON LEAST(sibling_match.user_a, sibling_match.user_b) = LEAST(sibling.user_a_id, sibling.user_b_id)
+         AND GREATEST(sibling_match.user_a, sibling_match.user_b) = GREATEST(sibling.user_a_id, sibling.user_b_id)
+        WHERE (sibling_conversation.created_at, sibling_conversation.id) < (pair.created_at, pair.id)
+    )
+    ORDER BY owner_user_id
+    """.trimIndent()

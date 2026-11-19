@@ -154,7 +154,7 @@ data class ConversationRecord(
     // The viewer's new-matches rail: a matched pair's conversation the viewer has not acted on yet
     // (JdbcMessagingMatchRailSql). Per viewer.
     val newMatch: Boolean = false,
-    // The viewer's "Bring your partner" offer; set on the conversation-detail read and the read mark only.
+    // The viewer's "Bring your partner" offer; set on the read mark (POST .../read) only.
     val partnerOffers: ConversationPartnerOffersRecord? = null,
 )
 

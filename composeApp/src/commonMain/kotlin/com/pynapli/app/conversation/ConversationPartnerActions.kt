@@ -66,7 +66,7 @@ internal fun ConversationPartnerActions(
                     participant.status in visibleConversationParticipantStatuses
             }
     // The server's "Bring your partner" offer replaces the small Invite partner button when present;
-    // without it (no offer, or an older server) the chrome is exactly as before.
+    // without it (no offer, or an older server) the chrome is as before.
     val offer = state.partnerOfferUi()
     val showInvitePartner =
         linkedPartnerUserId != null &&
@@ -127,8 +127,18 @@ internal fun ConversationPartnerActions(
             )
         }
 
-        offer != null || showInvitePartner || showLeave || partnerFeedback != null ||
-            state.isInvitingPartner || state.isLeaving -> {
+        else -> Unit
+    }
+    val statusShown =
+        partnerAcceptedWaiting || state.isViewerInvited || thirdPartyApprovalNeeded || waitingForPartner || inviterWaiting
+    // With a "Bring your partner" offer the actions show beside any open invite's status, so each side
+    // can bring their own partner while the other side's invite is still open.
+    when {
+        (offer != null || !statusShown) &&
+            (
+                offer != null || showInvitePartner || showLeave || partnerFeedback != null ||
+                    state.isInvitingPartner || state.isLeaving
+            ) -> {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 offer?.participantPartnerNotes?.forEach { note ->
                     Text(
@@ -231,7 +241,7 @@ internal fun ConversationPartnerActions(
                         }
                     }
                 }
-                if (state.errorMessage != null && state.draft.isBlank()) {
+                if (state.errorMessage != null && state.draft.isBlank() && !thirdPartyApprovalNeeded) {
                     Text(
                         text = state.errorMessage,
                         color = MaterialTheme.colorScheme.error,

@@ -99,6 +99,18 @@ class ConversationPartnerOfferTest {
         assertEquals(emptyList<ConversationParticipantPartnerDto>(), conversation.partnerOffers?.participantPartners)
     }
 
+    @Test
+    fun loadingOlderMessagesKeepsTheOfferFromTheReadMark() {
+        val offers =
+            ConversationPartnerOffersDto(
+                bringPartner = ConversationBringPartnerDto(partnerUserId = "jo", partnerDisplayName = "Jo"),
+            )
+        val open = requireNotNull(stateFor(offers).detail)
+        val olderPage = requireNotNull(stateFor(offers = null).detail)
+
+        assertEquals(offers, open.withPrependedPage(olderPage).conversation.partnerOffers)
+    }
+
     private fun stateFor(
         offers: ConversationPartnerOffersDto?,
         viewerStatus: String = ConversationParticipantStatus.ACTIVE,
