@@ -137,6 +137,7 @@ data class PsyncSessionUi(
                 hi != null -> add("Ages up to $hi")
             }
             if (filters.verifiedOnly) add("Verified only")
+            if (filters.verifiedCouplesOnly) add("Verified couples only")
             if (filters.linkedOnly == true) add("Linked partners only")
             if (filters.withPhotosOnly) add("With photos")
             val more =

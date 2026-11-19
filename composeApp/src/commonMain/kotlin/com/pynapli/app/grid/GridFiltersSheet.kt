@@ -121,6 +121,8 @@ internal fun GridFiltersSheet(
                 onTogglesChanged = { v, fp, av ->
                     draft = draft.copy(verified = v, facePhotoVerified = fp, ageVerified = av)
                 },
+                verifiedCouples = draft.verifiedCouples,
+                onVerifiedCouplesToggle = { draft = draft.copy(verifiedCouples = !draft.verifiedCouples) },
             )
 
             SectionTitle("Photos")

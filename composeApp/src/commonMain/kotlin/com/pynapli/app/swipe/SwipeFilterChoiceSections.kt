@@ -20,6 +20,7 @@ import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleGroup
 import com.pynapli.app.grid.LifestyleSection
 import com.pynapli.app.grid.LogisticsTag
+import com.pynapli.app.grid.VERIFIED_COUPLES_ONLY_LABEL
 import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 import com.pynapli.shared.profile.ProfileTaxonomies
 
@@ -191,6 +192,17 @@ internal fun VerifiedModeSection(
         SwipeSheetChip(label = "Any", active = noPreference) {
             onChange(false, false)
         }
+    }
+}
+
+/** "Verified couples only": an independent toggle beside the three-way Verified choice. */
+@Composable
+internal fun VerifiedCouplesSection(
+    verifiedCouples: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SwipeSheetChip(label = VERIFIED_COUPLES_ONLY_LABEL, active = verifiedCouples, onClick = onToggle)
     }
 }
 

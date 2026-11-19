@@ -73,7 +73,8 @@ internal fun SwipeIntentAndVerifiedFilters(
     SectionHeader(
         title = "Verified",
         dealbreakerKey = SwipeDealbreakerKey.VERIFIED,
-        eligible = draft.verifiedOnly,
+        // One "verified" lock covers both Verified only and Verified couples only (server relaxation).
+        eligible = draft.verifiedOnly || draft.verifiedCouples,
         locked = SwipeDealbreakerKey.VERIFIED in draft.dealbreakers,
         onLockChange = { locked ->
             onDraftChange(
@@ -93,7 +94,7 @@ internal fun SwipeIntentAndVerifiedFilters(
         verifiedPreferred = draft.verifiedPreferred,
         onChange = { only, preferred ->
             val dealbreakers =
-                if (!only) {
+                if (!only && !draft.verifiedCouples) {
                     draft.dealbreakers - SwipeDealbreakerKey.VERIFIED
                 } else {
                     draft.dealbreakers
@@ -107,4 +108,19 @@ internal fun SwipeIntentAndVerifiedFilters(
             )
         },
     )
+    VerifiedCouplesSection(
+        verifiedCouples = draft.verifiedCouples,
+        onToggle = { onDraftChange(draft.withVerifiedCouplesToggled()) },
+    )
+}
+
+/**
+ * Toggles "Verified couples only". Turning it off with "Verified only" also off drops the shared
+ * "verified" lock, the same way clearing "Verified only" does.
+ */
+internal fun SwipeFilters.withVerifiedCouplesToggled(): SwipeFilters {
+    val next = !verifiedCouples
+    val locks =
+        if (!next && !verifiedOnly) this.dealbreakers - SwipeDealbreakerKey.VERIFIED else this.dealbreakers
+    return copy(verifiedCouples = next, dealbreakers = locks)
 }
