@@ -14,13 +14,16 @@ import java.util.UUID
  *  - the viewer is not an active participant, or the conversation's direct pair has no match;
  *  - any partner invite is open in the conversation (accept/decline act on the newest open invite
  *    only, so the offer keeps invites one at a time);
+ *  - a block exists in either direction between any two of the people who would end up in it: the
+ *    present (active and invited) participants plus every partner this viewer would be offered or
+ *    shown. Partners hidden from the viewer are left out of this and every other check, so a hidden
+ *    partner never changes what the viewer sees;
  *  - a sibling conversation already holds these people (Psync: each partner's own conversation with
  *    the same target) and has had a partner invite: one group per couple-pair, never two.
  * A partner is offered (own) or named (another participant's) only when they are not in the
- * conversation, have never been invited to it (pending, accepted or declined: declining is final for
- * the offer), and no block exists in either direction between any two of the people who would then be
- * in it. Another participant's partner is named only where that participant's partner_visibility
- * already shows them to the viewer (same rule as the Grid/Swipe partner mini, incl. hidden-by-viewer).
+ * conversation and have never been invited to it (pending, accepted or declined: declining is final
+ * for the offer). Another participant's partner is named only where that participant's
+ * partner_visibility already shows them to the viewer (the Grid/Swipe partner-mini rule).
  */
 internal fun Connection.loadPartnerOffers(
     viewerUserId: UUID,
@@ -40,28 +43,42 @@ internal fun Connection.loadPartnerOffers(
     val presentUserIds = conversation.participants.map { it.userId }.toSet()
     val everInvited = loadEverInvitedPartnerIds(conversation.conversationId)
 
-    fun isCandidate(partner: LinkedPartnerRow): Boolean =
+    fun isNewToConversation(partner: LinkedPartnerRow): Boolean =
         partner.userId != viewerUserId &&
             partner.userId !in presentUserIds &&
-            partner.userId !in everInvited &&
-            !anyBlockAmong(presentUserIds + partner.userId)
+            partner.userId !in everInvited
 
     val viewerPartner = partners[viewerUserId]
     val bringPartner =
-        viewerPartner
-            ?.takeIf { isCandidate(it) && !isSocialActionRestricted(viewerUserId) }
-            ?.let { BringPartnerOfferRecord(partnerUserId = it.userId, partnerDisplayName = it.displayName) }
-    val participantPartners =
+        viewerPartner?.takeIf { isNewToConversation(it) && !isSocialActionRestricted(viewerUserId) }
+    // Other participants' partners this viewer may see, keyed by that participant.
+    val visibleOtherPartners =
         activeUserIds
             .filter { it != viewerUserId && it != viewerPartner?.userId }
             .mapNotNull { participantUserId ->
                 partners[participantUserId]
-                    ?.takeIf { isCandidate(it) && isPartnerVisibleToViewer(viewerUserId, participantUserId, it.userId) }
-                    ?.let { ParticipantPartnerOfferRecord(participantUserId, it.displayName) }
-            }
-    if (bringPartner == null && participantPartners.isEmpty()) return null
-    if (hasProgressedSiblingConversation(conversation.conversationId, activeUserIds, partners)) return null
-    return ConversationPartnerOffersRecord(bringPartner = bringPartner, participantPartners = participantPartners)
+                    ?.takeIf { isNewToConversation(it) }
+                    ?.takeIf { isPartnerVisibleToViewer(viewerUserId, participantUserId, it.userId) }
+                    ?.let { participantUserId to it }
+            }.toMap()
+    if (bringPartner == null && visibleOtherPartners.isEmpty()) return null
+
+    val wouldBeInConversation =
+        presentUserIds + listOfNotNull(bringPartner?.userId) + visibleOtherPartners.values.map { it.userId }
+    if (anyBlockAmong(wouldBeInConversation)) return null
+    val knownPartners =
+        buildMap<UUID, UUID> {
+            viewerPartner?.let { put(viewerUserId, it.userId) }
+            visibleOtherPartners.forEach { (participantUserId, partner) -> put(participantUserId, partner.userId) }
+        }
+    if (hasProgressedSiblingConversation(conversation.conversationId, activeUserIds, knownPartners)) return null
+    return ConversationPartnerOffersRecord(
+        bringPartner = bringPartner?.let { BringPartnerOfferRecord(it.userId, it.displayName) },
+        participantPartners =
+            visibleOtherPartners.map { (participantUserId, partner) ->
+                ParticipantPartnerOfferRecord(participantUserId, partner.displayName)
+            },
+    )
 }
 
 private const val PARTICIPANT_ACTIVE = "active"
@@ -112,7 +129,7 @@ private fun Connection.loadActiveLinkedPartners(userIds: List<UUID>): Map<UUID, 
     ).use { statement ->
         statement.setArray(1, createArrayOf("uuid", userIds.toTypedArray()))
         statement.executeQuery().use { rs ->
-            buildMap {
+            buildMap<UUID, LinkedPartnerRow> {
                 while (rs.next()) {
                     val ownerUserId = rs.getObject("user_id", UUID::class.java)
                     if (ownerUserId !in this) {
@@ -243,13 +260,14 @@ private fun Connection.isPartnerVisibleToViewer(
  * only them and their linked partners, with every active participant here present there in person or
  * through their partner. A Psync together match opens one conversation per partner with the same
  * target; once one of them grows, the other stops offering, so the four never get two groups.
+ * [knownPartners] (participant to partner) holds only links this viewer may see.
  */
 private fun Connection.hasProgressedSiblingConversation(
     conversationId: UUID,
     activeUserIds: List<UUID>,
-    partners: Map<UUID, LinkedPartnerRow>,
+    knownPartners: Map<UUID, UUID>,
 ): Boolean {
-    val couplePeople = (activeUserIds + partners.values.map { it.userId }).toSet()
+    val couplePeople = (activeUserIds + knownPartners.values).toSet()
     val membersBySibling =
         prepareStatement(
             """
@@ -286,7 +304,7 @@ private fun Connection.hasProgressedSiblingConversation(
     return membersBySibling.values.any { members ->
         couplePeople.containsAll(members) &&
             activeUserIds.all { userId ->
-                val partnerUserId = partners[userId]?.userId
+                val partnerUserId = knownPartners[userId]
                 userId in members || (partnerUserId != null && partnerUserId in members)
             }
     }

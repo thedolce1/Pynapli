@@ -72,8 +72,8 @@ data class ConversationDto(
     // server that predates the field, where clients fall back to swipe origin + no last message.
     val newMatch: Boolean? = null,
     // Server-decided "Bring your partner" offer for the viewer (MESSAGING_SPEC "Partner Invite Flow"),
-    // sent on the conversation-detail read and the read mark only. Null when there is nothing to offer, and from a server
-    // that predates it; clients then render the conversation exactly as before.
+    // sent on the conversation-detail read and the read mark only. Null when there is nothing to
+    // offer, and from a server that predates it; clients then render the conversation as before.
     val partnerOffers: ConversationPartnerOffersDto? = null,
 )
 

@@ -135,7 +135,8 @@ internal fun ConversationPartnerActions(
             )
         }
 
-        offer != null || showInvitePartner || showLeave || partnerFeedback != null || state.isInvitingPartner || state.isLeaving -> {
+        offer != null || showInvitePartner || showLeave || partnerFeedback != null ||
+            state.isInvitingPartner || state.isLeaving -> {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 offer?.participantPartnerNotes?.forEach { note ->
                     Text(

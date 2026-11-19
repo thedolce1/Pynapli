@@ -240,23 +240,41 @@ class BringPartnerOfferIntegrationTest {
             // Jo blocked Sam: Alex is not offered Jo, and the invite itself is refused generically.
             dataSource.insertBlock(blockerUserId = jo, blockedUserId = sam)
 
-            assertNull(service.offers(alex, conversationId)?.bringPartner)
-            val refusal = assertFailsWith<MessagingException> { service.inviteLinkedPartnerToConversation(alex, conversationId) }
+            assertNull(service.offers(alex, conversationId))
+            assertNull(service.offers(sam, conversationId))
+            val refusal =
+                assertFailsWith<MessagingException> {
+                    service.inviteLinkedPartnerToConversation(alex, conversationId)
+                }
             assertEquals("MESSAGING_NOT_ALLOWED", refusal.code)
+        }
 
-            // Riley blocked Jo (the two partners). Each could still join the pair alone, so each is
-            // offered; once Jo has joined, Riley would be in a chat with Jo: no offer, no name.
-            reset()
-            val again = service.matchConversation(alex, sam)
+    @Test
+    fun aBlockBetweenTheTwoPartnersStopsEveryOffer() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.matchConversation(alex, sam)
             dataSource.insertBlock(blockerUserId = riley, blockedUserId = jo)
-            assertEquals(jo.toString(), service.offers(alex, again)?.bringPartner?.partnerUserId)
-            assertEquals(riley.toString(), service.offers(sam, again)?.bringPartner?.partnerUserId)
-            service.inviteLinkedPartnerToConversation(alex, again)
-            service.acceptPartnerInvite(sam, again)
-            service.acceptPartnerInvite(jo, again)
-            assertNull(service.offers(sam, again))
-            assertNull(service.offers(alex, again))
-            assertNull(service.offers(jo, again))
+
+            // All four would end up together: nobody is offered or named, and nothing says who blocked.
+            assertNull(service.offers(alex, conversationId))
+            assertNull(service.offers(sam, conversationId))
+        }
+
+    @Test
+    fun aBlockInvolvingAPartnerHiddenFromTheViewerChangesNothingForThem() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.matchConversation(alex, sam)
+            sql("UPDATE discovery_settings SET partner_visibility = 'hidden' WHERE user_id = '$sam'")
+            dataSource.insertBlock(blockerUserId = riley, blockedUserId = jo)
+
+            // Alex cannot see Riley, so Riley's block must not reveal itself by hiding Alex's offer.
+            val alexOffers = service.offers(alex, conversationId)
+            assertEquals(jo.toString(), alexOffers?.bringPartner?.partnerUserId)
+            assertTrue(alexOffers?.participantPartners.orEmpty().isEmpty())
+            // Sam sees both partners (their own, and Jo is public), so Sam's offer stops.
+            assertNull(service.offers(sam, conversationId))
         }
 
     @Test
