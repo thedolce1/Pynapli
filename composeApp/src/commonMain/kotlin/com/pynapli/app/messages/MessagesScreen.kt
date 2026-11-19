@@ -125,12 +125,10 @@ private fun MessagesScreenContent(
                 MessagesPhase.Empty -> EmptyMessagesState(modifier = Modifier.fillMaxSize())
 
                 MessagesPhase.Content -> {
-                    // New matches (swipe conversations with no messages yet) ride a Tinder-style rail
-                    // at the top; they are kept out of the conversation list until someone says hi.
+                    // New matches (server-decided, ConversationDto.newMatch) ride a Tinder-style rail
+                    // at the top; they are kept out of the conversation list until acted on.
                     val conversationGroups =
-                        remember(state.conversations) {
-                            state.conversations.partition { conversation -> conversation.isNewMatch() }
-                        }
+                        remember(state.conversations) { state.conversations.partitionNewMatches() }
                     val newMatches = conversationGroups.first
                     val listConversations = conversationGroups.second
                     var revealed by remember { mutableStateOf(false) }

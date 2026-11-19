@@ -58,6 +58,7 @@ internal class MessagingDtoMapper(
             partnerInvite = record.partnerInvite?.toDto(),
             messageExpirySeconds = record.viewerExpirySeconds,
             effectiveMessageExpirySeconds = record.effectiveExpirySeconds,
+            newMatch = record.newMatch,
         )
 
     suspend fun toDto(

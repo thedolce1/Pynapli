@@ -79,7 +79,8 @@ class MessagingService(
 
     /**
      * Get or create the swipe-origin direct conversation for a new match and tell both people's
-     * Messages to refetch. A conversation that already exists (they talked from the Grid) is reused.
+     * Messages to refetch. A conversation that already exists (they talked from the Grid) is reused
+     * and moved up to the match time; it shows in both rails until each person opens it.
      * Blocked pairs get nothing. A failure is thrown: the caller delivers this through the match
      * side-effect outbox, which keeps it for a retry (the match itself already stands).
      */
@@ -222,5 +223,6 @@ class MessagingException(
     val code: String,
 ) : RuntimeException(code)
 
-// The new-matches rail shows swipe-origin conversations that have no messages yet.
-private const val MATCH_CONVERSATION_ORIGIN = "swipe"
+// The origin a match opens its conversation with. The new-matches rail itself is decided by the
+// server per viewer (ConversationRecord.newMatch), not by origin.
+internal const val MATCH_CONVERSATION_ORIGIN = "swipe"

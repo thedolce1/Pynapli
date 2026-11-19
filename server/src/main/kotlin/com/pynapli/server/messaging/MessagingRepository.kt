@@ -136,6 +136,9 @@ data class ConversationRecord(
     val viewerExpirySeconds: Int? = null,
     // Strictest non-null timer across active participants — what messages actually expire on.
     val effectiveExpirySeconds: Int? = null,
+    // The viewer's new-matches rail: a matched pair's conversation the viewer has not acted on yet
+    // (JdbcMessagingMatchRailSql). Per viewer.
+    val newMatch: Boolean = false,
 )
 
 data class ConversationParticipantRecord(

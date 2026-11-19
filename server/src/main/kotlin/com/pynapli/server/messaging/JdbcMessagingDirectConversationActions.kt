@@ -24,6 +24,9 @@ internal suspend fun DataSource.getOrCreateDirectMessagingConversation(
                 val existingId = connection.findDirectConversationId(viewerUserId, targetUserId)
                 val conversationId =
                     if (existingId != null) {
+                        // A match reusing an older (Grid) conversation: bring it to the top of the
+                        // inbox so it reaches the new-matches rail. No-op once done.
+                        if (origin == MATCH_CONVERSATION_ORIGIN) connection.bringMatchedConversationForward(existingId)
                         existingId
                     } else {
                         val newId = conversationIdFactory()
