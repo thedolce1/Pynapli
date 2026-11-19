@@ -616,8 +616,8 @@ Long description, first three bullets:
   covers them too, at no extra cost, for as long as you stay linked. Your accounts stay separate.
   [Linked Partner Benefit, "Current implementation" above.]
 - **Verified couples.** A couple shows as verified only when both partners have photo-verified, and
-  Social and Select members can filter to verified couples only. [`CoupleVerifiedFilterSql`;
-  `DiscoveryFilters.hasAdvancedFilters` makes the filter paid.]
+  every member can filter to verified couples only. [`CoupleVerifiedFilterSql`; the filter is free:
+  `DiscoveryFilters.requiresAdvancedEntitlement` gates only lifestyle and advanced logistics tags.]
 - **Your location stays yours.** Other members never see your exact location or exact distance:
   distances are rounded, and you can hide yours. [`DistanceRounding.kt` coarse cells and rounding,
   applied with `showDistance` in the Grid, Swipe, Activity and profile-peek mappers and SQL;
