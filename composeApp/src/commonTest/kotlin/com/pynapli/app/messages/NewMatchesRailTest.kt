@@ -43,6 +43,17 @@ class NewMatchesRailTest {
     }
 
     @Test
+    fun theHintOnlySaysHiWhenEveryMatchIsStillEmpty() {
+        val fresh = railConversation("fresh", origin = "swipe", lastMessage = null, newMatch = true)
+        val withHistory = railConversation("history", origin = "grid", lastMessage = hello("history"), newMatch = true)
+
+        assertEquals(NewMatchesHint.SAY_HI, listOf(fresh).newMatchesHint())
+        assertEquals(NewMatchesHint.OPEN, listOf(withHistory).newMatchesHint())
+        assertEquals(NewMatchesHint.OPEN, listOf(fresh, withHistory).newMatchesHint())
+        assertFalse(NewMatchesHint.OPEN.contains("say hi", ignoreCase = true))
+    }
+
+    @Test
     fun partitionPutsNewMatchesInTheRailAndKeepsTheServerOrder() {
         val inbox =
             listOf(

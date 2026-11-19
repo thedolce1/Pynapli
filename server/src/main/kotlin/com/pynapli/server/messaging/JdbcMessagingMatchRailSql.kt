@@ -4,15 +4,20 @@ import java.sql.Connection
 import java.util.UUID
 
 /*
- * The Messages new-matches rail (MESSAGING_SPEC "New-matches rail"). The server decides which inbox
+ * The Messages new-matches rail (MESSAGING_SPEC "New-Matches Rail"). The server decides which inbox
  * conversations are new matches for the viewer (ConversationDto.newMatch); the client only renders it.
  *
- * A direct conversation is a new match for the viewer when the pair has a `matches` row, nothing the
- * viewer can see has been posted since the match, and either
- *   - the conversation has no messages the viewer can see at all (a fresh match: it stays in the rail
- *     until the first message, opened or not, as before), or
- *   - the viewer has not acknowledged this match (`match_inbox_acknowledgements`, V115): the two had
- *     talked before the match, so it stays in the rail until the viewer opens the conversation.
+ * A direct conversation is a new match for the viewer when the pair has a `matches` row, the viewer
+ * has no `rail_cleared` acknowledgement for it (`match_inbox_acknowledgements`, V115), and nothing the
+ * viewer can see has been posted since the match. An acknowledgement with `rail_cleared` is written
+ *   - for both people when a message becomes visible in the conversation ([consumeMatchInInbox],
+ *     in the message's own transaction), so the item never comes back, even after expired messages
+ *     are purged;
+ *   - for the viewer alone when they open a conversation that already has messages
+ *     ([acknowledgeMatchInInbox]): a match with someone they had already talked to.
+ * Opening an empty match records `rail_cleared = false`: it stays in the rail until the first message.
+ * The "posted since the match" check keeps the per-viewer view of a held message: its sender sees it
+ * (their item clears), the other person does not (theirs stays until it is released).
  * An unmatch deletes the match (and its acknowledgements), which ends it; blocks drop the whole
  * conversation in MessagingConversationGuard, which takes the rail item with it.
  */
@@ -68,24 +73,17 @@ internal fun Connection.loadNewMatch(
               AND ?::uuid IN (dc.user_a_id, dc.user_b_id)
               AND NOT EXISTS (
                   SELECT 1
+                  FROM match_inbox_acknowledgements ack
+                  WHERE ack.match_id = mt.id
+                    AND ack.user_id = ?
+                    AND ack.rail_cleared
+              )
+              AND NOT EXISTS (
+                  SELECT 1
                   FROM messages msg
                   WHERE msg.conversation_id = dc.conversation_id
                     AND msg.created_at >= mt.created_at
                     AND $VIEWER_VISIBLE_MESSAGE
-              )
-              AND (
-                  NOT EXISTS (
-                      SELECT 1
-                      FROM messages msg
-                      WHERE msg.conversation_id = dc.conversation_id
-                        AND $VIEWER_VISIBLE_MESSAGE
-                  )
-                  OR NOT EXISTS (
-                      SELECT 1
-                      FROM match_inbox_acknowledgements ack
-                      WHERE ack.match_id = mt.id
-                        AND ack.user_id = ?
-                  )
               )
         )
         """.trimIndent(),
@@ -94,7 +92,6 @@ internal fun Connection.loadNewMatch(
         statement.setObject(2, userId)
         statement.setObject(3, userId)
         statement.setObject(4, userId)
-        statement.setObject(5, userId)
         statement.executeQuery().use { rs ->
             rs.next()
             rs.getBoolean(1)
@@ -102,9 +99,10 @@ internal fun Connection.loadNewMatch(
     }
 
 /**
- * The viewer opened the conversation (it was marked read): acknowledge the pair's match for this
- * viewer only, so a match between people who had already talked leaves their rail and never returns.
- * Idempotent; a no-op for an unmatched pair, a group thread or a non-pair participant.
+ * The viewer opened the conversation (it was marked read). If it already has messages, the match
+ * leaves this viewer's rail for good (`rail_cleared`); if it is still empty, the open is recorded but
+ * the match stays until the first message. Idempotent, never un-clears; a no-op for an unmatched
+ * pair or a participant outside the pair.
  */
 internal fun Connection.acknowledgeMatchInInbox(
     userId: UUID,
@@ -112,18 +110,57 @@ internal fun Connection.acknowledgeMatchInInbox(
 ) {
     prepareStatement(
         """
-        INSERT INTO match_inbox_acknowledgements (match_id, user_id)
-        SELECT mt.id, ?
+        INSERT INTO match_inbox_acknowledgements (match_id, user_id, rail_cleared)
+        SELECT mt.id,
+               ?,
+               EXISTS (
+                   SELECT 1
+                   FROM messages msg
+                   WHERE msg.conversation_id = dc.conversation_id
+                     AND $VIEWER_VISIBLE_MESSAGE
+               )
         FROM direct_conversations dc
         $DIRECT_PAIR_MATCH_JOIN
         WHERE dc.conversation_id = ?
           AND ?::uuid IN (dc.user_a_id, dc.user_b_id)
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (match_id, user_id) DO UPDATE
+        SET rail_cleared = match_inbox_acknowledgements.rail_cleared OR EXCLUDED.rail_cleared
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
-        statement.setObject(2, conversationId)
-        statement.setObject(3, userId)
+        statement.setObject(2, userId)
+        statement.setObject(3, conversationId)
+        statement.setObject(4, userId)
+        statement.executeUpdate()
+    }
+}
+
+/**
+ * A message became visible in [conversationId] (sent, or released from review): if the pair is
+ * matched, the match leaves both people's rails for good. Call it on the connection, and inside the
+ * transaction, that made the message visible. Writes nothing once both are cleared.
+ */
+internal fun Connection.consumeMatchInInbox(conversationId: UUID) {
+    prepareStatement(
+        """
+        INSERT INTO match_inbox_acknowledgements (match_id, user_id, rail_cleared)
+        SELECT mt.id, person.user_id, true
+        FROM direct_conversations dc
+        $DIRECT_PAIR_MATCH_JOIN
+        CROSS JOIN LATERAL (VALUES (dc.user_a_id), (dc.user_b_id)) AS person(user_id)
+        WHERE dc.conversation_id = ?
+          AND NOT EXISTS (
+              SELECT 1
+              FROM match_inbox_acknowledgements ack
+              WHERE ack.match_id = mt.id
+                AND ack.user_id = person.user_id
+                AND ack.rail_cleared
+          )
+        ON CONFLICT (match_id, user_id) DO UPDATE
+        SET rail_cleared = true
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, conversationId)
         statement.executeUpdate()
     }
 }

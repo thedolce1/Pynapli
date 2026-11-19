@@ -68,6 +68,9 @@ internal suspend fun DataSource.sendMessagingTextMessage(
                     )
                 }
 
+                // A visible message ends a match's new-matches rail item for both people, in this
+                // transaction; a held one waits for release (JdbcMessageModerationRepository).
+                if (moderationStatus == MessageModerationStatus.VISIBLE) connection.consumeMatchInInbox(conversationId)
                 connection.touchConversationAt(conversationId, message.createdAt)
                 connection.markSenderReadAt(userId, conversationId, message.createdAt)
 
@@ -126,20 +129,24 @@ internal suspend fun DataSource.sendMessagingMediaMessage(
             clientIdempotencyKey?.let { key ->
                 connection.findMessageByIdempotencyKey(userId, conversationId, key)?.let { return@withContext it }
             }
-            val message =
-                connection.insertMediaMessage(
-                    messageId = messageIdFactory(),
-                    userId = userId,
-                    conversationId = conversationId,
-                    mediaAssetId = mediaAssetId,
-                    contentType = contentType,
-                    pixelWidth = pixelWidth,
-                    pixelHeight = pixelHeight,
-                    body = body,
-                    clientIdempotencyKey = clientIdempotencyKey,
-                )
-            connection.touchConversationAt(conversationId, message.createdAt)
-            message
+            connection.inTransaction {
+                val message =
+                    insertMediaMessage(
+                        messageId = messageIdFactory(),
+                        userId = userId,
+                        conversationId = conversationId,
+                        mediaAssetId = mediaAssetId,
+                        contentType = contentType,
+                        pixelWidth = pixelWidth,
+                        pixelHeight = pixelHeight,
+                        body = body,
+                        clientIdempotencyKey = clientIdempotencyKey,
+                    )
+                // Ends a match's new-matches rail item for both people, with the message.
+                consumeMatchInInbox(conversationId)
+                touchConversationAt(conversationId, message.createdAt)
+                message
+            }
         }
     }
 
@@ -172,6 +179,8 @@ internal suspend fun DataSource.setMessagingConversationExpiry(
                     return@withContext null
                 }
                 val systemMessage = connection.insertSystemMessage(messageIdFactory(), userId, conversationId, systemMessageBody)
+                // A system notice is a visible message too: it ends a match's rail item for both.
+                connection.consumeMatchInInbox(conversationId)
                 connection.touchConversation(conversationId)
                 val conversation =
                     connection.loadConversation(userId, conversationId) ?: run {
