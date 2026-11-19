@@ -50,7 +50,7 @@ data class SwipeFilters(
     val hasPrivateAlbum: Boolean = false,
     val dealbreakers: Set<String> = emptySet(),
     // "Verified couples only": both linked partners selfie-verified (the couple-verified badge).
-    // Independent of [linked]; shares the "verified" dealbreaker lock with [verifiedOnly].
+    // Independent of [linked]. Always hard: the server never relaxes it, so it has no lock.
     val verifiedCouples: Boolean = false,
 ) {
     val activeCount: Int

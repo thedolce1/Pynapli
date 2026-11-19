@@ -293,6 +293,7 @@ private fun SwipeDeckArea(
             !state.hasMore -> {
                 EmptyDeck(
                     filtersActive = state.swipeFilters.isAnyActive,
+                    verifiedCouplesOnly = state.swipeFilters.verifiedCouples,
                     onRefresh = onRetryDeck,
                     onOpenFilters = onOpenFilters,
                     onOpenTravel = onOpenTravel,

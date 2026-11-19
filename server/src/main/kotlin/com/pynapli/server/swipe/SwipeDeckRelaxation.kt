@@ -25,7 +25,8 @@ internal object SwipeDeckRelaxation {
             return true
         }
         if (SwipeDealbreakerKey.VERIFIED !in dealbreakers &&
-            (filters.verifiedOnly || filters.verifiedCouplesOnly || filters.facePhotoVerifiedOnly || filters.ageVerifiedOnly)
+            // verifiedCouplesOnly is absent on purpose: it never relaxes (see relaxFilters).
+            (filters.verifiedOnly || filters.facePhotoVerifiedOnly || filters.ageVerifiedOnly)
         ) {
             return true
         }
@@ -58,6 +59,11 @@ internal object SwipeDeckRelaxation {
         return false
     }
 
+    /**
+     * The one relaxed retry (SwipeDeckQueryAction; Psync decks go through it too). Founder rule
+     * (2026-11-18): "Verified couples only" is a trust filter and never relaxes, locked or not, so
+     * it is deliberately not listed here and `copy` carries it into the retry unchanged.
+     */
     fun relaxFilters(
         filters: DiscoveryFilters,
         dealbreakers: Set<String>,
@@ -68,8 +74,6 @@ internal object SwipeDeckRelaxation {
             relationshipContexts = emptySet(),
             linkedOnly = if (SwipeDealbreakerKey.LINKED_ONLY in dealbreakers) filters.linkedOnly else null,
             verifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.verifiedOnly else false,
-            // Same "verified" lock as verifiedOnly: kept when locked, relaxed otherwise.
-            verifiedCouplesOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.verifiedCouplesOnly else false,
             facePhotoVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.facePhotoVerifiedOnly else false,
             ageVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.ageVerifiedOnly else false,
             discoveryStyles =
