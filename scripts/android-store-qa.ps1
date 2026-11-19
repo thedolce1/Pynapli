@@ -277,7 +277,7 @@ Assert-TextPresent $restoreXml "Store refreshed." "Store restore"
 
 # Scroll to the last product so the whole Boosts & extras section is on-screen. Anchor on the
 # Pineapple Likes pack's UNIQUE "5 for $3.99" price line, not the plain name: the Select plan lists
-# "Weekly Pineapple Likes", so anchoring on the name could stop at the Select card.
+# "5 Pineapple Likes every week", so anchoring on the name could stop at the Select card.
 Scroll-UntilAnyText @('5 for $3.99') 8 | Out-Null
 $productsXml = Capture-StoreStage "productsVisible" "05_products_visible"
 Assert-TextPresent $productsXml "Pineapple Likes" "Store products"

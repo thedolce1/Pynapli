@@ -20,6 +20,7 @@ import com.pynapli.server.safety.BlockRecord
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.BlockSummaryRecord
 import com.pynapli.server.safety.RiskPolicyService
+import com.pynapli.server.subscriptions.IncludedAllowance
 import com.pynapli.server.subscriptions.LinkedPartnerSubscriptionRecord
 import com.pynapli.server.subscriptions.StoredEntitlementRecord
 import com.pynapli.server.subscriptions.SubscriptionRecord
@@ -1831,6 +1832,7 @@ private class InMemorySwipeRepository(
         noteText: String?,
         travelLocationId: UUID?,
         spendInventory: SwipeInventorySpend?,
+        includedAllowance: IncludedAllowance?,
         matchIdFactory: () -> UUID,
     ): SwipeActionResult {
         var spentInventoryId: UUID? = null

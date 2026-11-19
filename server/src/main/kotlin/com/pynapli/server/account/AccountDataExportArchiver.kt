@@ -129,8 +129,12 @@ class JdbcAccountDataExportArchiver(
                     "SELECT id, CASE WHEN user_id = ? THEN linked_user_id ELSE user_id END AS partner_user_id, status, created_at, accepted_at, unlinked_at FROM user_profile_links WHERE user_id = ? OR linked_user_id = ? ORDER BY created_at",
                 "subscriptions" to
                     "SELECT platform, tier, status, external_product_id, external_order_id, current_period_start, current_period_end, created_at FROM subscriptions WHERE user_id = ? ORDER BY created_at",
+                // Purchased and plan-included units (source 'subscription', one row per period).
                 "premiumItems" to
-                    "SELECT inventory_type, quantity, source, expires_at, created_at FROM premium_inventory WHERE user_id = ?",
+                    "SELECT inventory_type, quantity, source, expires_at, allowance_period_start, allowance_granted, allowance_withheld, allowance_tier, created_at FROM premium_inventory WHERE user_id = ? ORDER BY created_at",
+                // When the person's weekly/monthly included-allowance cycle started (V116).
+                "includedAllowanceCycle" to
+                    "SELECT anchored_at, created_at FROM included_allowance_anchors WHERE user_id = ?",
                 "travel" to
                     "SELECT city, region, country, status, active_from, active_until, created_at FROM travel_locations WHERE user_id = ? ORDER BY created_at",
                 "playingTonight" to

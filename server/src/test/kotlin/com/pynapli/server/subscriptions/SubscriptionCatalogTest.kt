@@ -1,5 +1,7 @@
 package com.pynapli.server.subscriptions
 
+import com.pynapli.shared.network.dto.PremiumInventoryType
+import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -21,6 +23,28 @@ class SubscriptionCatalogTest {
     fun noTierListsTheSameFeatureTwice() {
         SubscriptionCatalog.inventory().tiers.forEach { tier ->
             assertEquals(tier.features.distinct(), tier.features, "${tier.displayName} lists a feature twice")
+        }
+    }
+
+    // The plan cards state the numbers the server grants (MONETIZATION_SPEC "Included allowances"),
+    // not a vague "Weekly Pineapple Likes" / "Monthly Boost".
+    @Test
+    fun planCardsStateTheIncludedAllowancesTheServerGrants() {
+        val tiers = SubscriptionCatalog.inventory().tiers.associateBy { it.tier }
+        val social = tiers.getValue(SubscriptionTier.SOCIAL).features
+        val select = tiers.getValue(SubscriptionTier.SELECT).features
+
+        assertTrue("1 Pineapple Like every week" in social, "Social card: $social")
+        assertTrue("5 Pineapple Likes every week" in select, "Select card: $select")
+        assertTrue("1 Boost every month" in select, "Select card: $select")
+        assertEquals(1, IncludedAllowancePlan.quantityFor(SubscriptionTier.SOCIAL, PremiumInventoryType.PINEAPPLE_LIKE))
+        assertEquals(5, IncludedAllowancePlan.quantityFor(SubscriptionTier.SELECT, PremiumInventoryType.PINEAPPLE_LIKE))
+        assertEquals(1, IncludedAllowancePlan.quantityFor(SubscriptionTier.SELECT, PremiumInventoryType.BOOST))
+        assertEquals(0, IncludedAllowancePlan.quantityFor(SubscriptionTier.SOCIAL, PremiumInventoryType.BOOST))
+        assertEquals(0, IncludedAllowancePlan.quantityFor(SubscriptionTier.FREE, PremiumInventoryType.PINEAPPLE_LIKE))
+        SubscriptionCatalog.inventory().tiers.forEach { tier ->
+            val vague = tier.features.filter { it == "Weekly Pineapple Likes" || it == "Monthly Boost" }
+            assertTrue(vague.isEmpty(), "${tier.displayName}: $vague")
         }
     }
 }

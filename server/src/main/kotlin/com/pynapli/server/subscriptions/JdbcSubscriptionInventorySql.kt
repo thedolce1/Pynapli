@@ -144,6 +144,162 @@ internal fun Connection.insertBoostActivation(
         }
     }
 
+/**
+ * Brings the plan's included units of [allowances] up to date for [userId] (MONETIZATION_SPEC
+ * "Included allowances"). Must run in the same transaction as, and before, anything that reads or
+ * spends the balance, because it is the only thing that grants, tops up or withholds included units.
+ *
+ * Exactly once per period: the period's row is created by `INSERT ... ON CONFLICT DO UPDATE` on the
+ * (user, type, period start) unique index (V116), so concurrent requests at the start of a period
+ * create one row between them. On an existing row it only re-applies the cap for the current tier:
+ * usable = max(0, entitled now - used this period), where used never changes here, so no sequence of
+ * tier changes, links and unlinks can make more than the period's highest entitlement usable.
+ */
+internal fun Connection.reconcileIncludedAllowances(
+    userId: UUID,
+    allowances: List<IncludedAllowance>,
+    now: Instant,
+) {
+    var anchor: Instant? = null
+    allowances.forEach { allowance ->
+        if (allowance.quantity <= 0) {
+            withholdIncludedAllowance(userId, allowance.inventoryType, now)
+            return@forEach
+        }
+        val resolvedAnchor =
+            anchor
+                ?: resolveIncludedAllowanceAnchor(userId, allowance.entitlementStartedAt, now).also { anchor = it }
+        val period = IncludedAllowancePlan.periodContaining(resolvedAnchor, allowance.period, now)
+        upsertIncludedAllowancePeriod(userId, allowance, period, now)
+    }
+}
+
+/**
+ * The person's allowance anchor, created on first use and never changed afterwards. Two statements
+ * on purpose: under READ COMMITTED the SELECT after an `ON CONFLICT DO NOTHING` takes a fresh
+ * snapshot, so it sees the row a concurrent first grant committed (a single CTE would not).
+ */
+internal fun Connection.resolveIncludedAllowanceAnchor(
+    userId: UUID,
+    entitlementStartedAt: Instant?,
+    now: Instant,
+): Instant {
+    selectIncludedAllowanceAnchor(userId)?.let { return it }
+    val candidate =
+        (entitlementStartedAt?.takeIf { it <= now } ?: now)
+            .truncatedTo(java.time.temporal.ChronoUnit.MICROS)
+    prepareStatement(
+        """
+        INSERT INTO included_allowance_anchors (user_id, anchored_at)
+        VALUES (?, ?)
+        ON CONFLICT (user_id) DO NOTHING
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, userId)
+        statement.setTimestamp(2, Timestamp.from(candidate))
+        statement.executeUpdate()
+    }
+    return selectIncludedAllowanceAnchor(userId) ?: candidate
+}
+
+private fun Connection.selectIncludedAllowanceAnchor(userId: UUID): Instant? =
+    prepareStatement("SELECT anchored_at FROM included_allowance_anchors WHERE user_id = ?").use { statement ->
+        statement.setObject(1, userId)
+        statement.executeQuery().use { rs -> if (rs.next()) rs.getTimestamp("anchored_at").toInstant() else null }
+    }
+
+private fun Connection.upsertIncludedAllowancePeriod(
+    userId: UUID,
+    allowance: IncludedAllowance,
+    period: IncludedAllowancePeriod,
+    now: Instant,
+) {
+    prepareStatement(UPSERT_INCLUDED_ALLOWANCE_PERIOD_QUERY).use { statement ->
+        statement.setObject(1, UUID.randomUUID())
+        statement.setObject(2, userId)
+        statement.setString(3, allowance.inventoryType)
+        statement.setInt(4, allowance.quantity)
+        statement.setTimestamp(5, Timestamp.from(period.end))
+        statement.setTimestamp(6, Timestamp.from(period.start))
+        statement.setInt(7, allowance.quantity)
+        statement.setString(8, allowance.tier)
+        statement.setTimestamp(9, Timestamp.from(now))
+        statement.executeUpdate()
+    }
+}
+
+/**
+ * Not entitled right now: the current period's unused included units stop being usable. They are
+ * moved to `allowance_withheld`, not deleted, so they come back if the tier does within the period.
+ * Purchased rows are never touched (they have no `allowance_period_start`).
+ */
+private fun Connection.withholdIncludedAllowance(
+    userId: UUID,
+    inventoryType: String,
+    now: Instant,
+) {
+    prepareStatement(
+        """
+        UPDATE premium_inventory
+        SET allowance_withheld = allowance_withheld + quantity,
+            quantity = 0,
+            updated_at = ?
+        WHERE user_id = ?
+          AND inventory_type = ?
+          AND allowance_period_start IS NOT NULL
+          AND quantity > 0
+          AND expires_at > ?
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setTimestamp(1, Timestamp.from(now))
+        statement.setObject(2, userId)
+        statement.setString(3, inventoryType)
+        statement.setTimestamp(4, Timestamp.from(now))
+        statement.executeUpdate()
+    }
+}
+
+// used = allowance_granted - quantity - allowance_withheld (never negative). With T = the current
+// tier's per-period amount (EXCLUDED.allowance_granted):
+//   granted'  = max(granted, T)           (an upgrade raises the high-water mark; nothing lowers it)
+//   quantity' = max(0, T - used)          (usable now)
+//   withheld' = granted' - used - quantity'
+// The WHERE skips the write when nothing changes (the row is still locked, which is harmless: the
+// caller is about to read or spend it).
+private val UPSERT_INCLUDED_ALLOWANCE_PERIOD_QUERY =
+    """
+    INSERT INTO premium_inventory AS pi (
+        id,
+        user_id,
+        inventory_type,
+        quantity,
+        source,
+        expires_at,
+        allowance_period_start,
+        allowance_granted,
+        allowance_withheld,
+        allowance_tier,
+        updated_at
+    )
+    VALUES (?, ?, ?, ?, 'subscription', ?, ?, ?, 0, ?, ?)
+    ON CONFLICT (user_id, inventory_type, allowance_period_start) WHERE allowance_period_start IS NOT NULL
+    DO UPDATE SET
+        quantity = GREATEST(0, EXCLUDED.allowance_granted - GREATEST(0, pi.allowance_granted - pi.quantity - pi.allowance_withheld)),
+        allowance_withheld =
+            GREATEST(pi.allowance_granted, EXCLUDED.allowance_granted)
+            - GREATEST(0, pi.allowance_granted - pi.quantity - pi.allowance_withheld)
+            - GREATEST(0, EXCLUDED.allowance_granted - GREATEST(0, pi.allowance_granted - pi.quantity - pi.allowance_withheld)),
+        allowance_granted = GREATEST(pi.allowance_granted, EXCLUDED.allowance_granted),
+        allowance_tier =
+            CASE
+                WHEN EXCLUDED.allowance_granted > pi.allowance_granted THEN EXCLUDED.allowance_tier
+                ELSE pi.allowance_tier
+            END,
+        updated_at = EXCLUDED.updated_at
+    WHERE pi.allowance_granted < EXCLUDED.allowance_granted
+       OR pi.quantity <> GREATEST(0, EXCLUDED.allowance_granted - GREATEST(0, pi.allowance_granted - pi.quantity - pi.allowance_withheld))
+    """.trimIndent()
+
 private val CONSUME_PREMIUM_INVENTORY_QUERY =
     """
     WITH candidate AS (
@@ -153,7 +309,9 @@ private val CONSUME_PREMIUM_INVENTORY_QUERY =
           AND inventory_type = ?
           AND quantity > 0
           AND (expires_at IS NULL OR expires_at > ?)
-        ORDER BY expires_at ASC NULLS LAST, created_at ASC, id ASC
+        -- The plan's included units for the current period go first (they lapse at the period
+        -- end), then whatever expires soonest; purchased units are touched only when those are gone.
+        ORDER BY (allowance_period_start IS NOT NULL) DESC, expires_at ASC NULLS LAST, created_at ASC, id ASC
         LIMIT 1
         FOR UPDATE
     )

@@ -1,6 +1,7 @@
 package com.pynapli.server.swipe
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.subscriptions.IncludedAllowance
 import java.time.Instant
 import java.util.UUID
 
@@ -146,7 +147,8 @@ interface SwipeRepository {
      * that paid inventory is spent in the same transaction as the insert: a replay of an
      * [actionId] that already landed spends nothing, a swipe that does not land (already decided
      * on this person, or an error) gives the unit back, and with nothing left the result has
-     * `inventoryUnavailable = true` and nothing is recorded.
+     * `inventoryUnavailable = true` and nothing is recorded. With [includedAllowance], the plan's
+     * included units for the current period are granted or withheld first, in that transaction.
      */
     suspend fun recordSwipeActionAndMarkCard(
         actionId: UUID,
@@ -159,6 +161,9 @@ interface SwipeRepository {
         noteText: String? = null,
         travelLocationId: UUID? = null,
         spendInventory: SwipeInventorySpend? = null,
+        // What the actor's plan includes of [spendInventory] this period: granted (once per period)
+        // or withheld in the same transaction, just before the spend, so included units go first.
+        includedAllowance: IncludedAllowance? = null,
         matchIdFactory: () -> UUID = UUID::randomUUID,
     ): SwipeActionResult {
         // This default has no inventory to spend from; a repository that sells paid swipes must

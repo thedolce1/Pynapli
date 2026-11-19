@@ -88,6 +88,25 @@ class JdbcSubscriptionRepository(
         duration: Duration,
     ): BoostActivationResult? = inventory.activateBoost(userId, now, duration)
 
+    override suspend fun activateBoost(
+        userId: UUID,
+        now: Instant,
+        duration: Duration,
+        includedAllowance: IncludedAllowance,
+    ): BoostActivationResult? = inventory.activateBoost(userId, now, duration, includedAllowance)
+
+    override suspend fun consumePineappleLikeInventoryReturningId(
+        userId: UUID,
+        now: Instant,
+        includedAllowance: IncludedAllowance,
+    ): UUID? = inventory.consumePineappleLikeInventoryReturningId(userId, now, includedAllowance)
+
+    override suspend fun reconcileIncludedAllowances(
+        userId: UUID,
+        allowances: List<IncludedAllowance>,
+        now: Instant,
+    ) = inventory.reconcileIncludedAllowances(userId, allowances, now)
+
     override suspend fun creditPlayStoreProductPurchase(
         purchaseToken: String,
         userId: UUID,
