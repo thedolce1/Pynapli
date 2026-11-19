@@ -140,8 +140,18 @@ displayed distance, order, radius membership, cursor — is a function of (viewe
 cell) only:
 
 - **Cell:** the effective location (active travel point, else home GPS) snapped to a 0.01-degree
-  grid (~1.1 km N-S) by `pynapli_location_cell` (V94). Ranking starts from the viewer's cell centre;
-  the shared rank window is keyed by that cell, so viewers sharing a window share an origin.
+  grid (~1.1 km N-S) by `pynapli_location_cell` (V94; pinned in V119 to the explicit
+  `round(x / 0.01) * 0.01` formula, round to nearest, ties to even, so a PostGIS upgrade cannot move
+  it). Ranking starts from the viewer's cell centre; the shared rank window is keyed by that cell,
+  so viewers sharing a window share an origin.
+- **Stored point:** since V119 `user_locations.geom` holds only the cell centre. Clients snap the fix
+  with `com.pynapli.shared.location.LocationCell` (the Kotlin twin, checked against the SQL by
+  `LocationCellStorageIntegrationTest`) and send no accuracy. `JdbcLocationRepository` snaps again in
+  SQL, stores `accuracy_meters = NULL` and sets `geohash` to the cell label. Nothing observable
+  changed: every reader already went through the cell helpers, and snapping is idempotent. The 1.6 km
+  pre-filter padding was sized for raw points and is now more than enough; it is left as is.
+  `travel_locations.geom` (a picked place, not a device fix) is stored as given and read through the
+  same cells.
 - **Displayed distance:** cell to cell, then bucketed: under 2 km reads "1 km", whole km to 10 km,
   5 km steps to 50 km, 10 km steps beyond. Deterministic (no per-request noise to average out).
 - **Order:** boost first, then a whole-km bucket of the cell-to-cell distance, then a stable

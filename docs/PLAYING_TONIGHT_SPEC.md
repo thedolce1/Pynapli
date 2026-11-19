@@ -83,8 +83,14 @@ Map:
 - No street-level pins.
 - Default is zone-only.
 - `zoneKey` is the owner's **effective** location (travel point when travelling) on a 0.02-degree
-  grid (`{floor(lon/0.02)}_{floor(lat/0.02)}`, ~2.2 km N-S), and is omitted when the owner hides
-  distance. Feed distance is cell to cell, radius snaps to the Grid steps, a traveller is matched
+  grid (~2.2 km N-S), and is omitted when the owner hides distance. Since V119 it is computed from
+  the owner's **cell**, in integers: with the cell centre at k hundredths of a degree, the zone is
+  `floor(k / 2)` on each axis (`pynapli_tonight_zone_x/_y`), keyed `{x}_{y}`. A cell centre on a
+  zone edge (even k) belongs to the zone east / north of the edge, negative coordinates included
+  (k = -235 gives -118). A zone never splits a cell. The old `floor(raw / 0.02)` cut through the
+  middle of every second cell, so a zone plus a coarse distance could say which half of a cell
+  someone was in. Pins whose raw point lay in the quarter of a zone just west or south of an edge
+  moved one zone east or north. Feed distance is cell to cell, radius snaps to the Grid steps, a traveller is matched
   only at the travel point, and order is the Grid's coarse order (never exact distance).
 - Map/list visibility is opt-in per session.
 - Markers are placed only in the part of the map nothing covers (below the top floater, above the

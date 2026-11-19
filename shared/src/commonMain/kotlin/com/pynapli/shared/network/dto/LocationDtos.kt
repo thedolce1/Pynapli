@@ -2,6 +2,10 @@ package com.pynapli.shared.network.dto
 
 import kotlinx.serialization.Serializable
 
+// A location write. Current clients send the fix already snapped to its 0.01-degree cell
+// (LocationCell) and no accuracy; the server snaps again and never stores a precise point or an
+// accuracy figure whatever an older client sends. `accuracyMeters` stays on the wire for those
+// clients and is validated, then discarded.
 @Serializable
 data class UpdateCurrentLocationRequestDto(
     val latitude: Double,
@@ -15,6 +19,7 @@ data class UpdateCurrentLocationRequestDto(
 
 // Acknowledgement of a location write. Carries no coordinates or location bucket of any kind:
 // current location is write-only from the client's side (never echoed back, L-40).
+// `accuracyMeters` is always null now (no accuracy figure is stored); kept for wire compatibility.
 @Serializable
 data class CurrentLocationDto(
     val updatedAt: String,

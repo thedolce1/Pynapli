@@ -7,6 +7,12 @@ import javax.sql.DataSource
 class JdbcLocationRepository(
     private val dataSource: DataSource,
 ) : LocationRepository {
+    /**
+     * The ONE writer of `user_locations` (location privacy): the point is snapped to its cell in SQL
+     * with `pynapli_location_cell`, so whatever a caller passes, only the cell centre is stored. The
+     * accuracy is always NULL (it described a precise fix that is no longer kept) and the geohash is
+     * the stored cell's label (`pynapli_location_cell_label`, V119), derived from the same snapped point.
+     */
     override suspend fun upsertCurrentLocation(
         userId: UUID,
         update: LocationUpdate,
@@ -19,11 +25,10 @@ class JdbcLocationRepository(
                         user_id, geom, geohash, city, region, country,
                         location_source, accuracy_meters, updated_at
                     )
-                    VALUES (
-                        ?,
-                        ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography,
-                        ?, ?, ?, ?, ?, ?, now()
-                    )
+                    SELECT ?, cell.geom, pynapli_location_cell_label(cell.geom), ?, ?, ?, ?, NULL::integer, now()
+                    FROM (
+                        SELECT pynapli_location_cell(ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography) AS geom
+                    ) cell
                     ON CONFLICT (user_id) DO UPDATE SET
                         geom = excluded.geom,
                         geohash = excluded.geohash,
@@ -31,28 +36,24 @@ class JdbcLocationRepository(
                         region = excluded.region,
                         country = excluded.country,
                         location_source = excluded.location_source,
-                        accuracy_meters = excluded.accuracy_meters,
+                        accuracy_meters = NULL,
                         updated_at = now()
-                    RETURNING updated_at, accuracy_meters, location_source, geohash, city, region, country
+                    RETURNING updated_at, location_source, city, region, country
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setObject(1, userId)
-                    statement.setDouble(2, update.longitude)
-                    statement.setDouble(3, update.latitude)
-                    statement.setString(4, update.geohash)
-                    statement.setString(5, update.city)
-                    statement.setString(6, update.region)
-                    statement.setString(7, update.country)
-                    statement.setString(8, update.source)
-                    update.accuracyMeters?.let { statement.setInt(9, it) } ?: statement.setNull(9, java.sql.Types.INTEGER)
+                    statement.setString(2, update.city)
+                    statement.setString(3, update.region)
+                    statement.setString(4, update.country)
+                    statement.setString(5, update.source)
+                    statement.setDouble(6, update.longitude)
+                    statement.setDouble(7, update.latitude)
 
                     statement.executeQuery().use { rs ->
                         rs.next()
                         CurrentLocationRecord(
                             updatedAt = rs.getTimestamp("updated_at").toInstant(),
-                            accuracyMeters = rs.getInt("accuracy_meters").takeUnless { rs.wasNull() },
                             source = rs.getString("location_source"),
-                            geohash = rs.getString("geohash"),
                             city = rs.getString("city"),
                             region = rs.getString("region"),
                             country = rs.getString("country"),

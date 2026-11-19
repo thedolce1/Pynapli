@@ -2,11 +2,13 @@ package com.pynapli.app.location
 
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.location.LocationCell
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LocationStateHolderTest {
@@ -65,6 +67,48 @@ class LocationStateHolderTest {
             assertTrue(result.submitted)
             assertEquals(GridLocationRefresh.Refresh, result.gridRefresh)
             assertEquals(2, repository.locations.size)
+        }
+
+    @Test
+    fun onlyTheCellLeavesTheDeviceWithoutAccuracy() =
+        runTest {
+            val repository = FakeLocationUpdateRepository()
+            val stateHolder = LocationStateHolder(repository)
+
+            stateHolder.submitLocation(DeviceLocation(latitude = 45.501734, longitude = -73.567261, accuracyMeters = 20))
+
+            val sent = repository.locations.single()
+            assertEquals(LocationCell.snapCoordinate(45.501734), sent.latitude)
+            assertEquals(LocationCell.snapCoordinate(-73.567261), sent.longitude)
+            assertEquals(4550, LocationCell.hundredths(sent.latitude))
+            assertEquals(-7357, LocationCell.hundredths(sent.longitude))
+            assertNull(sent.accuracyMeters)
+        }
+
+    @Test
+    fun thresholdsActOnTheUnsnappedMoveWhileSubmissionsAreSnapped() =
+        runTest {
+            val repository = FakeLocationUpdateRepository()
+            val stateHolder = LocationStateHolder(repository)
+
+            stateHolder.submitLocation(DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20))
+            // ~345 m north but still inside the same cell (45.50): measured on the snapped points the
+            // move would be zero and skipped; measured on the real fix it is a quiet refresh.
+            val sameCell = stateHolder.submitLocation(DeviceLocation(latitude = 45.5048, longitude = -73.5673, accuracyMeters = 20))
+            // ~200 m further north and into the next cell (45.51): on snapped points this would read
+            // as a 1.1 km jump and a full refresh; on the real fix it is under 250 m and skipped.
+            val nextCell = stateHolder.submitLocation(DeviceLocation(latitude = 45.5066, longitude = -73.5673, accuracyMeters = 20))
+
+            assertEquals(GridLocationRefresh.QuietRefresh, sameCell.gridRefresh)
+            assertTrue(sameCell.submitted)
+            assertEquals(GridLocationRefresh.None, nextCell.gridRefresh)
+            assertFalse(nextCell.submitted)
+            assertEquals(2, repository.locations.size)
+            repository.locations.forEach { sent ->
+                assertEquals(4550, LocationCell.hundredths(sent.latitude))
+                assertEquals(-7357, LocationCell.hundredths(sent.longitude))
+                assertNull(sent.accuracyMeters)
+            }
         }
 
     @Test
