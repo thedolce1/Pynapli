@@ -113,24 +113,65 @@ class LocationCellStorageIntegrationTest :
             }
         }
 
-        "the V116 backfill puts every stored point on the grid and is a no-op the second time" {
+        "a write that bypasses the service is still stored as the cell, by the database itself" {
             runBlocking {
-                val users =
-                    samplePoints().take(40).map { (longitude, latitude) ->
-                        UUID.randomUUID().also { user ->
-                            // Raw, pre-V116 shape: precise point, an accuracy figure, no geohash.
-                            dataSource.insertDiscoverableUser(user, "Legacy", age = 30, longitude = longitude, latitude = latitude)
-                        }
-                    }
-                // A legacy floored geohash must be replaced by the cell label.
+                val user = UUID.randomUUID()
+                // A raw SQL insert, then a raw SQL update: neither goes through LocationService.
+                dataSource.insertDiscoverableUser(user, "Bypass", age = 30, longitude = -73.56734, latitude = 45.50312)
+                val inserted = assertNotNull(dataSource.storedLocation(user))
+                val (insertLongitude, insertLatitude) = dataSource.sqlCell(-73.56734, 45.50312)
+                assertTrue(inserted.longitude == insertLongitude && inserted.latitude == insertLatitude, "insert not snapped: $inserted")
+                assertNull(inserted.accuracyMeters)
+
                 dataSource.connection.use { connection ->
                     connection
-                        .prepareStatement("UPDATE user_locations SET geohash = 'legacy' WHERE user_id = ?")
-                        .use { statement ->
-                            statement.setObject(1, users.first())
+                        .prepareStatement(
+                            "UPDATE user_locations SET geom = ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, " +
+                                "accuracy_meters = 9, geohash = 'raw' WHERE user_id = ?",
+                        ).use { statement ->
+                            statement.setDouble(1, 2.35271)
+                            statement.setDouble(2, 48.85664)
+                            statement.setObject(3, user)
                             statement.executeUpdate()
                         }
                 }
+                val updated = assertNotNull(dataSource.storedLocation(user))
+                val (updateLongitude, updateLatitude) = dataSource.sqlCell(2.35271, 48.85664)
+                assertTrue(updated.longitude == updateLongitude && updated.latitude == updateLatitude, "update not snapped: $updated")
+                assertNull(updated.accuracyMeters)
+                assertTrue(updated.geohash != "raw", "geohash not relabelled: $updated")
+            }
+        }
+
+        "the V116 backfill puts every stored point on the grid and is a no-op the second time" {
+            runBlocking {
+                // Rows as they were before V116: the trigger is off while they are seeded, the way it
+                // did not exist when they were written.
+                dataSource.setStoreCellTrigger(enabled = false)
+                val users =
+                    try {
+                        val seeded =
+                            samplePoints().take(40).map { (longitude, latitude) ->
+                                UUID.randomUUID().also { user ->
+                                    // Raw, pre-V116 shape: precise point, an accuracy figure, no geohash.
+                                    dataSource.insertDiscoverableUser(user, "Legacy", age = 30, longitude = longitude, latitude = latitude)
+                                }
+                            }
+                        // A legacy floored geohash must be replaced by the cell label.
+                        dataSource.connection.use { connection ->
+                            connection
+                                .prepareStatement("UPDATE user_locations SET geohash = 'legacy', accuracy_meters = 12 WHERE user_id = ?")
+                                .use { statement ->
+                                    statement.setObject(1, seeded.first())
+                                    statement.executeUpdate()
+                                }
+                        }
+                        seeded
+                    } finally {
+                        dataSource.setStoreCellTrigger(enabled = true)
+                    }
+                // The seed really is raw, so the backfill below has something to do.
+                assertEquals("legacy", assertNotNull(dataSource.storedLocation(users.first())).geohash)
 
                 dataSource.runV116()
                 val afterFirst = users.associateWith { assertNotNull(dataSource.storedLocation(it)) }
@@ -170,6 +211,16 @@ private data class StoredLocation(
     val geohash: String?,
     val rowVersion: String,
 )
+
+private fun DataSource.setStoreCellTrigger(enabled: Boolean) {
+    connection.use { connection ->
+        connection.createStatement().use { statement ->
+            statement.execute(
+                "ALTER TABLE user_locations ${if (enabled) "ENABLE" else "DISABLE"} TRIGGER user_locations_store_cell",
+            )
+        }
+    }
+}
 
 private fun DataSource.storedLocation(userId: UUID): StoredLocation? =
     connection.use { connection ->

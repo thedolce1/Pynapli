@@ -69,7 +69,29 @@ AS $$
     SELECT floor(round(ST_Y(pynapli_location_cell(g)::geometry) * 100)::integer / 2.0)::integer
 $$;
 
--- 4. Backfill: every stored point becomes its cell centre, the accuracy goes, the geohash follows the
+-- 4. The guarantee, enforced by the database rather than by convention: whatever writes
+--    user_locations (this build, an instance still on the previous build during a rolling deploy,
+--    a script, a future code path), the row that lands holds the cell centre, no accuracy figure and
+--    the cell label. Idempotent, so re-running this file is safe.
+CREATE OR REPLACE FUNCTION pynapli_user_locations_store_cell()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.geom := pynapli_location_cell(NEW.geom);
+    NEW.accuracy_meters := NULL;
+    NEW.geohash := pynapli_location_cell_label(NEW.geom);
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS user_locations_store_cell ON user_locations;
+CREATE TRIGGER user_locations_store_cell
+BEFORE INSERT OR UPDATE ON user_locations
+FOR EACH ROW
+EXECUTE FUNCTION pynapli_user_locations_store_cell();
+
+-- 5. Backfill: every stored point becomes its cell centre, the accuracy goes, the geohash follows the
 --    cell. updated_at is left alone (the impossible-travel signal compares against it).
 --    Idempotent: snapping a cell centre returns it unchanged, so the WHERE matches no row the second
 --    time and nothing is rewritten.
@@ -79,9 +101,8 @@ $$;
 --    indexed column makes these non-HOT updates: the GiST index on geom (and the geohash btree) gets
 --    a new entry for each new row version inside the same transaction, so it stays correct; the dead
 --    versions are reclaimed by autovacuum.
---    Rolling deploys: an instance still running the previous build after this migration writes raw
---    points and accuracy again until it is replaced. Reads stay cell-based regardless; re-run this
---    UPDATE once after the rollout completes to clear those rows.
+--    Rolling deploys: an instance still running the previous build after this migration still
+--    SENDS raw points, but the trigger above snaps them as they are written.
 UPDATE user_locations
 SET geom = pynapli_location_cell(geom),
     accuracy_meters = NULL,

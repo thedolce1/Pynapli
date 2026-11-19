@@ -82,7 +82,7 @@ class PasswordRecoveryService(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            logger.error("Password reset request could not be completed ({})", error.javaClass.simpleName)
+            logger.error("Account recovery request could not be completed ({})", error.javaClass.simpleName)
         }
     }
 
