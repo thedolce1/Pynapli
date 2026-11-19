@@ -176,14 +176,14 @@ class GridRankOrderPinTest :
 
                 val uncached = JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
                 val cached = JdbcGridRepository(dataSource, rankCacheTtl = Duration.ofMinutes(5))
-                // Window of 5: the cached window keeps the viewer, and a window whose other rows fill a
-                // page exactly ends the walk early (see queryGridRankCached), so 5 with pages of 3.
-                val cachedSmallWindow = JdbcGridRepository(dataSource, rankCacheTtl = Duration.ofMinutes(5), rankCacheWindow = 5)
+                // Window of 4: the cached window keeps the viewer, so its other rows fill the first page
+                // of 3 exactly and the rest must come from the per-viewer rank, not a false end.
+                val cachedSmallWindow = JdbcGridRepository(dataSource, rankCacheTtl = Duration.ofMinutes(5), rankCacheWindow = 4)
 
                 assertEquals(want, uncached.queryNearby(viewer, radius, 120).cards.map { it.pinned() }, "uncached")
                 assertEquals(want, cached.queryNearby(viewer, radius, 120).cards.map { it.pinned() }, "cached")
                 assertEquals(want, uncached.walk(pageSize = 3), "uncached, paged 3 at a time")
-                assertEquals(want, cachedSmallWindow.walk(pageSize = 3), "cached window of 5, paged 3 at a time")
+                assertEquals(want, cachedSmallWindow.walk(pageSize = 3), "cached window of 4, paged 3 at a time")
             }
         }
     })

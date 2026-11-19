@@ -162,7 +162,8 @@ internal class JdbcGridRepository(
      * `queryDeckRankCached`: bypass the shared cache for linkedOnly, disabled
      * cache, or travel-active viewers; otherwise load+cache an exclusion-free
      * window and apply cursor slice + self-exclusion in Kotlin, falling back to
-     * the uncached path when the page can't be filled from the window.
+     * the uncached path when the window can't settle the page and whether more
+     * rows follow it.
      */
     private fun Connection.queryGridRankCached(
         viewerLocationKey: GridLocationCacheKey,
@@ -212,14 +213,14 @@ internal class JdbcGridRepository(
                 .filter { cursor == null || it.afterCursor(cursor) }
                 .filterNot { it.userId == viewerUserId }
                 .toList()
-        val page = sliced.take(limit)
-        val hasMore = sliced.size > limit
-
-        // Fall back to the uncached path only when the window could not fill the
-        // page AND the window was full (so more matching rows may exist in the DB
-        // beyond the window). Mirrors Swipe's `cachedRows.size < cacheWindow` guard.
-        if (page.size >= limit || cachedRows.size < cacheWindow) {
-            return GridRankPage(cards = page, hasMore = hasMore)
+        // Serve from the window only when it can answer both the page AND whether
+        // more rows follow: either a row of the window remains past this page, or
+        // the window holds everyone in range (it came back short). A full window
+        // whose remaining rows fill the page exactly (or not at all) cannot tell
+        // whether more rows lie beyond it, so rank this page for the viewer
+        // directly. Mirrors Swipe's `windowRows < cacheWindow` guard.
+        if (sliced.size > limit || cachedRows.size < cacheWindow) {
+            return GridRankPage(cards = sliced.take(limit), hasMore = sliced.size > limit)
         }
 
         return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)

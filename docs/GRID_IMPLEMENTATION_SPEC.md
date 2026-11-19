@@ -449,7 +449,10 @@ Reward:
   `grid:candidates:v2:cell:{lonE2}_{latE2}:radius:{r}:w:{window}:f:{filterHash}` keyed by the
   viewer's 0.01-degree cell, TTL 5s). The cache
   is exclusion-free: per-viewer blocks/hides are applied after it in `GridService`, and linked-only and
-  travel-active viewers bypass it. **The Redis path fails open** to direct queries on any Redis error.
+  travel-active viewers bypass it. A page is served from the window only when a window row remains
+  past it or the window came back short (it holds everyone in range); otherwise that page is ranked
+  for the viewer directly, so a cached walk equals an uncached one and never ends early.
+  **The Redis path fails open** to direct queries on any Redis error.
 
 Battery: no continuous exact GPS in the background, no tight polling loops, stop foreground location
 updates when the app pauses, prefer event deltas over polling.
