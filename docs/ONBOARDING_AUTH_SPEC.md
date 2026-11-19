@@ -1,6 +1,6 @@
 # Pynapli Onboarding And Auth Spec
 
-Last updated: 2026-06-10
+Last updated: 2026-11-19
 
 ## Purpose
 
@@ -28,6 +28,46 @@ Session security:
 - Refresh-token rotation.
 - Remote logout per device.
 - Active sessions list in settings.
+
+## Membership Privacy (no account oracles)
+
+Someone who knows a member must not be able to confirm the member has an account. Unauthenticated
+auth endpoints that take an email therefore answer, and do the same work, whether or not the
+address is a member (server rules, enforced 2026-11-19):
+
+- **Sign-in** (`/v1/auth/email/login`, and `/v1/auth/account-appeal` which shares
+  `AuthService.verifyCredentials`): the password is always checked once with PBKDF2 at the current
+  parameters; an unknown address is checked against `PasswordHasher.decoyHash` (random bytes at the
+  current iteration count). Unknown address, wrong password, and a suspended/banned/paused account
+  with a wrong password all return the same `401 INVALID_CREDENTIALS`, and spend the same failed
+  sign-in budgets. Account status (`ACCOUNT_NOT_ACTIVE`, `ACCOUNT_NOT_RESTRICTED`) is revealed only
+  after the right password. Deleted accounts never match (treated as unknown).
+- **Password reset request** (`/v1/auth/password/reset-request`): answers `200 {"sent":true}` after
+  only the provider check, the rate limit and the email-format check, none of which depend on
+  membership. The account lookup, the code write and the email run after the response on the
+  server's background scope (`launchResetWork`); a failure there is logged by exception type only
+  (never the address or code) and cannot change the answer. Non-active accounts get no email, like
+  unknown addresses.
+- **Password reset completion** (`/v1/auth/password/reset`): an unknown address, an account without
+  a live code, a dead code and a wrong code all do the same reads and the same failed-attempt write
+  (a zero-row update when there is no live code) and answer `INVALID_RESET_CODE`.
+- Rate limits for these flows key on the typed address (and client IP / device), never on whether
+  it is a member.
+
+Known residuals:
+
+- **Sign-up is still an oracle (open, awaiting a founder decision):** `/v1/auth/email/signup`
+  answers `409 EMAIL_ALREADY_EXISTS` for a registered address. Closing it needs an email-ownership
+  step (always answer "check your email"; create or activate the account on confirmation; an
+  existing address gets an "you already have an account" email instead), which changes onboarding.
+- Tiny timing differences remain (an index hit versus miss; a one-row versus zero-row update on a
+  wrong reset code). If the PBKDF2 iteration count is ever raised, accounts still on the old count
+  verify faster than the decoy: rehash on successful sign-in when that happens.
+- The reset budgets are per typed address (`AUTH_PASSWORD_RESET` 5/h, `AUTH_PASSWORD_RESET_VERIFY`
+  15/h, five wrong tries kill a code), so anyone can exhaust them for a member's address and delay
+  that member's reset for up to an hour. Not an oracle (a stranger's address behaves the same); a
+  per-address-and-IP split is the proposed fix and needs a decision because it trades against the
+  per-address email cap.
 
 ## Signup Flow
 
