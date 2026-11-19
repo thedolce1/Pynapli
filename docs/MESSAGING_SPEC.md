@@ -111,8 +111,10 @@ The match moment keeps its two actions (Send a message, Keep swiping): partner i
 - **Final once used:** a partner who has had any invite to the thread (pending, accepted or declined)
   is never offered or named there again. Declining stays quiet; the manual button is unchanged.
 - **Blocks:** a block in either direction between any two of the people who would be in the thread
-  (current active and invited participants plus that partner) removes that offer; the invite itself is
-  still refused with the generic `MESSAGING_NOT_ALLOWED`.
+  (current active and invited participants plus every partner this viewer would be offered or shown)
+  removes the whole offer for that viewer, without saying who blocked whom; the invite itself is still
+  refused with the generic `MESSAGING_NOT_ALLOWED` when the invitee and a participant are blocked. A
+  partner hidden from the viewer is left out of every check, so it can never change what they see.
 - **One group per couple pair:** no offer in a conversation when another conversation that has had a
   partner invite already holds these people (only them and their linked partners, each of them there
   in person or through their partner). A Psync together match opens one conversation per partner with
