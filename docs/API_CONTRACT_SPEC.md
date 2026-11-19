@@ -122,6 +122,15 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 - Risk policy can hold outbound first messages for review.
 - Partner invite requires an active link plus partner **and** third-party consent.
   `ConversationDto.partnerInvite` is present while unresolved, with each side's consent status.
+- `ConversationDto.partnerOffers` (added 2026-11-18, optional; sent on `GET /v1/messages/threads/{id}`
+  and `POST /v1/messages/threads/{id}/read` only, null elsewhere and from older servers) is the per-viewer "Bring your partner" offer on a matched
+  conversation: `bringPartner { partnerUserId, partnerDisplayName }` is the viewer's own linked partner,
+  acted on with the existing `POST .../partner-invite` (same accepts, nothing new); `participantPartners
+  [{ participantUserId, partnerDisplayName }]` names another participant's linked partner the viewer is
+  already allowed to see, display only. Absent while any invite is open, once that partner has had any
+  invite to the thread, on any block among the would-be participants, and in a sibling conversation of
+  the same people that already had an invite. Rules: [MESSAGING_SPEC.md](MESSAGING_SPEC.md) "Partner
+  Invite Flow".
 - `ConversationDto.newMatch` (Boolean, added 2026-11-18) is the server's per-viewer answer to "does
   this conversation belong in my new-matches rail". Clients render it and never infer it; `null` only
   comes from an older server, where clients fall back to `origin == "swipe" && lastMessage == null`.

@@ -72,6 +72,14 @@ internal suspend fun DataSource.hasSentMessagingMessageInConversation(
         }
     }
 
+internal suspend fun DataSource.loadMessagingPartnerOffers(
+    viewerUserId: UUID,
+    conversation: ConversationRecord,
+): ConversationPartnerOffersRecord? =
+    withContext(Dispatchers.IO) {
+        connection.use { connection -> connection.loadPartnerOffers(viewerUserId, conversation) }
+    }
+
 internal suspend fun DataSource.getActiveLinkedPartnerUserId(userId: UUID): UUID? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->

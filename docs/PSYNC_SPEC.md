@@ -292,6 +292,12 @@ Partner invite rules still apply:
 - Private album access is separate.
 - Blocks override all match/chat state.
 
+Today a together match opens each partner's own direct conversation with the target (two match rows,
+two conversations, no invites). "Bring your partner" (MESSAGING_SPEC) offers each partner their own
+partner in their conversation; once one of them invites, the other conversation stops offering (to
+both its people), and the target's partner is then offered in the group only, so the four never end
+up with two groups or duplicate invites. Every join is still the ordinary partner invite with its accepts.
+
 Solo passthrough chat:
 
 - Belongs to the individual user.

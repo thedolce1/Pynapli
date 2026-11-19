@@ -71,6 +71,34 @@ data class ConversationDto(
     // viewer has not acted on yet; MESSAGING_SPEC "New-matches rail"). Per viewer. Null only from a
     // server that predates the field, where clients fall back to swipe origin + no last message.
     val newMatch: Boolean? = null,
+    // Server-decided "Bring your partner" offer for the viewer (MESSAGING_SPEC "Partner Invite Flow"),
+    // sent on the conversation-detail read and the read mark only. Null when there is nothing to offer, and from a server
+    // that predates it; clients then render the conversation exactly as before.
+    val partnerOffers: ConversationPartnerOffersDto? = null,
+)
+
+/**
+ * A shortcut over the ordinary partner invite, never a separate consent path: [bringPartner] is the
+ * viewer's own linked partner, invited with the existing `POST .../partner-invite` (same accepts);
+ * [participantPartners] names another participant's linked partner the viewer is already allowed to
+ * see, so the viewer can ask that participant. The viewer can never invite someone else's partner.
+ */
+@Serializable
+data class ConversationPartnerOffersDto(
+    val bringPartner: ConversationBringPartnerDto? = null,
+    val participantPartners: List<ConversationParticipantPartnerDto> = emptyList(),
+)
+
+@Serializable
+data class ConversationBringPartnerDto(
+    val partnerUserId: String,
+    val partnerDisplayName: String,
+)
+
+@Serializable
+data class ConversationParticipantPartnerDto(
+    val participantUserId: String,
+    val partnerDisplayName: String,
 )
 
 @Serializable

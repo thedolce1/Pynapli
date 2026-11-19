@@ -87,6 +87,44 @@ Recommended cooldown:
 
 - If the third party denies a partner invite, require a 24-hour cooldown before re-inviting that same partner to that same thread.
 
+### Bring your partner (shortcut, 2026-11-18)
+
+A server-decided offer that makes the invite above obvious on a match; it is not a second consent
+path. `GET /v1/messages/threads/{id}` (and the read mark the client applies after it) carries `ConversationDto.partnerOffers` for the viewer
+(`JdbcMessagingPartnerOfferSql`), and the conversation chrome renders it in place of the small
+"Invite partner" button (no new surface, notification or badge; without the field the chrome is as before).
+The match moment keeps its two actions (Send a message, Keep swiping): partner invites live in the conversation.
+
+- **Own partner (`bringPartner`):** "Bring Jo into this chat?" with one "Invite Jo" button, which is the
+  ordinary `POST .../partner-invite`. The partner and a third party still accept exactly as above.
+  Nobody can invite someone else's partner: the server invites only the caller's own active link.
+- **Another participant's partner (`participantPartners`):** a note, "Sam is linked with Riley. Ask Sam
+  if Riley would like to join.", shown only where Sam's `partner_visibility` already shows Riley to the
+  viewer (public; verified-only to a photo-verified viewer; matches-only to a match; hidden never),
+  and Riley is active, visible, not incognito, not quarantined/terminated and not hidden by the viewer.
+  No action: only Sam can invite Riley.
+- **Only on a match:** the conversation's direct pair has a `matches` row (it survives the switch to a
+  group), and the viewer is an active participant.
+- **One invite at a time:** no offer while any invite is open in the thread. Accept and decline act on
+  the newest open invite, so two open invites would leave the earlier invitee unable to respond until
+  the later one resolves (the manual flow can still create that; known gap).
+- **Final once used:** a partner who has had any invite to the thread (pending, accepted or declined)
+  is never offered or named there again. Declining stays quiet; the manual button is unchanged.
+- **Blocks:** a block in either direction between any two of the people who would be in the thread
+  (current active and invited participants plus that partner) removes that offer; the invite itself is
+  still refused with the generic `MESSAGING_NOT_ALLOWED`.
+- **One group per couple pair:** no offer in a conversation when another conversation that has had a
+  partner invite already holds these people (only them and their linked partners, each of them there
+  in person or through their partner). A Psync together match opens one conversation per partner with
+  the target; once one grows, the other stops offering, including to the target, and the target's own
+  partner is offered in the group only.
+
+Four people (couple + couple) still need every individual accept, one invite at a time: Alex opens the
+match and taps Invite Jo (2), Sam opens and approves (2), Jo opens and accepts (2), Sam taps Invite
+Riley (1), Alex or Jo opens and approves (2), Riley opens and accepts (2): 11 taps, the same minimum as
+the manual button. The shortcut saves discovery (a named, explained offer instead of a small button
+that also shows where an invite would be refused), not taps or rounds.
+
 ## Media And Private Albums
 
 Private album access is not the same as sending a photo.
@@ -208,6 +246,7 @@ Current implementation note:
 - [x] Intro Notes remain outside chat until accepted/matched.
 - [x] Partner invite requires linked partner and third-party consent.
 - [x] Partner invite appears in invited partner Activity.
+- [x] Bring your partner: a matched conversation offers each person their own linked partner and names another participant's visible partner, server-decided, through the existing invite only (`ConversationDto.partnerOffers`; `BringPartnerOfferIntegrationTest`, `ConversationPartnerOfferTest`).
 - [x] Album access is separate from chat membership.
 - [x] Media reveal is per-recipient.
 - [x] Own-message deletion returns a visible placeholder.

@@ -104,6 +104,15 @@ interface MessagingRepository {
     ): Boolean
 
     /**
+     * The viewer's "Bring your partner" offer on [conversation] (JdbcMessagingPartnerOfferSql), or
+     * null when there is nothing to offer. Read-only: acting on it is the ordinary partner invite.
+     */
+    suspend fun loadPartnerOffers(
+        viewerUserId: UUID,
+        conversation: ConversationRecord,
+    ): ConversationPartnerOffersRecord? = null
+
+    /**
      * Sets the caller's disappearing-messages timer ([expirySeconds] null = off) and records a
      * system message describing the change, in one transaction. Returns the refreshed detail
      * (with the new effective timer) and the system message, or null if the caller is not an
@@ -139,6 +148,25 @@ data class ConversationRecord(
     // The viewer's new-matches rail: a matched pair's conversation the viewer has not acted on yet
     // (JdbcMessagingMatchRailSql). Per viewer.
     val newMatch: Boolean = false,
+    // The viewer's "Bring your partner" offer; set on the conversation-detail read and the read mark only.
+    val partnerOffers: ConversationPartnerOffersRecord? = null,
+)
+
+data class ConversationPartnerOffersRecord(
+    // The viewer's own linked partner, whom the viewer may invite through the existing invite.
+    val bringPartner: BringPartnerOfferRecord?,
+    // Other participants' linked partners the viewer is allowed to see (named only, not invitable).
+    val participantPartners: List<ParticipantPartnerOfferRecord>,
+)
+
+data class BringPartnerOfferRecord(
+    val partnerUserId: UUID,
+    val partnerDisplayName: String,
+)
+
+data class ParticipantPartnerOfferRecord(
+    val participantUserId: UUID,
+    val partnerDisplayName: String,
 )
 
 data class ConversationParticipantRecord(

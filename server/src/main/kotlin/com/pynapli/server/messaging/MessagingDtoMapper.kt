@@ -1,8 +1,11 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.shared.network.dto.ConversationBringPartnerDto
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
+import com.pynapli.shared.network.dto.ConversationParticipantPartnerDto
+import com.pynapli.shared.network.dto.ConversationPartnerOffersDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
@@ -59,6 +62,25 @@ internal class MessagingDtoMapper(
             messageExpirySeconds = record.viewerExpirySeconds,
             effectiveMessageExpirySeconds = record.effectiveExpirySeconds,
             newMatch = record.newMatch,
+            partnerOffers =
+                record.partnerOffers?.let { offers ->
+                    ConversationPartnerOffersDto(
+                        bringPartner =
+                            offers.bringPartner?.let {
+                                ConversationBringPartnerDto(
+                                    partnerUserId = it.partnerUserId.toString(),
+                                    partnerDisplayName = it.partnerDisplayName,
+                                )
+                            },
+                        participantPartners =
+                            offers.participantPartners.map {
+                                ConversationParticipantPartnerDto(
+                                    participantUserId = it.participantUserId.toString(),
+                                    partnerDisplayName = it.partnerDisplayName,
+                                )
+                            },
+                    )
+                },
         )
 
     suspend fun toDto(

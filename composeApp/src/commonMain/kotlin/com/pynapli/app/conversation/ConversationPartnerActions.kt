@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -74,11 +75,15 @@ internal fun ConversationPartnerActions(
                 participant.userId == linkedPartnerUserId &&
                     participant.status in visibleConversationParticipantStatuses
             }
+    // The server's "Bring your partner" offer replaces the small Invite partner button when present;
+    // without it (no offer, or an older server) the chrome is exactly as before.
+    val offer = state.partnerOfferUi()
     val showInvitePartner =
         linkedPartnerUserId != null &&
             !partnerAlreadyInThread &&
             !state.isViewerInvited &&
-            !state.isLeaving
+            !state.isLeaving &&
+            offer?.bringPartnerName == null
     val showLeave =
         showLeaveAction &&
             conversation.kind == "group" &&
@@ -130,8 +135,45 @@ internal fun ConversationPartnerActions(
             )
         }
 
-        showInvitePartner || showLeave || partnerFeedback != null || state.isInvitingPartner || state.isLeaving -> {
+        offer != null || showInvitePartner || showLeave || partnerFeedback != null || state.isInvitingPartner || state.isLeaving -> {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                offer?.participantPartnerNotes?.forEach { note ->
+                    Text(
+                        text = note,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                offer?.bringPartnerName?.let { partnerName ->
+                    PartnerInviteStatusNotice(
+                        title = "Bring $partnerName into this chat?",
+                        body = "$partnerName and everyone here each need to accept. Nobody joins without saying yes.",
+                        action = {
+                            Button(
+                                onClick = onInvitePartner,
+                                enabled = !state.isInvitingPartner,
+                                modifier = Modifier.handCursor(enabled = !state.isInvitingPartner),
+                            ) {
+                                if (state.isInvitingPartner) {
+                                    CircularProgressIndicator(
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Filled.PersonAdd,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                Text(
+                                    text = "Invite $partnerName",
+                                    modifier = Modifier.padding(start = 6.dp),
+                                )
+                            }
+                        },
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
