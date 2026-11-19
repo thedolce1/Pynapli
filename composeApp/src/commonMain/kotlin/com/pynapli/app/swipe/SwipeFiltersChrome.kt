@@ -2,6 +2,7 @@ package com.pynapli.app.swipe
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -185,14 +186,23 @@ internal fun AdvancedPaywallBanner(onSubscribe: () -> Unit) {
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(18.dp),
         )
-        Text(
-            text = "Advanced filters require Pynapli+.",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Advanced filters require Pynapli+.",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // The partner benefit, as one quiet line under the primary message.
+            Text(
+                text = "One plan covers your linked partner too.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         TextButton(
             onClick = onSubscribe,
             modifier = Modifier.testTag(SwipeFilterTags.ADVANCED_PAYWALL_SUBSCRIBE).handCursor(),

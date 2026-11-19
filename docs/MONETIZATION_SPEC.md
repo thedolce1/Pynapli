@@ -247,9 +247,42 @@ Anti-abuse:
 - Fraud monitoring for frequent link/unlink cycles.
 - Subscription benefit should not apply retroactively to old linked partners.
 
-Product copy:
+Current implementation (server rule, `JdbcSubscriptionEntitlementSql.kt` partner branch +
+`SubscriptionRepository.findBestActiveEntitlement`):
 
-> Linked partner included while your link is active.
+- Any paid tier (Social or Select) carries it. Only the subscriber's own row in `subscriptions`
+  (status `active` or `grace`, inside its current period, any platform) reaches the partner; promo
+  and admin grants in `entitlements` never do.
+- The link must be `active` with `unlinked_at` null, and the subscriber's account must be active and
+  not deleted. One partner only: a user has at most one active link (V16/V17 unique indexes).
+- The partner gets the subscriber's tier (the whole tier policy). If the partner already has a
+  higher plan of their own, the higher one wins.
+- It ends when the link ends or the subscription lapses, with no stored grant to clean up (the
+  entitlement cache holds a result for 5 seconds). The cooldown is the partner-link one: after an
+  unlink, neither person can link again for 7 days (`ProfileLinkService`, `PROFILE_LINK_COOLDOWN`).
+  The `linked_partner_benefits` table is never written, and the other anti-abuse rules above
+  (verification requirement, link/unlink fraud monitoring) have no benefit-specific code yet.
+- Entitlement is per account, so being covered applies on every client (Android, iOS, web). Buying
+  a plan is Android-only today: the server has a Google Play verifier and no App Store one
+  (StoreKit 2 is still open), and web is read-only.
+- `SubscriptionEntitlementDto.linkedPartnerIncluded` is true for every paid entitlement, promo and
+  admin included, so clients must not read it as "your partner is covered"; use `source`.
+
+Product copy (in app since 2026-11-18; `store/StorePartnerBenefitCopy.kt`):
+
+- The Store sheet opens its plans section with the benefit, and every plans paywall lands on it.
+  Free viewer: "One subscription covers you both", then "Link your partner and they get the same
+  plan at no extra cost." plus "Solo? Every plan works just as well for one." when not linked, or
+  "Choose Social or Select and [partner] gets the same plan at no extra cost while you're linked."
+  when linked.
+- Own paid plan: "Your plan covers you and [partner]" (or "Your plan can cover your partner too"
+  with a link invitation). Covered by a partner: "You're covered by [partner]'s plan".
+- The current-plan card says who the plan covers ("Covers [partner] too", "Covered by [partner]'s
+  plan", "Covers your account only" for promo/admin). Paid tier cards list "Covers your linked
+  partner too" first.
+- The partner's display name is used only when it is on the client already (the profile-links
+  summary) and is 20 characters or fewer; otherwise the copy is generic.
+- The Travel mode and advanced-filter paywall banners carry one quiet secondary line about it.
 
 Avoid:
 
@@ -547,6 +580,7 @@ Do not experiment with:
 - [x] Fake ad slot and ad claims removed.
 - [x] Safety features remain free.
 - [x] Paywall copy uses Social/Select naming.
+- [x] The Store leads with the linked-partner benefit, worded for the viewer's link and plan source (2026-11-18).
 
 ## Do Not Implement
 
@@ -561,3 +595,31 @@ Do not experiment with:
 - Do not trust client-side premium flags.
 - Do not use deceptive fake Activity to sell upgrades.
 - Do not put ads in private albums, safety, partner invites, or reports.
+
+## Store listing draft (not published)
+
+**DRAFT awaiting founder and legal review. Not wired into any store listing, `web/` or metadata.**
+Written 2026-11-18 to be literally true per the code at that date (sources in brackets). It avoids
+"hookup", sexually explicit wording and any promise about meeting people (Apple guideline 1.1.4;
+Google Play sexual-content listing policy). Re-check every line against the code before use.
+
+- App Store subtitle (30 max, this is 24): **One plan covers you both**
+  (Hold until iOS can sell a plan: StoreKit 2 is not built and the server has no App Store
+  verifier, so an iOS listing that leads with a plan would point at something iOS can't sell yet.)
+- Google Play short description (80 max, this is 79), on one line so it copies as counted:
+
+  **For lifestyle couples and singles. Link your partner: one plan covers you both.**
+
+Long description, first three bullets:
+
+- **One subscription, two people.** Link your partner's account and your Social or Select plan
+  covers them too, at no extra cost, for as long as you stay linked. Your accounts stay separate.
+  [Linked Partner Benefit, "Current implementation" above.]
+- **Verified couples.** A couple shows as verified only when both partners have photo-verified, and
+  Social and Select members can filter to verified couples only. [`CoupleVerifiedFilterSql`;
+  `DiscoveryFilters.hasAdvancedFilters` makes the filter paid.]
+- **Your location stays yours.** Other members never see your exact location or exact distance:
+  distances are rounded, and you can hide yours. [`DistanceRounding.kt` coarse cells and rounding,
+  applied with `showDistance` in the Grid, Swipe, Activity and profile-peek mappers and SQL;
+  Tonight uses cell-to-cell distance and coarse zones. The server does store your location to run
+  discovery, so do not claim otherwise.]
