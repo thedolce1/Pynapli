@@ -2,10 +2,11 @@
 -- Like per week, Select 5 Pineapple Likes per week and 1 Boost per month. They are granted lazily,
 -- when the balance is read or about to be spent, never by a background job.
 --
--- 1. Each person's allowance cycle is anchored once, at their first paid entitlement, and never
---    moves again: weeks are 7-day and months 30-day windows counted from this instant. Because the
---    anchor never resets, subscribing/cancelling or linking/unlinking cannot open a second window
---    inside the same week or month.
+-- 1. Each person's allowance cycle is anchored once, the first time they are granted anything, at
+--    the start of the paid entitlement in force then (a subscription's current billing-period start,
+--    or the subscriber's for a covered partner; clamped to now), and never moves again: weeks are
+--    7-day and months 30-day windows counted from this instant. Because the anchor never resets,
+--    subscribing/cancelling or linking/unlinking cannot open a second window in the same period.
 CREATE TABLE IF NOT EXISTS included_allowance_anchors (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     anchored_at TIMESTAMPTZ NOT NULL,

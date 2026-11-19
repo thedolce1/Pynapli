@@ -238,8 +238,10 @@ Rules:
   admin or promo entitlement (same allowance as the tier), or the linked-partner benefit. Each person
   gets their own allowance; inventory is never shared between partners.
 - **Periods:** a week is a 7-day window and a month a 30-day window, laid end to end from the person's
-  allowance anchor: the start of the first paid entitlement they ever held (stored once in
-  `included_allowance_anchors`, never moved). So people do not all reset at the same moment, and
+  allowance anchor. The anchor is set once, the first time the person is granted anything, to the
+  start of the paid entitlement in force at that moment (for a subscription, its current
+  billing-period start; for a covered partner, the subscriber's), clamped to now. It is stored in
+  `included_allowance_anchors` and never moves. So people do not all reset at the same moment, and
   cancelling, resubscribing, upgrading or relinking never opens a new window early.
 - **Lazy, exactly once:** nothing runs on a schedule. The current period's units are granted when the
   balance is read (`GET /v1/subscriptions/inventory`) or about to be spent (Swipe Pineapple Like, Psync

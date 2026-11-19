@@ -249,6 +249,25 @@ class IncludedAllowanceIntegrationTest {
         }
 
     @Test
+    fun aRefundAfterALapseDoesNotMakeAnIncludedUnitUsable() =
+        runBlocking<Unit> {
+            val member = user()
+            val select = subscribe(member, SubscriptionTier.SELECT)
+            val spent = assertNotNull(service.consumePineappleLikeInventoryReturningId(member))
+            endSubscription(select)
+            assertEquals(0, balance(member, PremiumInventoryType.PINEAPPLE_LIKE))
+
+            // A Psync session that never delivered gives the unit back after the plan lapsed.
+            assertTrue(service.refundPineappleLikeInventory(spent))
+
+            assertEquals(0, balance(member, PremiumInventoryType.PINEAPPLE_LIKE))
+            assertNull(service.consumePineappleLikeInventoryReturningId(member))
+            // And it is there again, with the other unused four, if Select comes back this week.
+            subscribe(member, SubscriptionTier.SELECT)
+            assertEquals(5, balance(member, PremiumInventoryType.PINEAPPLE_LIKE))
+        }
+
+    @Test
     fun subscribingAndCancellingRepeatedlyInOneWeekGrantsOnce() =
         runBlocking<Unit> {
             val member = user()
