@@ -74,7 +74,6 @@ import com.pynapli.server.subscriptions.PlayStoreSubscriptionSyncWorker
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.swipe.SavedSwipeFilterService
 import com.pynapli.server.swipe.SwipeService
-import com.pynapli.server.swipe.TopPicksService
 import com.pynapli.server.tonight.TonightFeedService
 import com.pynapli.server.tonight.TonightSessionExpiryWorker
 import com.pynapli.server.tonight.TonightSessionService
@@ -147,7 +146,6 @@ class ServerDependencies(
     val hiddenProfileRepository: HiddenProfileRepository,
     val savedGridFilterService: SavedGridFilterService,
     val savedSwipeFilterService: SavedSwipeFilterService,
-    val topPicksService: TopPicksService,
     val matchCelebrationService: com.pynapli.server.swipe.MatchCelebrationService? = null,
     val tonightSessionService: TonightSessionService,
     val tonightFeedService: TonightFeedService,
@@ -509,7 +507,6 @@ class ServerDependencies(
                 hiddenProfileRepository = core.hiddenProfileRepository,
                 savedGridFilterService = grid.savedGridFilterService,
                 savedSwipeFilterService = grid.savedSwipeFilterService,
-                topPicksService = swipe.topPicksService,
                 matchCelebrationService = swipe.matchCelebrationService,
                 tonightSessionService = tonight.tonightSessionService,
                 tonightFeedService = tonight.tonightFeedService,

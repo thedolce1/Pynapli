@@ -79,13 +79,6 @@ internal fun savedFilterStatusFor(code: String): HttpStatusCode =
         else -> HttpStatusCode.BadRequest
     }
 
-internal fun topPicksStatusFor(code: String): HttpStatusCode =
-    when (code) {
-        "LOCATION_REQUIRED" -> HttpStatusCode.UnprocessableEntity
-        "STALE_TOP_PICK_SESSION" -> HttpStatusCode.Conflict
-        else -> HttpStatusCode.BadRequest
-    }
-
 internal fun travelLocationStatusFor(code: String): HttpStatusCode =
     when (code) {
         "ENTITLEMENT_REQUIRED",

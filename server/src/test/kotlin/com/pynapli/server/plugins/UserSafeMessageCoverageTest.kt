@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
 
 /**
  * Every error code the server throws must have a user-safe message. Codes without one fall back to
- * "Request could not be completed.", which tells a person nothing (several Travel and Top Picks codes
+ * "Request could not be completed.", which tells a person nothing (several Travel codes
  * did until 2026-11-12). New codes fail this test until they get a message or are listed below.
  */
 class UserSafeMessageCoverageTest {

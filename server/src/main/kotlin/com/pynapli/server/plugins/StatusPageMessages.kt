@@ -8,7 +8,6 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_TRAVEL_CITY", "INVALID_TRAVEL_REGION", "INVALID_TRAVEL_COUNTRY", "INVALID_TRAVEL_COORDINATES" ->
             "That place couldn't be used. Pick a city from the search results."
         "INVALID_TRAVEL_SEARCH_QUERY" -> "Type at least a few letters of a city, or a ZIP/postal code."
-        "STALE_TOP_PICK_SESSION" -> "Top Picks refreshed. Try again."
         "ENHANCED_VERIFICATION_REQUIRED" -> "Verify your profile to do this."
         "EXPORT_NOT_FOUND" -> "That data export is no longer available. Request a new one."
         "INVALID_CONVERSATION_ORIGIN", "INVALID_CONVERSATION_TARGET" -> "That chat can't be started."

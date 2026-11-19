@@ -84,8 +84,8 @@ class ReportService(
             }
         }
 
-        // Nobody should have to keep seeing someone they just reported: Grid, Swipe, Top Picks and
-        // live Psync decks all leave hidden profiles out. Best effort; the report already stands.
+        // Nobody should have to keep seeing someone they just reported: Grid, Swipe and live Psync
+        // decks all leave hidden profiles out. Best effort; the report already stands.
         hiddenProfileRepository?.let { hidden ->
             runCatching { hidden.hideProfile(hiderUserId = reporterUserId, hiddenUserId = reportedUserId) }
                 .onFailure { error -> logger.warn("Failed to hide reported profile for report {}", record.id, error) }

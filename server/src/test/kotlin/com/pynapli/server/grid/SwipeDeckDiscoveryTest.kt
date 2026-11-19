@@ -10,10 +10,6 @@ import com.pynapli.shared.network.dto.SwipeActionRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
-import java.time.Clock
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -356,90 +352,6 @@ class SwipeDeckDiscoveryTest :
                     "Rewind must increment the originally-consumed premium_inventory row",
                 )
                 assertTrue(deck.deckSessionId.isNotBlank())
-            }
-        }
-
-        "top picks generates and reuses a daily session backed by a real deck session" {
-            // SWIPE_IMPLEMENTATION_SPEC L308: stable picks within the 24h window.
-            // Two reads return the same session id; the backing swipe_deck_sessions
-            // row is queryable so submitAction tokens validate against it.
-            runBlocking {
-                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000950")
-                val target = UUID.fromString("00000000-0000-0000-0000-000000000951")
-                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
-                dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
-                val swipeRepository = JdbcSwipeRepository(dataSource)
-                val service =
-                    com.pynapli.server.swipe.TopPicksService(
-                        topPicksRepository =
-                            com.pynapli.server.swipe
-                                .JdbcTopPicksRepository(dataSource),
-                        swipeRepository = swipeRepository,
-                    )
-
-                val first = service.getCurrentPicks(viewer)
-                val second = service.getCurrentPicks(viewer)
-
-                assertEquals(first.sessionId, second.sessionId)
-                assertEquals(10, first.tierLimit)
-                assertEquals(1, first.picks.size)
-                assertEquals(
-                    target.toString(),
-                    first.picks
-                        .single()
-                        .card.userId,
-                )
-                // Same raw token returned on the cached read — proves deterministic
-                // reissue against the persisted card_token_hash.
-                assertEquals(
-                    first.picks
-                        .single()
-                        .card.rankToken,
-                    second.picks
-                        .single()
-                        .card.rankToken,
-                )
-            }
-        }
-
-        "top picks backing deck session remains actionable inside daily window" {
-            runBlocking {
-                val now = Instant.parse("2026-05-17T12:00:00Z")
-                val viewer = UUID.fromString("00000000-0000-0000-0000-000000001950")
-                val target = UUID.fromString("00000000-0000-0000-0000-000000001951")
-                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
-                dataSource.insertDiscoverableUser(target, "Maya", age = 35, longitude = -122.0836, latitude = 37.4226)
-                val swipeRepository = JdbcSwipeRepository(dataSource)
-                val topPicksService =
-                    com.pynapli.server.swipe.TopPicksService(
-                        topPicksRepository =
-                            com.pynapli.server.swipe
-                                .JdbcTopPicksRepository(dataSource),
-                        swipeRepository = swipeRepository,
-                        clock = Clock.fixed(now, ZoneOffset.UTC),
-                    )
-
-                val picks = topPicksService.getCurrentPicks(viewer)
-                val pick = assertNotNull(picks.picks.singleOrNull())
-                val laterSwipeService =
-                    SwipeService(
-                        repository = swipeRepository,
-                        clock = Clock.fixed(now.plus(Duration.ofMinutes(31)), ZoneOffset.UTC),
-                    )
-                val response =
-                    laterSwipeService.submitAction(
-                        viewer,
-                        SwipeActionRequestDto(
-                            actionId = UUID.randomUUID().toString(),
-                            deckSessionId = picks.deckSessionId,
-                            cardToken = pick.card.rankToken,
-                            targetUserId = target.toString(),
-                            action = SwipeAction.LIKE,
-                        ),
-                    )
-
-                assertTrue(picks.deckSessionId.isNotBlank())
-                assertTrue(response.recorded)
             }
         }
 
