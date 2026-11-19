@@ -22,27 +22,26 @@ import java.util.UUID
 
 /**
  * Email sign-up that proves the person owns the address and never reveals whether it already has
- * an account (ONBOARDING_AUTH_SPEC, "Membership privacy").
+ * an account (ONBOARDING_AUTH_SPEC, "Email sign-up").
  *
- * 1. [startSignup] validates the request exactly as sign-up always has (format, password policy,
- *    age gate, acceptances), hashes the password, and answers the same [EmailSignupStartedDto] for
- *    every syntactically valid request. The only work it does on the request is the same for every
- *    address: rate limits, validation, one password hash, one random token, one queued job. It never
- *    looks the address up.
- * 2. Off the request path ([launchSignupWork]): a new address gets a pending sign-up and a 6-digit
- *    code by email; an address that already has an account (any status but deleted, as sign-in
- *    treats them) gets a neutral "someone tried to sign up with this address" email, and nothing is
- *    created or changed. A deleted account's address is free again, as it was before this change.
- * 3. [verify] takes the address, the code and the token the sign-up response returned. Every
- *    failure is the same INVALID_SIGNUP_CODE after the same work (one lookup, one hash comparison,
- *    one failed-attempt write, against a placeholder row when nothing matches). Success creates the
- *    account from the pending row in one transaction, exactly as sign-up created it before, and
- *    returns the session.
+ * 1. [startSignup] validates the request (format, a strict single address, password policy, age
+ *    gate, acceptances), hashes the password, and answers the same [EmailSignupStartedDto] for every
+ *    valid request. On the request it does the same work for every address: rate limits,
+ *    validation, one password hash, one random token, one queued job. It never looks the address up.
+ * 2. Off the request path ([launchSignupWork], bounded): a new address gets its own pending sign-up
+ *    (one row per token, so nobody else's sign-up can replace it) and a 6-digit code by email; an
+ *    address that already has an account (any status but deleted, as sign-in treats them) gets a
+ *    neutral "someone tried to sign up with this address" email, and nothing is created or changed.
+ * 3. [verify] takes the address, the code and the token the sign-up response returned. It first
+ *    spends one attempt in a single statement that always writes exactly one row: the matching live
+ *    sign-up, or the permanent placeholder row when there is none (V118). Only then is the code
+ *    compared. So concurrent guesses can't outrun the cap, and a failure does the same work whether
+ *    or not the address had a pending sign-up. Success creates the account from the pending row in
+ *    one transaction, exactly as sign-up always created it, and returns the session.
  *
- * The token is what keeps a person who only knows someone's address from finishing that person's
- * sign-up with a password of their own (start a second sign-up, wait for the owner to type the new
- * code). It also keeps them from burning the owner's code attempts: wrong guesses only count when
- * the token matches.
+ * Guess budget: [MAX_ATTEMPTS] per pending sign-up for its whole life (a resend issues a new code but
+ * never gives attempts back, and a row gets at most [MAX_CODES] codes). Rows are bounded by the email
+ * caps, so per address per day at most [ADDRESS_DAILY_EMAIL_CAP] x [MAX_ATTEMPTS] guesses exist.
  */
 class EmailSignupService(
     private val repository: EmailSignupRepository,
@@ -51,7 +50,7 @@ class EmailSignupService(
     private val passwordHasher: PasswordHasher = PasswordHasher(),
     private val clock: Clock = Clock.systemUTC(),
     private val rateLimitService: RateLimitService? = null,
-    /** Runs member-only work off the request path: the application background scope in production. */
+    /** Runs member-only work off the request path: the bounded background launcher in production. */
     private val launchSignupWork: (suspend () -> Unit) -> Unit,
     private val codeGenerator: () -> String = ::newSignupCode,
     private val tokenGenerator: () -> String = TokenGenerator::newToken,
@@ -76,6 +75,7 @@ class EmailSignupService(
         // stop the owner signing up; the per-device one stops one install spraying addresses.
         rateLimitGuard.enforce(RateLimitedAction.AUTH_SIGNUP, addressAndClient(account, clientIp), deviceId)
         validator.validateEmailPassword(email, password)
+        if (!EmailAddressRules.isStrict(account)) throw AuthException("INVALID_EMAIL")
         val ageGate =
             validator.validateSignupAgeGate(
                 birthdate = birthdate,
@@ -89,14 +89,15 @@ class EmailSignupService(
         val signupToken = tokenGenerator()
         val draft =
             SignupDraft(
-                address = email.trim(),
+                account = account,
+                clientIp = clientIp,
                 emailHash = Sha256.hash(account),
                 signupTokenHash = Sha256.hash(signupToken),
                 passwordHash = passwordHash,
                 birthdate = ageGate.birthdate,
                 acceptedAt = ageGate.acceptedAt,
             )
-        launchSignupWork { deliverSignup(account, draft) }
+        launchSignupWork { deliverSignup(draft) }
         return EmailSignupStartedDto(
             verificationRequired = true,
             signupToken = signupToken,
@@ -115,11 +116,10 @@ class EmailSignupService(
         if (!mailer.isConfigured) throw AuthException("SIGNUP_UNAVAILABLE")
         val account = normalizeEmail(email)
         rateLimitGuard.enforce(RateLimitedAction.AUTH_SIGNUP_RESEND, addressAndClient(account, clientIp), deviceId)
-        if (!account.contains("@")) throw AuthException("INVALID_EMAIL")
+        if (!EmailAddressRules.isStrict(account)) throw AuthException("INVALID_EMAIL")
         val emailHash = Sha256.hash(account)
         val tokenHash = Sha256.hash(signupToken.trim())
-        val address = email.trim()
-        launchSignupWork { deliverResend(account, address, emailHash, tokenHash) }
+        launchSignupWork { deliverResend(account, clientIp, emailHash, tokenHash) }
     }
 
     suspend fun verify(
@@ -134,46 +134,41 @@ class EmailSignupService(
         val account = normalizeEmail(email)
         rateLimitGuard.enforce(RateLimitedAction.AUTH_SIGNUP_VERIFY, addressAndClient(account, clientIp))
         val now = clock.instant()
-        val pending = repository.findLivePendingSignup(Sha256.hash(account), now)
+        val emailHash = Sha256.hash(account)
 
-        // Both comparisons always run, against placeholders when there is no row, so a missing
-        // sign-up, a wrong token and a wrong code cost the same.
-        val tokenMatches = sameHash(pending?.signupTokenHash ?: PLACEHOLDER_HASH, Sha256.hash(signupToken.trim())) && pending != null
-        val codeMatches = sameHash(pending?.codeHash ?: PLACEHOLDER_HASH, codeHash(pending?.id ?: PLACEHOLDER_ID, code.trim()))
+        // Spend the attempt first, atomically, on exactly one real row (the sign-up, or the placeholder
+        // when there is none). Then compare: N parallel guesses get N distinct attempt numbers, and
+        // only the first MAX_ATTEMPTS are compared at all.
+        val attempt = repository.consumeAttempt(emailHash, Sha256.hash(signupToken.trim()), now)
+        val codeMatches = sameHash(attempt.codeHash, codeHash(attempt.id, code.trim()))
         val usable =
-            pending != null &&
-                tokenMatches &&
-                pending.failedAttempts < MAX_FAILED_ATTEMPTS &&
-                pending.codeExpiresAt.isAfter(now)
-        if (pending == null || !usable || !codeMatches) {
-            // Always one write. Only a guess made with the right token counts against the code, so
-            // someone who just knows the address can't use up the owner's attempts.
-            repository.recordFailedAttempt(if (pending != null && tokenMatches) pending.id else PLACEHOLDER_ID)
-            throw AuthException("INVALID_SIGNUP_CODE")
-        }
+            attempt.id != PLACEHOLDER_ID &&
+                attempt.attempts <= MAX_ATTEMPTS &&
+                attempt.codeExpiresAt.isAfter(now)
+        if (!usable || !codeMatches) throw AuthException("INVALID_SIGNUP_CODE")
 
         val user =
             repository.completeSignup(
-                pendingId = pending.id,
-                expectedCodeHash = pending.codeHash,
+                pendingId = attempt.id,
+                emailHash = emailHash,
+                expectedCodeHash = attempt.codeHash,
+                maxAttempts = MAX_ATTEMPTS,
                 userId = UUID.randomUUID(),
                 identityId = UUID.randomUUID(),
-                displayAge = Period.between(pending.birthdate, LocalDate.now(clock)).years,
+                displayAge = Period.between(attempt.birthdate, LocalDate.now(clock)).years,
                 verifiedAt = now,
             )
-        if (user == null) {
-            // A concurrent verify won, or the address got an account meanwhile: same answer as any
-            // other failure.
-            repository.recordFailedAttempt(PLACEHOLDER_ID)
-            throw AuthException("INVALID_SIGNUP_CODE")
-        }
-        return authService.startFirstSession(user, deviceId, platform, appVersion)
+        // A concurrent verify won, or the address got an account meanwhile: same answer as any other
+        // failure (this branch needs the right code, so it tells a guesser nothing).
+        return user?.let { authService.startFirstSession(it, deviceId, platform, appVersion) }
+            ?: throw AuthException("INVALID_SIGNUP_CODE")
     }
 
     /**
-     * Local development only (route gated by `devSignupShortcutsEnabled` and PYNAPLI_ENV=local):
-     * creates a verified account at once through the same account-creation function as [verify], so
-     * the seeds and load tests need no email. Unlike the public flow it answers EMAIL_ALREADY_EXISTS.
+     * Local development only (route gated: off by default, local environment, local file mailer,
+     * loopback peer without forwarding headers): creates a verified account at once through the same
+     * account-creation function as [verify], so the seeds and load tests need no email. Unlike the
+     * public flow it answers EMAIL_ALREADY_EXISTS.
      */
     suspend fun createVerifiedAccountForLocalDev(
         email: String,
@@ -186,7 +181,10 @@ class EmailSignupService(
         platform: String?,
         appVersion: String?,
     ): AuthSessionDto {
+        rateLimitGuard.enforce(RateLimitedAction.AUTH_DEV_SIGNUP, DEV_SIGNUP_SUBJECT)
         validator.validateEmailPassword(email, password)
+        val account = normalizeEmail(email)
+        if (!EmailAddressRules.isStrict(account)) throw AuthException("INVALID_EMAIL")
         val ageGate =
             validator.validateSignupAgeGate(
                 birthdate = birthdate,
@@ -198,7 +196,7 @@ class EmailSignupService(
             repository.createVerifiedAccount(
                 userId = UUID.randomUUID(),
                 identityId = UUID.randomUUID(),
-                emailHash = Sha256.hash(normalizeEmail(email)),
+                emailHash = Sha256.hash(account),
                 passwordHash = passwordHasher.hash(password),
                 birthdate = ageGate.birthdate,
                 displayAge = ageGate.displayAge,
@@ -210,68 +208,81 @@ class EmailSignupService(
         return authService.startFirstSession(user, deviceId, platform, appVersion)
     }
 
-    private suspend fun deliverSignup(
-        account: String,
-        draft: SignupDraft,
-    ) {
+    private suspend fun deliverSignup(draft: SignupDraft) {
         runLogged("sign-up") {
-            // Over the silent per-address cap: a complete no-op, so a flood can't keep replacing the
-            // owner's pending sign-up either.
-            if (!withinSendCaps(account)) return@runLogged
+            // Over a silent email cap: a complete no-op.
+            if (!withinSendCaps(draft.account, draft.clientIp)) return@runLogged
             if (repository.findEmailIdentity(draft.emailHash) != null) {
-                mailer.sendAlreadyRegisteredNotice(draft.address)
+                mailer.sendAlreadyRegisteredNotice(draft.account)
                 return@runLogged
             }
             val now = clock.instant()
             val pendingId = UUID.randomUUID()
             val code = codeGenerator()
-            repository.replacePendingSignup(
-                NewPendingSignup(
-                    id = pendingId,
-                    emailHash = draft.emailHash,
-                    signupTokenHash = draft.signupTokenHash,
-                    passwordHash = draft.passwordHash,
-                    birthdate = draft.birthdate,
-                    acceptedAt = draft.acceptedAt,
-                    termsVersion = AUTH_TERMS_VERSION,
-                    privacyVersion = AUTH_PRIVACY_VERSION,
-                    codeHash = codeHash(pendingId, code),
-                    codeExpiresAt = now.plus(CODE_LIFETIME),
-                    expiresAt = now.plus(PENDING_LIFETIME),
-                    createdAt = now,
-                ),
-                now = now,
-            )
-            mailer.sendSignupCode(draft.address, code)
+            val inserted =
+                repository.insertPendingSignup(
+                    NewPendingSignup(
+                        id = pendingId,
+                        emailHash = draft.emailHash,
+                        signupTokenHash = draft.signupTokenHash,
+                        passwordHash = draft.passwordHash,
+                        birthdate = draft.birthdate,
+                        acceptedAt = draft.acceptedAt,
+                        termsVersion = AUTH_TERMS_VERSION,
+                        privacyVersion = AUTH_PRIVACY_VERSION,
+                        codeHash = codeHash(pendingId, code),
+                        codeExpiresAt = now.plus(CODE_LIFETIME),
+                        expiresAt = now.plus(PENDING_LIFETIME),
+                        createdAt = now,
+                    ),
+                    now = now,
+                    maxLivePerAddress = MAX_LIVE_PER_ADDRESS,
+                )
+            // Already MAX_LIVE_PER_ADDRESS sign-ups waiting for this address: refuse, never evict, so
+            // nobody can push the owner's sign-up out by starting more.
+            if (inserted) mailer.sendSignupCode(draft.account, code)
         }
     }
 
     private suspend fun deliverResend(
         account: String,
-        address: String,
+        clientIp: String?,
         emailHash: String,
         tokenHash: String,
     ) {
         runLogged("sign-up resend") {
             val now = clock.instant()
-            val pending = repository.findLivePendingSignup(emailHash, now) ?: return@runLogged
-            if (!sameHash(pending.signupTokenHash, tokenHash)) return@runLogged
+            val pending = repository.findLivePendingSignup(emailHash, tokenHash, now) ?: return@runLogged
             // Checked only once the token matched, so only the device that started the sign-up can
             // spend the address's email budget through resend.
-            if (!withinSendCaps(account)) return@runLogged
+            if (!withinSendCaps(account, clientIp)) return@runLogged
             val code = codeGenerator()
-            if (repository.replaceCode(pending.id, codeHash(pending.id, code), now.plus(CODE_LIFETIME))) {
-                mailer.sendSignupCode(address, code)
+            // A new code, never new attempts; at most MAX_CODES codes per sign-up.
+            if (repository.replaceCode(pending.id, codeHash(pending.id, code), now.plus(CODE_LIFETIME), MAX_CODES)) {
+                mailer.sendSignupCode(account, code)
             }
         }
     }
 
-    /** Counts one email against both silent per-address caps; false when either is spent. */
-    private suspend fun withinSendCaps(account: String): Boolean {
+    /**
+     * Counts one email against the silent caps; false when any is spent. Tight per address AND
+     * client IP (one network can't starve the owner's own sign-up from theirs), looser per address
+     * alone to cap a flood from many networks. "Address" is the address family (any +tag removed),
+     * so +variants share every budget.
+     */
+    private suspend fun withinSendCaps(
+        account: String,
+        clientIp: String?,
+    ): Boolean {
         val limiter = rateLimitService ?: return true
-        val hourly = limiter.checkSubject(account, RateLimitedAction.AUTH_SIGNUP_EMAIL_HOURLY, fallbackOnOutage = true)
-        val daily = limiter.checkSubject(account, RateLimitedAction.AUTH_SIGNUP_EMAIL_DAILY, fallbackOnOutage = true)
-        return hourly.allowed && daily.allowed
+        // The address family (+tags removed) everywhere, so +variants can't multiply any budget.
+        val family = EmailAddressRules.withoutPlusTag(account)
+        val perNetwork = addressAndClient(family, clientIp)
+        // In order, stopping at the first that is spent: an email refused for one network never
+        // counts against the address family, so one network can't use up the owner's family budget.
+        if (!limiter.checkSubject(perNetwork, RateLimitedAction.AUTH_SIGNUP_EMAIL_HOURLY, fallbackOnOutage = true).allowed) return false
+        if (!limiter.checkSubject(perNetwork, RateLimitedAction.AUTH_SIGNUP_EMAIL_DAILY, fallbackOnOutage = true).allowed) return false
+        return limiter.checkSubject(family, RateLimitedAction.AUTH_SIGNUP_EMAIL_ADDRESS_DAILY, fallbackOnOutage = true).allowed
     }
 
     private suspend fun runLogged(
@@ -288,8 +299,7 @@ class EmailSignupService(
         }
     }
 
-    // Salted with the pending sign-up, so the same code on two sign-ups never shares a hash and a
-    // replaced sign-up's code stops working.
+    // Salted with the pending sign-up, so the same code on two sign-ups never shares a hash.
     private fun codeHash(
         pendingId: UUID,
         code: String,
@@ -301,7 +311,8 @@ class EmailSignupService(
     ): String = "$account|${clientIp?.trim()?.takeIf { it.isNotEmpty() } ?: "unknown-address"}"
 
     private class SignupDraft(
-        val address: String,
+        val account: String,
+        val clientIp: String?,
         val emailHash: String,
         val signupTokenHash: String,
         val passwordHash: PasswordHash,
@@ -313,15 +324,31 @@ class EmailSignupService(
         private val logger = LoggerFactory.getLogger(EmailSignupService::class.java)
         const val CODE_LENGTH = 6
 
-        /** Same strength, lifetime and attempt limit as the password-reset code. */
+        /** Same strength and lifetime as the password-reset code. */
         val CODE_LIFETIME: Duration = Duration.ofMinutes(30)
-        const val MAX_FAILED_ATTEMPTS = 5
+
+        /** Guesses per pending sign-up for its whole life, across all its codes. */
+        const val MAX_ATTEMPTS = 5
+
+        /** Codes one pending sign-up can ever be issued (the first plus two resends). */
+        const val MAX_CODES = 3
+
+        /**
+         * Live pending sign-ups per address; a further sign-up is refused, nothing is evicted. Equal to
+         * the family email cap, so the email caps (per network first) are what binds, not this.
+         */
+        const val MAX_LIVE_PER_ADDRESS = 20
+
+        /** Sign-up emails per address family per day (RateLimitService AUTH_SIGNUP_EMAIL_ADDRESS_DAILY). */
+        const val ADDRESS_DAILY_EMAIL_CAP = 20
 
         /** How long a started sign-up can be finished (a resend issues a fresh code within it). */
         val PENDING_LIFETIME: Duration = Duration.ofHours(24)
 
-        private val PLACEHOLDER_ID: UUID = UUID(0L, 0L)
-        private val PLACEHOLDER_HASH: String = Sha256.hash("pynapli-signup-placeholder")
+        /** The permanent placeholder row (V118) that failed verifies with no live sign-up write to. */
+        val PLACEHOLDER_ID: UUID = UUID(0L, 0L)
+
+        private const val DEV_SIGNUP_SUBJECT = "local-dev-signup"
         private val random = SecureRandom()
 
         fun newSignupCode(): String = random.nextInt(1_000_000).toString().padStart(CODE_LENGTH, '0')
@@ -338,40 +365,53 @@ interface EmailSignupRepository {
     suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord?
 
     /**
-     * Inserts the address's pending sign-up, or atomically replaces the one already there (new id,
-     * token, password, code and lifetime), so concurrent sign-ups for one address leave one row.
-     * Also deletes a batch of expired pending sign-ups.
+     * Under a per-address lock: deletes a batch of expired sign-ups, then inserts [pending] unless the
+     * address already has [maxLivePerAddress] live ones (then nothing changes and it answers false).
+     * Never replaces or evicts another sign-up.
      */
-    suspend fun replacePendingSignup(
+    suspend fun insertPendingSignup(
         pending: NewPendingSignup,
         now: Instant,
-    )
+        maxLivePerAddress: Int,
+    ): Boolean
 
-    /** The address's pending sign-up while it is still within its 24 hours, else null. */
+    /** The live sign-up started with this token for this address, else null. */
     suspend fun findLivePendingSignup(
         emailHash: String,
+        signupTokenHash: String,
         now: Instant,
     ): PendingSignupRecord?
 
-    /** A fresh code for the same pending sign-up (attempts back to zero). False when the row is gone. */
+    /** A fresh code for the same sign-up while it has had fewer than [maxCodes]; attempts untouched. */
     suspend fun replaceCode(
         pendingId: UUID,
         codeHash: String,
         codeExpiresAt: Instant,
+        maxCodes: Int,
     ): Boolean
 
-    /** One write whether or not [pendingId] exists. */
-    suspend fun recordFailedAttempt(pendingId: UUID)
+    /**
+     * One statement that always updates exactly one row: adds one attempt to the live sign-up for
+     * (address, token), or to the permanent placeholder row when there is none, and returns that row
+     * as it is after the increment.
+     */
+    suspend fun consumeAttempt(
+        emailHash: String,
+        signupTokenHash: String,
+        now: Instant,
+    ): SignupAttemptRecord
 
     /**
-     * In one transaction: removes the pending sign-up (only while it still holds [expectedCodeHash],
-     * so of two concurrent verifies exactly one wins) and creates the account from it, marked
-     * email-verified at [verifiedAt]. Null when the row was already taken or the address got an
-     * account meanwhile (nothing changes then).
+     * In one transaction: removes the sign-up (only while it still holds [expectedCodeHash] and has
+     * spent at most [maxAttempts], so of two concurrent verifies exactly one wins), creates the account
+     * from it marked email-verified at [verifiedAt], and removes every other sign-up of the address.
+     * Null when the row was already taken or the address got an account meanwhile (nothing changes).
      */
     suspend fun completeSignup(
         pendingId: UUID,
+        emailHash: String,
         expectedCodeHash: String,
+        maxAttempts: Int,
         userId: UUID,
         identityId: UUID,
         displayAge: Int,
@@ -410,9 +450,14 @@ class NewPendingSignup(
 
 data class PendingSignupRecord(
     val id: UUID,
-    val signupTokenHash: String,
+    val codesIssued: Int,
+)
+
+/** A row right after [EmailSignupRepository.consumeAttempt] spent one attempt on it. */
+data class SignupAttemptRecord(
+    val id: UUID,
+    val attempts: Long,
     val codeHash: String,
     val codeExpiresAt: Instant,
-    val failedAttempts: Int,
     val birthdate: LocalDate,
 )

@@ -62,6 +62,10 @@ class RouteSecurityMatrixTest {
             "Dev sign-up routes should only be registered when the local mailbox is wired.",
         )
         assertTrue(
+            Regex("""if \(!call\.isDirectLoopbackRequest\(\)\)""").findAll(signupRoutes).count() == 2,
+            "Both dev sign-up routes must refuse anything but a direct loopback request.",
+        )
+        assertTrue(
             signupDependencies.contains("localMailer?.takeIf { config.devSignupShortcutsAllowed() }"),
             "The local mailbox must only be handed to the routes when the dev shortcuts are allowed.",
         )

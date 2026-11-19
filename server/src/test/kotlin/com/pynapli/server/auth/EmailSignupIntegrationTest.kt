@@ -3,6 +3,7 @@ package com.pynapli.server.auth
 import com.pynapli.server.auth.security.PasswordHash
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.auth.security.Sha256
+import com.pynapli.server.auth.security.normalizeEmail
 import com.pynapli.server.dependencies.devSignupShortcutsAllowed
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
@@ -16,6 +17,7 @@ import com.pynapli.server.testsupport.raceTogether
 import com.pynapli.server.testsupport.signUpVerified
 import com.pynapli.server.testsupport.testServerConfig
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -24,8 +26,13 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -40,9 +47,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Email sign-up that verifies the address and never reveals membership (ONBOARDING_AUTH_SPEC,
- * "Membership privacy"). Work is asserted, never wall-clock time: the off-request work is queued
- * ([QueuedSignupWork]) so each test sees what the request did by itself before running it.
+ * Email sign-up that verifies the address and never reveals membership (ONBOARDING_AUTH_SPEC, "Email
+ * sign-up"). Everything here runs against the real database, since the SQL is the point. Work is
+ * asserted, never wall-clock time: the off-request work is queued ([QueuedSignupWork]) so each test
+ * sees what the request did by itself before running it.
  */
 class EmailSignupIntegrationTest {
     private val dataSource = PynapliTestDatabase.dataSource
@@ -58,6 +66,7 @@ class EmailSignupIntegrationTest {
         clock: Clock = Clock.systemUTC(),
         signupMailer: SignupMailer = mailer,
         rateLimitService: RateLimitService? = null,
+        tokens: () -> String = { nextToken },
     ) = EmailSignupService(
         repository = repository,
         mailer = signupMailer,
@@ -67,7 +76,7 @@ class EmailSignupIntegrationTest {
         rateLimitService = rateLimitService,
         launchSignupWork = work::launch,
         codeGenerator = { nextCode },
-        tokenGenerator = { nextToken },
+        tokenGenerator = tokens,
     )
 
     @BeforeTest
@@ -79,15 +88,19 @@ class EmailSignupIntegrationTest {
         email: String,
         password: String = PASSWORD,
         deviceId: String? = "phone",
-    ) = startSignup(email, password, "1990-01-01", true, true, true, deviceId = deviceId, clientIp = TEST_CLIENT_IP)
+        clientIp: String = TEST_CLIENT_IP,
+    ) = startSignup(email, password, "1990-01-01", true, true, true, deviceId = deviceId, clientIp = clientIp)
 
     private suspend fun EmailSignupService.verifyWith(
         email: String,
         code: String,
         token: String,
-    ) = verify(email, code, token, deviceId = "phone", platform = "android", appVersion = "1.0", clientIp = TEST_CLIENT_IP)
+        clientIp: String = TEST_CLIENT_IP,
+    ) = verify(email, code, token, deviceId = "phone", platform = "android", appVersion = "1.0", clientIp = clientIp)
 
     private suspend fun member(email: String = MEMBER) = authService.signUpVerified(email, PASSWORD, platform = "android", appVersion = "1.0")
+
+    private fun later(duration: Duration) = Clock.fixed(Instant.now().plus(duration).plusSeconds(60), ZoneOffset.UTC)
 
     @Test
     fun aNewAndARegisteredAddressGetTheSameAnswerAfterTheSameRequestWork() =
@@ -121,8 +134,8 @@ class EmailSignupIntegrationTest {
 
             assertEquals(listOf(MEMBER), mailer.notices)
             assertEquals(listOf(NEWCOMER to "123456"), mailer.codes)
-            assertEquals(1, count("SELECT count(*) FROM pending_email_signups"))
-            assertEquals(1, count("SELECT count(*) FROM pending_email_signups WHERE email_hash = ?", Sha256.hash(NEWCOMER)))
+            assertEquals(1, pendingRows())
+            assertEquals(1, pendingRows(NEWCOMER))
             // The member's account is untouched: still one, same password.
             assertEquals(1, count("SELECT count(*) FROM users"))
             runBlocking { authService.loginEmail(MEMBER, PASSWORD, null, "android", "1.0") }
@@ -135,6 +148,8 @@ class EmailSignupIntegrationTest {
             val service = signup()
             val started = service.start(NEWCOMER)
             work.runAll()
+            // Puts the placeholder row in place (the test database is truncated between tests).
+            assertFailsWith<AuthException> { service.verifyWith("nobody@example.com", "000000", "no-token") }
             val before = tableCounts()
 
             val session = service.verifyWith(NEWCOMER, "123456", started.signupToken)
@@ -162,58 +177,126 @@ class EmailSignupIntegrationTest {
         }
 
     @Test
-    fun everyFailureIsTheSameErrorAfterTheSameWork() =
+    fun everyFailureWritesExactlyOneRowWhetherOrNotTheAddressIsAMember() =
         runBlocking<Unit> {
             member()
+            val service = signup()
+            // The attacker's view: a sign-up started FOR the member's address (no row is ever made for
+            // it) and one for an address with no account (a real row exists for its token).
+            nextToken = "token-for-member"
+            val forMember = service.start(MEMBER)
+            nextToken = "token-for-newcomer"
+            val forNewcomer = service.start(NEWCOMER)
+            work.runAll()
+            assertEquals(0, pendingRows(MEMBER))
+            assertEquals(1, pendingRows(NEWCOMER))
+
+            val attempts =
+                listOf(
+                    "member address, its own token" to suspend { service.verifyWith(MEMBER, "123456", forMember.signupToken) },
+                    "new address, its own token, wrong code" to suspend { service.verifyWith(NEWCOMER, "000000", forNewcomer.signupToken) },
+                    "unknown address" to suspend { service.verifyWith("nobody@example.com", "123456", forNewcomer.signupToken) },
+                    "new address, wrong token" to suspend { service.verifyWith(NEWCOMER, "123456", "someone-elses-token") },
+                    "expired code" to
+                        suspend {
+                            signup(clock = later(EmailSignupService.CODE_LIFETIME)).verifyWith(NEWCOMER, "123456", forNewcomer.signupToken)
+                        },
+                )
+            attempts.forEach { (name, attempt) ->
+                val before = attemptsByRow()
+                repository.calls.clear()
+                val error = assertFailsWith<AuthException>(name) { attempt() }
+                val after = attemptsByRow()
+
+                assertEquals("INVALID_SIGNUP_CODE", error.code, name)
+                assertEquals(listOf("consumeAttempt"), repository.calls, name)
+                assertEquals(before.keys, after.keys, "$name: no row added or removed")
+                val written = after.filter { (id, value) -> value != before[id] }
+                assertEquals(1, written.size, "$name: exactly one row written")
+                assertEquals(1L, written.values.single() - before.getValue(written.keys.single()), "$name: by one attempt")
+            }
+
+            // Already verified: the code worked once; the same request now fails the same way.
+            nextToken = "token-2"
+            nextCode = "654321"
+            val fresh = service.start("fresh@example.com")
+            work.runAll()
+            service.verifyWith("fresh@example.com", "654321", fresh.signupToken)
+            val before = attemptsByRow()
+            assertFailsWith<AuthException> { service.verifyWith("fresh@example.com", "654321", fresh.signupToken) }
+            assertEquals(1, attemptsByRow().count { (id, value) -> value != before[id] })
+        }
+
+    @Test
+    fun concurrentWrongGuessesNeverGetPastTheCapAndTheRightCodeThenFails() =
+        runBlocking<Unit> {
             val service = signup()
             val started = service.start(NEWCOMER)
             work.runAll()
 
-            val attempts =
-                listOf(
-                    "wrong code" to suspend { service.verifyWith(NEWCOMER, "000000", started.signupToken) },
-                    "unknown address" to suspend { service.verifyWith("nobody@example.com", "123456", started.signupToken) },
-                    "registered address" to suspend { service.verifyWith(MEMBER, "123456", started.signupToken) },
-                    "wrong token" to suspend { service.verifyWith(NEWCOMER, "123456", "someone-elses-token") },
-                    "expired code" to
-                        suspend {
-                            signup(clock = Clock.fixed(Instant.now().plus(EmailSignupService.CODE_LIFETIME).plusSeconds(60), ZoneOffset.UTC))
-                                .verifyWith(NEWCOMER, "123456", started.signupToken)
-                        },
-                )
-            attempts.forEach { (name, attempt) ->
-                repository.calls.clear()
-                val error = assertFailsWith<AuthException>(name) { attempt() }
-                assertEquals("INVALID_SIGNUP_CODE", error.code, name)
-                assertEquals(listOf("findLivePendingSignup", "recordFailedAttempt"), repository.calls, name)
-            }
+            val outcomes =
+                coroutineScope {
+                    (1..GUESSES).map { index ->
+                        async(Dispatchers.IO) {
+                            runCatching { service.verifyWith(NEWCOMER, "%06d".format(index), started.signupToken) }
+                        }
+                    }.awaitAll()
+                }
 
-            // Already verified: the code worked once and the same request now fails the same way.
-            service.verifyWith(NEWCOMER, "123456", started.signupToken)
-            repository.calls.clear()
-            val again = assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "123456", started.signupToken) }
-            assertEquals("INVALID_SIGNUP_CODE", again.code)
-            assertEquals(listOf("findLivePendingSignup", "recordFailedAttempt"), repository.calls)
+            assertTrue(outcomes.all { it.isFailure })
+            // Every guess spent an attempt before anything was compared.
+            assertEquals(GUESSES, count("SELECT attempts FROM pending_email_signups WHERE email_hash = ?", Sha256.hash(NEWCOMER)))
+            val dead = assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "123456", started.signupToken) }
+            assertEquals("INVALID_SIGNUP_CODE", dead.code)
+            assertEquals(0, count("SELECT count(*) FROM users"))
         }
 
     @Test
-    fun aReplacedCodeAndAnExpiredSignUpFail() =
+    fun theRightCodeInsideTheBudgetStillWorks() =
         runBlocking<Unit> {
             val service = signup()
-            val first = service.start(NEWCOMER)
+            val started = service.start(NEWCOMER)
             work.runAll()
-            nextCode = "654321"
-            nextToken = "token-2"
-            val second = service.start(NEWCOMER)
+            repeat(EmailSignupService.MAX_ATTEMPTS - 1) {
+                assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "000000", started.signupToken) }
+            }
+
+            service.verifyWith(NEWCOMER, "123456", started.signupToken)
+        }
+
+    @Test
+    fun aResendGivesANewCodeButNeverGivesGuessesBack() =
+        runBlocking<Unit> {
+            val service = signup()
+            val started = service.start(NEWCOMER)
+            work.runAll()
+            repeat(EmailSignupService.MAX_ATTEMPTS) {
+                assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "000000", started.signupToken) }
+            }
+
+            nextCode = "777888"
+            service.resendCode(NEWCOMER, started.signupToken, deviceId = "phone", clientIp = TEST_CLIENT_IP)
             work.runAll()
 
-            assertEquals(1, count("SELECT count(*) FROM pending_email_signups"))
-            assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "123456", first.signupToken) }
-            assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "654321", first.signupToken) }
-            val afterADay = signup(clock = Clock.fixed(Instant.now().plus(EmailSignupService.PENDING_LIFETIME).plusSeconds(60), ZoneOffset.UTC))
-            assertFailsWith<AuthException> { afterADay.verifyWith(NEWCOMER, "654321", second.signupToken) }
+            assertEquals(NEWCOMER to "777888", mailer.codes.last())
+            assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "777888", started.signupToken) }
+        }
 
-            service.verifyWith(NEWCOMER, "654321", second.signupToken)
+    @Test
+    fun aSignUpGetsAtMostThreeCodes() =
+        runBlocking<Unit> {
+            val service = signup()
+            val started = service.start(NEWCOMER)
+            work.runAll()
+
+            repeat(4) { index ->
+                nextCode = "90000$index"
+                service.resendCode(NEWCOMER, started.signupToken, deviceId = "phone", clientIp = TEST_CLIENT_IP)
+                work.runAll()
+            }
+
+            assertEquals(EmailSignupService.MAX_CODES, mailer.codes.size)
+            service.verifyWith(NEWCOMER, "900001", started.signupToken)
         }
 
     @Test
@@ -221,60 +304,115 @@ class EmailSignupIntegrationTest {
         runBlocking<Unit> {
             val started = signup().start(NEWCOMER)
             work.runAll()
-            val later = signup(clock = Clock.fixed(Instant.now().plus(EmailSignupService.CODE_LIFETIME).plusSeconds(60), ZoneOffset.UTC))
-            assertFailsWith<AuthException> { later.verifyWith(NEWCOMER, "123456", started.signupToken) }
+            val afterExpiry = signup(clock = later(EmailSignupService.CODE_LIFETIME))
+            assertFailsWith<AuthException> { afterExpiry.verifyWith(NEWCOMER, "123456", started.signupToken) }
 
             nextCode = "222333"
-            later.resendCode(NEWCOMER, started.signupToken, deviceId = "phone", clientIp = TEST_CLIENT_IP)
+            afterExpiry.resendCode(NEWCOMER, started.signupToken, deviceId = "phone", clientIp = TEST_CLIENT_IP)
             work.runAll()
 
             assertEquals(NEWCOMER to "222333", mailer.codes.last())
-            later.verifyWith(NEWCOMER, "222333", started.signupToken)
+            afterExpiry.verifyWith(NEWCOMER, "222333", started.signupToken)
         }
 
     @Test
-    fun theAttemptCapHoldsButOnlyGuessesWithTheRightTokenCount() =
+    fun anExpiredSignUpCannotBeFinished() =
+        runBlocking<Unit> {
+            val started = signup().start(NEWCOMER)
+            work.runAll()
+
+            assertFailsWith<AuthException> { signup(clock = later(EmailSignupService.PENDING_LIFETIME)).verifyWith(NEWCOMER, "123456", started.signupToken) }
+        }
+
+    @Test
+    fun someoneElsesSignUpsAndResendsForTheAddressNeverStopTheOwner() =
+        runBlocking<Unit> {
+            val limits = RateLimitService(CountingRateLimitRepository())
+            var tokenNumber = 0
+            val service = signup(rateLimitService = limits, tokens = { "token-${tokenNumber++}" })
+
+            // The owner starts first.
+            nextCode = "111111"
+            val owner = service.start(NEWCOMER, deviceId = null, clientIp = OWNER_IP)
+            work.runAll()
+            // Then a stranger floods the address from another network: sign-ups and resends.
+            nextCode = "999999"
+            val stranger = (1..10).map { service.start(NEWCOMER, deviceId = null, clientIp = STRANGER_IP) }
+            repeat(10) { service.resendCode(NEWCOMER, stranger.first().signupToken, null, STRANGER_IP) }
+            work.runAll()
+
+            // The stranger's network got its few emails and no more; the owner's sign-up is untouched.
+            assertEquals(1 + 3, mailer.codes.size)
+            service.verifyWith(NEWCOMER, "111111", owner.signupToken, clientIp = OWNER_IP)
+            assertEquals(0, pendingRows(NEWCOMER), "verify removes every sign-up of the address")
+        }
+
+    @Test
+    fun theOwnerCanStillSignUpAfterSomeoneElseFloodedTheAddress() =
+        runBlocking<Unit> {
+            val limits = RateLimitService(CountingRateLimitRepository())
+            var tokenNumber = 0
+            val service = signup(rateLimitService = limits, tokens = { "token-${tokenNumber++}" })
+            nextCode = "999999"
+            val stranger = (1..10).map { service.start(NEWCOMER, deviceId = null, clientIp = STRANGER_IP) }
+            repeat(10) { service.resendCode(NEWCOMER, stranger.last().signupToken, null, STRANGER_IP) }
+            // +tag variants share the address family's budget, from the same network.
+            (1..10).forEach { service.start("newcomer+$it@example.com", deviceId = null, clientIp = STRANGER_IP) }
+            work.runAll()
+
+            nextCode = "111111"
+            val owner = service.start(NEWCOMER, deviceId = null, clientIp = OWNER_IP)
+            work.runAll()
+
+            assertEquals(NEWCOMER to "111111", mailer.codes.last())
+            service.verifyWith(NEWCOMER, "111111", owner.signupToken, clientIp = OWNER_IP)
+        }
+
+    @Test
+    fun aFullAddressRefusesMoreSignUpsAndNeverEvictsAnEarlierOne() =
+        runBlocking<Unit> {
+            var tokenNumber = 0
+            val service = signup(tokens = { "token-${tokenNumber++}" })
+            nextCode = "111111"
+            val owner = service.start(NEWCOMER, deviceId = null)
+            work.runAll()
+            nextCode = "999999"
+            repeat(EmailSignupService.MAX_LIVE_PER_ADDRESS + 5) { service.start(NEWCOMER, deviceId = null) }
+            work.runAll()
+
+            assertEquals(EmailSignupService.MAX_LIVE_PER_ADDRESS, pendingRows(NEWCOMER))
+            assertEquals(EmailSignupService.MAX_LIVE_PER_ADDRESS, mailer.codes.size)
+            service.verifyWith(NEWCOMER, "111111", owner.signupToken)
+        }
+
+    @Test
+    fun concurrentSignUpsForOneAddressStayUnderTheCap() =
+        runBlocking<Unit> {
+            var tokenNumber = 0
+            val service = signup(tokens = { synchronized(this) { "token-${tokenNumber++}" } })
+            repeat(EmailSignupService.MAX_LIVE_PER_ADDRESS + 5) { service.start(NEWCOMER, deviceId = null) }
+            val jobs = work.drain()
+
+            coroutineScope { jobs.map { job -> async(Dispatchers.IO) { job() } }.awaitAll() }
+
+            assertEquals(EmailSignupService.MAX_LIVE_PER_ADDRESS, pendingRows(NEWCOMER))
+            assertEquals(EmailSignupService.MAX_LIVE_PER_ADDRESS, mailer.codes.size)
+        }
+
+    @Test
+    fun aUniqueViolationAtCompletionKeepsThePendingRowAndAnswersTheSameError() =
         runBlocking<Unit> {
             val service = signup()
             val started = service.start(NEWCOMER)
             work.runAll()
+            // The address gets an account some other way between sign-up and verify.
+            service.createVerifiedAccountForLocalDev(NEWCOMER, "another-password-1", "1990-01-01", true, true, true, null, null, null)
 
-            // Someone who only knows the address can't use up the owner's attempts.
-            repeat(EmailSignupService.MAX_FAILED_ATTEMPTS * 2) {
-                assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "000000", "not-the-token") }
-            }
-            assertEquals(0, count("SELECT failed_attempts FROM pending_email_signups"))
+            val error = assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "123456", started.signupToken) }
 
-            repeat(EmailSignupService.MAX_FAILED_ATTEMPTS) {
-                assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "000000", started.signupToken) }
-            }
-            val dead = assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "123456", started.signupToken) }
-            assertEquals("INVALID_SIGNUP_CODE", dead.code)
-
-            // The owner is never stuck: a resend gives a fresh code with fresh attempts.
-            nextCode = "777888"
-            service.resendCode(NEWCOMER, started.signupToken, deviceId = "phone", clientIp = TEST_CLIENT_IP)
-            work.runAll()
-            service.verifyWith(NEWCOMER, "777888", started.signupToken)
-        }
-
-    @Test
-    fun theSilentSendCapsHoldTheSameWayForMembersAndNonMembers() =
-        runBlocking<Unit> {
-            member()
-            val limits = RateLimitService(CountingRateLimitRepository())
-            val service = signup(rateLimitService = limits)
-
-            val answers =
-                // No device id: this is about the per-address caps, not the per-device limit.
-                (1..7).flatMap {
-                    listOf(service.start(NEWCOMER, deviceId = null), service.start(MEMBER, deviceId = null))
-                }
-            work.runAll()
-
-            assertEquals(1, answers.map { it.copy(signupToken = "") }.toSet().size, "every answer has the same shape")
-            assertEquals(HOURLY_SEND_CAP, mailer.codes.size)
-            assertEquals(HOURLY_SEND_CAP, mailer.notices.size)
+            assertEquals("INVALID_SIGNUP_CODE", error.code)
+            assertEquals(1, pendingRows(NEWCOMER), "rolled back: the pending row is still there")
+            assertEquals(1, count("SELECT count(*) FROM users"))
         }
 
     @Test
@@ -304,24 +442,7 @@ class EmailSignupIntegrationTest {
             val loser = listOf(first, second).single { it.isFailure }.exceptionOrNull()
             assertEquals("INVALID_SIGNUP_CODE", (loser as AuthException).code)
             assertEquals(1, count("SELECT count(*) FROM users"))
-            assertEquals(0, count("SELECT count(*) FROM pending_email_signups"))
-        }
-
-    @Test
-    fun concurrentSignUpsForOneAddressLeaveOnePendingRow() =
-        runBlocking<Unit> {
-            val service = signup()
-            service.start(NEWCOMER)
-            nextToken = "token-2"
-            service.start(NEWCOMER)
-            // Run the two queued jobs against each other rather than one after the other.
-            val (first, second) = work.drain()
-            val (a, b) = raceTogether(first, second)
-
-            assertTrue(a.isSuccess && b.isSuccess)
-            assertEquals(2, mailer.codes.size)
-
-            assertEquals(1, count("SELECT count(*) FROM pending_email_signups WHERE email_hash = ?", Sha256.hash(NEWCOMER)))
+            assertEquals(0, pendingRows())
         }
 
     @Test
@@ -360,7 +481,7 @@ class EmailSignupIntegrationTest {
                 assertEquals("SIGNUP_UNAVAILABLE", resend.code)
             }
             assertEquals(0, work.size)
-            assertEquals(0, count("SELECT count(*) FROM pending_email_signups"))
+            assertEquals(0, pendingRows())
         }
 
     @Test
@@ -375,6 +496,7 @@ class EmailSignupIntegrationTest {
             val service = signup()
 
             service.start("banned@example.com")
+            nextToken = "token-2"
             val again = service.start("deleted@example.com")
             work.runAll()
 
@@ -384,7 +506,62 @@ class EmailSignupIntegrationTest {
         }
 
     @Test
-    fun theDevShortcutsExistOnlyWhenWiredAndMakeTheSameAccount() =
+    fun onlyAStrictSingleAddressCanStartASignUpAndTheMailerGetsItNormalised() =
+        runBlocking<Unit> {
+            val service = signup()
+            val rejected =
+                listOf(
+                    "a@b",
+                    "a b@example.com",
+                    "a@example.com,b@example.com",
+                    "a@example.com;b@example.com",
+                    "<a@example.com>",
+                    "\"a\"@example.com",
+                    "a@@example.com",
+                    "a@example..com",
+                    ".a@example.com",
+                    "a\n@example.com",
+                    "a@exa_mple.com",
+                    "a@-example.com",
+                    "${"a".repeat(65)}@example.com",
+                    "a@${"b".repeat(250)}.com",
+                    "Bcc: a@example.com",
+                )
+            rejected.forEach { address ->
+                val error = assertFailsWith<AuthException>(address) { service.start(address) }
+                assertEquals("INVALID_EMAIL", error.code, address)
+            }
+            assertEquals(0, work.size)
+
+            val started = service.start("  New.Comer+Join@Example.COM ")
+            work.runAll()
+            assertEquals(listOf("new.comer+join@example.com" to "123456"), mailer.codes)
+            service.verifyWith("new.comer+join@example.com", "123456", started.signupToken)
+        }
+
+    @Test
+    fun anExistingAccountWhoseAddressFailsTheStrictCheckCanStillSignInAndReset() =
+        runBlocking<Unit> {
+            val loose = "Old Style <member>@example"
+            JdbcAuthRepository(dataSource).createEmailUser(
+                userId = UUID.randomUUID(),
+                identityId = UUID.randomUUID(),
+                emailHash = Sha256.hash(normalizeEmail(loose)),
+                passwordHash = hasher.hash(PASSWORD),
+                birthdate = LocalDate.of(1990, 1, 1),
+                displayAge = 30,
+                adultConfirmedAt = Instant.now(),
+                termsAcceptedAt = Instant.now(),
+                termsVersion = AUTH_TERMS_VERSION,
+                privacyAcceptedAt = Instant.now(),
+                privacyVersion = AUTH_PRIVACY_VERSION,
+            )
+
+            authService.loginEmail(loose, PASSWORD, null, "android", "1.0")
+        }
+
+    @Test
+    fun theDevShortcutsServeADirectLocalRequestAndNeverSayWhoIsAMember() =
         testApplication {
             val service = signup()
             val mailbox = LocalFileSignupMailer(createTempFile("signup-codes", ".txt").toFile())
@@ -401,10 +578,67 @@ class EmailSignupIntegrationTest {
             val again = client.post("/v1/dev/auth/email/signup") { json(signupBody(NEWCOMER, PASSWORD)) }
             assertEquals(HttpStatusCode.Conflict, again.status)
 
-            runBlocking { mailbox.sendSignupCode("Someone@Example.com", "424242") }
+            runBlocking {
+                mailbox.sendSignupCode("Someone@Example.com", "424242")
+                mailbox.sendAlreadyRegisteredNotice("member@example.com")
+            }
             val code = client.post("/v1/dev/auth/email/signup/latest-code") { json("""{"email":"someone@example.com"}""") }
             assertTrue(code.bodyAsText().contains("424242"))
+            val notice = client.post("/v1/dev/auth/email/signup/latest-code") { json("""{"email":"member@example.com"}""") }
+            val nobody = client.post("/v1/dev/auth/email/signup/latest-code") { json("""{"email":"nobody@example.com"}""") }
+            assertEquals(nobody.bodyAsText(), notice.bodyAsText(), "the lookup never says an address got the notice")
         }
+
+    @Test
+    fun theDevShortcutsAreNotFoundBehindAProxyOrTunnelEvenWhenOn() =
+        testApplication {
+            val mailbox = LocalFileSignupMailer(createTempFile("signup-codes", ".txt").toFile())
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureEmailSignupRoutes(signup(), devMailbox = mailbox)
+            }
+
+            val forwarded =
+                listOf(
+                    "X-Forwarded-For" to "198.51.100.7",
+                    "Forwarded" to "for=198.51.100.7",
+                    "Cf-Connecting-IP" to "198.51.100.7",
+                    "Cf-Ray" to "8a1b2c3d4e5f-AMS",
+                    "X-Real-IP" to "198.51.100.7",
+                    "Via" to "1.1 proxy",
+                )
+            forwarded.forEach { (name, value) ->
+                val create =
+                    client.post("/v1/dev/auth/email/signup") {
+                        header(name, value)
+                        json(signupBody(NEWCOMER, PASSWORD))
+                    }
+                val lookup =
+                    client.post("/v1/dev/auth/email/signup/latest-code") {
+                        header(name, value)
+                        json("""{"email":"someone@example.com"}""")
+                    }
+                assertEquals(HttpStatusCode.NotFound, create.status, name)
+                assertEquals(HttpStatusCode.NotFound, lookup.status, name)
+            }
+            assertEquals(0, count("SELECT count(*) FROM users"))
+        }
+
+    @Test
+    fun onlyALoopbackPeerWithoutForwardingHeadersIsADirectLocalRequest() {
+        assertTrue(isDirectLoopbackRequest("127.0.0.1", setOf("Content-Type", "Accept")))
+        assertTrue(isDirectLoopbackRequest("0:0:0:0:0:0:0:1", emptySet()))
+        assertTrue(isDirectLoopbackRequest("::1", emptySet()))
+        assertFalse(isDirectLoopbackRequest("203.0.113.5", emptySet()))
+        assertFalse(isDirectLoopbackRequest("10.0.0.2", emptySet()))
+        assertFalse(isDirectLoopbackRequest("192.168.1.20", emptySet()))
+        // cloudflared and any reverse proxy run on this machine too: their peer IS loopback.
+        assertFalse(isDirectLoopbackRequest("127.0.0.1", setOf("X-Forwarded-For")))
+        assertFalse(isDirectLoopbackRequest("127.0.0.1", setOf("cf-connecting-ip")))
+        assertFalse(isDirectLoopbackRequest("127.0.0.1", setOf("Forwarded")))
+        assertFalse(isDirectLoopbackRequest("::1", setOf("X-Forwarded-Proto")))
+    }
 
     @Test
     fun theDevShortcutsAreAbsentWithoutTheMailbox() =
@@ -420,7 +654,8 @@ class EmailSignupIntegrationTest {
         }
 
     @Test
-    fun theDevShortcutsNeedTheFlagALocalEnvironmentAndTheLocalMailer() {
+    fun theDevShortcutsAreOffByDefaultAndNeedALocalEnvironmentAndTheLocalMailer() {
+        assertFalse(testServerConfig(environment = "local").devSignupShortcutsEnabled, "off unless asked for")
         val local = testServerConfig(environment = "local").copy(devSignupShortcutsEnabled = true, passwordResetMailer = "log")
         assertTrue(local.devSignupShortcutsAllowed())
         assertFalse(local.copy(devSignupShortcutsEnabled = false).devSignupShortcutsAllowed())
@@ -462,6 +697,24 @@ class EmailSignupIntegrationTest {
             }
         }
 
+    /** Every pending row's attempt count, the placeholder included. */
+    private fun attemptsByRow(): Map<UUID, Long> =
+        dataSource.connection.use { connection ->
+            connection.prepareStatement("SELECT id, attempts FROM pending_email_signups").use { statement ->
+                statement.executeQuery().use { rs ->
+                    buildMap { while (rs.next()) put(rs.getObject("id", UUID::class.java), rs.getLong("attempts")) }
+                }
+            }
+        }
+
+    /** Real pending sign-ups (never the placeholder), for one address or all. */
+    private fun pendingRows(email: String? = null): Int =
+        if (email == null) {
+            count("SELECT count(*) FROM pending_email_signups WHERE id <> ?", EmailSignupService.PLACEHOLDER_ID)
+        } else {
+            count("SELECT count(*) FROM pending_email_signups WHERE id <> ? AND email_hash = ?", EmailSignupService.PLACEHOLDER_ID, Sha256.hash(email))
+        }
+
     private fun count(
         sql: String,
         vararg args: Any,
@@ -491,7 +744,9 @@ class EmailSignupIntegrationTest {
         const val PASSWORD = "signup-password-1"
         const val MEMBER = "member@example.com"
         const val NEWCOMER = "newcomer@example.com"
-        const val HOURLY_SEND_CAP = 5
+        const val OWNER_IP = "203.0.113.40"
+        const val STRANGER_IP = "198.51.100.66"
+        const val GUESSES = 20
     }
 }
 
@@ -506,46 +761,55 @@ private class CountingSignupRepository(
         return inner.findEmailIdentity(emailHash)
     }
 
-    override suspend fun replacePendingSignup(
+    override suspend fun insertPendingSignup(
         pending: NewPendingSignup,
         now: Instant,
-    ) {
-        calls += "replacePendingSignup"
-        inner.replacePendingSignup(pending, now)
+        maxLivePerAddress: Int,
+    ): Boolean {
+        calls += "insertPendingSignup"
+        return inner.insertPendingSignup(pending, now, maxLivePerAddress)
     }
 
     override suspend fun findLivePendingSignup(
         emailHash: String,
+        signupTokenHash: String,
         now: Instant,
     ): PendingSignupRecord? {
         calls += "findLivePendingSignup"
-        return inner.findLivePendingSignup(emailHash, now)
+        return inner.findLivePendingSignup(emailHash, signupTokenHash, now)
     }
 
     override suspend fun replaceCode(
         pendingId: UUID,
         codeHash: String,
         codeExpiresAt: Instant,
+        maxCodes: Int,
     ): Boolean {
         calls += "replaceCode"
-        return inner.replaceCode(pendingId, codeHash, codeExpiresAt)
+        return inner.replaceCode(pendingId, codeHash, codeExpiresAt, maxCodes)
     }
 
-    override suspend fun recordFailedAttempt(pendingId: UUID) {
-        calls += "recordFailedAttempt"
-        inner.recordFailedAttempt(pendingId)
+    override suspend fun consumeAttempt(
+        emailHash: String,
+        signupTokenHash: String,
+        now: Instant,
+    ): SignupAttemptRecord {
+        calls += "consumeAttempt"
+        return inner.consumeAttempt(emailHash, signupTokenHash, now)
     }
 
     override suspend fun completeSignup(
         pendingId: UUID,
+        emailHash: String,
         expectedCodeHash: String,
+        maxAttempts: Int,
         userId: UUID,
         identityId: UUID,
         displayAge: Int,
         verifiedAt: Instant,
     ): UserRecord? {
         calls += "completeSignup"
-        return inner.completeSignup(pendingId, expectedCodeHash, userId, identityId, displayAge, verifiedAt)
+        return inner.completeSignup(pendingId, emailHash, expectedCodeHash, maxAttempts, userId, identityId, displayAge, verifiedAt)
     }
 
     override suspend fun createVerifiedAccount(

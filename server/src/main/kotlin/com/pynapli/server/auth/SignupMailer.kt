@@ -7,7 +7,7 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Delivers the two sign-up emails (ONBOARDING_AUTH_SPEC, "Membership privacy"). Production needs a
+ * Delivers the two sign-up emails (ONBOARDING_AUTH_SPEC, "Email sign-up"). Production needs a
  * real email provider (founder setup, docs/PATH_TO_TESTERS.md); until one is wired, sign-up answers
  * SIGNUP_UNAVAILABLE for every address alike.
  *
@@ -71,23 +71,24 @@ class LocalFileSignupMailer(
 ) : SignupMailer {
     override val isConfigured: Boolean = true
 
-    private val latest = ConcurrentHashMap<String, LocalSignupMail>()
+    // Codes only: the dev lookup must not answer whether an address got the "already registered"
+    // notice instead (that would be a membership answer, even on a local server).
+    private val latestCodes = ConcurrentHashMap<String, String>()
 
     override suspend fun sendSignupCode(
         email: String,
         code: String,
     ) {
-        latest[email.trim().lowercase()] = LocalSignupMail(code = code, alreadyRegisteredNotice = false)
+        latestCodes[email.trim().lowercase()] = code
         append("${Instant.now()} $email $code")
     }
 
     override suspend fun sendAlreadyRegisteredNotice(email: String) {
-        latest[email.trim().lowercase()] = LocalSignupMail(code = null, alreadyRegisteredNotice = true)
         append("${Instant.now()} $email already-registered-notice")
     }
 
-    /** The last sign-up email "sent" to [email] by this process, if any. */
-    fun latestFor(email: String): LocalSignupMail? = latest[email.trim().lowercase()]
+    /** The last sign-up code "sent" to [email] by this process, if any. */
+    fun latestCodeFor(email: String): String? = latestCodes[email.trim().lowercase()]
 
     private suspend fun append(line: String) {
         withContext(Dispatchers.IO) {
@@ -96,11 +97,6 @@ class LocalFileSignupMailer(
         }
     }
 }
-
-data class LocalSignupMail(
-    val code: String?,
-    val alreadyRegisteredNotice: Boolean,
-)
 
 /** No provider configured: sign-up answers SIGNUP_UNAVAILABLE (503) before doing anything. */
 object UnconfiguredSignupMailer : SignupMailer {

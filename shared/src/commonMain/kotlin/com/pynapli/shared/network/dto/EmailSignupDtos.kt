@@ -3,7 +3,7 @@ package com.pynapli.shared.network.dto
 import kotlinx.serialization.Serializable
 
 /**
- * Answer to `POST /v1/auth/email/signup` (ONBOARDING_AUTH_SPEC, "Membership privacy"). The same
+ * Answer to `POST /v1/auth/email/signup` (ONBOARDING_AUTH_SPEC, "Email sign-up"). The same
  * shape, status and values whether or not the address already has an account: no session is
  * created here. The device keeps [signupToken] (random, never shown to the person) and sends it
  * back with the emailed code to `/v1/auth/email/signup/verify`, or to `/resend`; without it nobody
@@ -46,8 +46,8 @@ data class DevSignupCodeRequestDto(
     val email: String,
 )
 
+/** Only the code: nothing here says whether the address got the "already registered" notice instead. */
 @Serializable
 data class DevSignupCodeDto(
     val code: String? = null,
-    val alreadyRegisteredNoticeSent: Boolean = false,
 )

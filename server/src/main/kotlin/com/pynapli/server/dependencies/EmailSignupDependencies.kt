@@ -1,6 +1,7 @@
 package com.pynapli.server.dependencies
 
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.BoundedWorkLauncher
 import com.pynapli.server.auth.EmailSignupService
 import com.pynapli.server.auth.JdbcEmailSignupRepository
 import com.pynapli.server.auth.LocalFileSignupMailer
@@ -8,7 +9,6 @@ import com.pynapli.server.auth.UnconfiguredSignupMailer
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.safety.RateLimitService
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 internal class EmailSignupDependencies(
     val service: EmailSignupService,
@@ -17,11 +17,12 @@ internal class EmailSignupDependencies(
 )
 
 /**
- * Email sign-up (ONBOARDING_AUTH_SPEC, "Membership privacy"). Mailer selection follows the reset
+ * Email sign-up (ONBOARDING_AUTH_SPEC, "Email sign-up"). Mailer selection follows the reset
  * mailer exactly: the local file mailer only for PYNAPLI_PASSWORD_RESET_MAILER=log with
  * PYNAPLI_ENV=local, otherwise no provider (sign-up answers SIGNUP_UNAVAILABLE) until a real one is
  * wired (founder setup). Member-only work runs on [backgroundScope], the application's background
- * scope, which is cancelled when the server stops.
+ * scope, which is cancelled when the server stops (on Cloud Run it needs CPU after the response:
+ * docs/PATH_TO_TESTERS.md).
  */
 internal fun buildEmailSignupDependencies(
     config: ServerConfig,
@@ -37,7 +38,9 @@ internal fun buildEmailSignupDependencies(
             mailer = localMailer ?: UnconfiguredSignupMailer,
             authService = authService,
             rateLimitService = rateLimitService,
-            launchSignupWork = { work -> backgroundScope.launch { work() } },
+            // Bounded: a flood of sign-ups can't take the whole database pool; a dropped job only
+            // means no email, and the request answers the same either way.
+            launchSignupWork = BoundedWorkLauncher(backgroundScope)::launch,
         )
     val devMailbox = localMailer?.takeIf { config.devSignupShortcutsAllowed() }
     return EmailSignupDependencies(service = service, devMailbox = devMailbox)
@@ -47,7 +50,8 @@ internal fun buildEmailSignupDependencies(
 internal fun ServerConfig.usesLocalFileMailer(): Boolean = passwordResetMailer == "log" && environment == "local"
 
 /**
- * Three locks on the dev sign-up helpers: the flag (refused at startup in production-like
- * environments), a local environment, and the local file mailer actually being in use.
+ * Three locks on wiring the dev sign-up helpers: the flag (off by default, refused at startup in
+ * production-like environments), a local environment, and the local file mailer actually being in
+ * use. The routes add a fourth: direct loopback requests only.
  */
 internal fun ServerConfig.devSignupShortcutsAllowed(): Boolean = devSignupShortcutsEnabled && usesLocalFileMailer()

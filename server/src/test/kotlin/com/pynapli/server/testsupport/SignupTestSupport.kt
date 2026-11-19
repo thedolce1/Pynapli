@@ -9,6 +9,7 @@ import com.pynapli.server.auth.EmailSignupService
 import com.pynapli.server.auth.JdbcEmailSignupRepository
 import com.pynapli.server.auth.NewPendingSignup
 import com.pynapli.server.auth.PendingSignupRecord
+import com.pynapli.server.auth.SignupAttemptRecord
 import com.pynapli.server.auth.SignupMailer
 import com.pynapli.server.auth.UserRecord
 import com.pynapli.server.auth.security.PasswordHash
@@ -44,8 +45,8 @@ internal class QueuedSignupWork {
 internal class CapturingSignupMailer(
     override val isConfigured: Boolean = true,
 ) : SignupMailer {
-    val codes = mutableListOf<Pair<String, String>>()
-    val notices = mutableListOf<String>()
+    val codes: MutableList<Pair<String, String>> = java.util.Collections.synchronizedList(mutableListOf())
+    val notices: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
 
     override suspend fun sendSignupCode(
         email: String,
@@ -64,8 +65,8 @@ internal class CapturingSignupMailer(
 /**
  * Creates an account through the real email sign-up flow (start -> queued work -> emailed code ->
  * verify) and returns the session verify hands back. Replaces the old one-step `signupEmail` in
- * every test that just needs an account. Defaults to the shared test database; unit tests pass an
- * [InMemoryEmailSignupRepository].
+ * every test that just needs an account. Defaults to the shared test database; the in-memory
+ * AuthService unit tests pass an [InMemoryEmailSignupRepository].
  */
 internal suspend fun AuthService.signUpVerified(
     email: String,
@@ -119,24 +120,27 @@ internal suspend fun AuthService.signUpVerified(
 internal const val TEST_CLIENT_IP = "203.0.113.10"
 
 /**
- * In-memory pending sign-ups for unit tests; accounts are created through [accounts] (an in-memory
- * [AuthRepository]), which throws EMAIL_ALREADY_EXISTS for a taken address.
+ * In-memory pending sign-ups, only for the in-memory AuthService unit tests; everything where the
+ * SQL is the point is tested against the database (EmailSignupIntegrationTest). Accounts are created
+ * through [accounts] (an in-memory [AuthRepository], which throws EMAIL_ALREADY_EXISTS for a taken
+ * address). Follows JdbcEmailSignupRepository's rules, placeholder included.
  */
 internal class InMemoryEmailSignupRepository(
     private val accounts: AuthRepository,
 ) : EmailSignupRepository {
-    private val pendingByEmail = linkedMapOf<String, StoredPending>()
-    var failedAttemptWrites = 0
-        private set
+    private val rows = linkedMapOf<UUID, StoredPending>()
+    private var placeholderAttempts = 0L
 
     override suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord? = accounts.findEmailIdentity(emailHash)
 
-    override suspend fun replacePendingSignup(
+    override suspend fun insertPendingSignup(
         pending: NewPendingSignup,
         now: Instant,
-    ) {
-        pendingByEmail.entries.removeIf { !it.value.expiresAt.isAfter(now) }
-        pendingByEmail[pending.emailHash] =
+        maxLivePerAddress: Int,
+    ): Boolean {
+        rows.values.removeIf { !it.expiresAt.isAfter(now) }
+        if (rows.values.count { it.emailHash == pending.emailHash } >= maxLivePerAddress) return false
+        rows[pending.id] =
             StoredPending(
                 id = pending.id,
                 emailHash = pending.emailHash,
@@ -148,47 +152,61 @@ internal class InMemoryEmailSignupRepository(
                 privacyVersion = pending.privacyVersion,
                 codeHash = pending.codeHash,
                 codeExpiresAt = pending.codeExpiresAt,
-                failedAttempts = 0,
+                codesIssued = 1,
+                attempts = 0,
                 expiresAt = pending.expiresAt,
             )
+        return true
     }
 
     override suspend fun findLivePendingSignup(
         emailHash: String,
+        signupTokenHash: String,
         now: Instant,
-    ): PendingSignupRecord? =
-        pendingByEmail[emailHash]
-            ?.takeIf { it.expiresAt.isAfter(now) }
-            ?.let { PendingSignupRecord(it.id, it.signupTokenHash, it.codeHash, it.codeExpiresAt, it.failedAttempts, it.birthdate) }
+    ): PendingSignupRecord? = live(emailHash, signupTokenHash, now)?.let { PendingSignupRecord(it.id, it.codesIssued) }
 
     override suspend fun replaceCode(
         pendingId: UUID,
         codeHash: String,
         codeExpiresAt: Instant,
+        maxCodes: Int,
     ): Boolean {
-        val entry = pendingByEmail.entries.firstOrNull { it.value.id == pendingId } ?: return false
-        entry.setValue(entry.value.copy(codeHash = codeHash, codeExpiresAt = codeExpiresAt, failedAttempts = 0))
+        val row = rows[pendingId]?.takeIf { it.codesIssued < maxCodes } ?: return false
+        rows[pendingId] = row.copy(codeHash = codeHash, codeExpiresAt = codeExpiresAt, codesIssued = row.codesIssued + 1)
         return true
     }
 
-    override suspend fun recordFailedAttempt(pendingId: UUID) {
-        failedAttemptWrites++
-        val entry = pendingByEmail.entries.firstOrNull { it.value.id == pendingId } ?: return
-        entry.setValue(entry.value.copy(failedAttempts = entry.value.failedAttempts + 1))
+    override suspend fun consumeAttempt(
+        emailHash: String,
+        signupTokenHash: String,
+        now: Instant,
+    ): SignupAttemptRecord {
+        val row = live(emailHash, signupTokenHash, now)
+        if (row == null) {
+            placeholderAttempts++
+            return SignupAttemptRecord(EmailSignupService.PLACEHOLDER_ID, placeholderAttempts, "placeholder", Instant.EPOCH, LocalDate.of(1900, 1, 1))
+        }
+        val spent = row.copy(attempts = row.attempts + 1)
+        rows[row.id] = spent
+        return SignupAttemptRecord(spent.id, spent.attempts, spent.codeHash, spent.codeExpiresAt, spent.birthdate)
     }
 
     override suspend fun completeSignup(
         pendingId: UUID,
+        emailHash: String,
         expectedCodeHash: String,
+        maxAttempts: Int,
         userId: UUID,
         identityId: UUID,
         displayAge: Int,
         verifiedAt: Instant,
     ): UserRecord? {
-        val entry = pendingByEmail.entries.firstOrNull { it.value.id == pendingId && it.value.codeHash == expectedCodeHash } ?: return null
-        val pending = entry.value
-        pendingByEmail.remove(entry.key)
-        return create(userId, identityId, pending.emailHash, pending.passwordHash, pending.birthdate, displayAge, pending.acceptedAt, pending.termsVersion, pending.privacyVersion)
+        val pending = rows[pendingId]?.takeIf { it.codeHash == expectedCodeHash && it.attempts <= maxAttempts } ?: return null
+        val user =
+            create(userId, identityId, pending.emailHash, pending.passwordHash, pending.birthdate, displayAge, pending.acceptedAt, pending.termsVersion, pending.privacyVersion)
+                ?: return null
+        rows.values.removeIf { it.emailHash == emailHash }
+        return user
     }
 
     override suspend fun createVerifiedAccount(
@@ -204,7 +222,11 @@ internal class InMemoryEmailSignupRepository(
         verifiedAt: Instant,
     ): UserRecord? = create(userId, identityId, emailHash, passwordHash, birthdate, displayAge, acceptedAt, termsVersion, privacyVersion)
 
-    fun pendingCount(): Int = pendingByEmail.size
+    private fun live(
+        emailHash: String,
+        signupTokenHash: String,
+        now: Instant,
+    ): StoredPending? = rows.values.firstOrNull { it.emailHash == emailHash && it.signupTokenHash == signupTokenHash && it.expiresAt.isAfter(now) }
 
     private suspend fun create(
         userId: UUID,
@@ -246,7 +268,8 @@ internal class InMemoryEmailSignupRepository(
         val privacyVersion: String,
         val codeHash: String,
         val codeExpiresAt: Instant,
-        val failedAttempts: Int,
+        val codesIssued: Int,
+        val attempts: Long,
         val expiresAt: Instant,
     )
 }

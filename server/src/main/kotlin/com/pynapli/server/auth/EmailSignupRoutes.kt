@@ -9,6 +9,7 @@ import com.pynapli.shared.network.dto.EmailSignupResendRequestDto
 import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -22,9 +23,10 @@ import io.ktor.server.routing.routing
  *
  * [devMailbox] turns on two local-development-only helpers under `/v1/dev/auth/...` (create a
  * verified account at once; read the last code the local file mailer "sent"). The caller passes it
- * only when `devSignupShortcutsEnabled` is on, PYNAPLI_ENV is local and the local file mailer is
- * wired; startup validation refuses the flag in production-like environments. Otherwise the paths
- * don't exist (404).
+ * only when PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true (off by default), PYNAPLI_ENV is local and the
+ * local file mailer is wired; startup validation refuses the flag in production-like environments.
+ * Even then they answer 404 to anything but a direct loopback request ([isDirectLoopbackRequest]),
+ * so a tunnel or proxy in front of a local server never reaches them.
  */
 fun Application.configureEmailSignupRoutes(
     signupService: EmailSignupService,
@@ -79,6 +81,10 @@ fun Application.configureEmailSignupRoutes(
             // Seeds and load tests: a verified account at once, through the same account-creation
             // function as verify. 409 EMAIL_ALREADY_EXISTS for an existing address (local only).
             post("/v1/dev/auth/email/signup") {
+                if (!call.isDirectLoopbackRequest()) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@post
+                }
                 val request = call.receive<EmailSignupRequestDto>()
                 call.respond(
                     signupService.createVerifiedAccountForLocalDev(
@@ -97,16 +103,61 @@ fun Application.configureEmailSignupRoutes(
 
             // UI QA (scripts/android-onboarding-qa.ps1): the code a developer would read in
             // .pynapli-local-mail/signup-codes.txt, without depending on the server's working directory.
+            // Codes only: it never says whether an address got the "already registered" notice.
             post("/v1/dev/auth/email/signup/latest-code") {
+                if (!call.isDirectLoopbackRequest()) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@post
+                }
                 val request = call.receive<DevSignupCodeRequestDto>()
-                val mail = mailbox.latestFor(request.email)
-                call.respond(
-                    DevSignupCodeDto(
-                        code = mail?.code,
-                        alreadyRegisteredNoticeSent = mail?.alreadyRegisteredNotice == true,
-                    ),
-                )
+                call.respond(DevSignupCodeDto(code = mailbox.latestCodeFor(request.email)))
             }
         }
     }
 }
+
+/**
+ * The dev routes serve only a request made on this machine, straight to the server: the socket peer
+ * is a loopback address AND the request carries no proxy or tunnel header. A tunnel (cloudflared
+ * runs on this machine, so its peer IS loopback) or any reverse proxy adds forwarding headers, so its
+ * requests are refused even though they arrive from 127.0.0.1. The peer is the socket address, never
+ * a header, so it can't be spoofed; a client could only add headers, which makes it more likely to
+ * be refused, never less.
+ */
+internal fun ApplicationCall.isDirectLoopbackRequest(): Boolean =
+    isDirectLoopbackRequest(
+        remoteAddress = request.local.remoteAddress,
+        headerNames = request.headers.names(),
+    )
+
+internal fun isDirectLoopbackRequest(
+    remoteAddress: String,
+    headerNames: Collection<String>,
+): Boolean {
+    val peer = remoteAddress.trim().removePrefix("/").lowercase()
+    if (peer !in LOOPBACK_PEERS && !peer.startsWith("127.")) return false
+    return headerNames.none { name ->
+        val header = name.lowercase()
+        header in FORWARDING_HEADERS || FORWARDING_HEADER_PREFIXES.any { header.startsWith(it) }
+    }
+}
+
+// "localhost" is what Ktor's in-process test engine reports for its own (loopback) peer.
+private val LOOPBACK_PEERS = setOf("127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "[::1]", "localhost")
+
+private val FORWARDING_HEADERS =
+    setOf(
+        "forwarded",
+        "via",
+        "x-real-ip",
+        "true-client-ip",
+        "x-client-ip",
+        "x-cluster-client-ip",
+        "fly-client-ip",
+        "fastly-client-ip",
+        "cdn-loop",
+        "x-original-forwarded-for",
+    )
+
+// x-forwarded-for/-host/-proto/-port, and Cloudflare's cf-connecting-ip, cf-ray, cf-visitor, cf-ipcountry...
+private val FORWARDING_HEADER_PREFIXES = listOf("x-forwarded-", "cf-")

@@ -123,10 +123,15 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_RESEND, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
                 // Guessing a 6-digit sign-up code: each code also dies after 5 wrong tries.
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_VERIFY, limit = 15, windowSeconds = ONE_HOUR_SECONDS),
-                // Silent per-address caps on sign-up emails (code or "already registered" notice). The
-                // response never changes when they trip; the email just isn't sent.
-                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_EMAIL_HOURLY, limit = 5, windowSeconds = ONE_HOUR_SECONDS),
-                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_EMAIL_DAILY, limit = 15, windowSeconds = ONE_DAY_SECONDS),
+                // Silent caps on sign-up emails (code or "already registered" notice); the response never
+                // changes when they trip, the email just isn't sent. Tight per address + client IP, so one
+                // network can't starve the owner's own sign-up; looser per address family (+tags folded)
+                // to cap a flood from many networks. EmailSignupService.ADDRESS_DAILY_EMAIL_CAP mirrors it.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_EMAIL_HOURLY, limit = 3, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_EMAIL_DAILY, limit = 6, windowSeconds = ONE_DAY_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_EMAIL_ADDRESS_DAILY, limit = 20, windowSeconds = ONE_DAY_SECONDS),
+                // Local-dev sign-up shortcut (loopback only): room for a full demo seed, still bounded.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_DEV_SIGNUP, limit = 2_000, windowSeconds = ONE_HOUR_SECONDS),
                 // Failed sign-ins only (AuthRateLimitGuard). Per account + client IP: tight, so guessing
                 // from one address stops fast, while someone elsewhere can't lock the real user out.
                 RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN_FAILURE, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
@@ -210,6 +215,8 @@ object RateLimitedAction {
     const val AUTH_SIGNUP_VERIFY = "auth_signup_verify"
     const val AUTH_SIGNUP_EMAIL_HOURLY = "auth_signup_email_hourly"
     const val AUTH_SIGNUP_EMAIL_DAILY = "auth_signup_email_daily"
+    const val AUTH_SIGNUP_EMAIL_ADDRESS_DAILY = "auth_signup_email_address_daily"
+    const val AUTH_DEV_SIGNUP = "auth_dev_signup"
     const val AUTH_LOGIN_FAILURE = "auth_login_failure"
     const val AUTH_LOGIN_FAILURE_ACCOUNT = "auth_login_failure_account"
     const val AUTH_REFRESH = "auth_refresh"
