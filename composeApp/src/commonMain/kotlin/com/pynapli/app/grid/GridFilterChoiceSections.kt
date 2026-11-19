@@ -290,19 +290,34 @@ internal fun TrustSection(
     facePhotoVerified: Boolean,
     ageVerified: Boolean,
     onTogglesChanged: (Boolean, Boolean, Boolean) -> Unit,
+    verifiedCouples: Boolean = false,
+    onVerifiedCouplesToggle: () -> Unit = {},
 ) {
     // "Verified" and "face photo verified" are the same reviewed-selfie signal (FILTERS_SPEC), so they
     // share one chip; turning it off also clears the face-photo flag an older saved filter may carry.
     val photoVerified = verified || facePhotoVerified
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         SheetToggleChip(label = "Photo verified", active = photoVerified) {
             onTogglesChanged(!photoVerified, false, ageVerified)
         }
         SheetToggleChip(label = "Age verified", active = ageVerified) {
             onTogglesChanged(verified, facePhotoVerified, !ageVerified)
         }
+        // Both linked partners selfie-verified: the couple-verified badge (independent of "Linked").
+        SheetToggleChip(
+            label = VERIFIED_COUPLES_ONLY_LABEL,
+            active = verifiedCouples,
+            onClick = onVerifiedCouplesToggle,
+        )
     }
 }
+
+/** Shared label for the Grid and Swipe "Verified couples only" chips. */
+internal const val VERIFIED_COUPLES_ONLY_LABEL = "Verified couples only"
 
 @Composable
 internal fun WhoSection(

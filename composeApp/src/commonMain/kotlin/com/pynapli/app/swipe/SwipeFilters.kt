@@ -49,11 +49,15 @@ data class SwipeFilters(
     // FILTERS_SPEC "Has private album": only show profiles that own a visible private album.
     val hasPrivateAlbum: Boolean = false,
     val dealbreakers: Set<String> = emptySet(),
+    // "Verified couples only": both linked partners selfie-verified (the couple-verified badge).
+    // Independent of [linked]; shares the "verified" dealbreaker lock with [verifiedOnly].
+    val verifiedCouples: Boolean = false,
 ) {
     val activeCount: Int
         get() {
             var count = 0
             if (singles) count += 1
+            if (verifiedCouples) count += 1
             if (partnered) count += 1
             if (linked) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
@@ -114,6 +118,7 @@ data class SwipeFilters(
             hasPrivateAlbumOnly = hasPrivateAlbum,
             dealbreakers = dealbreakers,
             verifiedPreferred = verifiedPreferred,
+            verifiedCouplesOnly = verifiedCouples,
         )
     }
 
@@ -172,6 +177,7 @@ data class SwipeFilters(
                 withPhotos = request.withPhotosOnly,
                 hasPrivateAlbum = request.hasPrivateAlbumOnly,
                 dealbreakers = dealbreakers,
+                verifiedCouples = request.verifiedCouplesOnly,
             )
         }
     }

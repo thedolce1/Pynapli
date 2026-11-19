@@ -61,11 +61,15 @@ data class GridFilters(
     val radiusMeters: Int = DEFAULT_RADIUS_METERS,
     val minimumAge: Int? = null,
     val maximumAge: Int? = null,
+    // "Verified couples only": both linked partners selfie-verified (the couple-verified badge).
+    // Independent of [linked]; the server applies it without touching linkedOnly.
+    val verifiedCouples: Boolean = false,
 ) {
     val activeCount: Int
         get() {
             var count = 0
             if (online) count += 1
+            if (verifiedCouples) count += 1
             if (singles) count += 1
             if (partnered) count += 1
             if (linked) count += 1
@@ -130,6 +134,7 @@ data class GridFilters(
             intents = intents.map { it.serverValue },
             genders = genders.toList(),
             orientations = orientations.toList(),
+            verifiedCouplesOnly = verifiedCouples,
         )
     }
 
@@ -181,6 +186,7 @@ data class GridFilters(
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
+                verifiedCouples = request.verifiedCouplesOnly,
             )
         }
     }

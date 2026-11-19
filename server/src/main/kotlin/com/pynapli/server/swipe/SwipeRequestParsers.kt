@@ -48,6 +48,7 @@ internal object SwipeDeckRequestParser {
                 genders = request.genders,
                 orientations = request.orientations,
                 verifiedPreferred = request.verifiedPreferred,
+                verifiedCouplesOnly = request.verifiedCouplesOnly,
             ) { _ -> SwipeException("INVALID_SWIPE_FILTER") }
         return ParsedSwipeDeckRequest(
             radiusMeters = request.radiusMeters.coerceIn(minRadiusMeters, maxRadiusMeters),

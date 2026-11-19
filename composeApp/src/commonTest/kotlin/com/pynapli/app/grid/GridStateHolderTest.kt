@@ -178,6 +178,31 @@ class GridStateHolderTest {
         }
 
     @Test
+    fun verifiedCouplesSetsTheRequestFieldCountsAsActiveAndClears() =
+        runTest {
+            val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+            val stateHolder = GridStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.applyFilters(
+                stateHolder.state.value.filters
+                    .copy(verifiedCouples = true),
+            )
+
+            val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
+            assertEquals(true, request.verifiedCouplesOnly)
+            // It does not switch on the separate "Linked" filter.
+            assertEquals(null, request.linkedOnly)
+            assertEquals(1, stateHolder.state.value.filters.activeCount)
+            assertEquals(true, GridFilters.fromGridQueryRequest(request).verifiedCouples)
+
+            stateHolder.clearAllFilters()
+            assertEquals(false, stateHolder.state.value.filters.verifiedCouples)
+            assertEquals(false, repository.lastFilters!!.toGridQueryRequest(cursor = null).verifiedCouplesOnly)
+            assertEquals(0, stateHolder.state.value.filters.activeCount)
+        }
+
+    @Test
     fun togglingVerifiedSetsVerifiedOnlyOnRequest() =
         runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))

@@ -289,7 +289,7 @@ Behavior:
 
 Recommended TTL:
 
-- Likes sent while traveling remain visible for up to 24 hours after switching location, mirroring Tinder's public Passport behavior.
+- Likes sent while traveling remain visible for up to 24 hours after switching location. (This was once described as mirroring Tinder's Passport behavior; that could not be confirmed as of 2026-11-18, so treat it as Pynapli's own rule.)
 
 ## Discovery Settings
 

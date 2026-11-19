@@ -6,7 +6,7 @@ Last updated: 2026-04-24
 
 Playing Tonight is Pynapli's immediate availability signal for linked partners and social lifestyle users.
 
-It is inspired by Grindr's Right Now, adapted for Pynapli's partner-link model.
+It is inspired by Grindr's Right Now (as of November 2026: 1-hour sessions, 10 free per week, and an opt-in map with a user-chosen location offset), adapted for Pynapli's partner-link model.
 
 Core rule:
 

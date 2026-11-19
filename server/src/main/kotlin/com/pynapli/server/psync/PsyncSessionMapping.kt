@@ -46,6 +46,7 @@ internal fun SwipeDeckRequestDto.toPsyncFiltersSummary(): String {
                 hi != null -> add("ages up to $hi")
             }
             if (verifiedOnly) add("verified only")
+            if (verifiedCouplesOnly) add("verified couples only")
             if (discoveryStyles.isNotEmpty()) add(discoveryStyles.joinToString("/"))
             if (intents.isNotEmpty()) add(intents.joinToString("/"))
             val tagCount = lifestyleTags.size + logisticsTags.size + boundaryItems.size

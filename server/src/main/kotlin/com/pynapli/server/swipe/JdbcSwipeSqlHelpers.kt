@@ -44,7 +44,9 @@ internal fun ResultSet.readDeckRankRow(): DeckRankRow =
         naturalRank = getLong("natural_rank"),
     )
 
-internal fun DiscoveryFilters.isRankCacheEligible(): Boolean = linkedOnly == null
+// linkedOnly and verifiedCouplesOnly test the linked partner against this viewer (blocks, partner
+// visibility, hidden list), so their windows are never shared across viewers.
+internal fun DiscoveryFilters.isRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly
 
 internal fun DiscoveryFilters.rankCacheKey(): String =
     buildString {
@@ -86,6 +88,10 @@ internal fun DiscoveryFilters.rankCacheKey(): String =
         append(orientations.sorted().joinToString("|"))
         append(';')
         append(verifiedPreferred)
+        append(';')
+        // Never cached (see isRankCacheEligible); keyed anyway so a future eligibility change cannot
+        // let filtered and unfiltered viewers share a window.
+        append(verifiedCouplesOnly)
     }
 
 internal fun ResultSet.readStringArray(column: String): List<String> {

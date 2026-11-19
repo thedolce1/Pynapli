@@ -63,6 +63,8 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
   `coupleVerified`). `coupleVerified` is server-computed: true only while the person and the partner in
   the mini are both photo-verified, so it is false whenever the mini is hidden. Profile detail
   (`PublicProfileDto`) carries the same `coupleVerified`.
+- `verifiedCouplesOnly` (Grid query and Swipe deck request, default false) returns only people whose
+  card would carry `coupleVerified` for this viewer. It does not set or change `linkedOnly`.
 - Blocks, privacy and risk apply before cards are returned.
 - Tier volume caps (page size and depth) are enforced server-side. **Cursor tokens carry scope and
   seen-count state**, so a client can't bypass tier depth by changing the requested limit. Grid

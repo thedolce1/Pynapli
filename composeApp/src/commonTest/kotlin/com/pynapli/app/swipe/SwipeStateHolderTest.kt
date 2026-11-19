@@ -557,6 +557,29 @@ class SwipeStateHolderTest {
         }
 
     @Test
+    fun verifiedCouplesFilterReachesTheRequestCountsAsActiveAndClears() =
+        runTest {
+            val repository =
+                FakeSwipeRepository(
+                    deck = SwipeDeckUi(cards = emptyList(), deckSessionId = "deck-1"),
+                )
+            val stateHolder = SwipeStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.applyFilters(SwipeFilters.defaults.copy(verifiedCouples = true))
+
+            val applied = repository.deckRequests.last()
+            assertEquals(true, applied.verifiedCouplesOnly)
+            // The separate "Linked" filter stays as the viewer left it.
+            assertNull(applied.linkedOnly)
+            assertEquals(1, stateHolder.state.value.swipeFilters.activeCount)
+
+            stateHolder.applyFilters(SwipeFilters.defaults)
+            assertEquals(false, repository.deckRequests.last().verifiedCouplesOnly)
+            assertEquals(0, stateHolder.state.value.swipeFilters.activeCount)
+        }
+
+    @Test
     fun rewindEntitlementFailureShowsPaywallMessage() =
         runTest {
             val card = swipeCard(userId = "target-1")

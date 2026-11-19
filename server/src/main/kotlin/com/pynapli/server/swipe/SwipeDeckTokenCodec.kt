@@ -278,6 +278,8 @@ class SwipeDeckTokenCodec(
                     append("|orientations=")
                     append(filters.orientations.sorted().joinToString(","))
                     append("|verifiedPreferred=").append(filters.verifiedPreferred)
+                    // Appended only when set, so decks dealt without it keep their hash.
+                    if (filters.verifiedCouplesOnly) append("|verifiedCouplesOnly=true")
                     // Locks decide which filters a thin deck may relax, so they shape later pages
                     // too. Appended only when set, so decks dealt without locks keep their hash.
                     if (dealbreakers.isNotEmpty()) {

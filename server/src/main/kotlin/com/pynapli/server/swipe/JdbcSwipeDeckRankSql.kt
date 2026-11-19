@@ -1,5 +1,6 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.distance.CoarseLocation
@@ -132,6 +133,9 @@ $candidateSource
               AND (?::boolean = false OR p.verified_at IS NOT NULL)
               AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
               AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+              -- "Verified couples only": exactly the couple-verified badge for this viewer. Also runs
+              -- on the linked-only forced-id path, which reaches this query with linkedOnly cleared.
+              ${CoupleVerifiedFilterSql.predicate(user = "u", profile = "p", settings = "ds")}
               AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
               AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
               -- Lifestyle groups + boundaries (LifestyleFilterSql): same predicate on every surface.
@@ -290,6 +294,7 @@ $candidateSource
         statement.setBoolean(index++, filters.verifiedOnly)
         statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
         statement.setBoolean(index++, filters.ageVerifiedOnly)
+        index = CoupleVerifiedFilterSql.bind(statement, index, filters.verifiedCouplesOnly, viewerUserId)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
         statement.setArray(index++, intents)

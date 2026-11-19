@@ -1,0 +1,103 @@
+package com.pynapli.server.discovery
+
+import java.sql.PreparedStatement
+import java.util.UUID
+
+/**
+ * The "Verified couples only" predicate shared by the Grid rank and Swipe deck rank queries. It means
+ * exactly what the couple-verified badge means for this viewer, so a card that passes always shows
+ * the badge and a card that shows the badge always passes:
+ *
+ *  - the candidate is photo-verified (`profiles.verified_at`);
+ *  - they have an active partner link, and that partner is the one the card's partner mini would show
+ *    this viewer: the hydration LATERAL in JdbcGridHydrationSql / JdbcSwipeDeckHydrationSql (active,
+ *    not deleted, visible, not incognito, not quarantined/terminated, no block either way with the
+ *    viewer, and the owner's partner_visibility lets this viewer see them), and not someone the
+ *    viewer hid (GridService / JdbcSwipeDeckQueryActions strip a hidden partner from the card);
+ *  - that partner is photo-verified too.
+ *
+ * A user has at most one active link (V16/V17 unique indexes), so EXISTS here and the badge's
+ * `LIMIT 1` LATERAL pick the same partner. The predicate is viewer-specific, so a filter carrying it
+ * is never served from the shared rank cache (`isGridRankCacheEligible` / `isRankCacheEligible`).
+ *
+ * [user], [profile] and [settings] are the candidate's `users`, `profiles` and `discovery_settings`
+ * aliases in the calling query. Leads with `?::boolean = false` so the default path costs nothing.
+ */
+object CoupleVerifiedFilterSql {
+    fun predicate(
+        user: String,
+        profile: String,
+        settings: String,
+    ): String =
+        """
+        AND (
+            ?::boolean = false
+            OR (
+                $profile.verified_at IS NOT NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM user_profile_links cv_upl
+                    JOIN users cv_user ON cv_user.id = cv_upl.linked_user_id
+                    JOIN profiles cv_profile ON cv_profile.user_id = cv_user.id
+                    JOIN discovery_settings cv_ds ON cv_ds.user_id = cv_user.id
+                    LEFT JOIN account_risk_states cv_risk ON cv_risk.user_id = cv_user.id
+                    WHERE cv_upl.user_id = $user.id
+                      AND cv_upl.status = 'active'
+                      AND cv_upl.unlinked_at IS NULL
+                      AND cv_user.status = 'active'
+                      AND cv_user.deleted_at IS NULL
+                      AND cv_profile.visibility_status = 'visible'
+                      AND cv_profile.verified_at IS NOT NULL
+                      AND cv_ds.incognito = false
+                      AND COALESCE(cv_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM user_blocks cv_ub
+                          WHERE (cv_ub.blocker_user_id = ?::uuid AND cv_ub.blocked_user_id = cv_user.id)
+                             OR (cv_ub.blocker_user_id = cv_user.id AND cv_ub.blocked_user_id = ?::uuid)
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM user_hidden_profiles cv_hidden
+                          WHERE cv_hidden.hider_user_id = ?::uuid
+                            AND cv_hidden.hidden_user_id = cv_user.id
+                      )
+                      AND (
+                          $settings.partner_visibility = 'public'
+                          OR (
+                              $settings.partner_visibility = 'verified_only'
+                              AND EXISTS (
+                                  SELECT 1 FROM profiles cv_viewer
+                                  WHERE cv_viewer.user_id = ?::uuid AND cv_viewer.verified_at IS NOT NULL
+                              )
+                          )
+                          OR (
+                              $settings.partner_visibility = 'matches_only'
+                              AND EXISTS (
+                                  SELECT 1 FROM matches cv_match
+                                  WHERE LEAST(cv_match.user_a, cv_match.user_b) = LEAST(?::uuid, $user.id)
+                                    AND GREATEST(cv_match.user_a, cv_match.user_b) = GREATEST(?::uuid, $user.id)
+                              )
+                          )
+                      )
+                )
+            )
+        )
+        """.trimIndent()
+
+    /** Binds [predicate] starting at [startIndex]; returns the next free index. */
+    fun bind(
+        statement: PreparedStatement,
+        startIndex: Int,
+        enabled: Boolean,
+        viewerUserId: UUID,
+    ): Int {
+        var index = startIndex
+        statement.setBoolean(index++, enabled)
+        // Block check (both directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST.
+        repeat(VIEWER_PLACEHOLDERS) { statement.setObject(index++, viewerUserId) }
+        return index
+    }
+
+    private const val VIEWER_PLACEHOLDERS = 6
+}

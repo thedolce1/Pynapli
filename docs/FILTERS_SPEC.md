@@ -216,6 +216,7 @@ Filters:
 - Photo verified
 - Linked partner visible
 - Linked partner verified
+- Verified couples only (both linked partners verified; see Swipe "Verified")
 - Verified-only messages
 
 Rules:
@@ -354,6 +355,7 @@ Options:
 - Verified only
 - Verified preferred
 - No preference
+- Verified couples only (a separate toggle, combinable with the three above)
 
 Rules:
 
@@ -363,10 +365,20 @@ Rules:
 - "Verified" means **selfie photo verification** approved by a reviewer (TRUST_AND_SAFETY_SPEC
   "Photo Verification"): profiles.verified_at and ace_photo_verified_at, both written on approval.
   "Face photo verified" is the same signal today; "Age verified" is the separate age check.
-- The filter is **individual**: "Verified only" keeps a person who is verified, single or linked. There
-  is no "verified couples only" option, so a linked person whose partner is unverified still matches.
-  Couples show a separate **couple verified** badge only when both linked partners are verified and
-  the partner is visible to the viewer (coupleVerified on Grid cards and profile detail).
+- The filter is **individual**: "Verified only" keeps a person who is verified, single or linked, so a
+  linked person whose partner is unverified still matches. Couples show a separate **couple verified**
+  badge only when both linked partners are verified and the partner is visible to the viewer
+  (coupleVerified on Grid cards, Swipe cards and profile detail).
+- **Verified couples only** (`verifiedCouplesOnly`, Grid and Swipe, and Psync decks through the Swipe
+  sheet) keeps only people whose card shows that couple-verified badge for this viewer: they and their
+  active linked partner are both photo-verified, and the partner is visible to the viewer (active,
+  visible, not incognito, not quarantined or terminated, no block either way, the owner's partner
+  visibility allows this viewer, and the viewer has not hidden the partner). One SQL predicate
+  (`CoupleVerifiedFilterSql`) serves both rank queries. It implies a linked partner but does not set or
+  change the separate `linkedOnly` filter. It is free, like "Verified only", and on Swipe it shares the
+  `verified` dealbreaker lock (relaxed on a thin deck unless locked). It is viewer-specific, so a request
+  with it on never uses the shared rank cache; it is also in both rank-cache keys, the Grid cursor scope
+  and the Swipe deck-token scope.
 
 ### Dealbreakers
 
@@ -556,6 +568,7 @@ Do not rely on bios for filtering.
 - [x] "Recently joined" + "Traveling here" (Presence, grid-only): `recentlyJoinedOnly` = the account (`users.created_at`) was created within the last 7 days; `travelingHereOnly` = the candidate is near the viewer via an active `travel_locations` row (the card's `visiting` state, not their home GPS). Both are hard SQL gates in the grid rank query (also in `gridRankCacheKey` + the grid cursor scope); Swipe ignores them. Covered by `GridAndSwipeRepositoryIntegrationTest` "grid query with recentlyJoinedOnly excludes older accounts" + "grid query with travelingHereOnly returns only travel-mode visitors" + client `GridStateHolderTest.recentlyJoinedAndTravelingHereFiltersSerializeAndRoundTrip`.
 - [x] **Filter-scope invariant (both surfaces):** a new hard filter must be added to BOTH the rank-cache class key (`gridRankCacheKey` / swipe `rankCacheKey`) AND the cursor/token scope (`DiscoveryCursorCodec.gridScopeHash` / `SwipeDeckTokenCodec.deckScopeHash`), or a cursor/deck token can carry across a filter change and misalign or replay a stale page. Both scopes now cover every set/order-defining filter (`genders`/`orientations`/`withPhotosOnly` on grid + swipe; `verifiedPreferred` on the swipe deck token; `activeTodayOnly` on grid). Guarded by `GridRankCacheKeyTest`/`SwipeRankCacheKeyTest` and `SwipeDeckTokenCodecTest.deckScopeHashDistinguishesEverySetOrOrderDefiningFilter`.
 - [x] Swinger filters (Round 4): `LifestyleFilterSql` is the one predicate set for Grid rank, Swipe deck rank and the Playing Tonight feed (any-of within Swap / Room / Experience / other, all-of across; experience vs `profiles.experience_level`; `boundaryItems` hides `<item>:not_for_me`). `boundaryItems` is in both rank-cache keys, both cursor/deck-token scopes, `DiscoveryFiltersJson`, both saved-filter services and Psync. Swipe dealbreakers `swap` / `room` / `experience` / `boundaries` survive relaxation. Tonight feed takes `orientations` / `lifestyleTags` / `boundaryItems` in the body of `POST /v1/tonight/feed/query` (never the query string) with the Grid age-verification + advanced-filter gates; Swipe card tags include the experience level. Travel mode uses the same SQL. Covered by `SwingerFilterDiscoveryTest` (Grid + Swipe, home + Travel), `TonightFeedServiceIntegrationTest`, `SwipeDeckLifestyleRelaxationTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `SwingerFiltersClientTest`.
+- [x] "Verified couples only" (2026-11-18, Grid + Swipe + Psync decks): `verifiedCouplesOnly` on `GridQueryRequestDto` / `SwipeDeckRequestDto` (default false, so older clients and saved filters behave as before) means exactly the couple-verified badge for the viewer (`CoupleVerifiedFilterSql`, shared by `JdbcGridRankSql` and `JdbcSwipeDeckRankSql`, also on the linked-only forced-id Swipe path). Never served from the shared rank cache (like `linkedOnly`), in both rank-cache keys, the Grid cursor scope and the Swipe deck-token scope (appended only when on), `DiscoveryFiltersJson` (only when on), both saved-filter services and Psync validation and summaries. Free (in `hasAdvancedFilters`, not `requiresAdvancedEntitlement`), relaxes under the `verified` lock like `verifiedOnly`. Client: a "Verified couples only" chip in the Grid Trust row and under the Swipe Verified choice; counts as active, clears with Clear all, round-trips through saved presets. Covered by `VerifiedCouplesFilterIntegrationTest` (filtered ids equal the ids whose badge shows, across pending links, hidden/verified-only/matches partner visibility, blocks, viewer hides, incognito, terminated and deleted partners, with `linkedOnly` and `verifiedOnly`, and shared-cache cross-viewer cases), `VerifiedCouplesFilterContractTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `GridStateHolderTest` and `SwipeFiltersTest`. Playing Tonight's feed has its own three-field filter set and does not take it.
 
 ## Do Not Implement
 

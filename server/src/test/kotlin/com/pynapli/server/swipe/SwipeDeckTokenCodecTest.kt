@@ -63,6 +63,7 @@ class SwipeDeckTokenCodecTest {
                 base.copy(intents = setOf("dating")),
                 base.copy(lifestyleTags = setOf("some_experience")),
                 base.copy(boundaryItems = setOf("photos")),
+                base.copy(verifiedCouplesOnly = true),
             )
         variants.forEach { variant ->
             assertNotEquals(
