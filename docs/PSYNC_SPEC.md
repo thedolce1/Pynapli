@@ -14,7 +14,7 @@ Core rule:
 
 ## Product Role
 
-Psync gives Pynapli a signature linked-partner feature that Grindr, Tinder, and standard couple-profile apps do not offer.
+Psync gives Pynapli a signature linked-partner feature that Grindr and standard couple-profile apps do not offer. Tinder's "Double Date" (June 2025) lets two friends pair up to match with other pairs and opens a group chat, but it is not a live synced deck for a couple, and one like per pair is enough, the opposite of Psync's rule that each partner consents.
 
 It should:
 

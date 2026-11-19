@@ -114,7 +114,7 @@ Signals that reduce risk:
 
 ## Photo Verification
 
-Selfie photo verification, in the Bumble/Tinder style, is what the verified badge and the "Verified
+Selfie photo verification (one still selfie in a server-chosen pose, reviewed by a person) is what the verified badge and the "Verified
 only" filters mean. Server-owned end to end (erification/PhotoVerificationService.kt):
 
 - The user asks to verify. The server picks a random pose from a fixed server-side list
@@ -133,6 +133,10 @@ only" filters mean. Server-owned end to end (erification/PhotoVerificationServi
   retention worker under JobLock.
 - **Founder decision (defaulted):** replacing all profile photos does **not** remove verification. The
   spec was silent; an admin revoke is the tool when photos no longer match the person.
+- This is not parity with other apps (2025-2026): Tinder's Face Check is a mandatory liveness video
+  with ongoing matching against new photos, and Bumble added optional government ID verification.
+  Because replacing photos keeps verification here, Pynapli has no equivalent of Tinder's ongoing
+  photo matching.
 
 ## Suspicious Signals
 
