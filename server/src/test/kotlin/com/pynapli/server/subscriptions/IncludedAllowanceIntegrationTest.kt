@@ -632,11 +632,9 @@ class IncludedAllowanceIntegrationTest {
 
     private fun hasAnchor(userId: UUID): Boolean = anchorCount(userId) > 0
 
-    private fun anchorCount(userId: UUID): Int =
-        intQuery("SELECT COUNT(*)::integer FROM included_allowance_anchors WHERE user_id = ?", userId)
+    private fun anchorCount(userId: UUID): Int = intQuery("SELECT COUNT(*)::integer FROM included_allowance_anchors WHERE user_id = ?", userId)
 
-    private fun activeBoostCount(userId: UUID): Int =
-        intQuery("SELECT COUNT(*)::integer FROM boost_activations WHERE user_id = ? AND status = 'active'", userId)
+    private fun activeBoostCount(userId: UUID): Int = intQuery("SELECT COUNT(*)::integer FROM boost_activations WHERE user_id = ? AND status = 'active'", userId)
 
     private fun update(
         sql: String,

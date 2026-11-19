@@ -74,11 +74,9 @@ internal object SubscriptionCatalog {
         )
 
     // The plan card states what the server grants (IncludedAllowancePlan), from the same constants.
-    internal fun includedPineappleLikesLine(perWeek: Int): String =
-        if (perWeek == 1) "1 Pineapple Like every week" else "$perWeek Pineapple Likes every week"
+    internal fun includedPineappleLikesLine(perWeek: Int): String = if (perWeek == 1) "1 Pineapple Like every week" else "$perWeek Pineapple Likes every week"
 
-    internal fun includedBoostsLine(perMonth: Int): String =
-        if (perMonth == 1) "1 Boost every month" else "$perMonth Boosts every month"
+    internal fun includedBoostsLine(perMonth: Int): String = if (perMonth == 1) "1 Boost every month" else "$perMonth Boosts every month"
 
     private fun premiumProducts(): List<PremiumProductDto> =
         listOf(
