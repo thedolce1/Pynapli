@@ -262,7 +262,9 @@ Current implementation (server rule, `JdbcSubscriptionEntitlementSql.kt` partner
   unlink, neither person can link again for 7 days (`ProfileLinkService`, `PROFILE_LINK_COOLDOWN`).
   The `linked_partner_benefits` table is never written, and the other anti-abuse rules above
   (verification requirement, link/unlink fraud monitoring) have no benefit-specific code yet.
-- Entitlement is per account, so it applies on every client (Android, iOS, web).
+- Entitlement is per account, so being covered applies on every client (Android, iOS, web). Buying
+  a plan is Android-only today: the server has a Google Play verifier and no App Store one
+  (StoreKit 2 is still open), and web is read-only.
 - `SubscriptionEntitlementDto.linkedPartnerIncluded` is true for every paid entitlement, promo and
   admin included, so clients must not read it as "your partner is covered"; use `source`.
 
@@ -602,8 +604,11 @@ Written 2026-11-18 to be literally true per the code at that date (sources in br
 Google Play sexual-content listing policy). Re-check every line against the code before use.
 
 - App Store subtitle (30 max, this is 24): **One plan covers you both**
-- Google Play short description (80 max, this is 79): **For lifestyle couples and singles. Link
-  your partner: one plan covers you both.**
+  (Hold until iOS can sell a plan: StoreKit 2 is not built and the server has no App Store
+  verifier, so an iOS listing that leads with a plan would point at something iOS can't sell yet.)
+- Google Play short description (80 max, this is 79), on one line so it copies as counted:
+
+  **For lifestyle couples and singles. Link your partner: one plan covers you both.**
 
 Long description, first three bullets:
 
@@ -614,5 +619,7 @@ Long description, first three bullets:
   Social and Select members can filter to verified couples only. [`CoupleVerifiedFilterSql`;
   `DiscoveryFilters.hasAdvancedFilters` makes the filter paid.]
 - **Your location stays yours.** Other members never see your exact location or exact distance:
-  distances are rounded, and you can hide yours. [`DistanceRounding.kt` coarse cells and rounding;
-  `showDistance`. The server does store your location to run discovery, so do not claim otherwise.]
+  distances are rounded, and you can hide yours. [`DistanceRounding.kt` coarse cells and rounding,
+  applied with `showDistance` in the Grid, Swipe, Activity and profile-peek mappers and SQL;
+  Tonight uses cell-to-cell distance and coarse zones. The server does store your location to run
+  discovery, so do not claim otherwise.]

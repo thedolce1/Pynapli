@@ -47,6 +47,8 @@ internal fun storePartnerBenefitCopy(
 ): StorePartnerBenefitCopy {
     val linked = partnerLink as? StorePartnerLink.Linked
     val name = linked?.let { partnerCopyName(it.partnerDisplayName) }
+    // Who pays, when the viewer is covered by a partner: named only if that is the partner linked now.
+    val subscriberUserId = entitlement?.linkedPartnerUserId
     return when {
         entitlement.isOwnPaidSubscription() ->
             when {
@@ -77,8 +79,7 @@ internal fun storePartnerBenefitCopy(
             }
 
         entitlement?.source == EntitlementSource.LINKED_PARTNER_BENEFIT -> {
-            // Name the subscriber only when they are the partner this viewer is linked to now.
-            val subscriberName = name?.takeIf { linked?.partnerUserId == entitlement?.linkedPartnerUserId }
+            val subscriberName = name?.takeIf { linked?.partnerUserId == subscriberUserId }
             StorePartnerBenefitCopy(
                 headline = subscriberName?.let { "You're covered by $it's plan" } ?: "You're covered by your partner's plan",
                 supporting = "You get the same plan at no extra cost while you're linked.",
@@ -108,6 +109,8 @@ internal fun currentPlanCoverageLine(
 ): String {
     val linked = partnerLink as? StorePartnerLink.Linked
     val name = linked?.let { partnerCopyName(it.partnerDisplayName) }
+    // Who pays, when the viewer is covered by a partner: named only if that is the partner linked now.
+    val subscriberUserId = entitlement?.linkedPartnerUserId
     return when {
         entitlement.isOwnPaidSubscription() ->
             when {
@@ -117,7 +120,7 @@ internal fun currentPlanCoverageLine(
                 else -> "Covers a linked partner too"
             }
         entitlement?.source == EntitlementSource.LINKED_PARTNER_BENEFIT -> {
-            val subscriberName = name?.takeIf { linked?.partnerUserId == entitlement?.linkedPartnerUserId }
+            val subscriberName = name?.takeIf { linked?.partnerUserId == subscriberUserId }
             subscriberName?.let { "Covered by $it's plan" } ?: "Covered by your partner's plan"
         }
         // Promo and admin grants are the viewer's alone: the partner benefit reads subscriptions only.
