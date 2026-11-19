@@ -1,5 +1,7 @@
 package com.pynapli.app.messages
 
+import com.pynapli.app.conversation.actionablePartnerInvite
+import com.pynapli.app.conversation.openPartnerInvites
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.MessageDto
@@ -14,8 +16,10 @@ internal data class PartnerInviteUiState(
 )
 
 internal fun ConversationDto.partnerInviteUiState(viewerUserId: String?): PartnerInviteUiState? {
-    val invite = partnerInvite ?: return null
     if (viewerUserId == null) return null
+    // With several open invites the row speaks for the one the viewer answers first (their own, else
+    // one awaiting their approval), then any other they are party to.
+    val invite = actionablePartnerInvite(viewerUserId) ?: openPartnerInvites().firstOrNull() ?: return null
     val viewerParticipant = participants.firstOrNull { participant -> participant.userId == viewerUserId }
     val viewerIsInvitedPartner = viewerUserId == invite.invitedPartnerUserId
     val viewerCanApproveAsThirdParty =

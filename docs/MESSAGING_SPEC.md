@@ -87,6 +87,27 @@ Recommended cooldown:
 
 - If the third party denies a partner invite, require a 24-hour cooldown before re-inviting that same partner to that same thread.
 
+### Several invites at once (2026-11-19)
+
+Each side can invite their own partner while another invite is still open; every open invite is
+answered on its own (`partner_chat_invites` already allowed one open invite per partner per thread).
+
+- `ConversationDto.partnerInvites` lists every open invite the viewer is party to, newest first: all of
+  them for an active participant, only their own for an invited person. The single `partnerInvite`
+  stays for older clients and is the invite the viewer answers first (their own as invitee, else one
+  awaiting their approval, else the newest); with one open invite it is that invite, as before.
+- Accept and decline resolve the invite on the server. An invitee answers their own invite (they have
+  at most one open per thread) and nothing else. Anyone else approves or declines as the third party
+  the invite named by the optional `inviteId` query parameter, or without it (older clients) the newest
+  open invite they can approve, preferring one still waiting for a third party.
+- **Approval rule as implemented (unchanged):** the third-party approval of an invite comes from any
+  one active participant who is not that invite's inviter. Invited people are not active, so an invited
+  person never approves another invite, and two partners invited at the same time cannot approve each
+  other in. The spec's "the other parties approve" (every one of them) is not what the code does.
+- Declines, the 24-hour cooldown after a third-party decline, blocks, `RISK_RESTRICTED` and the switch
+  to a group conversation work per invite exactly as for a single invite; declining one invite leaves
+  any other open invite untouched.
+
 ### Bring your partner (shortcut, 2026-11-18)
 
 A server-decided offer that makes the invite above obvious on a match; it is not a second consent

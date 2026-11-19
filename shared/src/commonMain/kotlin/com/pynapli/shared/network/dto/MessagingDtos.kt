@@ -62,7 +62,11 @@ data class ConversationDto(
     val lastMessage: MessageDto? = null,
     val unreadCount: Int,
     val updatedAt: String,
+    // The single open partner invite older clients read: the one the viewer acts on first.
     val partnerInvite: PartnerChatInviteDto? = null,
+    // Every open partner invite the viewer is party to, newest first: all of them for an active
+    // participant, only their own for an invited person. Empty from a server that predates it.
+    val partnerInvites: List<PartnerChatInviteDto> = emptyList(),
     // The viewer's own disappearing-messages timer (null = off) and the effective timer for the
     // conversation (strictest of all active participants; what messages actually expire on).
     val messageExpirySeconds: Int? = null,

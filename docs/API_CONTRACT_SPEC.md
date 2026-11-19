@@ -122,6 +122,12 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 - Risk policy can hold outbound first messages for review.
 - Partner invite requires an active link plus partner **and** third-party consent.
   `ConversationDto.partnerInvite` is present while unresolved, with each side's consent status.
+- Several invites can be open in one conversation (added 2026-11-19). `ConversationDto.partnerInvites`
+  (list, empty from older servers) carries every open invite the viewer is party to; `partnerInvite`
+  stays for older clients as the one the viewer answers first. `POST .../partner-invite/accept` and
+  `.../decline` take an optional `?inviteId=` naming the invite a third party answers; without it the
+  server resolves it (an invitee's own invite, else the newest invite the caller can approve). An
+  invited person naming another invite gets `PARTNER_INVITE_NOT_FOUND`.
 - `ConversationDto.partnerOffers` (added 2026-11-18, optional; sent on `GET /v1/messages/threads/{id}`
   and `POST /v1/messages/threads/{id}/read` only, null elsewhere and from older servers) is the per-viewer "Bring your partner" offer on a matched
   conversation: `bringPartner { partnerUserId, partnerDisplayName }` is the viewer's own linked partner,

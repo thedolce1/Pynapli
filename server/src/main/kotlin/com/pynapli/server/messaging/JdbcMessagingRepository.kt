@@ -97,12 +97,14 @@ class JdbcMessagingRepository(
     override suspend fun acceptPartnerInvite(
         userId: UUID,
         conversationId: UUID,
-    ): ConversationDetailRecord? = dataSource.acceptMessagingPartnerInvite(userId, conversationId)
+        inviteId: UUID?,
+    ): ConversationDetailRecord? = dataSource.acceptMessagingPartnerInvite(userId, conversationId, inviteId)
 
     override suspend fun declinePartnerInvite(
         userId: UUID,
         conversationId: UUID,
-    ): Boolean = dataSource.declineMessagingPartnerInvite(userId, conversationId)
+        inviteId: UUID?,
+    ): Boolean = dataSource.declineMessagingPartnerInvite(userId, conversationId, inviteId)
 
     override suspend fun leaveConversation(
         userId: UUID,

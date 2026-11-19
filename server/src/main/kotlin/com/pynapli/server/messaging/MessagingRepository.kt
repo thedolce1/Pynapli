@@ -88,14 +88,17 @@ interface MessagingRepository {
         partnerUserId: UUID,
     ): PartnerInviteResult
 
+    /** [inviteId] names the invite a third party approves; null resolves it from who is acting. */
     suspend fun acceptPartnerInvite(
         userId: UUID,
         conversationId: UUID,
+        inviteId: UUID? = null,
     ): ConversationDetailRecord?
 
     suspend fun declinePartnerInvite(
         userId: UUID,
         conversationId: UUID,
+        inviteId: UUID? = null,
     ): Boolean
 
     suspend fun leaveConversation(
@@ -140,7 +143,10 @@ data class ConversationRecord(
     val lastMessage: MessageRecord?,
     val unreadCount: Int = 0,
     val updatedAt: Instant,
+    // The single open invite older clients read (see primaryFor in JdbcMessagingConversationLookupSql).
     val partnerInvite: PartnerChatInviteRecord? = null,
+    // Every open invite the viewer is party to, newest first (several can be open at once).
+    val partnerInvites: List<PartnerChatInviteRecord> = emptyList(),
     // The viewer's own disappearing-messages timer (null = off).
     val viewerExpirySeconds: Int? = null,
     // Strictest non-null timer across active participants — what messages actually expire on.

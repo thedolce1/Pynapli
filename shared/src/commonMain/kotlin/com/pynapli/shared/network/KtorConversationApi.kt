@@ -89,11 +89,21 @@ internal class KtorConversationApi(
 
     override suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto> = support.authPost("/v1/messages/threads/$conversationId/partner-invite")
 
-    override suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = support.authPost("/v1/messages/threads/$conversationId/partner-invite/accept")
+    override suspend fun acceptConversationPartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationDetailDto> =
+        support.authPost("/v1/messages/threads/$conversationId/partner-invite/accept") {
+            inviteId?.let { parameter("inviteId", it) }
+        }
 
     override suspend fun declineConversationPartnerInvite(
         conversationId: String,
-    ): AppResult<ConversationPartnerInviteResponseDto> = support.authPost("/v1/messages/threads/$conversationId/partner-invite/decline")
+        inviteId: String?,
+    ): AppResult<ConversationPartnerInviteResponseDto> =
+        support.authPost("/v1/messages/threads/$conversationId/partner-invite/decline") {
+            inviteId?.let { parameter("inviteId", it) }
+        }
 
     override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = support.authPost("/v1/messages/threads/$conversationId/leave")
 }

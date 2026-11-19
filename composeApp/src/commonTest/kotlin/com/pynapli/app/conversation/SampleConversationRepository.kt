@@ -212,9 +212,9 @@ class SampleConversationRepository : ConversationRepository {
             ),
         )
 
-    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = getConversationDetail(conversationId, before = null)
+    override suspend fun acceptPartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationDetailDto> = getConversationDetail(conversationId, before = null)
 
-    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
+    override suspend fun declinePartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
 
     override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT))
 }

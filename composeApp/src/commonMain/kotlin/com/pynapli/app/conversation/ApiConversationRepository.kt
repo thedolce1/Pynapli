@@ -97,9 +97,15 @@ class ApiConversationRepository(
 
     override suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto> = apiClient.inviteLinkedPartnerToConversation(conversationId)
 
-    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = apiClient.acceptConversationPartnerInvite(conversationId)
+    override suspend fun acceptPartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationDetailDto> = apiClient.acceptConversationPartnerInvite(conversationId, inviteId)
 
-    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = apiClient.declineConversationPartnerInvite(conversationId)
+    override suspend fun declinePartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationPartnerInviteResponseDto> = apiClient.declineConversationPartnerInvite(conversationId, inviteId)
 
     override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = apiClient.leaveConversation(conversationId)
 

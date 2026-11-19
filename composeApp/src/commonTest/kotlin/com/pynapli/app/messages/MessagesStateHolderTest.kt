@@ -244,9 +244,9 @@ private class FakeMessagesRepository(
 
     override suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> = AppResult.Success(pagesAfter.getValue(cursor))
 
-    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = acceptResult
+    override suspend fun acceptPartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationDetailDto> = acceptResult
 
-    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> {
+    override suspend fun declinePartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationPartnerInviteResponseDto> {
         onDecline()
         return declineResult
     }

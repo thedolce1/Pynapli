@@ -70,21 +70,17 @@ internal suspend fun DataSource.inviteLinkedMessagingPartner(
 internal suspend fun DataSource.acceptMessagingPartnerInvite(
     userId: UUID,
     conversationId: UUID,
+    inviteId: UUID?,
 ): ConversationDetailRecord? =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection.inTransaction {
-                val invite =
-                    connection.loadOpenPartnerInvite(conversationId, forUpdate = true)
+                val (invite, userRole) =
+                    connection.resolvePartnerInviteAction(userId, conversationId, inviteId)
                         ?: run {
                             connection.rollback()
                             return@withContext null
                         }
-                val userRole = connection.partnerInviteUserRole(userId, invite)
-                if (userRole == PartnerInviteUserRole.None) {
-                    connection.rollback()
-                    return@withContext null
-                }
 
                 connection.acceptOpenPartnerInvite(conversationId, userId, invite, userRole)
                 val detail =
@@ -112,21 +108,17 @@ internal suspend fun DataSource.acceptMessagingPartnerInvite(
 internal suspend fun DataSource.declineMessagingPartnerInvite(
     userId: UUID,
     conversationId: UUID,
+    inviteId: UUID?,
 ): Boolean =
     withContext(Dispatchers.IO) {
         connection.use { connection ->
             connection.inTransaction {
-                val invite =
-                    connection.loadOpenPartnerInvite(conversationId, forUpdate = true)
+                val (invite, userRole) =
+                    connection.resolvePartnerInviteAction(userId, conversationId, inviteId)
                         ?: run {
                             connection.rollback()
                             return@withContext false
                         }
-                val userRole = connection.partnerInviteUserRole(userId, invite)
-                if (userRole == PartnerInviteUserRole.None) {
-                    connection.rollback()
-                    return@withContext false
-                }
 
                 connection.declineOpenPartnerInvite(conversationId, invite, userRole)
                 connection.commit()

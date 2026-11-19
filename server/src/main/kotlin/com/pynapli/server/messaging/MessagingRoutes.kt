@@ -110,13 +110,17 @@ fun Application.configureMessagingRoutes(
             post("/{threadId}/partner-invite/accept") {
                 val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
-                call.respond(messagingService.acceptPartnerInvite(user.id, threadId))
+                call.respond(
+                    messagingService.acceptPartnerInvite(user.id, threadId, call.request.queryParameters["inviteId"]),
+                )
             }
 
             post("/{threadId}/partner-invite/decline") {
                 val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
-                call.respond(messagingService.declinePartnerInvite(user.id, threadId))
+                call.respond(
+                    messagingService.declinePartnerInvite(user.id, threadId, call.request.queryParameters["inviteId"]),
+                )
             }
 
             post("/{threadId}/leave") {

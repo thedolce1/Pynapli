@@ -276,7 +276,7 @@ private fun ColumnScope.ProfileHubSurface(
         },
         onAcceptPartnerChatInvite = { conversationId ->
             scope.launch {
-                messagesStateHolder.acceptPartnerInvite(conversationId)
+                messagesStateHolder.acceptPartnerInvite(conversationId, authState.session?.userId)
             }
         },
         onDeclinePartnerChatInvite = { conversationId ->

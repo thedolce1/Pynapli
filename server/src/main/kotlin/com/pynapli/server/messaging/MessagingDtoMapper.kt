@@ -59,6 +59,7 @@ internal class MessagingDtoMapper(
             unreadCount = record.unreadCount,
             updatedAt = record.updatedAt.toString(),
             partnerInvite = record.partnerInvite?.toDto(),
+            partnerInvites = record.partnerInvites.map { it.toDto() },
             messageExpirySeconds = record.viewerExpirySeconds,
             effectiveMessageExpirySeconds = record.effectiveExpirySeconds,
             newMatch = record.newMatch,

@@ -60,7 +60,8 @@ internal class ConversationPartnerActionCoordinator(
             )
         }
 
-        when (val result = repository.acceptPartnerInvite(conversationId)) {
+        val inviteId = current.actionablePartnerInvite?.inviteId
+        when (val result = repository.acceptPartnerInvite(conversationId, inviteId)) {
             is AppResult.Success -> {
                 val detail = result.value.withReadConversation(repository)
                 state.update { existing ->
@@ -99,7 +100,8 @@ internal class ConversationPartnerActionCoordinator(
             )
         }
 
-        when (val result = repository.declinePartnerInvite(conversationId)) {
+        val inviteId = current.actionablePartnerInvite?.inviteId
+        when (val result = repository.declinePartnerInvite(conversationId, inviteId)) {
             is AppResult.Success -> {
                 if (current.isViewerInvited) {
                     dismissConversation()

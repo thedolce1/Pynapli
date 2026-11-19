@@ -124,10 +124,11 @@ internal fun Connection.insertPartnerChatInvite(
         statement.executeUpdate() > 0
     }
 
-internal fun Connection.loadOpenPartnerInvite(
+/** Every open (unresolved) invite in the conversation, newest first. Several may be open at once. */
+internal fun Connection.loadOpenPartnerInvites(
     conversationId: UUID,
     forUpdate: Boolean,
-): PartnerChatInviteRecord? {
+): List<PartnerChatInviteRecord> {
     val query =
         buildString {
             append(
@@ -143,7 +144,6 @@ internal fun Connection.loadOpenPartnerInvite(
                 WHERE thread_id = ?
                   AND resolved_at IS NULL
                 ORDER BY created_at DESC, id DESC
-                LIMIT 1
                 """.trimIndent(),
             )
             if (forUpdate) append("\nFOR UPDATE")
@@ -151,8 +151,42 @@ internal fun Connection.loadOpenPartnerInvite(
     return prepareStatement(query).use { statement ->
         statement.setObject(1, conversationId)
         statement.executeQuery().use { rs ->
-            if (rs.next()) rs.toPartnerChatInviteRecord() else null
+            buildList {
+                while (rs.next()) add(rs.toPartnerChatInviteRecord())
+            }
         }
+    }
+}
+
+/**
+ * The open invite [userId] accepts or declines, and in which role, or null when there is none.
+ *  - An invitee acts on their own invite only (at most one open per person per thread, by the unique
+ *    index); naming any other invite is refused, so an invited person never approves anyone.
+ *  - Anyone else acts as the third-party approver of the invite named by [inviteId], or without one
+ *    (older clients) of the newest open invite they can approve, preferring one still waiting for the
+ *    third party. The approver must be an active participant who is not that invite's inviter
+ *    ([partnerInviteUserRole]); the two invited partners are not active, so neither approves the other.
+ * Locks the open invite rows (call inside the accept/decline transaction).
+ */
+internal fun Connection.resolvePartnerInviteAction(
+    userId: UUID,
+    conversationId: UUID,
+    inviteId: UUID?,
+): Pair<PartnerChatInviteRecord, PartnerInviteUserRole>? {
+    val open = loadOpenPartnerInvites(conversationId, forUpdate = true)
+    open.firstOrNull { it.invitedPartnerUserId == userId }?.let { own ->
+        return if (inviteId == null || inviteId == own.inviteId) own to PartnerInviteUserRole.InvitedPartner else null
+    }
+    val candidates =
+        if (inviteId != null) {
+            open.filter { it.inviteId == inviteId }
+        } else {
+            open.sortedByDescending { it.thirdPartyStatus == PARTNER_INVITE_PENDING }
+        }
+    return candidates.firstNotNullOfOrNull { invite ->
+        partnerInviteUserRole(userId, invite)
+            .takeIf { it == PartnerInviteUserRole.ThirdPartyApprover }
+            ?.let { invite to it }
     }
 }
 

@@ -489,14 +489,14 @@ private class FakeConversationRepository(
 
     override suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto> = AppResult.Failure(AppError("UNUSED", "Unused."))
 
-    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> {
+    override suspend fun acceptPartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationDetailDto> {
         if (acceptResult is AppResult.Success) {
             detailConversation = (acceptResult as AppResult.Success<ConversationDetailDto>).value.conversation
         }
         return acceptResult
     }
 
-    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
+    override suspend fun declinePartnerInvite(conversationId: String, inviteId: String?): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED))
 
     override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Success(ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT))
 }

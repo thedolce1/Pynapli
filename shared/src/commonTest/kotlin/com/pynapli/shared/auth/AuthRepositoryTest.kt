@@ -610,10 +610,14 @@ private class FakeApiClient(
 
     override suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
-    override suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
+    override suspend fun acceptConversationPartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationDetailDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun declineConversationPartnerInvite(
         conversationId: String,
+        inviteId: String?,
     ): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))

@@ -37,38 +37,28 @@ internal fun ConversationPartnerActions(
 ) {
     val conversation = state.detail?.conversation ?: return
     val viewerUserId = state.viewerUserId
-    val pendingInvite = conversation.partnerInvite
-    val viewerParticipant = conversation.participants.firstOrNull { participant -> participant.userId == viewerUserId }
-    val viewerIsInvitedPartner =
+    // Several invites can be open at once (each side bringing their own partner): each is shown and
+    // answered on its own.
+    val invites = conversation.openPartnerInvites()
+    val viewerIsActive =
         viewerUserId != null &&
-            pendingInvite?.invitedPartnerUserId == viewerUserId
-    val viewerCanApproveAsThirdParty =
-        viewerUserId != null &&
-            pendingInvite != null &&
-            viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
-            viewerUserId != pendingInvite.inviterUserId &&
-            viewerUserId != pendingInvite.invitedPartnerUserId
+            conversation.participants.any { it.userId == viewerUserId && it.status == ConversationParticipantStatus.ACTIVE }
+    val ownInvite = invites.firstOrNull { invite -> viewerUserId != null && invite.invitedPartnerUserId == viewerUserId }
     val partnerAcceptedWaiting =
-        pendingInvite?.let { invite ->
-            viewerIsInvitedPartner &&
-                invite.partnerStatus == PartnerChatInviteStatus.ACCEPTED &&
-                invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
-        } == true
-    val thirdPartyApprovalNeeded =
-        pendingInvite?.let { invite ->
-            viewerCanApproveAsThirdParty &&
-                invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
-        } == true
+        ownInvite != null &&
+            ownInvite.partnerStatus == PartnerChatInviteStatus.ACCEPTED &&
+            ownInvite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
+    // An invite by someone else that waits for the viewer's approval (never offered to an invited person).
+    val approvalInvite = state.actionablePartnerInvite?.takeIf { it.invitedPartnerUserId != viewerUserId }
+    val thirdPartyApprovalNeeded = approvalInvite != null
     val waitingForPartner =
-        pendingInvite?.let { invite ->
-            viewerCanApproveAsThirdParty &&
-                invite.thirdPartyStatus == PartnerChatInviteStatus.ACCEPTED &&
-                invite.partnerStatus == PartnerChatInviteStatus.PENDING
-        } == true
-    val inviterWaiting =
-        viewerUserId != null &&
-            pendingInvite != null &&
-            viewerUserId == pendingInvite.inviterUserId
+        viewerIsActive &&
+            invites.any { invite ->
+                invite.inviterUserId != viewerUserId &&
+                    invite.thirdPartyStatus == PartnerChatInviteStatus.ACCEPTED &&
+                    invite.partnerStatus == PartnerChatInviteStatus.PENDING
+            }
+    val inviterWaiting = invites.any { invite -> viewerUserId != null && invite.inviterUserId == viewerUserId }
     val partnerAlreadyInThread =
         linkedPartnerUserId != null &&
             conversation.participants.any { participant ->
@@ -113,7 +103,9 @@ internal fun ConversationPartnerActions(
         thirdPartyApprovalNeeded -> {
             PartnerInvitePrompt(
                 title = "Partner invite request",
-                body = "Approve before the partner can join this chat.",
+                body =
+                    "Approve before ${approvalInvite?.let { conversation.invitedPartnerName(it) } ?: "the partner"} " +
+                        "can join this chat.",
                 isResponding = state.isRespondingToInvite,
                 errorMessage = state.errorMessage,
                 onAcceptInvite = onAcceptInvite,

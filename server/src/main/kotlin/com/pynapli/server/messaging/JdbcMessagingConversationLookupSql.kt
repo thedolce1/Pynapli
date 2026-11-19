@@ -158,6 +158,13 @@ internal fun Connection.loadConversation(
     }
 
     val effectiveExpirySeconds = participants.effectiveExpirySeconds()
+    // Open invites the viewer is party to: all of them for an active participant (inviter or
+    // approver), only their own for an invited person.
+    val viewerActive = participants.any { it.userId == userId && it.status == "active" }
+    val viewerInvites =
+        loadOpenPartnerInvites(conversationId, forUpdate = false).filter { invite ->
+            viewerActive || invite.invitedPartnerUserId == userId
+        }
     return ConversationRecord(
         conversationId = conversationId,
         kind = kind ?: return null,
@@ -166,12 +173,24 @@ internal fun Connection.loadConversation(
         lastMessage = loadLastMessage(userId, conversationId, effectiveExpirySeconds),
         unreadCount = loadUnreadCount(userId, conversationId),
         updatedAt = updatedAt ?: return null,
-        partnerInvite = loadOpenPartnerInvite(conversationId, forUpdate = false),
+        partnerInvite = viewerInvites.primaryFor(userId),
+        partnerInvites = viewerInvites,
         viewerExpirySeconds = participants.firstOrNull { it.userId == userId }?.messageExpirySeconds,
         effectiveExpirySeconds = effectiveExpirySeconds,
         newMatch = loadNewMatch(userId, conversationId),
     )
 }
+
+/**
+ * The single `partnerInvite` older clients read: with one open invite it is that invite (as before);
+ * with several, the one this viewer acts on first (their own as invitee, else one awaiting their
+ * approval, else the newest), matching what an accept or decline without an invite id resolves to.
+ */
+private fun List<PartnerChatInviteRecord>.primaryFor(userId: UUID): PartnerChatInviteRecord? =
+    firstOrNull { it.invitedPartnerUserId == userId }
+        ?: firstOrNull { it.inviterUserId != userId && it.thirdPartyStatus == PARTNER_INVITE_PENDING }
+        ?: firstOrNull { it.inviterUserId != userId }
+        ?: firstOrNull()
 
 /** Strictest (smallest) non-null timer across active participants; null when all are off. */
 internal fun List<ConversationParticipantRecord>.effectiveExpirySeconds(): Int? =

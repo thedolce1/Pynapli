@@ -66,9 +66,16 @@ interface ConversationApi {
 
     suspend fun inviteLinkedPartnerToConversation(conversationId: String): AppResult<ConversationDto>
 
-    suspend fun acceptConversationPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
+    /** [inviteId] names the invite a third party approves when several are open (null: server resolves). */
+    suspend fun acceptConversationPartnerInvite(
+        conversationId: String,
+        inviteId: String? = null,
+    ): AppResult<ConversationDetailDto>
 
-    suspend fun declineConversationPartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+    suspend fun declineConversationPartnerInvite(
+        conversationId: String,
+        inviteId: String? = null,
+    ): AppResult<ConversationPartnerInviteResponseDto>
 
     suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
 }
