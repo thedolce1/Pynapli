@@ -44,8 +44,8 @@ address is a member (server rules, enforced 2026-11-19):
   after the right password. Deleted accounts never match (treated as unknown).
 - **Password reset request** (`/v1/auth/password/reset-request`): answers `200 {"sent":true}` after
   only the provider check, the rate limit and the email-format check, none of which depend on
-  membership. The account lookup, the code write and the email run after the response on the
-  server's background scope (`launchResetWork`); a failure there is logged by exception type only
+  membership. The account lookup, the code write and the email run off the request path on the
+  server's background scope (`launchResetWork`; the handler never waits for them); a failure there is logged by exception type only
   (never the address or code) and cannot change the answer. Non-active accounts get no email, like
   unknown addresses.
 - **Password reset completion** (`/v1/auth/password/reset`): an unknown address, an account without

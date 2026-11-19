@@ -179,7 +179,7 @@ internal fun buildCoreDependencies(
                 } else {
                     UnconfiguredPasswordResetMailer
                 },
-            // A member's lookup, code write and email run after the response, so a reset request
+            // A member's lookup, code write and email run off the request path, so a reset request
             // takes the same time whether or not the address has an account.
             launchResetWork = { work -> backgroundScope.launch { work() } },
             rateLimitService = rateLimitService,

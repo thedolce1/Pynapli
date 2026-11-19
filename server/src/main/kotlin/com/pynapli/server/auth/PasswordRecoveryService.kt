@@ -20,8 +20,8 @@ import java.util.UUID
  * Forgot password emails a 6-digit code to the address the person types. Pynapli stores only a
  * hash of each email, so the code goes to the typed address once it matches an account; the
  * address itself is never stored. The request can't be used to discover who is on Pynapli: it
- * answers the same way whether or not an account exists, and it answers before looking. The
- * account lookup, the code write and the email all run after the response, through
+ * answers the same way whether or not an account exists, and it never waits on the lookup. The
+ * account lookup, the code write and the email all run off the request path, through
  * [launchResetWork] (the server's background scope in production), so a member's request takes no
  * longer than anyone else's and a failed send can't change the answer.
  *
@@ -34,7 +34,7 @@ import java.util.UUID
 class PasswordRecoveryService(
     private val repository: PasswordRecoveryRepository,
     private val mailer: PasswordResetMailer,
-    // Runs a reset request's account work after the response. No default on purpose: running it
+    // Runs a reset request's account work off the request path. No default on purpose: running it
     // inline would make a member's request measurably slower than a stranger's again.
     private val launchResetWork: (suspend () -> Unit) -> Unit,
     private val passwordHasher: PasswordHasher = PasswordHasher(),

@@ -227,10 +227,15 @@ class PasswordRecoveryIntegrationTest {
             signUp()
 
             // Before, a member whose email failed got PASSWORD_RESET_UNAVAILABLE while a stranger
-            // got "sent": an oracle. Now the request has answered before the send is tried.
-            recovery(resetMailer = FailingMailer).requestReset("reset@example.com", null)
-            recovery(resetMailer = FailingMailer).requestReset("nobody@example.com", null)
+            // got "sent": an oracle. Now the request has answered before the send is tried, and the
+            // failure stays in the background work (logged, never thrown).
+            val failing = FailingMailer()
+            recovery(resetMailer = failing).requestReset("reset@example.com", null)
+            recovery(resetMailer = failing).requestReset("nobody@example.com", null)
+            assertEquals(0, failing.attempts)
+
             runResetWork()
+            assertEquals(1, failing.attempts, "only the member's send is tried")
         }
 
     @Test
@@ -308,13 +313,17 @@ class PasswordRecoveryIntegrationTest {
         }
     }
 
-    private object FailingMailer : PasswordResetMailer {
+    private class FailingMailer : PasswordResetMailer {
+        var attempts = 0
         override val isConfigured = true
 
         override suspend fun sendResetCode(
             email: String,
             code: String,
-        ) = throw IllegalStateException("provider down")
+        ) {
+            attempts += 1
+            throw IllegalStateException("provider down")
+        }
     }
 
     /** Records which repository calls a flow makes, in order, and passes them through. */
