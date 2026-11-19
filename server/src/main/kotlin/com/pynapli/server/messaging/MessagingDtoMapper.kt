@@ -5,8 +5,8 @@ import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
 import com.pynapli.shared.network.dto.ConversationParticipantPartnerDto
-import com.pynapli.shared.network.dto.ConversationPartnerOffersDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.ConversationPartnerOffersDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import java.nio.charset.StandardCharsets

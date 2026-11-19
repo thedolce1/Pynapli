@@ -197,6 +197,24 @@ class PartnerInviteConsentIntegrationTest {
         }
 
     @Test
+    fun aRetryAfterAnotherInviteWasCreatedLaterStillNeverApprovesIt() =
+        runBlocking {
+            val service = service()
+            val conversationId = service.conversation()
+            service.inviteLinkedPartnerToConversation(alex, conversationId)
+            service.acceptPartnerInvite(sam, conversationId)
+            service.acceptPartnerInvite(jo, conversationId) // Jo joins; say the response is lost.
+            service.inviteLinkedPartnerToConversation(sam, conversationId) // Riley is invited afterwards.
+
+            service.acceptPartnerInvite(jo, conversationId) // The retry, with no invite id.
+
+            assertEquals(PartnerChatInviteStatus.PENDING, service.inviteFor(riley, conversationId)?.thirdPartyStatus)
+            // Jo approves Riley only by naming the invite.
+            service.acceptPartnerInvite(jo, conversationId, service.inviteIdFor(riley, conversationId))
+            assertEquals(PartnerChatInviteStatus.ACCEPTED, service.inviteFor(riley, conversationId)?.thirdPartyStatus)
+        }
+
+    @Test
     fun anIdLessApprovalWithTwoApprovableInvitesIsRefused() =
         runBlocking {
             val service = service()
@@ -204,17 +222,17 @@ class PartnerInviteConsentIntegrationTest {
             service.inviteLinkedPartnerToConversation(alex, conversationId)
             service.acceptPartnerInvite(sam, conversationId)
             service.acceptPartnerInvite(jo, conversationId) // Jo is in.
-            // Alex and Jo later split and Alex links with Kim; Alex invites Kim and Sam invites Riley.
+            // Alex and Jo later split and Jo links with Kim; Jo invites Kim and Sam invites Riley.
             sql("UPDATE user_profile_links SET status = 'unlinked', unlinked_at = now() WHERE user_id IN ('$alex', '$jo')")
-            link(alex, kim)
-            service.inviteLinkedPartnerToConversation(alex, conversationId)
+            link(jo, kim)
+            service.inviteLinkedPartnerToConversation(jo, conversationId)
             service.inviteLinkedPartnerToConversation(sam, conversationId)
 
-            // Jo could approve either: without an id nothing is chosen for them.
-            assertEquals("PARTNER_INVITE_NOT_FOUND", refusalCode { service.acceptPartnerInvite(jo, conversationId) })
-            assertEquals("PARTNER_INVITE_NOT_FOUND", refusalCode { service.declinePartnerInvite(jo, conversationId) })
+            // Alex could approve either: without an id nothing is chosen for them.
+            assertEquals("PARTNER_INVITE_NOT_FOUND", refusalCode { service.acceptPartnerInvite(alex, conversationId) })
+            assertEquals("PARTNER_INVITE_NOT_FOUND", refusalCode { service.declinePartnerInvite(alex, conversationId) })
             // Naming one works and touches only that one.
-            service.acceptPartnerInvite(jo, conversationId, service.inviteIdFor(kim, conversationId))
+            service.acceptPartnerInvite(alex, conversationId, service.inviteIdFor(kim, conversationId))
             assertEquals(PartnerChatInviteStatus.ACCEPTED, service.inviteFor(kim, conversationId)?.thirdPartyStatus)
             assertEquals(PartnerChatInviteStatus.PENDING, service.inviteFor(riley, conversationId)?.thirdPartyStatus)
         }

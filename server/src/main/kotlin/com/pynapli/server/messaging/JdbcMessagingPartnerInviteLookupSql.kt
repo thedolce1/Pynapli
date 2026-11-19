@@ -178,10 +178,10 @@ internal sealed interface PartnerInviteAction {
  *  - Anyone else approves or declines, as the third party, the invite named by [inviteId] (of this
  *    conversation). The approver must be an active participant who is not that invite's inviter
  *    ([partnerInviteUserRole]); invited partners are not active, so neither approves the other.
- *  - Without an id (older clients): a repeat by someone whose own invite here was resolved after an
- *    invite still open was created is a retry of their own answer (they could not have been shown that
- *    other invite while invited), never an approval; otherwise only when exactly one open invite awaits
- *    this caller's approval is it the one. Anything else is refused.
+ *  - Without an id (older clients): from someone who joined this thread through an accepted invite it
+ *    is a retry of their own answer (a lost response), never an approval, so such a person approves
+ *    only by naming the invite; from anyone else it acts only when exactly one open invite awaits this
+ *    caller's approval. Anything else is refused.
  * Locks every open invite row of the thread in one order (call inside the accept/decline transaction).
  */
 internal fun Connection.resolvePartnerInviteAction(
@@ -203,7 +203,7 @@ internal fun Connection.resolvePartnerInviteAction(
             .Respond(named, PartnerInviteUserRole.ThirdPartyApprover)
             .takeIf { partnerInviteUserRole(userId, named) == PartnerInviteUserRole.ThirdPartyApprover }
     }
-    if (ownInviteResolvedSince(userId, conversationId, open.minOfOrNull { it.createdAt })) {
+    if (joinedByAcceptedInvite(userId, conversationId)) {
         return PartnerInviteAction.OwnInviteAlreadyResolved
     }
     return open
@@ -214,32 +214,31 @@ internal fun Connection.resolvePartnerInviteAction(
         ?.let { PartnerInviteAction.Respond(it, PartnerInviteUserRole.ThirdPartyApprover) }
 }
 
-private fun Connection.ownInviteResolvedSince(
+private fun Connection.joinedByAcceptedInvite(
     userId: UUID,
     conversationId: UUID,
-    since: java.time.Instant?,
-): Boolean {
-    since ?: return false
-    return prepareStatement(
+): Boolean =
+    prepareStatement(
         """
         SELECT EXISTS (
             SELECT 1 FROM partner_chat_invites
             WHERE thread_id = ?
               AND invited_partner_user_id = ?
               AND resolved_at IS NOT NULL
-              AND resolved_at >= ?
+              AND partner_status = ?
+              AND third_party_status = ?
         )
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, conversationId)
         statement.setObject(2, userId)
-        statement.setTimestamp(3, java.sql.Timestamp.from(since))
+        statement.setString(3, PARTNER_INVITE_ACCEPTED)
+        statement.setString(4, PARTNER_INVITE_ACCEPTED)
         statement.executeQuery().use { rs ->
             rs.next()
             rs.getBoolean(1)
         }
     }
-}
 
 /**
  * Blocks between [inviteeUserId] and anyone else present in the thread (active participants and the
