@@ -4,6 +4,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import kotlinx.coroutines.runBlocking
 import java.time.Duration
 import java.util.UUID
@@ -25,7 +26,7 @@ class DataRetentionIntegrationTest {
         PynapliTestDatabase.reset()
     }
 
-    private suspend fun user(email: String) = UUID.fromString(auth.signupEmail(email, "retention-pass-1", "1990-01-01", true, true, true, null, "android", "1.0").user.userId)
+    private suspend fun user(email: String) = UUID.fromString(auth.signUpVerified(email, "retention-pass-1", platform = "android", appVersion = "1.0").user.userId)
 
     private fun execute(
         sql: String,

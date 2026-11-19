@@ -207,6 +207,9 @@ internal val REQUEST_LIMIT_RULES =
         // so one address can't spray guesses across many accounts.
         RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/email/login"), RateLimitedAction.AUTH_LOGIN_IP, LimitKey.CLIENT_IP),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/email/signup"), RateLimitedAction.AUTH_SIGNUP_IP, LimitKey.CLIENT_IP),
+        // Resend shares the sign-up budget; code checks get their own.
+        RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/email/signup/resend"), RateLimitedAction.AUTH_SIGNUP_IP, LimitKey.CLIENT_IP),
+        RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/email/signup/verify"), RateLimitedAction.AUTH_SIGNUP_VERIFY_IP, LimitKey.CLIENT_IP),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/password/reset-request"), RateLimitedAction.AUTH_PASSWORD_RESET_IP, LimitKey.CLIENT_IP),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/account-appeal"), RateLimitedAction.ACCOUNT_APPEAL_IP, LimitKey.CLIENT_IP),
         // Signed in: per user.

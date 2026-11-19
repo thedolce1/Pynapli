@@ -4,6 +4,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.ReportCategory
 import com.pynapli.shared.network.dto.ReportTargetType
@@ -30,7 +31,7 @@ class ReportRiskDedupeIntegrationTest {
         PynapliTestDatabase.reset()
     }
 
-    private suspend fun user(email: String) = UUID.fromString(auth.signupEmail(email, "report-password-1", "1990-01-01", true, true, true, null, "android", "1.0").user.userId)
+    private suspend fun user(email: String) = UUID.fromString(auth.signUpVerified(email, "report-password-1", platform = "android", appVersion = "1.0").user.userId)
 
     private suspend fun report(
         reporter: UUID,

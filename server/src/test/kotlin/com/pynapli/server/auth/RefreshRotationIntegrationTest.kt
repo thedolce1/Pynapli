@@ -4,6 +4,7 @@ import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.moderation.revokeUserSessions
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import com.pynapli.shared.network.dto.AuthSessionDto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +51,7 @@ class RefreshRotationIntegrationTest {
 
     private fun authService(repository: AuthRepository = JdbcAuthRepository(dataSource)) = AuthService(repository, passwordHasher = PasswordHasher(iterations = 1_000), clock = clock)
 
-    private suspend fun AuthService.signUp(): AuthSessionDto = signupEmail("rotation@example.com", PASSWORD, "1990-01-01", true, true, true, deviceId = "web", platform = "web", appVersion = "1.0")
+    private suspend fun AuthService.signUp(): AuthSessionDto = signUpVerified("rotation@example.com", PASSWORD, deviceId = "web", platform = "web", appVersion = "1.0")
 
     @Test
     fun concurrentRefreshesWithTheSameTokenHaveExactlyOneWinner() =

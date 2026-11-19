@@ -2,6 +2,7 @@ package com.pynapli.server.auth
 
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
 import java.time.Instant
@@ -40,16 +41,12 @@ class PasswordRecoveryIntegrationTest {
     }
 
     private suspend fun signUp(email: String = "reset@example.com") =
-        authService.signupEmail(
+        authService.signUpVerified(
             email = email,
             password = OLD_PASSWORD,
-            birthdate = "1990-01-01",
-            confirmedAdult = true,
-            acceptedTerms = true,
-            acceptedPrivacy = true,
-            deviceId = null,
             platform = "test",
             appVersion = "1",
+            passwordHasher = hasher,
         )
 
     private suspend fun signIn(

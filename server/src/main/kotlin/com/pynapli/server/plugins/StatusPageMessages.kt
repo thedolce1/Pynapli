@@ -24,6 +24,8 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_GRID_MESSAGE_POLICY" -> "Choose who can message you from the options shown."
         "INVALID_RESET_CODE" -> "That code isn't right or has expired. Request a new one."
         "PASSWORD_RESET_UNAVAILABLE" -> "Password reset by email isn't available right now. Contact support@pynapli.com."
+        "INVALID_SIGNUP_CODE" -> "That code isn't right or has expired. Check the newest email, or send a new code."
+        "SIGNUP_UNAVAILABLE" -> "Creating an account by email isn't available right now. Contact support@pynapli.com."
         "WRONG_CURRENT_PASSWORD" -> "Your current password isn't right."
         "SESSION_NOT_FOUND" -> "That device is already signed out."
         "CANNOT_SIGN_OUT_CURRENT_SESSION" -> "Use Log out to sign out of this device."

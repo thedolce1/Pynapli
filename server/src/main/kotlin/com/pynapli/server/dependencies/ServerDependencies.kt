@@ -98,6 +98,8 @@ class ServerDependencies(
     val authService: AuthService,
     val passwordRecoveryService: PasswordRecoveryService? = null,
     val signedInDevicesService: SignedInDevicesService? = null,
+    val emailSignupService: com.pynapli.server.auth.EmailSignupService? = null,
+    val devSignupMailbox: com.pynapli.server.auth.LocalFileSignupMailer? = null,
     val profileService: ProfileService,
     val favoriteService: com.pynapli.server.favorites.FavoriteService? = null,
     val profileLinkService: ProfileLinkService,
@@ -215,6 +217,14 @@ class ServerDependencies(
             val redis = RedisDependencyProbe(redisCache)
             val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             val core = buildCoreDependencies(config, database, redisCache)
+            val emailSignup =
+                buildEmailSignupDependencies(
+                    config = config,
+                    database = database,
+                    authService = core.authService,
+                    rateLimitService = core.rateLimitService,
+                    backgroundScope = profileActivityScope,
+                )
             val media =
                 buildMediaDependencies(
                     config = config,
@@ -457,6 +467,8 @@ class ServerDependencies(
                 authService = core.authService,
                 passwordRecoveryService = core.passwordRecoveryService,
                 signedInDevicesService = core.signedInDevicesService,
+                emailSignupService = emailSignup.service,
+                devSignupMailbox = emailSignup.devMailbox,
                 profileService = profileService,
                 favoriteService = favoriteService,
                 profileLinkService = profileLinkService,

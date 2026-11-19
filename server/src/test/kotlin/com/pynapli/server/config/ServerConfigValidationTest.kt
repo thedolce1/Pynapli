@@ -45,6 +45,16 @@ class ServerConfigValidationTest {
     }
 
     @Test
+    fun productionLikeEnvironmentsRefuseTheDevSignupShortcuts() {
+        val staging = validStagingConfig().copy(devSignupShortcutsEnabled = true).startupValidationIssues().map { it.code }
+        val production = validStagingConfig(environment = "production").copy(devSignupShortcutsEnabled = true).startupValidationIssues().map { it.code }
+
+        assertEquals(listOf("DEV_SIGNUP_SHORTCUTS_FORBIDDEN"), staging)
+        assertEquals(listOf("DEV_SIGNUP_SHORTCUTS_FORBIDDEN"), production)
+        assertEquals(emptyList(), localConfig().copy(devSignupShortcutsEnabled = true).startupValidationIssues())
+    }
+
+    @Test
     fun incompleteCdnConfigFailsFastInAnyEnvironment() {
         val issueCodes =
             localConfig(mediaDeliveryProvider = "cdn")

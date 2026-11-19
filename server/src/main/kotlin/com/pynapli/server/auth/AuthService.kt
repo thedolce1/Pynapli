@@ -14,7 +14,6 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import java.sql.SQLException
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
@@ -64,50 +63,18 @@ class AuthService(
         }
     }
 
-    suspend fun signupEmail(
-        email: String,
-        password: String,
-        birthdate: String?,
-        confirmedAdult: Boolean,
-        acceptedTerms: Boolean,
-        acceptedPrivacy: Boolean,
+    /**
+     * The first session of an account email sign-up just created (EmailSignupService, after the
+     * emailed code checked out). Same tail sign-up has always had: the account-farm signal
+     * (TRUST_AND_SAFETY_SPEC; signal-only, never blocks), the session, the SIGNUP metric.
+     */
+    internal suspend fun startFirstSession(
+        user: UserRecord,
         deviceId: String?,
         platform: String?,
         appVersion: String?,
     ): AuthSessionDto {
-        rateLimitGuard.enforce(RateLimitedAction.AUTH_SIGNUP, email, deviceId)
-        validator.validateEmailPassword(email, password)
-        val ageGate =
-            validator.validateSignupAgeGate(
-                birthdate = birthdate,
-                confirmedAdult = confirmedAdult,
-                acceptedTerms = acceptedTerms,
-                acceptedPrivacy = acceptedPrivacy,
-            )
-        val user =
-            try {
-                repository.createEmailUser(
-                    userId = UUID.randomUUID(),
-                    identityId = UUID.randomUUID(),
-                    emailHash = Sha256.hash(normalizeEmail(email)),
-                    passwordHash = passwordHasher.hash(password),
-                    birthdate = ageGate.birthdate,
-                    displayAge = ageGate.displayAge,
-                    adultConfirmedAt = ageGate.acceptedAt,
-                    termsAcceptedAt = ageGate.acceptedAt,
-                    termsVersion = AUTH_TERMS_VERSION,
-                    privacyAcceptedAt = ageGate.acceptedAt,
-                    privacyVersion = AUTH_PRIVACY_VERSION,
-                )
-            } catch (error: SQLException) {
-                if (error.sqlState == "23505") throw AuthException("EMAIL_ALREADY_EXISTS")
-                throw error
-            }
-
-        // Account-farm signal (TRUST_AND_SAFETY_SPEC): record the device->account link and raise a
-        // risk signal if this device is behind too many accounts. Signal-only — never blocks signup.
         deviceFarmGuard.recordSignup(user.id, deviceId)
-
         val session = sessionManager.createSession(user, deviceId, platform, appVersion)
         productMetrics?.record(ProductMetrics.SIGNUP)
         return session

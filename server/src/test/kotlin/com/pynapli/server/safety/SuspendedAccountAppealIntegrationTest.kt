@@ -7,6 +7,7 @@ import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -45,7 +46,7 @@ class SuspendedAccountAppealIntegrationTest {
         }
     }
 
-    private suspend fun account(email: String = "suspended@example.com") = auth.signupEmail(email, PASSWORD, "1990-01-01", true, true, true, null, "android", "1.0").user.userId
+    private suspend fun account(email: String = "suspended@example.com") = auth.signUpVerified(email, PASSWORD, platform = "android", appVersion = "1.0").user.userId
 
     private fun body(
         email: String,

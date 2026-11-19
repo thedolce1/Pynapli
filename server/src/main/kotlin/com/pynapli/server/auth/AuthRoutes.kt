@@ -2,7 +2,6 @@ package com.pynapli.server.auth
 
 import com.pynapli.server.safety.clientIp
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
-import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.PasswordChangeDto
 import com.pynapli.shared.network.dto.PasswordChangedDto
@@ -30,13 +29,7 @@ fun Application.configureAuthRoutes(
 ) {
     routing {
         route("/v1/auth") {
-            post("/email/signup") {
-                call.respond(
-                    authService.signupEmail(
-                        request = call.receive(),
-                    ),
-                )
-            }
+            // Email sign-up lives in EmailSignupRoutes (verified, membership-private).
 
             post("/email/login") {
                 call.respond(
@@ -104,19 +97,6 @@ fun Application.configureAuthRoutes(
     }
 }
 
-private suspend fun AuthService.signupEmail(request: EmailSignupRequestDto) =
-    signupEmail(
-        email = request.email,
-        password = request.password,
-        birthdate = request.birthdate,
-        confirmedAdult = request.confirmedAdult,
-        acceptedTerms = request.acceptedTerms,
-        acceptedPrivacy = request.acceptedPrivacy,
-        deviceId = request.deviceId,
-        platform = request.platform,
-        appVersion = request.appVersion,
-    )
-
 private suspend fun AuthService.loginEmail(
     request: EmailLoginRequestDto,
     clientIp: String,
@@ -135,7 +115,7 @@ fun authStatusFor(code: String): HttpStatusCode =
         "INVALID_CREDENTIALS", "INVALID_REFRESH_TOKEN", "UNAUTHENTICATED" -> HttpStatusCode.Unauthorized
         "ACCOUNT_NOT_ACTIVE" -> HttpStatusCode.Forbidden
         "ACCOUNT_NOT_RESTRICTED" -> HttpStatusCode.Conflict
-        "PASSWORD_RESET_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
+        "PASSWORD_RESET_UNAVAILABLE", "SIGNUP_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
         "WRONG_CURRENT_PASSWORD" -> HttpStatusCode.Forbidden
         "SESSION_NOT_FOUND" -> HttpStatusCode.NotFound
         "CANNOT_SIGN_OUT_CURRENT_SESSION" -> HttpStatusCode.Conflict
@@ -148,6 +128,7 @@ fun authStatusFor(code: String): HttpStatusCode =
         "ADULT_CONFIRMATION_REQUIRED",
         "TERMS_ACCEPTANCE_REQUIRED",
         "PRIVACY_ACCEPTANCE_REQUIRED",
+        "INVALID_SIGNUP_CODE",
         -> HttpStatusCode.BadRequest
         else -> HttpStatusCode.BadRequest
     }

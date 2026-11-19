@@ -118,7 +118,15 @@ class RateLimitService(
 
         private val POLICIES =
             listOf(
+                // Sign-up (EmailSignupService): per address + client IP, and per device.
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_RESEND, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
+                // Guessing a 6-digit sign-up code: each code also dies after 5 wrong tries.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_VERIFY, limit = 15, windowSeconds = ONE_HOUR_SECONDS),
+                // Silent per-address caps on sign-up emails (code or "already registered" notice). The
+                // response never changes when they trip; the email just isn't sent.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_EMAIL_HOURLY, limit = 5, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_EMAIL_DAILY, limit = 15, windowSeconds = ONE_DAY_SECONDS),
                 // Failed sign-ins only (AuthRateLimitGuard). Per account + client IP: tight, so guessing
                 // from one address stops fast, while someone elsewhere can't lock the real user out.
                 RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN_FAILURE, limit = 10, windowSeconds = ONE_HOUR_SECONDS),
@@ -156,6 +164,7 @@ class RateLimitService(
                 // a shared NAT (a venue's Wi-Fi), well below what scripted guessing needs.
                 RateLimitPolicy(action = RateLimitedAction.AUTH_LOGIN_IP, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_VERIFY_IP, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.ACCOUNT_APPEAL_IP, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
                 // Per user, far above real use: a fast chatter sends a few messages a minute.
@@ -197,6 +206,10 @@ class RateLimitService(
 
 object RateLimitedAction {
     const val AUTH_SIGNUP = "auth_signup"
+    const val AUTH_SIGNUP_RESEND = "auth_signup_resend"
+    const val AUTH_SIGNUP_VERIFY = "auth_signup_verify"
+    const val AUTH_SIGNUP_EMAIL_HOURLY = "auth_signup_email_hourly"
+    const val AUTH_SIGNUP_EMAIL_DAILY = "auth_signup_email_daily"
     const val AUTH_LOGIN_FAILURE = "auth_login_failure"
     const val AUTH_LOGIN_FAILURE_ACCOUNT = "auth_login_failure_account"
     const val AUTH_REFRESH = "auth_refresh"
@@ -221,6 +234,7 @@ object RateLimitedAction {
     const val PROFILE_UPDATE = "profile_update"
     const val AUTH_LOGIN_IP = "auth_login_ip"
     const val AUTH_SIGNUP_IP = "auth_signup_ip"
+    const val AUTH_SIGNUP_VERIFY_IP = "auth_signup_verify_ip"
     const val AUTH_PASSWORD_RESET_IP = "auth_password_reset_ip"
     const val ACCOUNT_APPEAL_IP = "account_appeal_ip"
     const val MESSAGE_SEND = "message_send"

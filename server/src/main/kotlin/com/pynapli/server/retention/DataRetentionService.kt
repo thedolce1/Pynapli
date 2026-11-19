@@ -27,6 +27,7 @@ import javax.sql.DataSource
  * - **Dead sessions** revoked or past refresh expiry for [deadSessionGrace] (kept that long so the
  *   signed-in-devices history and abuse investigations still see them).
  * - **Password reset codes** expired or used more than a day ago.
+ * - **Pending email sign-ups** past their 24 hours (V117; sign-up writes also sweep a batch).
  * - **Play notification payloads** (`raw_payload`) older than [rtdnPayloadGrace]: the processed
  *   result is kept, the raw purchase JSON is not needed after that.
  *
@@ -46,6 +47,7 @@ class DataRetentionService(
                 deadSessions = repeatBatches { it.deleteBatch(DELETE_DEAD_SESSIONS, deadSessionGrace.seconds) },
                 passwordResetCodes = repeatBatches { it.deleteBatch(DELETE_OLD_RESET_CODES, Duration.ofDays(1).seconds) },
                 rtdnPayloads = repeatBatches { it.deleteBatch(CLEAR_OLD_RTDN_PAYLOADS, rtdnPayloadGrace.seconds) },
+                pendingSignups = repeatBatches { it.deleteBatch(DELETE_EXPIRED_PENDING_SIGNUPS, 0L) },
             )
         }
 
@@ -169,6 +171,16 @@ class DataRetentionService(
             )
             """.trimIndent()
 
+        val DELETE_EXPIRED_PENDING_SIGNUPS =
+            """
+            DELETE FROM pending_email_signups
+            WHERE id IN (
+                SELECT id FROM pending_email_signups
+                WHERE expires_at < now() - make_interval(secs => ?)
+                LIMIT ?
+            )
+            """.trimIndent()
+
         val CLEAR_OLD_RTDN_PAYLOADS =
             """
             UPDATE play_store_rtdn_events
@@ -189,8 +201,9 @@ data class DataRetentionSummary(
     val deadSessions: Int,
     val passwordResetCodes: Int,
     val rtdnPayloads: Int,
+    val pendingSignups: Int = 0,
 ) {
-    val total: Int get() = expiredMessages + deadSessions + passwordResetCodes + rtdnPayloads
+    val total: Int get() = expiredMessages + deadSessions + passwordResetCodes + rtdnPayloads + pendingSignups
 }
 
 class DataRetentionWorker(
@@ -213,11 +226,12 @@ class DataRetentionWorker(
                             if (summary.total > 0) {
                                 val resetCodes = summary.passwordResetCodes // a count, not a secret
                                 logger.info(
-                                    "Data retention removed expiredMessages={} deadSessions={} resetCodes={} rtdnPayloads={}",
+                                    "Data retention removed expiredMessages={} deadSessions={} resetCodes={} rtdnPayloads={} pendingSignups={}",
                                     summary.expiredMessages,
                                     summary.deadSessions,
                                     resetCodes,
                                     summary.rtdnPayloads,
+                                    summary.pendingSignups,
                                 )
                             }
                         }
