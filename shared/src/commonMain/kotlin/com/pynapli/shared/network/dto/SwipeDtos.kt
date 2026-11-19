@@ -166,22 +166,3 @@ data class CreateSavedSwipeFilterRequestDto(
     val name: String,
     val payload: SwipeDeckRequestDto,
 )
-
-// SWIPE_IMPLEMENTATION_SPEC L293-313: daily curated set. The session is stable
-// within a 24h window so the user sees the same picks until expiresAt; the
-// server generates a new set on the next call after that.
-@Serializable
-data class TopPickCardDto(
-    val position: Int,
-    val card: SwipeCardDto,
-)
-
-@Serializable
-data class TopPicksResponseDto(
-    val sessionId: String,
-    val deckSessionId: String = "",
-    val generatedAt: String,
-    val expiresAt: String,
-    val picks: List<TopPickCardDto>,
-    val tierLimit: Int,
-)

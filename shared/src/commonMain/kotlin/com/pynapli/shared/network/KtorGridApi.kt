@@ -11,7 +11,6 @@ import com.pynapli.shared.network.dto.SavedGridFiltersListDto
 import com.pynapli.shared.network.dto.SavedSwipeFilterDto
 import com.pynapli.shared.network.dto.SavedSwipeFiltersListDto
 import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
-import com.pynapli.shared.network.dto.TopPicksResponseDto
 import com.pynapli.shared.network.dto.TravelLocationDto
 import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
 import io.ktor.client.request.bearerAuth
@@ -68,8 +67,6 @@ internal class KtorGridApi(
                 response.toAppResult<Unit>(support.json)
             }
         }
-
-    override suspend fun getTopPicks(): AppResult<TopPicksResponseDto> = support.authGet("/v1/swipe/picks")
 
     override suspend fun getTravelLocation(): AppResult<TravelLocationDto?> =
         support.authenticated { token ->

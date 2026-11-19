@@ -12,13 +12,10 @@ data class SwipeFilterUi(
 
 enum class SwipeFilterType {
     ForYou,
-    TopPicks,
     Linked,
     Age,
 }
 
-// Top Picks is frozen: its chip is not offered, so no one can switch the deck to it. The picks mode,
-// its server route and tables stay in place until the feature is either finished or removed.
 internal val defaultSwipeFilters =
     listOf(
         SwipeFilterUi(SwipeFilterType.ForYou, "For You", active = true),
@@ -33,11 +30,7 @@ internal fun List<SwipeFilterUi>.withPaidLocks(advancedFiltersAllowed: Boolean):
         filter.copy(
             locked =
                 when (filter.type) {
-                    // Top Picks is free (all tiers get at least one daily pick); the
-                    // server enforces the per-tier pick count, not the chip.
-                    SwipeFilterType.ForYou,
-                    SwipeFilterType.TopPicks,
-                    -> false
+                    SwipeFilterType.ForYou -> false
                     SwipeFilterType.Linked,
                     SwipeFilterType.Age,
                     -> !advancedFiltersAllowed
@@ -47,11 +40,7 @@ internal fun List<SwipeFilterUi>.withPaidLocks(advancedFiltersAllowed: Boolean):
 
 internal fun SwipeFilterType.toPresetFilters(): SwipeFilters =
     when (this) {
-        // Top Picks is a deck SOURCE switch, not a filter set; the server curates the
-        // picks, so the request filters are reset to defaults (unused in picks mode).
-        SwipeFilterType.ForYou,
-        SwipeFilterType.TopPicks,
-        -> SwipeFilters.forYou
+        SwipeFilterType.ForYou -> SwipeFilters.forYou
         SwipeFilterType.Linked -> SwipeFilters.linkedOnly
         SwipeFilterType.Age -> SwipeFilters.ageRange
     }

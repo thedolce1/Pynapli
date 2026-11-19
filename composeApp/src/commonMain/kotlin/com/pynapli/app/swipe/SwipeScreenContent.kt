@@ -161,16 +161,6 @@ internal fun SwipeScreenContent(
                     onOpenStore = onOpenStore,
                 )
             }
-            if (state.topPicksMode) {
-                // Make the curated mode legible on the deck itself (the chip alone is easy to miss)
-                // and set the expectation that the set is finite + refreshes daily.
-                Text(
-                    text = "Today's Top Picks · refreshes daily",
-                    color = PynapliColors.Accent,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 6.dp, start = 2.dp),
-                )
-            }
             Spacer(Modifier.height(10.dp))
 
             SwipeDeckArea(
@@ -179,7 +169,6 @@ internal fun SwipeScreenContent(
                 distanceUnit = distanceUnit,
                 onRetryDeck = onRetryDeck,
                 onOpenFilters = onOpenFilters,
-                onBackToForYou = { onFilterSelected(SwipeFilterType.ForYou) },
                 onOpenTravel = onOpenTravel,
                 onPineappleGesture = { onPineappleLike() },
                 exitMemory = exitMemory,
@@ -274,7 +263,6 @@ private fun SwipeDeckArea(
     distanceUnit: String,
     onRetryDeck: () -> Unit,
     onOpenFilters: () -> Unit,
-    onBackToForYou: () -> Unit,
     onOpenTravel: () -> Unit,
     onPineappleGesture: (SwipeCardDto) -> Unit,
     exitMemory: SwipeExitMemory,
@@ -307,8 +295,6 @@ private fun SwipeDeckArea(
                     filtersActive = state.swipeFilters.isAnyActive,
                     onRefresh = onRetryDeck,
                     onOpenFilters = onOpenFilters,
-                    topPicksMode = state.topPicksMode,
-                    onBackToForYou = onBackToForYou,
                     onOpenTravel = onOpenTravel,
                 )
             }

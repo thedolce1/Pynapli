@@ -21,16 +21,6 @@ class ApiSwipeRepository(
             )
         }
 
-    override suspend fun loadTopPicks(): AppResult<SwipeDeckUi> =
-        apiClient.getTopPicks().map { value ->
-            SwipeDeckUi(
-                deckSessionId = value.deckSessionId.takeIf { it.isNotBlank() },
-                cards = value.picks.map { it.card },
-                nextCursor = null,
-                advancedFiltersApplied = false,
-            )
-        }
-
     override suspend fun submitAction(action: QueuedSwipeAction): AppResult<MatchDto?> =
         apiClient
             .submitSwipeAction(

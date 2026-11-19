@@ -31,7 +31,6 @@ class SwipeStateHolder(
         val effectiveOwnerUserId = ownerUserId.normalizedOwnerUserId() ?: restoredQueueOwnerUserId
         restorePendingActions(effectiveOwnerUserId)
         val current = _state.value
-        val topPicksMode = current.topPicksMode
         val swipeFilters = current.swipeFilters
         _state.update {
             it.copy(
@@ -42,12 +41,7 @@ class SwipeStateHolder(
                 errorMessage = null,
             )
         }
-        val deckResult =
-            if (topPicksMode) {
-                repository.loadTopPicks()
-            } else {
-                repository.loadDeck(swipeFilters.toSwipeDeckRequest())
-            }
+        val deckResult = repository.loadDeck(swipeFilters.toSwipeDeckRequest())
         when (val result = deckResult) {
             is AppResult.Success ->
                 _state.update {
@@ -66,7 +60,6 @@ class SwipeStateHolder(
                     it.copy(
                         isLoading = false,
                         nextCursor = null,
-                        topPicksMode = if (entitlementRequired) false else it.topPicksMode,
                         filters =
                             if (entitlementRequired) {
                                 it.filters.withPaidLocks(advancedFiltersAllowed = false).withActiveFilter(SwipeFilterType.ForYou)
@@ -147,7 +140,6 @@ class SwipeStateHolder(
             it.copy(
                 filters = it.filters.withActiveFilter(type),
                 swipeFilters = type.toPresetFilters(),
-                topPicksMode = type == SwipeFilterType.TopPicks,
                 paywallMessage = null,
                 errorCode = null,
                 errorMessage = null,
@@ -166,7 +158,6 @@ class SwipeStateHolder(
         _state.update {
             it.copy(
                 swipeFilters = filters,
-                topPicksMode = false,
                 filters = it.filters.withActiveFilter(SwipeFilterType.ForYou),
                 paywallMessage = null,
                 errorCode = null,

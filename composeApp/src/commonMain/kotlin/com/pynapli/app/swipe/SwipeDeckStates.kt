@@ -36,48 +36,36 @@ import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.CloudOff
 import com.pynapli.app.design.icons.filled.Place
 import com.pynapli.app.design.icons.filled.Refresh
-import com.pynapli.app.design.icons.filled.Star
 import com.pynapli.app.design.icons.filled.Style
 import com.pynapli.app.design.icons.filled.Tune
 
 /**
  * The end of the deck is a destination, not a dead end: it says why it is empty and offers the next
- * move. Top Picks is a finite daily set, so it routes back to the main deck (SWIPE_IMPLEMENTATION_SPEC:
- * picks refresh every 24h). Otherwise the server has already run its relaxation pass (FILTERS_SPEC
- * L487-489), so the useful moves are widening filters or swiping somewhere else with Travel mode.
+ * move. The server has already run its relaxation pass (FILTERS_SPEC L487-489), so the useful
+ * moves are widening filters or swiping somewhere else with Travel mode.
  */
 @Composable
 internal fun EmptyDeck(
     filtersActive: Boolean,
     onRefresh: () -> Unit,
     onOpenFilters: () -> Unit,
-    topPicksMode: Boolean = false,
-    onBackToForYou: () -> Unit = {},
     onOpenTravel: () -> Unit = {},
 ) {
     SwipeDeckStatus(
-        icon = if (topPicksMode) Icons.Filled.Star else Icons.Filled.Style,
-        iconTint = if (topPicksMode) PynapliColors.Accent else MaterialTheme.colorScheme.primary,
+        icon = Icons.Filled.Style,
+        iconTint = MaterialTheme.colorScheme.primary,
         title =
             when {
-                topPicksMode -> "You've seen today's Top Picks"
                 filtersActive -> "No one else matches your filters"
                 else -> "You've seen everyone nearby"
             },
         message =
             when {
-                topPicksMode -> "Fresh picks arrive daily. Keep swiping the main deck meanwhile."
                 filtersActive -> "Widen distance or drop a dealbreaker to see more people, or swipe another city with Travel mode."
                 else -> "New people join every day. Widen your search, or swipe another city with Travel mode."
             },
         modifier = Modifier.testTag(SwipeTestTags.EMPTY_DECK),
     ) {
-        if (topPicksMode) {
-            Button(onClick = onBackToForYou, modifier = Modifier.fillMaxWidth().handCursor()) {
-                Text("Back to For You")
-            }
-            return@SwipeDeckStatus
-        }
         Button(
             onClick = onOpenFilters,
             modifier =
