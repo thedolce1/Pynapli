@@ -129,18 +129,18 @@ internal fun StoreTierRow(
             }
         }
 
+        // A plan that covers a linked partner says so first (the Store's lead benefit).
+        if (tier.linkedPartnerIncluded) {
+            StoreFeatureRow(label = TIER_PARTNER_LINE)
+        }
+
         tier.features.forEach { feature ->
             StoreFeatureRow(label = feature)
         }
 
-        StoreFeatureRow(
-            label =
-                if (tier.linkedPartnerIncluded) {
-                    "Linked partner included"
-                } else {
-                    "Single account entitlement"
-                },
-        )
+        if (!tier.linkedPartnerIncluded) {
+            StoreFeatureRow(label = "Single account entitlement")
+        }
     }
 }
 

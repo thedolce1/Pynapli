@@ -7,7 +7,9 @@ import kotlin.test.assertTrue
 class SubscriptionCatalogTest {
     // Clients render these from the tier's linkedPartnerIncluded flag, so a feature line with the
     // same words shows twice on the Store's plan card.
-    private val flagRows = setOf("Linked partner included", "Single account entitlement")
+    // "Covers your linked partner too" is the in-app wording since 2026-11-18; the older label stays
+    // listed so neither can creep back in as a feature line.
+    private val flagRows = setOf("Covers your linked partner too", "Linked partner included", "Single account entitlement")
 
     @Test
     fun featureListsNeverRepeatWhatTheFlagsSay() {
