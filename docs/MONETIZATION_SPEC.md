@@ -350,10 +350,6 @@ Shipped 2026-11-17: Intro Notes are no longer a product. A Pineapple Like option
   a purchase made under it is still verified and credited as 3 Pineapple Likes. **Founder: deactivate
   `pynapli_intro_notes_3` in Play Console.**
 
-### Extra Picks
-
-Top Picks is frozen (2026-11-17): don't sell Picks packs or list daily Picks as a Select perk.
-
 ### Event Spotlight
 
 Purpose:

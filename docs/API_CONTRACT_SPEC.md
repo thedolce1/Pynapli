@@ -91,7 +91,6 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 - Rewind is entitlement-gated, soft-rewinds the latest eligible Like/Pass, and returns a fresh deck
   session and card token for the restored card; `rewound=false` when nothing can be safely restored.
 - `GET /v1/matches` is being removed (no client caller); matches reach users through conversations.
-  `GET /v1/swipe/picks` (Top Picks) is frozen.
 
 ### Activity
 
