@@ -176,7 +176,12 @@ class VerifiedCouplesFilterIntegrationTest {
 
             // One verified match is below the low-water mark, so the unlocked filter relaxes.
             val unlocked = SwipeDeckRequestDto(radiusMeters = 25_000, limit = 30, verifiedOnly = true)
-            val relaxed = service.queryDeck(viewer, unlocked).items.map { it.userId }.toSet()
+            val relaxed =
+                service
+                    .queryDeck(viewer, unlocked)
+                    .items
+                    .map { it.userId }
+                    .toSet()
             assertEquals(setOf(verified, unverified).map { it.toString() }.toSet(), relaxed)
 
             // Locked (with distance), it holds.
