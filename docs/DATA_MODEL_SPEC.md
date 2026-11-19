@@ -27,7 +27,7 @@ every change must keep.
 
 | Domain | Tables |
 | --- | --- |
-| Accounts and auth | `users`, `auth_identities`, `user_sessions`, `password_reset_codes`, `account_device_links`, `account_data_export_requests`, `account_deletion_events` |
+| Accounts and auth | `users`, `auth_identities`, `user_sessions`, `password_reset_codes`, `pending_email_signups`, `account_device_links`, `account_data_export_requests`, `account_deletion_events` |
 | Profile and discovery | `profiles` (incl. structured lifestyle/logistics/intent tags), `discovery_settings`, `saved_grid_filters`, `saved_swipe_filters` |
 | Location and travel | `user_locations`, `travel_locations`, `travel_trips`, `travel_places`, `travel_places_dataset` |
 | Partner linking | `user_profile_links`, `linked_partner_benefits` (no writer; the partner benefit is computed live from links + subscriptions) |
@@ -55,6 +55,15 @@ every change must keep.
   sealed with AES-256-GCM under a key derived from that consumed token (never stored), so the blob is
   useless without the old token; revocation clears it. Password-reset codes are stored only as
   `SHA-256(userId:code)`.
+- **Email sign-up is verified first** (V117, [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#membership-privacy)).
+  `pending_email_signups` holds a started sign-up for an address with no account: one row per
+  `email_hash` (unique; a new sign-up replaces it), the password hash, birthdate, acceptance time and
+  Terms/Privacy versions, `SHA-256` of the sign-up token, `SHA-256(id:code)`, the code's expiry
+  (30 min) and failed attempts, and `expires_at` (24 h). No plaintext address, no location, no
+  profile, no device labels. Verify deletes the row and creates the account in one transaction;
+  expired rows go on the next sign-up write and in the data-retention job. A pending row can't sign
+  in and belongs to no account (out of export and deletion). `users.email_verified_at` is set for
+  accounts created through it; older accounts stay NULL and nothing is gated on it yet.
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
   the integrity of retained safety/legal records. In the same transaction, GDPR/CCPA erasure nulls
   identity hashes (`email_hash`, `phone_hash`, `firebase_uid`), clears `auth_identities` credentials

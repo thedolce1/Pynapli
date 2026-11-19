@@ -43,6 +43,7 @@ the only real project is `pynapli`. Recommended: use `pynapli` as staging now, a
 | Branch protection on `main` | Not applied | command in [DEVOPS_INFRA_SETUP_SPEC.md](DEVOPS_INFRA_SETUP_SPEC.md#branch-protection) |
 | Billing / cost alerts | Not set up | required before any prod resource |
 | Email aliases | Not created | founder ops |
+| Transactional email provider | **Not chosen. Required:** without one nobody can sign up (or reset a password) outside local development; both answer "unavailable" | below, A6 |
 
 Verify live state: `GET https://<cloud-run-url>/health` and `/health/deep` (both `200`).
 
@@ -55,6 +56,7 @@ Verify live state: `GET https://<cloud-run-url>/health` and `/health/deep` (both
 | A3 | Deploy the API to Cloud Run, ideally at **`api.pynapli.com`** (the PWA default) | infra README step 8, or the **Deploy Staging API** workflow |
 | A4 | Budget alerts. **Do not skip.** | infra README step 9 |
 | A5 | Verify `/health` and `/health/deep` on the live URL | |
+| A6 | **Choose and wire a transactional email provider.** Sign-up now emails a 6-digit code before any account exists, so without a provider *no one can create an account* outside local development (sign-up answers `503 SIGNUP_UNAVAILABLE`; reset answers `PASSWORD_RESET_UNAVAILABLE`). A provider must implement both server interfaces: `SignupMailer` (`sendSignupCode(email, code)`, `sendAlreadyRegisteredNotice(email)`, `isConfigured = true`) and `PasswordResetMailer` (`sendResetCode(email, code)`), be selected by a new `PYNAPLI_PASSWORD_RESET_MAILER` value (today only `log`, local-only, and `none` exist) wired in `buildEmailSignupDependencies` and `buildCoreDependencies`, take its API key from Secret Manager, send from a neutral sender with the exact wording in `SignupEmailWording` (no product name in sender or subject), and have SPF/DKIM/DMARC set up for the sending domain. | ONBOARDING_AUTH_SPEC "Membership Privacy" |
 
 **A3 done = Android testers and the PWA both become possible.**
 
