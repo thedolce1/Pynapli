@@ -27,7 +27,7 @@ import javax.sql.DataSource
  * - **Dead sessions** revoked or past refresh expiry for [deadSessionGrace] (kept that long so the
  *   signed-in-devices history and abuse investigations still see them).
  * - **Password reset codes** expired or used more than a day ago.
- * - **Pending email sign-ups** past their 24 hours (V117; sign-up writes also sweep a batch).
+ * - **Pending email sign-ups** past their 24 hours (V118; sign-up writes also sweep a batch).
  * - **Play notification payloads** (`raw_payload`) older than [rtdnPayloadGrace]: the processed
  *   result is kept, the raw purchase JSON is not needed after that.
  *

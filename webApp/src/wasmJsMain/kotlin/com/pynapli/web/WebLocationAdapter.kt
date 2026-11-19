@@ -14,7 +14,8 @@ import kotlinx.coroutines.launch
  * `MainActivity.requestCurrentLocation` — one-shot fix on explicit user action,
  * same `LocationStateHolder` state machine (denied/unavailable copy included),
  * same movement-thresholded grid refresh. The browser shows its own permission
- * prompt; nothing here stores raw coordinates client-side.
+ * prompt; nothing here stores raw coordinates client-side, and the state holder sends only the
+ * fix's 0.01-degree cell (no accuracy) to the server.
  */
 class WebLocationAdapter(
     private val locationStateHolder: LocationStateHolder,

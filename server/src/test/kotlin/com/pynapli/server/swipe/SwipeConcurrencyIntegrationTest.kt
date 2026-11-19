@@ -167,11 +167,15 @@ class SwipeConcurrencyIntegrationTest :
                 dataSource.grantInventory(viewer, "pineapple_like", 5)
                 val request = service.dealtRequest(viewer, target, SwipeAction.PINEAPPLE_LIKE, UUID.randomUUID())
 
+                // Social includes 1 Pineapple Like a week (V117), granted in the record transaction and
+                // spent before the 5 purchased: 1 + 5 - 1 left, and the rewind gives the included one back.
                 assertTrue(service.submitAction(viewer, request).recorded)
-                assertEquals(4, dataSource.inventoryQuantity(viewer, "pineapple_like"))
+                assertEquals(5, dataSource.inventoryQuantity(viewer, "pineapple_like"))
+                assertEquals(5, dataSource.purchasedInventoryQuantity(viewer, "pineapple_like"))
                 assertTrue(service.rewind(viewer).rewound)
 
-                assertEquals(5, dataSource.inventoryQuantity(viewer, "pineapple_like"))
+                assertEquals(6, dataSource.inventoryQuantity(viewer, "pineapple_like"))
+                assertEquals(5, dataSource.purchasedInventoryQuantity(viewer, "pineapple_like"))
             }
         }
 
@@ -285,6 +289,25 @@ internal fun DataSource.inventoryQuantity(
         c
             .prepareStatement(
                 "SELECT COALESCE(sum(quantity), 0)::integer FROM premium_inventory WHERE user_id = ? AND inventory_type = ?",
+            ).use { s ->
+                s.setObject(1, userId)
+                s.setString(2, inventoryType)
+                s.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
+                }
+            }
+    }
+
+/** Units outside the plan's included allowance (here the 'dev' rows [grantInventory] inserts). */
+private fun DataSource.purchasedInventoryQuantity(
+    userId: UUID,
+    inventoryType: String,
+): Int =
+    connection.use { c ->
+        c
+            .prepareStatement(
+                "SELECT COALESCE(sum(quantity), 0)::integer FROM premium_inventory WHERE user_id = ? AND inventory_type = ? AND allowance_period_start IS NULL",
             ).use { s ->
                 s.setObject(1, userId)
                 s.setString(2, inventoryType)

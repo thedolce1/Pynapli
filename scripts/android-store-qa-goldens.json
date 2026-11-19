@@ -5,9 +5,9 @@
       "requiredTexts": [
         "Store",
         "Restore",
+        "One subscription covers you both",
         "Plans",
         "Pynapli Free",
-        "Pynapli Social",
         "Free plan active"
       ],
       "forbiddenTexts": [
@@ -50,8 +50,8 @@
     "restoreRefreshed": {
       "requiredTexts": [
         "Store refreshed.",
-        "Pynapli Free",
-        "Pynapli Social"
+        "One subscription covers you both",
+        "Plans"
       ],
       "forbiddenTexts": [
         "Something went wrong",

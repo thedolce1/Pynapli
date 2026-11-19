@@ -55,7 +55,7 @@ every change must keep.
   sealed with AES-256-GCM under a key derived from that consumed token (never stored), so the blob is
   useless without the old token; revocation clears it. Password-reset codes are stored only as
   `SHA-256(userId:code)`.
-- **Email sign-up is verified first** (V117, [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#membership-privacy)).
+- **Email sign-up is verified first** (V118, [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#membership-privacy)).
   `pending_email_signups` holds a started sign-up for an address with no account: one row per
   `email_hash` (unique; a new sign-up replaces it), the password hash, birthdate, acceptance time and
   Terms/Privacy versions, `SHA-256` of the sign-up token, `SHA-256(id:code)`, the code's expiry
@@ -90,6 +90,14 @@ every change must keep.
 
 - Store the current, eligible discovery location, not long-term location history.
 - **Exact location is never exposed to clients**, in any DTO or log.
+- **Exact location is never stored either.** `user_locations.geom` holds only the 0.01-degree cell
+  centre (`pynapli_location_cell`). The single writer, `JdbcLocationRepository`, snaps in SQL whatever it
+  is given. `accuracy_meters` is always NULL (the column stays; old clients may still send the field,
+  which is validated and discarded). `geohash` is the cell label `"lat:lon"` to two decimals,
+  rounded to nearest (`pynapli_location_cell_label`), and nothing reads it. V116 backfilled existing rows.
+  Earlier precise points remain in backups and WAL until rotated.
+- `travel_locations.geom` and `travel_trips.latitude/longitude` are picked places, not device fixes.
+  They are stored as given; every reader goes through the cell helpers.
 - PostGIS `geography(Point, 4326)` with a GiST index backs proximity queries.
 
 ### Partner linking

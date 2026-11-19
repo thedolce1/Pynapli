@@ -2,11 +2,22 @@ package com.pynapli.server.auth
 
 import com.pynapli.server.auth.security.PasswordHash
 import com.pynapli.server.auth.security.PasswordHasher
+import com.pynapli.server.plugins.configureSerialization
+import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.testsupport.CountingRateLimitRepository
 import com.pynapli.server.testsupport.InMemoryEmailSignupRepository
 import com.pynapli.server.testsupport.denyingRateLimitService
 import com.pynapli.server.testsupport.signUpVerified
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import java.time.LocalDate
@@ -15,6 +26,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class AuthServiceTest {
     @Test
@@ -329,6 +341,7 @@ private suspend fun signup(
     platform: String? = null,
     appVersion: String? = null,
     rateLimitService: RateLimitService? = null,
+    passwordHasher: PasswordHasher = PasswordHasher(iterations = 1_000),
 ) = service.signUpVerified(
     email = email,
     password = password,
@@ -338,6 +351,7 @@ private suspend fun signup(
     appVersion = appVersion,
     repository = InMemoryEmailSignupRepository(repository),
     rateLimitService = rateLimitService,
+    passwordHasher = passwordHasher,
     confirmedAdult = confirmedAdult,
     acceptedTerms = acceptedTerms,
     acceptedPrivacy = acceptedPrivacy,
@@ -621,5 +635,119 @@ class AuthLoginRateLimitTest {
         const val PASSWORD = "correct horse battery"
         const val ATTACKER_IP = "198.51.100.66"
         const val REAL_USER_IP = "203.0.113.20"
+    }
+}
+
+/**
+ * Sign-in must not say whether an address is a member: an unknown address costs the same password
+ * check as a wrong password and gets the same answer. Asserts the work done, not wall-clock time.
+ */
+class LoginMembershipOracleTest {
+    private val hasher = CountingPasswordHasher()
+    private val repository = InMemoryAuthRepository()
+    private val service = AuthService(repository, passwordHasher = hasher)
+
+    private suspend fun signupMember() = signup(service, repository, email = MEMBER, password = PASSWORD, passwordHasher = hasher)
+
+    @Test
+    fun anUnknownAddressCostsOnePasswordCheckAtTheCurrentParameters() =
+        runBlocking {
+            signupMember()
+
+            val unknown = assertFailsWith<AuthException> { service.loginEmail(STRANGER, PASSWORD, null, null, null) }
+            assertEquals(listOf(hasher.iterations), hasher.verifiedIterations)
+
+            hasher.verifiedIterations.clear()
+            val wrongPassword = assertFailsWith<AuthException> { service.loginEmail(MEMBER, WRONG_PASSWORD, null, null, null) }
+            assertEquals(listOf(hasher.iterations), hasher.verifiedIterations)
+
+            assertEquals("INVALID_CREDENTIALS", unknown.code)
+            assertEquals(wrongPassword.code, unknown.code)
+        }
+
+    @Test
+    fun anUnknownAddressGetsTheWrongPasswordResponseFieldForField() =
+        testApplication {
+            signupMember()
+            repository.setUserStatus(UUID.fromString(signup(service, repository, email = SUSPENDED, password = PASSWORD, passwordHasher = hasher).user.userId), "suspended")
+            application {
+                configureSerialization()
+                configureStatusPages()
+                configureAuthRoutes(service)
+            }
+
+            suspend fun login(
+                email: String,
+                password: String,
+            ): HttpResponse =
+                client.post("/v1/auth/email/login") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"email":"$email","password":"$password"}""")
+                }
+
+            val wrongPassword = login(MEMBER, WRONG_PASSWORD)
+            val unknown = login(STRANGER, WRONG_PASSWORD)
+            val suspendedWrongPassword = login(SUSPENDED, WRONG_PASSWORD)
+
+            assertEquals(HttpStatusCode.Unauthorized, wrongPassword.status)
+            val expectedBody = wrongPassword.bodyAsText()
+            assertTrue(expectedBody.contains("\"INVALID_CREDENTIALS\""), expectedBody)
+            for (response in listOf(unknown, suspendedWrongPassword)) {
+                assertEquals(wrongPassword.status, response.status)
+                assertEquals(expectedBody, response.bodyAsText())
+                assertEquals(wrongPassword.comparableHeaders(), response.comparableHeaders())
+            }
+
+            // Account status is only revealed to someone who knows the password.
+            val suspendedRightPassword = login(SUSPENDED, PASSWORD)
+            assertEquals(HttpStatusCode.Forbidden, suspendedRightPassword.status)
+            assertTrue(suspendedRightPassword.bodyAsText().contains("\"ACCOUNT_NOT_ACTIVE\""))
+        }
+
+    @Test
+    fun aNonActiveAccountRevealsItsStatusOnlyAfterTheRightPassword() =
+        runBlocking {
+            val userId = UUID.fromString(signupMember().user.userId)
+            repository.setUserStatus(userId, "banned")
+
+            val wrong = assertFailsWith<AuthException> { service.loginEmail(MEMBER, WRONG_PASSWORD, null, null, null) }
+            assertEquals("INVALID_CREDENTIALS", wrong.code)
+            val right = assertFailsWith<AuthException> { service.loginEmail(MEMBER, PASSWORD, null, null, null) }
+            assertEquals("ACCOUNT_NOT_ACTIVE", right.code)
+            assertEquals(2, hasher.verifiedIterations.size)
+        }
+
+    @Test
+    fun theDecoyHashUsesTheCurrentParametersAndMatchesNothing() {
+        assertEquals(hasher.iterations, hasher.decoyHash.iterations)
+        assertEquals(false, hasher.verify(PASSWORD, hasher.decoyHash))
+        assertEquals(false, hasher.verify("", hasher.decoyHash))
+    }
+
+    private fun HttpResponse.comparableHeaders(): Map<String, List<String>> =
+        headers
+            .entries()
+            .filterNot { it.key.equals(HttpHeaders.Date, ignoreCase = true) }
+            .associate { it.key.lowercase() to it.value }
+
+    /** Counts every password check and the iteration count it ran at. */
+    private class CountingPasswordHasher : PasswordHasher(iterations = 1_000) {
+        val verifiedIterations = mutableListOf<Int>()
+
+        override fun verify(
+            password: String,
+            stored: PasswordHash,
+        ): Boolean {
+            verifiedIterations += stored.iterations
+            return super.verify(password, stored)
+        }
+    }
+
+    private companion object {
+        const val MEMBER = "member@example.com"
+        const val SUSPENDED = "suspended@example.com"
+        const val STRANGER = "stranger@example.com"
+        const val PASSWORD = "correct horse battery"
+        const val WRONG_PASSWORD = "wrong horse battery"
     }
 }

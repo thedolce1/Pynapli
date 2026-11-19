@@ -39,12 +39,13 @@ internal fun storeListIndexFor(
 ): Int? {
     if (state.tiers.isEmpty()) return null
     // current-plan, then manage-on-mobile on read-only clients.
-    val tiersTitle = if (purchasesAvailable) 1 else 2
-    val firstTier = tiersTitle + 1
-    // linked-partner-benefit, then the products title.
-    val firstProduct = firstTier + state.tiers.size + 2
+    val partnerBenefit = if (purchasesAvailable) 1 else 2
+    // The plans section opens with the linked-partner benefit, then the Plans title.
+    val firstTier = partnerBenefit + 2
+    // After the tiers, the products title.
+    val firstProduct = firstTier + state.tiers.size + 1
     return when (focus) {
-        StorePaywallFocus.Plans -> tiersTitle
+        StorePaywallFocus.Plans -> partnerBenefit
         StorePaywallFocus.Select ->
             state.tiers
                 .indexOfFirst { it.tier == SubscriptionTier.SELECT }
@@ -70,6 +71,7 @@ fun StorePaywallSheet(
     focus: StorePaywallFocus,
     onDismiss: () -> Unit,
     purchasesAvailable: Boolean = true,
+    partnerLink: StorePartnerLink = StorePartnerLink.Unknown,
 ) {
     PynapliBottomSheet(
         onDismiss = onDismiss,
@@ -89,6 +91,7 @@ fun StorePaywallSheet(
                 purchasesAvailable = purchasesAvailable,
                 focus = focus,
                 onClose = onDismiss,
+                partnerLink = partnerLink,
                 modifier = Modifier.fillMaxSize(),
             )
         }

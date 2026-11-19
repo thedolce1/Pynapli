@@ -382,14 +382,23 @@ private fun TravelPaywallBanner(onSubscribe: () -> Unit) {
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(18.dp),
         )
-        Text(
-            text = "Travel mode is included with Pynapli Select.",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Travel mode is included with Pynapli Select.",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // The partner benefit, as one quiet line under the primary message.
+            Text(
+                text = "Select covers your linked partner too.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Button(
             onClick = onSubscribe,
             modifier = Modifier.testTag(TravelModeTags.PAYWALL_SUBSCRIBE).handCursor(),

@@ -2,6 +2,7 @@ package com.pynapli.server.swipe
 
 import com.pynapli.server.db.withConnection
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.subscriptions.IncludedAllowance
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -185,6 +186,7 @@ class JdbcSwipeRepository(
         noteText: String?,
         travelLocationId: UUID?,
         spendInventory: SwipeInventorySpend?,
+        includedAllowance: IncludedAllowance?,
         matchIdFactory: () -> UUID,
     ): SwipeActionResult =
         actionActions.recordSwipeActionAndMarkCard(
@@ -198,6 +200,7 @@ class JdbcSwipeRepository(
             noteText = noteText,
             travelLocationId = travelLocationId,
             spendInventory = spendInventory,
+            includedAllowance = includedAllowance,
             matchIdFactory = matchIdFactory,
         )
 

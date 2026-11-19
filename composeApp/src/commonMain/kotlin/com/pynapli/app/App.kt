@@ -31,6 +31,7 @@ import com.pynapli.app.media.PhotoCropOverlay
 import com.pynapli.app.onboarding.OnboardingFlowScreen
 import com.pynapli.app.store.StorePaywallFocus
 import com.pynapli.app.store.StorePaywallSheet
+import com.pynapli.app.store.toStorePartnerLink
 import kotlinx.coroutines.launch
 
 /**
@@ -454,11 +455,14 @@ fun PynapliApp(
         )
 
         storePaywallFocus?.let { focus ->
+            // Partner-benefit wording uses the links already loaded at sign-in; no extra fetch.
+            val profileLinksState by graph.profileLinksStateHolder.state.collectAsState()
             StorePaywallSheet(
                 stateHolder = graph.storeStateHolder,
                 focus = focus,
                 onDismiss = { storePaywallFocus = null },
                 purchasesAvailable = platform.storePurchasesAvailable,
+                partnerLink = profileLinksState.toStorePartnerLink(),
             )
         }
 

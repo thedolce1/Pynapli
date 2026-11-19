@@ -21,7 +21,7 @@ import javax.sql.DataSource
  * [TonightFeedService] (same split the Grid uses). No location ever leaves here in
  * precise form (L-11): the owner's EFFECTIVE location (travel point when travelling) is
  * only ever read as a cell-to-cell distance from the viewer's cell and as a coarse zone
- * index on a [ZONE_DEGREES] grid; radius membership is cell-to-cell too.
+ * index on a [ZONE_DEGREES] grid derived from the owner's cell; radius membership is cell-to-cell too.
  */
 class JdbcTonightFeedRepository(
     private val dataSource: DataSource,
@@ -39,8 +39,6 @@ class JdbcTonightFeedRepository(
                 val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
                 var index = 1
                 statement.setObject(index++, viewerUserId) // viewer_location CTE
-                statement.setDouble(index++, ZONE_DEGREES) // zone x
-                statement.setDouble(index++, ZONE_DEGREES) // zone y
                 statement.setInt(index++, radiusMeters) // order bucket: hidden placement span
                 statement.setTimestamp(index++, Timestamp.from(now)) // ts.expires_at > ?
                 statement.setObject(index++, viewerUserId) // owner.id <> ?
@@ -86,7 +84,12 @@ class JdbcTonightFeedRepository(
         }
 
     companion object {
-        /** Zone grid for the Tonight map: 0.02 degree (~2.2 km north-south), coarser than a distance cell. */
+        /**
+         * Zone grid for the Tonight map: 0.02 degree (~2.2 km north-south), two location cells per
+         * axis. Documentation only: the zone is computed in SQL by `pynapli_tonight_zone_x/_y` (V116)
+         * from the owner's cell, as floor(cell hundredths / 2) on integers. A cell centre on a zone
+         * edge (even hundredths) belongs to the zone east / north of that edge, negatives included.
+         */
         const val ZONE_DEGREES: Double = 0.02
 
         // Profile-photo LATERAL identical to the Grid's hydration block (same album/
@@ -147,8 +150,9 @@ class JdbcTonightFeedRepository(
                    COALESCE(NULLIF(owner_profile.display_name, ''), 'Pynapli User') AS owner_display_name,
                    owner_ds.show_distance AS owner_show_distance,
                    pynapli_coarse_distance_m(v.geom, COALESCE(owner_travel.geom, owner_ul.geom)) AS owner_distance_meters,
-                   floor(ST_X(COALESCE(owner_travel.geom, owner_ul.geom)::geometry) / ?)::integer AS owner_zone_x,
-                   floor(ST_Y(COALESCE(owner_travel.geom, owner_ul.geom)::geometry) / ?)::integer AS owner_zone_y,
+                   -- Zones come from the owner's CELL in integer arithmetic (V116), never the raw point.
+                   pynapli_tonight_zone_x(COALESCE(owner_travel.geom, owner_ul.geom)) AS owner_zone_x,
+                   pynapli_tonight_zone_y(COALESCE(owner_travel.geom, owner_ul.geom)) AS owner_zone_y,
                    pynapli_order_bucket_m(
                        owner_ds.show_distance,
                        pynapli_coarse_distance_m(v.geom, COALESCE(owner_travel.geom, owner_ul.geom)),

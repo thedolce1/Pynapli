@@ -384,9 +384,10 @@ class TonightFeedServiceIntegrationTest :
             runBlocking {
                 val viewer = UUID.randomUUID()
                 dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
-                // Opposite corners of the zone [2.34, 2.36) x [48.84, 48.86): ~2.4 km apart.
+                // Zone 117_2442 holds the cells centred on 2.34 / 2.35 east and 48.84 / 48.85 north, i.e.
+                // raw points in [2.335, 2.355) x [48.835, 48.855). Opposite corners: ~2.5 km apart.
                 val owners =
-                    listOf(2.3405 to 48.8410, 2.3595 to 48.8590, 2.3500 to 48.8500).map { (lon, lat) ->
+                    listOf(2.3355 to 48.8355, 2.3545 to 48.8545, 2.3500 to 48.8500).map { (lon, lat) ->
                         UUID.randomUUID().also { owner ->
                             dataSource.seedDiscoverableUser(owner, "Owner", lon, lat)
                             dataSource.insertActiveSoloSession(owner, intent = "solo")
@@ -397,6 +398,70 @@ class TonightFeedServiceIntegrationTest :
 
                 assertEquals(owners.size, zones.size)
                 assertEquals(listOf("117_2442"), zones.distinct(), "zones must not separate owners inside one zone: $zones")
+            }
+        }
+
+        // The half-cell leak: zones used to be cut from the RAW point on edges at even hundredths,
+        // which run through the middle of every second cell, so a zone plus a coarse distance said
+        // which half of a cell someone was in. Zones now come from the cell itself.
+        "two owners in different halves of one cell get the same zone" {
+            runBlocking {
+                val viewer = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(viewer, "Viewer", viewerLon, viewerLat)
+                // Both snap to the cell centred on (2.34, 48.85); 2.34 is a zone edge. The raw-point
+                // zoning put the west one in zone 116 and the east one in 117.
+                val west = UUID.randomUUID()
+                val east = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(west, "West", 2.3351, 48.8451)
+                dataSource.seedDiscoverableUser(east, "East", 2.3449, 48.8549)
+                dataSource.insertActiveSoloSession(west, intent = "solo")
+                dataSource.insertActiveSoloSession(east, intent = "solo")
+
+                val zones =
+                    service()
+                        .feed(viewer, radiusMeters = 50_000, intent = null, limit = 100)
+                        .items
+                        .associate { it.person.userId to it.person.zoneKey }
+
+                assertEquals("117_2442", zones[west.toString()])
+                assertEquals("117_2442", zones[east.toString()])
+            }
+        }
+
+        "zones are floor(cell hundredths / 2): edge cells go east and north, negative coordinates included" {
+            runBlocking {
+                // Buenos Aires: both coordinates negative.
+                val viewer = UUID.randomUUID()
+                dataSource.seedDiscoverableUser(viewer, "Viewer", -58.3816, -34.6037)
+                val points =
+                    mapOf(
+                        // Opposite halves of the cell centred on (-58.38, -34.60) (k = -5838, -3460: both
+                        // on zone edges). Raw-point zoning split them (-2920_-1731 vs -2919_-1730).
+                        "edgeSouthWest" to (-58.3849 to -34.6049),
+                        "edgeNorthEast" to (-58.3751 to -34.5951),
+                        // k = -5837 (odd): the east half of the same zone.
+                        "oddEast" to (-58.3700 to -34.6000),
+                        // k = -5839 (odd): the zone to the west, -2920.
+                        "westZone" to (-58.3900 to -34.6000),
+                    )
+                val placed =
+                    points.mapValues { (name, point) ->
+                        UUID.randomUUID().also { owner ->
+                            dataSource.seedDiscoverableUser(owner, name, point.first, point.second)
+                            dataSource.insertActiveSoloSession(owner, intent = "solo")
+                        }
+                    }
+
+                val zones =
+                    service()
+                        .feed(viewer, radiusMeters = 50_000, intent = null, limit = 100)
+                        .items
+                        .associate { it.person.userId to it.person.zoneKey }
+
+                assertEquals("-2919_-1730", zones[placed.getValue("edgeSouthWest").toString()])
+                assertEquals("-2919_-1730", zones[placed.getValue("edgeNorthEast").toString()])
+                assertEquals("-2919_-1730", zones[placed.getValue("oddEast").toString()])
+                assertEquals("-2920_-1730", zones[placed.getValue("westZone").toString()])
             }
         }
 

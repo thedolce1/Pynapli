@@ -101,6 +101,10 @@ class AuthService(
      * status, so a wrong password never reveals whether an account exists or is suspended.
      * Used by sign-in and by the suspended-account appeal (which can't have a session).
      * Failed attempts are limited per account + [clientIp] (AuthRateLimitGuard).
+     *
+     * An address with no account still costs one full password check, against the hasher's decoy
+     * hash at the current parameters, and fails exactly like a wrong password: neither the answer
+     * nor the time it takes says whether the address is a member.
      */
     suspend fun verifyCredentials(
         email: String,
@@ -110,7 +114,9 @@ class AuthService(
         rateLimitGuard.beforeLoginAttempt(email, clientIp)
         validator.validateEmailPassword(email, password)
         val identity = repository.findEmailIdentity(Sha256.hash(normalizeEmail(email)))
-        if (identity == null || !passwordHasher.verify(password, identity.passwordHash)) {
+        // Always verify (no short-circuit on a missing account), then decide.
+        val passwordMatches = passwordHasher.verify(password, identity?.passwordHash ?: passwordHasher.decoyHash)
+        if (identity == null || !passwordMatches) {
             rateLimitGuard.recordLoginFailure(email, clientIp)
             throw AuthException("INVALID_CREDENTIALS")
         }

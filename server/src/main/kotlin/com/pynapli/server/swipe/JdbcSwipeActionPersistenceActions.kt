@@ -1,6 +1,7 @@
 package com.pynapli.server.swipe
 
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.subscriptions.IncludedAllowance
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -113,6 +114,7 @@ internal class JdbcSwipeActionPersistenceActions(
         noteText: String?,
         travelLocationId: UUID?,
         spendInventory: SwipeInventorySpend?,
+        includedAllowance: IncludedAllowance?,
         matchIdFactory: () -> UUID,
     ): SwipeActionResult =
         dataSource.withConnection { connection ->
@@ -126,6 +128,7 @@ internal class JdbcSwipeActionPersistenceActions(
                 travelLocationId = travelLocationId,
                 matchIdFactory = matchIdFactory,
                 spendInventory = spendInventory,
+                includedAllowance = includedAllowance,
                 now = now,
             ) {
                 markDeckCardActionRecorded(

@@ -156,6 +156,7 @@ private fun StoreIconBadge() {
 internal fun CurrentPlanRow(
     entitlement: SubscriptionEntitlementDto?,
     onManageSubscription: () -> Unit = {},
+    partnerLink: StorePartnerLink = StorePartnerLink.Unknown,
 ) {
     val ownPaid = entitlement?.source == EntitlementSource.OWN_SUBSCRIPTION && entitlement.tier != SubscriptionTier.FREE
     val renewal =
@@ -191,12 +192,7 @@ internal fun CurrentPlanRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text =
-                        if (entitlement?.linkedPartnerIncluded == true) {
-                            "Linked partner included"
-                        } else {
-                            "Core discovery and safety included"
-                        },
+                    text = currentPlanCoverageLine(entitlement, partnerLink),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
@@ -305,20 +301,22 @@ internal fun StoreFeatureRow(label: String) {
 }
 
 /**
- * Linked-partner benefit callout (handoff `StoreScreen`): a dedicated explainer for the core Pynapli
- * differentiator — one paid tier covers an active linked partner — rather than only surfacing it as a
- * single perk line. Accent link-icon disc + headline + subtext, on the shared raised-card treatment.
+ * Linked-partner benefit callout (handoff `StoreScreen`): the core Pynapli differentiator, one paid
+ * plan covers an active linked partner, so it leads the plans section and is the first thing a
+ * paywall lands on. Wording comes from [storePartnerBenefitCopy] (linked, covered, solo).
+ * Accent link-icon disc + headline + supporting line, on the shared raised-card treatment.
  */
 @Composable
-internal fun StoreLinkedPartnerBenefitRow() {
+internal fun StoreLinkedPartnerBenefitRow(copy: StorePartnerBenefitCopy) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clip(PynapliShape.CardShape)
-                .background(PynapliColors.SurfaceRaised)
-                .border(1.dp, PynapliColors.Border, PynapliShape.CardShape)
-                .padding(14.dp),
+                .background(PynapliColors.Accent.copy(alpha = 0.06f))
+                .border(1.dp, PynapliColors.Accent.copy(alpha = 0.40f), PynapliShape.CardShape)
+                .padding(14.dp)
+                .testTag(StoreTestTags.PARTNER_BENEFIT),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -340,16 +338,23 @@ internal fun StoreLinkedPartnerBenefitRow() {
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "One subscription · two people",
+                text = copy.headline,
                 color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "Your paid tier extends to your active linked partner. Independent accounts always.",
+                text = copy.supporting,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
+            copy.secondary?.let { line ->
+                Text(
+                    text = line,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
@@ -375,4 +380,5 @@ internal object StoreTestTags {
     const val LIST = "store-list"
     const val PAYWALL_SHEET = "store-paywall-sheet"
     const val CLOSE = "store-close"
+    const val PARTNER_BENEFIT = "store-partner-benefit"
 }
