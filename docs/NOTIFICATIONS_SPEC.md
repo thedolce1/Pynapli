@@ -200,7 +200,6 @@ Server-side notification limits:
 - [x] Message notifications grouped per thread.
 - [x] Flirt notifications capped per sender/recipient window.
 - [x] View notifications aggregated.
-- [ ] Boost/result notifications capped.
 - [x] Private album request notifications capped per requester/recipient window.
 
 ## Implementation Checklist

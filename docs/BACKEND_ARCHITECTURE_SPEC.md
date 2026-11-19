@@ -50,8 +50,8 @@ services before the product needs it.
 
 ### Swipe
 
-Deck generation, dealbreakers, ranking, like limits, match creation, Pineapple Like (Intro Notes are
-being merged into it as an optional note), Boost priority and Activity events are server-side. Swipe
+Deck generation, dealbreakers, ranking, like limits, match creation, Pineapple Like (Intro Notes were
+merged into it as an optional note), Boost priority and Activity events are server-side. Swipe
 actions are server-authoritative; deck cards carry server-issued tokens.
 
 ### Partner links
@@ -178,7 +178,7 @@ error rates by endpoint. Product metrics: [ANALYTICS_AND_METRICS_SPEC.md](ANALYT
 
 - [ ] Production bucket/CDN and live GCS/Cloud Vision validation (needs founder credentials).
 - [ ] StoreKit 2 server validation; real Play credentials.
-- [ ] Privacy-safe client Analytics events; Crashlytics redaction validation.
+- [ ] Crashlytics redaction validation.
 - [ ] Production App Check rollout and real-device validation.
 - [ ] Two-replica load run on real infrastructure.
 

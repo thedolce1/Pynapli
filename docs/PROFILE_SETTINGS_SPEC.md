@@ -390,8 +390,6 @@ Notification categories:
 - Flirts
 - Album requests
 - Partner invites
-- Events
-- Boost results
 - Picks expiring
 - Safety/account
 
@@ -514,7 +512,7 @@ Current MVP behavior:
 - User can request an export from Profile/Settings.
 - Server records the request in `account_data_export_requests`.
 - UI shows the latest request status.
-- Production archive generation/download delivery remains a follow-up job.
+- A worker builds the archive and the app downloads it from `/v1/account/data-export/{requestId}/download`.
 
 ### Delete Account
 

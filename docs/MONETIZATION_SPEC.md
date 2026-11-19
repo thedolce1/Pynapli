@@ -390,7 +390,7 @@ Avoid:
 ## Ads
 
 **No ads (2026-11-17).** No ad network exists, so the fake "Sponsored" slot, the "ad-supported" Free
-tier and the paid "No ads" perk are being removed. If ads are ever reconsidered, check store policy
+tier and the paid "No ads" perk were removed. If ads are ever reconsidered, check store policy
 for an adult app first, and keep these rules: no ads in private albums, chat threads, partner invite,
 report/block, verification or safety flows; no ads implying sexual services or exposing lifestyle
 context; no sensitive targeting.
@@ -548,7 +548,7 @@ Do not experiment with:
 - [x] A Boost lifts the person onto the first Swipe deck page, capped at one boosted card in four.
 - [x] Pineapple Like inventory exists.
 - [x] Intro Notes merged into Pineapple Like as an optional note (V92; legacy Play SKU credited as Pineapple Likes).
-- [ ] Fake ad slot and "ad-supported"/"No ads" claims removed (in progress).
+- [x] Fake ad slot and ad claims removed.
 - [x] Safety features remain free.
 - [x] Paywall copy uses Social/Select naming.
 

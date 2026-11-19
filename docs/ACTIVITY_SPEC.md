@@ -15,7 +15,6 @@ It captures lightweight signals that are not full conversations yet:
 - Psync invites and recaps
 - Playing Tonight interactions
 - Repeat interest
-- Boost results
 
 Core rule:
 
@@ -60,9 +59,8 @@ Reason:
 ## Activity Screen Structure
 
 Compact header, tabs, the list, and upgrade/reveal rows where appropriate. Tabs on mobile: **Flirts**
-(default; taps, swipe likes, Pineapple Likes, notes), **Views**, **Matches**, **Requests** (album
-access, partner/Psync/Tonight invites). The server also accepts `all`. The Matches tab is being merged
-into the Messages new-matches rail (`MessagesNewMatchesRail.kt`), which already shows new matches.
+(default; taps, swipe likes, Pineapple Likes, notes), **Views**, **Requests**. New matches live in
+the Messages new-matches rail and are not in the Activity badge.
 
 ## Activity Row Design
 
@@ -506,7 +504,6 @@ Aggregate where useful:
 
 - Repeat profile views
 - Multiple likes count
-- Boost results
 
 Do not aggregate:
 
@@ -650,7 +647,7 @@ Avoid:
 - [x] A like opened from Likes You offers Like back in the shared profile sheet (Activity's like-back).
 - [x] Pineapple Likes appear in Activity.
 - [x] A Pineapple Like's note appears on the like in Activity, not Messages (Intro Notes merged into Pineapple Like, V92).
-- [x] Matches appear in Activity for both matched users (Matches tab being merged into the Messages new-matches rail).
+- [x] Matches appear in Activity for both matched users (shown in the Messages new-matches rail).
 - [x] Likes You and match rows survive a crash between the like or match commit and their delivery: they are written to the match side-effect outbox in the same transaction and redelivered by a drainer (SWIPE_IMPLEMENTATION_SPEC "Match side effects").
 - [x] Match Activity rows can open the message path.
 - [x] Partner chat invites appear in invited partner Activity.

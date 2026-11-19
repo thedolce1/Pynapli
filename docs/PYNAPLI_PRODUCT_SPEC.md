@@ -71,7 +71,7 @@ Answers "who should I intentionally consider?" Slower, curated, lower noise.
 
 - Before a match: like, pass, Pineapple Like (super like), Rewind, view linked-partner preview,
   report, block. **No messaging before a mutual match**, except an optional note on a Pineapple Like
-  (Intro Notes are being merged into Pineapple Like), capped hard.
+  (Intro Notes were merged into it), capped hard.
 - After a match: chat, invite linked partner, share or request album access.
 - Cards: photo carousel, name, age, distance, linked-partner mini avatar, one short bio line, a few
   tags only on expand.
@@ -130,7 +130,7 @@ never force it.
 
 The interest inbox, separate from Messages, newest first: viewed you, flirted, liked you in Swipe,
 album requests and grants, partner/Psync/Tonight invites. New matches show in the Messages
-new-matches rail (the Activity Matches tab is being merged into it). Gating teases value without
+new-matches rail (the Activity Matches tab was merged into it). Gating teases value without
 being scammy. Privacy controls: hide me from Viewed lists (which also hides your own Viewed list and
 deletes its history), hide my distance, browse incognito, who may flirt, who may request albums.
 Details: [ACTIVITY_SPEC.md](ACTIVITY_SPEC.md).

@@ -97,7 +97,6 @@ Partner preview can show:
 - Linked with Jamie
 - Partner profile photo
 - Partner active state, if allowed
-- Partner distance/city, if allowed
 - View profile
 
 Current MVP implementation:
@@ -105,7 +104,7 @@ Current MVP implementation:
 - Tapping the linked-partner badge on the top swipe card opens a lightweight `LinkedPartnerPreviewDialog` showing "Linked with [partner]", partner photo (or avatar fallback), and a clarifying line that swipe stays on the displayed user.
 - Partner active state is hydrated server-side from `PresenceService` (a single presence call covers both target and partner user IDs per page) and shown as a small green dot with "Active now" in the dialog when the partner is online.
 - "View profile" routes through the existing `ProfileDetailStateHolder.openLinkedPartner` flow with `ProfileDetailActionMode.Grid`, so the partner is shown without swipe-style action buttons.
-- Partner distance/city is not yet surfaced because `SwipeCardRecord` does not carry the partner's coordinates; adding it requires a candidate-SQL change to compute partner-to-viewer distance and a "show partner distance" allow rule.
+- Partner distance is deliberately not shown in the preview (location privacy).
 
 Do not merge linked users into a couple card.
 
@@ -542,7 +541,6 @@ Swipe should feed Activity:
 - Someone Super/Pineapple Liked you
 - Someone sent a Pineapple Like with a note (the note shows on the like)
 - You matched
-- Your Boost generated views/likes
 - Your Pick expires soon
 
 Activity handles FOMO. Swipe should stay focused on decisions.
@@ -586,7 +584,7 @@ people, the actor's match conversation in Messages, and the match push to the ta
 Tiers are Free, Social and Select; the per-tier like limits, Rewind, Travel, Likes You reveal,
 Pineapple Likes and Boost allowances live in [MONETIZATION_SPEC.md](MONETIZATION_SPEC.md) and
 `subscriptions/SubscriptionPolicy.kt`. Swipe never gates block/report, basic intent clarity, or
-safety. The free tier is not "ad-supported": the ad slot and "No ads" perk are being removed.
+safety. The free tier is not "ad-supported": the ad slot and "No ads" perk were removed.
 
 ## Safety And Consent
 
@@ -683,7 +681,6 @@ Load proof: `scripts/swipe-api-load-test.ps1` (run history in git).
 - [ ] Partial: offline action queue with a cap, stable action ids and SQLDelight persistence on
   Android and iOS (`SqlDelightSwipeActionQueueStore`); iPhone process-death QA needs a Mac.
 - [x] Block/report from the card; linked-partner preview never becomes a couple card.
-- [ ] Optional map-pin destination picker for Travel.
 
 ## Do Not Implement
 

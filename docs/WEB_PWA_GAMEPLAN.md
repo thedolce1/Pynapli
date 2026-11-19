@@ -45,7 +45,7 @@ Every surface is designed per window size class. Large screens get desktop-nativ
 | Session persistence | SQLDelight + KeyStore cipher | `LocalStorageSessionStore` (no SQLDelight driver on wasm) |
 | Location | FusedLocation, while-in-use | Browser Geolocation, one-shot fix on explicit action, denied/unavailable states (`WebLocationAdapter`) |
 | Media pick/crop | photo picker | `<input type=file>` → skia decode/crop (`WebMediaPicker`) |
-| Presence | server-side | server-side; no client sends an HTTP heartbeat (`POST /v1/presence/heartbeat` is being removed) |
+| Presence | server-side | server-side; no client sends an HTTP heartbeat (`POST /v1/presence/heartbeat` was removed) |
 | Realtime | WebSocket with auth header | Browsers can't set WebSocket headers, so streams accept one `StreamAuthFrameDto` first frame within 5s. **Never** put the token in a URL query. Tab wake (`visibilitychange`) refetches over HTTP. |
 | Push | FCM | Deferred (Web Push is post-v1) |
 | Deep links | Android intents | URL routes + history (`PynapliRoutes`, `WebUrlRouter`, webpack `historyApiFallback`); deep links queue until authenticated |

@@ -544,7 +544,7 @@ Manual/device:
 
 - [ ] Partial: shared module has domain/network packages, but not every feature is factored into shared packages.
 - [x] Ktor Client configured in shared code.
-- [ ] Partial: Grid presence, Activity, and Messages WebSocket clients reconnect and refetch/apply canonical state for implemented streams; receipts, partner links, entitlement, Psync, Playing Tonight, and album grant streams remain future work.
+- [ ] Partial: Grid presence, Activity, and Messages WebSocket clients reconnect and refetch/apply canonical state for implemented streams; read receipts arrive as `message_read` deltas on the messages stream (sent only when the reader's plan allows read receipts). Psync has its own stream (`/v1/psync/stream`); partner-link, entitlement, Playing Tonight and album-grant changes arrive by refetch.
 - [ ] Partial: session storage exists, but secure platform token storage expect/actual is not complete.
 - [ ] Partial: location update flow exists, but platform expect/actual location provider abstraction is not complete.
 - [ ] Partial: Android Play Billing bridge exists; iOS StoreKit bridge is missing.
@@ -552,7 +552,7 @@ Manual/device:
 - [ ] Partial: Swipe action queue is capped and Android persists it through SQLDelight; iOS wiring and process-death device QA remain incomplete.
 - [x] Activity and Messages are separate.
 - [x] Partner invite consent flow implemented.
-- [ ] Firebase analytics excludes sensitive data.
+- [x] No client Analytics events are sent.
 - [x] Entitlements come from Ktor.
 
 ## Do Not Implement

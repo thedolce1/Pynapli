@@ -73,7 +73,6 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
   `resultLimitReached` is true when a capped tier hit its depth and more candidates exist behind the
   paid gate.
 - Open messaging from the Grid is allowed when the recipient's settings and risk policy allow.
-- The `adSupported` flag is being removed with the fake ad slot.
 
 ### Swipe
 
@@ -90,14 +89,13 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
   still accepts it and credits 3 Pineapple Likes.
 - Rewind is entitlement-gated, soft-rewinds the latest eligible Like/Pass, and returns a fresh deck
   session and card token for the restored card; `rewound=false` when nothing can be safely restored.
-- `GET /v1/matches` is being removed (no client caller); matches reach users through conversations.
+- `GET /v1/matches` was removed. Matches reach users through conversations.
   `GET /v1/swipe/picks` (Top Picks) is frozen.
 
 ### Activity
 
 - Tabs: `all`, `views`, `flirts` (taps, swipe likes, Pineapple Likes, notes), `matches`, `requests`
-  (album access, partner/Psync/Tonight invites). The `matches` tab is being merged into the Messages
-  new-matches rail.
+  (album access, partner/Psync/Tonight invites). The mobile app no longer uses the `matches` tab.
 - Cursors are signed and viewer/tab-scoped and carry seen-count state, so reveal-depth gates apply
   consistently across pages.
 - The summary applies the same visibility/block/risk filters as the feed. `badgeCount` excludes
@@ -193,7 +191,7 @@ Streams: `/v1/presence/stream`, `/v1/activity/stream`, `/v1/messages/stream`, `/
 WebSockets are never the sole authority; clients refetch canonical state on reconnect. Don't stream
 full grid reorders or a partner's individual Psync swipes. Auth rules:
 [BACKEND_ARCHITECTURE_SPEC.md](BACKEND_ARCHITECTURE_SPEC.md#realtime). `POST /v1/presence/heartbeat`
-is being removed (no client caller).
+was removed.
 
 ### Admin
 
