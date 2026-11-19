@@ -4,6 +4,11 @@
 # The tunnel URL changes on every start (free quick tunnels are ephemeral): the staging demo
 # APK bakes this URL in, so if you restart the tunnel you must rebuild the APK too.
 # Stop the tunnel with:  Get-Process cloudflared | Stop-Process
+#
+# Refuses to start while the running server serves the dev sign-up shortcuts (they create accounts
+# with no email and read sign-up codes). Demo flow: start the server with
+# PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true, run scripts/seed-demo-data.ps1, restart the server
+# WITHOUT the flag (it is off by default), then run this script.
 param(
     [string]$LocalUrl = "http://localhost:8080",
     [string]$CloudflaredPath = "C:\Program Files (x86)\cloudflared\cloudflared.exe",
@@ -11,6 +16,13 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliDevSignup.psm1") -Force -DisableNameChecking
+# The probe goes straight to the server over loopback, exactly the requests the dev routes serve.
+if (Test-DevSignupShortcuts -BaseUrl $LocalUrl) {
+    throw "The server at $LocalUrl still serves the dev sign-up shortcuts. Restart it without PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED (off by default) before starting a public tunnel."
+}
+Write-Host "[ok] Dev sign-up shortcuts are off on $LocalUrl"
 
 if (-not (Test-Path $CloudflaredPath)) {
     throw "cloudflared not found at $CloudflaredPath (winget install Cloudflare.cloudflared)"

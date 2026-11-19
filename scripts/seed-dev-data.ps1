@@ -8,6 +8,11 @@
 
 $ErrorActionPreference = "Stop"
 
+# Accounts come from the local-only dev sign-up route, which is off by default: fail fast with the
+# instruction if the server wasn't started with PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliDevSignup.psm1") -Force -DisableNameChecking
+Assert-DevSignupShortcuts -BaseUrl $BaseUrl
+
 $viewerEmail = "dev@pynapli.local"
 $viewerLatitude = 37.4220
 $viewerLongitude = -122.0841
@@ -230,7 +235,7 @@ $script:SeedDeviceId = "local-dev-seed-$([guid]::NewGuid().ToString('N').Substri
 # Accounts come from the local-only dev sign-up route: the public /v1/auth/email/signup now only
 # emails a code (ONBOARDING_AUTH_SPEC, "Membership privacy"). The dev route creates a verified
 # account at once and answers 409 for an existing one; it exists only on a PYNAPLI_ENV=local server
-# with the "log" mailer (a 404 here means the server isn't one).
+# with the "log" mailer and PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true, for direct loopback requests.
 function Get-DevSession {
     param(
         [string]$Email

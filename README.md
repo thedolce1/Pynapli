@@ -30,6 +30,7 @@ Check your tooling:
 
 ```powershell
 docker compose up -d                 # Postgres (PostGIS) + Redis
+$env:PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED = 'true'   # only to seed / run QA; off by default
 .\gradlew.bat :server:run            # Ktor on :8080; Flyway migrates at startup
 .\scripts\seed-dev-data.ps1          # dev account + nearby profiles (server must be running)
 .\gradlew.bat :androidApp:installDebug
@@ -37,6 +38,14 @@ docker compose up -d                 # Postgres (PostGIS) + Redis
 
 Debug Android builds show a **Dev login** button that signs in as the seeded `dev@pynapli.local`
 account (debug builds only; release and staging builds don't contain the credentials).
+
+Sign-up emails a code before any account exists, so the seeds, load tests and QA scripts create
+accounts through local-only dev routes (`/v1/dev/auth/email/signup`, `/latest-code`). They are off
+unless the server starts with `PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true` (and the local defaults
+`PYNAPLI_ENV=local`, `PYNAPLI_PASSWORD_RESET_MAILER=log`), answer only direct loopback requests, and
+the scripts stop with this instruction when they are off. Codes the app sends locally are in
+`.pynapli-local-mail/signup-codes.txt` (relative to the server's working directory). Before a demo
+tunnel, restart the server without the flag (`scripts/start-demo-tunnel.ps1` refuses otherwise).
 
 Health: `GET /health` (process) and `GET /health/deep` (Postgres + Redis).
 

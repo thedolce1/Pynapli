@@ -179,7 +179,7 @@ function Get-SignupCode {
                 -Body (@{ email = $Email } | ConvertTo-Json) `
                 -TimeoutSec 5
         } catch {
-            throw "Dev sign-up code lookup failed ($($_.Exception.Message)). It needs a local server (PYNAPLI_ENV=local, PYNAPLI_PASSWORD_RESET_MAILER=log)."
+            throw "Dev sign-up code lookup failed ($($_.Exception.Message)). It needs a local server started with PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true (PYNAPLI_ENV=local, PYNAPLI_PASSWORD_RESET_MAILER=log)."
         }
         if (-not [string]::IsNullOrWhiteSpace([string]$result.code)) {
             return [string]$result.code
@@ -232,6 +232,10 @@ if ($health.status -ne "ok") {
     throw "Unexpected health status: $($health | ConvertTo-Json -Compress)"
 }
 Write-Host "[ok] Ktor health: $BaseUrl/health/deep"
+
+# The emailed code is read from the local-only dev lookup, which is off by default.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliDevSignup.psm1") -Force -DisableNameChecking
+Assert-DevSignupShortcuts -BaseUrl $BaseUrl
 
 if (-not $SkipSeed) {
     Write-Host "[step] Seeding dev data"
