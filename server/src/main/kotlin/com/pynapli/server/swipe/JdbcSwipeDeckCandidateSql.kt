@@ -34,6 +34,15 @@ internal fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLoca
         }
     }
 
+/**
+ * Linked-only deck candidates: eligible people with an eligible linked partner whose EFFECTIVE
+ * location's cell is within [radiusMeters] of the viewer's cell (the same membership as
+ * [queryDeckRank]). Candidates come from the same two GiST-backed ST_DWithin lookups as the deck
+ * (home GPS, active travel point, padded by [CoarseLocation.CELL_PAD_METERS]), so the cost follows
+ * the people near the viewer, not every linked user on the platform; the exact cell-to-cell test
+ * then decides. Beyond [limit] the cut is the deck's own distance-independent tiebreak (seeded by
+ * the viewer's cell), so it is stable and reveals nothing about distance.
+ */
 internal fun Connection.listLinkedCandidateUserIdsNear(
     viewerUserId: UUID,
     radiusMeters: Int,
@@ -42,18 +51,37 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
     prepareStatement(
         """
         WITH viewer_location AS (
-            SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
+            SELECT cell.geom,
+                   'deck:' || ST_AsText(cell.geom::geometry) AS order_seed
             FROM user_locations ul
             LEFT JOIN travel_locations tl
               ON tl.user_id = ul.user_id
              AND tl.status = 'active'
              AND tl.active_until IS NULL
+            CROSS JOIN LATERAL (SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom) cell
             WHERE ul.user_id = ?
+        ),
+        -- Index pre-filter, as in queryDeckRank: anyone whose home or active travel point is within
+        -- the padded radius. Every effective location that passes the exact test below is in here.
+        near_ids AS (
+            SELECT near_home.user_id
+            FROM viewer_location v
+            JOIN user_locations near_home ON ST_DWithin(v.geom, near_home.geom, ?)
+            UNION
+            SELECT near_travel.user_id
+            FROM viewer_location v
+            JOIN travel_locations near_travel
+              ON near_travel.status = 'active'
+             AND near_travel.active_until IS NULL
+             AND ST_DWithin(v.geom, near_travel.geom, ?)
         )
         SELECT upl.user_id
         FROM viewer_location v
+        JOIN near_ids nearby
+          ON true
         JOIN user_profile_links upl
-          ON upl.status = 'active'
+          ON upl.user_id = nearby.user_id
+         AND upl.status = 'active'
          AND upl.unlinked_at IS NULL
         JOIN users target
           ON target.id = upl.user_id
@@ -97,14 +125,22 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
           )
           -- Same membership as the deck: the effective location's cell within the radius step.
           AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= ?
+        -- Only matters past the limit: a stable, distance-independent cut (the deck's L-08 tiebreak).
+        ORDER BY pynapli_order_tiebreak(v.order_seed, upl.user_id), upl.user_id
         LIMIT ?
         """.trimIndent(),
     ).use { statement ->
+        val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
         statement.setObject(1, viewerUserId)
-        statement.setObject(2, viewerUserId)
-        statement.setObject(3, viewerUserId)
-        statement.setDouble(4, radiusMeters.toDouble())
-        statement.setInt(5, limit)
+        // Index pre-filter radius (home GPS + travel point), padded by the cell slack.
+        statement.setDouble(2, paddedRadius)
+        statement.setDouble(3, paddedRadius)
+        // Partner block check, both directions.
+        statement.setObject(4, viewerUserId)
+        statement.setObject(5, viewerUserId)
+        // Exact cell-to-cell radius membership.
+        statement.setDouble(6, radiusMeters.toDouble())
+        statement.setInt(7, limit)
         statement.executeQuery().use { rs ->
             buildSet {
                 while (rs.next()) {
