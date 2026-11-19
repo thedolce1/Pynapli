@@ -32,7 +32,7 @@ class JdbcRiskRepository(
             connection.inTransaction {
                 val now = clock.instant()
                 connection.applyDueDecay(userId, now)
-                val state = connection.upsertRiskState(userId, delta, RiskDecayPolicy.isDecayable(source), now)
+                val change = connection.applyDelta(userId, delta, RiskDecayPolicy.isDecayable(source), metadataJson, now)
                 val event =
                     connection.insertRiskEvent(
                         id = eventIdFactory(),
@@ -40,12 +40,12 @@ class JdbcRiskRepository(
                         actorUserId = actorUserId,
                         source = source,
                         reason = reason,
-                        delta = delta,
-                        state = state,
-                        metadataJson = metadataJson,
+                        delta = change.ledgerDelta,
+                        state = change.state,
+                        metadataJson = change.metadataJson,
                     )
                 connection.commit()
-                RiskMutationRecord(event = event, state = state)
+                RiskMutationRecord(event = event, state = change.state)
             }
         }
 
@@ -68,7 +68,7 @@ class JdbcRiskRepository(
                 } else {
                     val now = clock.instant()
                     connection.applyDueDecay(userId, now)
-                    val state = connection.upsertRiskState(userId, delta, RiskDecayPolicy.isDecayable(source), now)
+                    val change = connection.applyDelta(userId, delta, RiskDecayPolicy.isDecayable(source), metadataJson, now)
                     val event =
                         connection.insertRiskEvent(
                             id = eventIdFactory(),
@@ -76,14 +76,51 @@ class JdbcRiskRepository(
                             actorUserId = actorUserId,
                             source = source,
                             reason = reason,
-                            delta = delta,
-                            state = state,
-                            metadataJson = metadataJson,
+                            delta = change.ledgerDelta,
+                            state = change.state,
+                            metadataJson = change.metadataJson,
                         )
-                    RiskMutationRecord(event = event, state = state)
+                    RiskMutationRecord(event = event, state = change.state)
                 }
             }
         }
+
+    /** The new state, and the delta and metadata the ledger row should carry for it. */
+    private class AppliedChange(
+        val state: AccountRiskStateRecord,
+        val ledgerDelta: Int,
+        val metadataJson: String,
+    )
+
+    /**
+     * Applies [delta] through [upsertRiskState]. The ledger keeps the requested delta, as it always
+     * has, unless the admin floor limited a reduction: then it records the delta actually applied
+     * (possibly 0), so `delta` and `score_after` agree, and the metadata carries the requested delta
+     * and the floor. Must run inside a transaction: the row is locked before it is read.
+     */
+    private fun Connection.applyDelta(
+        userId: UUID,
+        delta: Int,
+        decayable: Boolean,
+        metadataJson: String,
+        now: Instant,
+    ): AppliedChange {
+        val before = if (delta < 0) selectStoredRiskState(userId, forUpdate = true) else null
+        val state = upsertRiskState(userId, delta, decayable, now)
+        val floor = before?.adminFloorScore
+        if (before == null || floor == null) return AppliedChange(state, delta, metadataJson)
+        val applied = state.score - before.record.score
+        val withoutFloor = maxOf(delta, -before.record.score)
+        if (applied == withoutFloor) return AppliedChange(state, delta, metadataJson)
+        return AppliedChange(
+            state = state,
+            ledgerDelta = applied,
+            metadataJson =
+                metadataJson.withJsonFields(
+                    "\"requestedDelta\":$delta,\"adminFloorScore\":$floor,\"limitedByAdminFloor\":true",
+                ),
+        )
+    }
 
     private fun Connection.hasEventWithReason(
         userId: UUID,
@@ -233,6 +270,7 @@ class JdbcRiskRepository(
         val record: AccountRiskStateRecord,
         val decayablePoints: Int,
         val decayAnchorAt: Instant?,
+        val adminFloorScore: Int?,
     ) {
         // Clamped to the score: some writers (and test fixtures) set the score directly.
         val usableDecayablePoints: Int get() = minOf(decayablePoints, record.score).coerceAtLeast(0)
@@ -253,7 +291,8 @@ class JdbcRiskRepository(
                    last_reviewed_at,
                    updated_at,
                    decayable_points,
-                   decay_anchor_at
+                   decay_anchor_at,
+                   admin_floor_score
             FROM account_risk_states
             WHERE user_id = ?
             ${if (forUpdate) "FOR UPDATE" else ""}
@@ -266,6 +305,7 @@ class JdbcRiskRepository(
                         record = rs.toRiskStateRecord(),
                         decayablePoints = rs.getInt("decayable_points"),
                         decayAnchorAt = rs.getTimestampOrNull("decay_anchor_at")?.toInstant(),
+                        adminFloorScore = rs.getInt("admin_floor_score").takeUnless { rs.wasNull() },
                     )
                 } else {
                     null
@@ -336,8 +376,9 @@ class JdbcRiskRepository(
      * - a positive delta from a decayable source adds the points actually applied after the clamp;
      * - a positive delta from any other source leaves the decayable part alone, except where the 100
      *   cap leaves no room for it (the non-decayable part takes precedence);
-     * - a negative delta (verification) comes off the decayable part first, then the rest, so the
-     *   total still drops by the full amount;
+     * - a negative delta (verification) comes off the decayable part first, then the rest, and never
+     *   takes the score below the admin floor (`admin_floor_score`, written by admin set-tier, lock
+     *   and ban) or below 0;
      * The decay clock starts at [now] when the decayable part goes from zero to positive and is
      * cleared when it returns to zero.
      */
@@ -351,12 +392,22 @@ class JdbcRiskRepository(
         val insertDecayable = "(CASE WHEN payload.decayable AND payload.delta > 0 THEN $insertScore ELSE 0 END)"
         val payloadDelta = "(SELECT delta FROM payload)"
         val payloadDecayable = "(SELECT decayable FROM payload)"
-        val updateScore = "GREATEST(0, LEAST(100, account_risk_states.score + $payloadDelta))"
+        // A negative delta stops at the admin floor (or at the current score if it is already below
+        // the floor, so a reduction never raises it). With no admin floor this is GREATEST(0, score + delta).
+        val adminFloor = "COALESCE(account_risk_states.admin_floor_score, 0)"
+        val updateScore =
+            """
+            (CASE
+                WHEN $payloadDelta < 0
+                    THEN GREATEST(0, LEAST(account_risk_states.score, $adminFloor), account_risk_states.score + $payloadDelta)
+                ELSE GREATEST(0, LEAST(100, account_risk_states.score + $payloadDelta))
+            END)
+            """.trimIndent()
         val oldDecayable = "GREATEST(0, LEAST(account_risk_states.decayable_points, account_risk_states.score))"
         val updateDecayable =
             """
             (CASE
-                WHEN $payloadDelta < 0 THEN GREATEST(0, $oldDecayable + $payloadDelta)
+                WHEN $payloadDelta < 0 THEN GREATEST(0, $oldDecayable + ($updateScore - account_risk_states.score))
                 WHEN $payloadDelta > 0 AND $payloadDecayable THEN $oldDecayable + ($updateScore - account_risk_states.score)
                 WHEN $payloadDelta > 0
                     THEN GREATEST(0, LEAST($oldDecayable, 100 - LEAST(100, account_risk_states.score - $oldDecayable + $payloadDelta)))
