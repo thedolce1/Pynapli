@@ -5,6 +5,7 @@ import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.auth.security.normalizeEmail
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
+import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -18,8 +19,14 @@ import java.util.UUID
  *
  * Forgot password emails a 6-digit code to the address the person types. Pynapli stores only a
  * hash of each email, so the code goes to the typed address once it matches an account; the
- * address itself is never stored. The request always answers the same way whether or not an
- * account exists, so it can't be used to discover who is on Pynapli.
+ * address itself is never stored. The request can't be used to discover who is on Pynapli: it
+ * answers the same way whether or not an account exists, and it never waits on the lookup. The
+ * account lookup, the code write and the email all run off the request path, through
+ * [launchResetWork] (the server's background scope in production), so a member's request takes no
+ * longer than anyone else's and a failed send can't change the answer.
+ *
+ * Checking a code does the same reads and the same failed-attempt write whether or not the address
+ * is a member or has a live code.
  *
  * Every successful reset or change signs out the account's other sessions: someone resetting a
  * password usually suspects another person has it.
@@ -27,6 +34,9 @@ import java.util.UUID
 class PasswordRecoveryService(
     private val repository: PasswordRecoveryRepository,
     private val mailer: PasswordResetMailer,
+    // Runs a reset request's account work off the request path. No default on purpose: running it
+    // inline would make a member's request measurably slower than a stranger's again.
+    private val launchResetWork: (suspend () -> Unit) -> Unit,
     private val passwordHasher: PasswordHasher = PasswordHasher(),
     private val clock: Clock = Clock.systemUTC(),
     rateLimitService: RateLimitService? = null,
@@ -45,21 +55,34 @@ class PasswordRecoveryService(
         val normalized = normalizeEmail(email)
         if (!normalized.contains("@")) throw AuthException("INVALID_EMAIL")
 
-        val identity = repository.findEmailIdentity(Sha256.hash(normalized)) ?: return
-        if (identity.userStatus != "active") return
+        val typedAddress = email.trim()
+        launchResetWork { sendCodeIfMember(normalized, typedAddress) }
+    }
 
-        val code = codeGenerator()
-        repository.replaceResetCode(
-            codeId = UUID.randomUUID(),
-            userId = identity.userId,
-            codeHash = codeHash(identity.userId, code),
-            expiresAt = clock.instant().plus(CODE_LIFETIME),
-        )
+    /**
+     * After the response: emails a code if [normalized] is an active account, otherwise nothing.
+     * Never throws; a failure is logged by exception type only (never the address or the code).
+     */
+    private suspend fun sendCodeIfMember(
+        normalized: String,
+        typedAddress: String,
+    ) {
         try {
-            mailer.sendResetCode(email = email.trim(), code = code)
+            val identity = repository.findEmailIdentity(Sha256.hash(normalized)) ?: return
+            if (identity.userStatus != "active") return
+
+            val code = codeGenerator()
+            repository.replaceResetCode(
+                codeId = UUID.randomUUID(),
+                userId = identity.userId,
+                codeHash = codeHash(identity.userId, code),
+                expiresAt = clock.instant().plus(CODE_LIFETIME),
+            )
+            mailer.sendResetCode(email = typedAddress, code = code)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
-            logger.error("Reset email could not be sent ({})", error.javaClass.simpleName)
-            throw AuthException("PASSWORD_RESET_UNAVAILABLE")
+            logger.error("Password reset request could not be completed ({})", error.javaClass.simpleName)
         }
     }
 
@@ -74,17 +97,19 @@ class PasswordRecoveryService(
             repository
                 .findEmailIdentity(Sha256.hash(normalizeEmail(email)))
                 ?.takeIf { it.userStatus == "active" }
-                ?: throw AuthException("INVALID_RESET_CODE")
+        // No account, no live code and a wrong code all do the same reads and the same
+        // failed-attempt write (against an id that matches no row when there is no live code), so
+        // someone who just requested a reset for an address can't tell from a wrong code whether
+        // the address is a member.
+        val accountId = identity?.userId ?: UUID.randomUUID()
         val live =
             repository
-                .findLiveResetCode(identity.userId, clock.instant())
-                ?.takeIf { it.failedAttempts < MAX_FAILED_ATTEMPTS }
-                ?: throw AuthException("INVALID_RESET_CODE")
-
-        val expected = live.codeHash.toByteArray()
-        val presented = codeHash(identity.userId, code.trim()).toByteArray()
-        if (!MessageDigest.isEqual(expected, presented)) {
-            repository.recordFailedAttempt(live.id)
+                .findLiveResetCode(accountId, clock.instant())
+                ?.takeIf { identity != null && it.failedAttempts < MAX_FAILED_ATTEMPTS }
+        val presented = codeHash(accountId, code.trim()).toByteArray()
+        val matches = live != null && MessageDigest.isEqual(live.codeHash.toByteArray(), presented)
+        if (identity == null || live == null || !matches) {
+            repository.recordFailedAttempt(live?.id ?: UUID.randomUUID())
             throw AuthException("INVALID_RESET_CODE")
         }
 

@@ -214,7 +214,7 @@ class ServerDependencies(
             val postgres = PostgresDependencyProbe(database)
             val redis = RedisDependencyProbe(redisCache)
             val profileActivityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            val core = buildCoreDependencies(config, database, redisCache)
+            val core = buildCoreDependencies(config, database, redisCache, backgroundScope = profileActivityScope)
             val media =
                 buildMediaDependencies(
                     config = config,
