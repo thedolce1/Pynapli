@@ -66,6 +66,7 @@ class GridService(
                     intents = request.intents,
                     genders = request.genders,
                     orientations = request.orientations,
+                    verifiedCouplesOnly = request.verifiedCouplesOnly,
                 ) { _ -> GridException("INVALID_GRID_FILTER") }
             }
         profile("grid.lifestyleGate") { requireLifestyleFilterAccess(viewerUserId, filters) }
@@ -181,6 +182,8 @@ class GridService(
                                     linkedPartnerUserId = null,
                                     linkedPartnerDisplayName = null,
                                     linkedPartnerThumbnailMediaAssetId = null,
+                                    // The badge needs a visible partner, as on Swipe cards.
+                                    coupleVerified = false,
                                 )
                             } else {
                                 card

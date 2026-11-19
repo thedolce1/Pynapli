@@ -209,6 +209,8 @@ class DiscoveryCursorCodec(
                     append(filters.genders.sorted().joinToString(","))
                     append("|orientations=")
                     append(filters.orientations.sorted().joinToString(","))
+                    // Appended only when set, so cursors issued without it keep their hash.
+                    if (filters.verifiedCouplesOnly) append("|verifiedCouplesOnly=true")
                 }
             return sha256Base64Url(normalized)
         }

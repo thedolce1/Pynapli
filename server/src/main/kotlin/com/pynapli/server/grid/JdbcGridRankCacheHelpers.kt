@@ -83,12 +83,12 @@ internal fun Connection.viewerHasActiveTravelLocation(viewerUserId: UUID): Boole
     }
 
 /**
- * Grid is cache-eligible unless `linkedOnly` is set. Mirrors Swipe's
- * `DiscoveryFilters.isRankCacheEligible()`: linkedOnly bakes a per-viewer block
- * subquery into the linked-partner existence test, so it is not shareable
- * cross-viewer.
+ * Grid is cache-eligible unless `linkedOnly` or `verifiedCouplesOnly` is set. Mirrors Swipe's
+ * `DiscoveryFilters.isRankCacheEligible()`: both bake per-viewer state (blocks; for verified
+ * couples also the owner's partner visibility toward this viewer and the viewer's hidden list)
+ * into the linked-partner test, so the window is not shareable cross-viewer.
  */
-internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean = linkedOnly == null
+internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly
 
 /**
  * Stable cache-class key for the FILTER properties that define the ranked
@@ -139,4 +139,8 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         append(genders.sorted().joinToString("|"))
         append(';')
         append(orientations.sorted().joinToString("|"))
+        append(';')
+        // Never cached (see isGridRankCacheEligible); keyed anyway so a future eligibility change
+        // cannot let filtered and unfiltered viewers share a window.
+        append(verifiedCouplesOnly)
     }

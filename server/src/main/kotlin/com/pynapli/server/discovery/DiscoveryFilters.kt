@@ -48,6 +48,11 @@ data class DiscoveryFilters(
     // This field carries the soft-ranking signal; Swipe uses it to boost verified
     // targets in the deck ranking. Grid ignores it.
     val verifiedPreferred: Boolean = false,
+    // "Verified couples only": the candidate passes only when the couple-verified badge would show
+    // for this viewer (CoupleVerifiedFilterSql: both linked partners photo-verified and the partner
+    // visible to the viewer). Implies "linked" without changing linkedOnly. Viewer-specific, so it
+    // keeps the request off the shared rank cache. Free, like verifiedOnly.
+    val verifiedCouplesOnly: Boolean = false,
 ) {
     // Broad non-default filter signal used by Swipe's stricter paid gate.
     val hasAdvancedFilters: Boolean
@@ -57,6 +62,7 @@ data class DiscoveryFilters(
                 relationshipContexts.isNotEmpty() ||
                 linkedOnly != null ||
                 verifiedOnly ||
+                verifiedCouplesOnly ||
                 facePhotoVerifiedOnly ||
                 ageVerifiedOnly ||
                 discoveryStyles.isNotEmpty() ||
@@ -103,6 +109,7 @@ fun discoveryFiltersFrom(
     orientations: List<String> = emptyList(),
     verifiedPreferred: Boolean = false,
     boundaryItems: List<String> = emptyList(),
+    verifiedCouplesOnly: Boolean = false,
     errorFactory: (String) -> RuntimeException,
 ): DiscoveryFilters {
     val min =
@@ -218,6 +225,7 @@ fun discoveryFiltersFrom(
         genders = genderValues,
         orientations = orientationValues,
         verifiedPreferred = verifiedPreferred,
+        verifiedCouplesOnly = verifiedCouplesOnly,
     )
 }
 

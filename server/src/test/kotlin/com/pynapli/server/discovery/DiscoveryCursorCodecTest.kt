@@ -126,6 +126,14 @@ class DiscoveryCursorCodecTest {
     }
 
     @Test
+    fun verifiedCouplesOnlyIsInTheCursorScope() {
+        val token = codec.encodeGridCursor(scope(filters = DiscoveryFilters()), anchor)
+        assertFailsWith<DiscoveryCursorException> {
+            codec.decodeGridCursor(token, scope(filters = DiscoveryFilters(verifiedCouplesOnly = true)))
+        }
+    }
+
+    @Test
     fun rejectsMalformedTokens() {
         assertFailsWith<DiscoveryCursorException> { codec.decodeGridCursor("", scope()) }
         assertFailsWith<DiscoveryCursorException> { codec.decodeGridCursor("not-a-token", scope()) }

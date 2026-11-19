@@ -45,6 +45,15 @@ class SwipeRankCacheKeyTest {
     }
 
     @Test
+    fun verifiedCouplesOnlyChangesTheRankCacheKeyAndIsNeverCached() {
+        assertNotEquals(
+            DiscoveryFilters().rankCacheKey(),
+            DiscoveryFilters(verifiedCouplesOnly = true).rankCacheKey(),
+        )
+        kotlin.test.assertFalse(DiscoveryFilters(verifiedCouplesOnly = true).isRankCacheEligible())
+    }
+
+    @Test
     fun withPhotosOnlyChangesTheRankCacheKey() {
         assertNotEquals(
             DiscoveryFilters().rankCacheKey(),

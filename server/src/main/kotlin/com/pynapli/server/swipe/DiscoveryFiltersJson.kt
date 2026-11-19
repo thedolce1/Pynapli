@@ -23,6 +23,8 @@ internal fun DiscoveryFilters.toPersistedJson(): String =
         append(",\"logisticsTags\":").append(logisticsTags.toJsonArray())
         append(",\"tonightAvailableOnly\":").append(tonightAvailableOnly)
         append(",\"intents\":").append(intents.toJsonArray())
+        // Written only when set, so payloads of decks dealt without it are unchanged.
+        if (verifiedCouplesOnly) append(",\"verifiedCouplesOnly\":true")
         append("}")
     }
 

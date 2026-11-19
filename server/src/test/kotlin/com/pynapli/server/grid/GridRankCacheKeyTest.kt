@@ -19,6 +19,15 @@ class GridRankCacheKeyTest {
     }
 
     @Test
+    fun verifiedCouplesOnlyChangesTheRankCacheKeyAndIsNeverCached() {
+        assertNotEquals(
+            DiscoveryFilters().gridRankCacheKey(),
+            DiscoveryFilters(verifiedCouplesOnly = true).gridRankCacheKey(),
+        )
+        kotlin.test.assertFalse(DiscoveryFilters(verifiedCouplesOnly = true).isGridRankCacheEligible())
+    }
+
+    @Test
     fun experienceLevelAndBoundariesChangeTheRankCacheKey() {
         assertNotEquals(
             DiscoveryFilters().gridRankCacheKey(),

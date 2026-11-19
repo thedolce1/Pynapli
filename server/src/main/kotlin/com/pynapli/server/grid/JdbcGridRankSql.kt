@@ -1,5 +1,6 @@
 package com.pynapli.server.grid
 
+import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.distance.CoarseLocation
@@ -143,6 +144,8 @@ internal fun Connection.queryGridRank(
               AND (?::boolean = false OR p.verified_at IS NOT NULL)
               AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
               AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
+              -- "Verified couples only": exactly the couple-verified badge for this viewer.
+              ${CoupleVerifiedFilterSql.predicate(user = "u", profile = "p", settings = "ds")}
               AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
               -- Lifestyle groups + boundaries (LifestyleFilterSql): same predicate on every surface.
               ${LifestyleFilterSql.predicates("p")}
@@ -326,6 +329,7 @@ internal fun Connection.queryGridRank(
         statement.setBoolean(index++, filters.verifiedOnly)
         statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
         statement.setBoolean(index++, filters.ageVerifiedOnly)
+        index = CoupleVerifiedFilterSql.bind(statement, index, filters.verifiedCouplesOnly, viewerUserId)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
         index = LifestyleFilterSql.bind(statement, this, index, filters.lifestyleTags, filters.boundaryItems)

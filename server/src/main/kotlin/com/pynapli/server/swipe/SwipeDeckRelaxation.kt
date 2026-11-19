@@ -25,7 +25,7 @@ internal object SwipeDeckRelaxation {
             return true
         }
         if (SwipeDealbreakerKey.VERIFIED !in dealbreakers &&
-            (filters.verifiedOnly || filters.facePhotoVerifiedOnly || filters.ageVerifiedOnly)
+            (filters.verifiedOnly || filters.verifiedCouplesOnly || filters.facePhotoVerifiedOnly || filters.ageVerifiedOnly)
         ) {
             return true
         }
@@ -68,6 +68,8 @@ internal object SwipeDeckRelaxation {
             relationshipContexts = emptySet(),
             linkedOnly = if (SwipeDealbreakerKey.LINKED_ONLY in dealbreakers) filters.linkedOnly else null,
             verifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.verifiedOnly else false,
+            // Same "verified" lock as verifiedOnly: kept when locked, relaxed otherwise.
+            verifiedCouplesOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.verifiedCouplesOnly else false,
             facePhotoVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.facePhotoVerifiedOnly else false,
             ageVerifiedOnly = if (SwipeDealbreakerKey.VERIFIED in dealbreakers) filters.ageVerifiedOnly else false,
             discoveryStyles =

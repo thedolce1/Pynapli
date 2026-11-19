@@ -31,6 +31,9 @@ data class GridQueryRequestDto(
     val intents: List<String> = emptyList(),
     val genders: List<String> = emptyList(),
     val orientations: List<String> = emptyList(),
+    // "Verified couples only": only people whose couple-verified badge shows for this viewer (both
+    // linked partners selfie-verified, partner visible). Independent of linkedOnly. Old clients omit it.
+    val verifiedCouplesOnly: Boolean = false,
 )
 
 @Serializable

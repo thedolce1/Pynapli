@@ -100,5 +100,6 @@ private fun validatePayload(payload: SwipeDeckRequestDto): DiscoveryFilters {
         genders = payload.genders,
         orientations = payload.orientations,
         verifiedPreferred = payload.verifiedPreferred,
+        verifiedCouplesOnly = payload.verifiedCouplesOnly,
     ) { _ -> SavedFilterException("INVALID_SAVED_FILTER_PAYLOAD") }
 }

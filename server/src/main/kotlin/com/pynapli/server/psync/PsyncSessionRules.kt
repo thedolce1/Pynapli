@@ -76,6 +76,7 @@ internal fun requirePsyncFiltersAllowed(
             logisticsTags = filters.logisticsTags,
             intents = filters.intents,
             verifiedPreferred = filters.verifiedPreferred,
+            verifiedCouplesOnly = filters.verifiedCouplesOnly,
         ) { PsyncException("INVALID_PSYNC_FILTER") }
     if (discovery.requiresAdvancedEntitlement && !policy.advancedFiltersAllowed) {
         throw PsyncException("PSYNC_ADVANCED_FILTERS_NOT_ALLOWED")
