@@ -1,6 +1,8 @@
 package com.pynapli.server.location
 
 import com.pynapli.server.safety.LocationRiskSignalPublisher
+import com.pynapli.shared.location.SnappedCoordinates
+import com.pynapli.shared.location.snapToLocationCell
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
 import java.time.Clock
@@ -8,7 +10,6 @@ import java.time.Duration
 import java.util.UUID
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -23,14 +24,17 @@ class LocationService(
     ): CurrentLocationDto {
         validate(request)
         val source = request.source.trim().lowercase()
-        publishSpoofSignalIfImpossible(userId, request)
+        // Location privacy: the precise fix (if an older client sent one) goes no further than this
+        // line. Everything below, the spoof check included, sees only the cell centre, and the
+        // repository snaps again in SQL. The accuracy figure is validated (old clients send it) and
+        // then dropped: it described a precise fix we do not keep.
+        val cell = snapToLocationCell(request.latitude, request.longitude)
+        publishSpoofSignalIfImpossible(userId, cell)
         val update =
             LocationUpdate(
-                latitude = request.latitude,
-                longitude = request.longitude,
-                accuracyMeters = request.accuracyMeters,
+                latitude = cell.latitude,
+                longitude = cell.longitude,
                 source = source,
-                geohash = coarseLocationBucket(request.latitude, request.longitude),
                 city = request.city.cleanOptional(80),
                 region = request.region.cleanOptional(80),
                 country = request.country.cleanOptional(80),
@@ -48,17 +52,22 @@ class LocationService(
      * to bypass it); the only exemption is a Travel mode session the server itself
      * holds as active. The distance floor keeps GPS jitter and tiny intervals from
      * ever flagging.
+     *
+     * Both points are cell centres (the stored point always is, and [cell] is the snapped request),
+     * so the distance is off by at most a cell diagonal (~1.6 km) against the raw fixes. That cannot
+     * matter: a flag needs at least [IMPOSSIBLE_TRAVEL_MIN_DISTANCE_KM] at
+     * [IMPOSSIBLE_TRAVEL_MIN_SPEED_KMH] or more, and two fixes in one cell compare as 0 km.
      */
     private suspend fun publishSpoofSignalIfImpossible(
         userId: UUID,
-        request: UpdateCurrentLocationRequestDto,
+        cell: SnappedCoordinates,
     ) {
         val publisher = locationRiskSignals ?: return
         runCatching {
             val previous = repository.getCurrentCoordinates(userId) ?: return
             if (previous.travelSessionActive) return
 
-            val distanceKm = haversineKm(previous.latitude, previous.longitude, request.latitude, request.longitude)
+            val distanceKm = haversineKm(previous.latitude, previous.longitude, cell.latitude, cell.longitude)
             if (distanceKm < IMPOSSIBLE_TRAVEL_MIN_DISTANCE_KM) return
 
             val elapsed = Duration.between(previous.updatedAt, clock.instant())
@@ -94,7 +103,8 @@ class LocationService(
     private fun CurrentLocationRecord.toDto(): CurrentLocationDto =
         CurrentLocationDto(
             updatedAt = updatedAt.toString(),
-            accuracyMeters = accuracyMeters,
+            // Never stored any more; the field stays on the wire for older clients.
+            accuracyMeters = null,
             source = source,
             city = city,
             region = region,
@@ -105,15 +115,6 @@ class LocationService(
         val value = this?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         if (value.length > maxLength) throw LocationException("INVALID_LOCATION_LABEL")
         return value
-    }
-
-    private fun coarseLocationBucket(
-        latitude: Double,
-        longitude: Double,
-    ): String {
-        val latBucket = floor(latitude * 100.0) / 100.0
-        val lonBucket = floor(longitude * 100.0) / 100.0
-        return "%.2f:%.2f".format(latBucket, lonBucket)
     }
 
     companion object {
