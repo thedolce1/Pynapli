@@ -140,8 +140,16 @@ class LocationCellStorageIntegrationTest :
                     assertNull(stored.accuracyMeters)
                     assertEquals(
                         "%s:%s".format(
-                            java.math.BigDecimal(LocationCell.hundredths(stored.latitude)).movePointLeft(2).setScale(2).toPlainString(),
-                            java.math.BigDecimal(LocationCell.hundredths(stored.longitude)).movePointLeft(2).setScale(2).toPlainString(),
+                            java.math
+                                .BigDecimal(LocationCell.hundredths(stored.latitude))
+                                .movePointLeft(2)
+                                .setScale(2)
+                                .toPlainString(),
+                            java.math
+                                .BigDecimal(LocationCell.hundredths(stored.longitude))
+                                .movePointLeft(2)
+                                .setScale(2)
+                                .toPlainString(),
                         ),
                         stored.geohash,
                     )
