@@ -44,8 +44,7 @@ class VerifiedCouplesFilterContractTest {
 
     @Test
     fun aFilterChangeInvalidatesGridCursorsAndSwipeDeckTokens() {
-        fun grid(filters: DiscoveryFilters) =
-            DiscoveryCursorCodec.gridScopeHash(viewer, 50_000, 60, filters, onlineOnly = false)
+        fun grid(filters: DiscoveryFilters) = DiscoveryCursorCodec.gridScopeHash(viewer, 50_000, 60, filters, onlineOnly = false)
 
         fun deck(filters: DiscoveryFilters) = SwipeDeckTokenCodec.deckScopeHash(viewer, 50_000, 30, filters)
 
@@ -128,8 +127,7 @@ class VerifiedCouplesFilterContractTest {
     private class OneRowRepository(
         private val listedPayload: String,
     ) : SavedFilterRepository {
-        override suspend fun list(userId: UUID): List<SavedFilterRecord> =
-            listOf(record(UUID.randomUUID(), userId, "Old", listedPayload))
+        override suspend fun list(userId: UUID): List<SavedFilterRecord> = listOf(record(UUID.randomUUID(), userId, "Old", listedPayload))
 
         override suspend fun create(
             id: UUID,
