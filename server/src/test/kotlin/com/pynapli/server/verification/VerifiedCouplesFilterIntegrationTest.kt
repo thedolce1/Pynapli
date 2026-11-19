@@ -201,6 +201,13 @@ class VerifiedCouplesFilterIntegrationTest {
         // M: M1 shows their partner to matches only, and the viewer has no match with M1.
         val (m1, m2) = couple("M", verified1 = true, verified2 = true)
         dataSource.setCouplePartnerVisibility(m1, "matches_only")
+        // U: both verified, linked once and since unlinked -> neither.
+        val (u1, u2) = couple("U", verified1 = true, verified2 = true)
+        dataSource.runSql(
+            "UPDATE user_profile_links SET status = 'unlinked', unlinked_at = now() WHERE user_id IN (?, ?)",
+            u1,
+            u2,
+        )
         return World(viewer, a1, a2, b1, b2, c, d1, d2, e1, e2, g1, g2, h2, j1, j2, m2, hiddenByViewer = setOf(g2))
     }
 
