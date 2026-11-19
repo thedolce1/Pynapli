@@ -50,8 +50,8 @@ class DesktopLocationAdapter(
         private const val DEFAULT_LATITUDE = 37.4220
         private const val DEFAULT_LONGITUDE = -122.0841
 
-        // A plausible consumer-GPS accuracy. Not 0: the server's location-spoofing signal treats
-        // impossibly precise fixes as suspicious, and this shell should not look like an attacker.
+        // A plausible consumer-GPS accuracy for the in-memory fix. It never leaves the device:
+        // LocationStateHolder sends only the 0.01-degree cell, with no accuracy, as on every shell.
         private const val FIXED_ACCURACY_METERS = 20
     }
 }
