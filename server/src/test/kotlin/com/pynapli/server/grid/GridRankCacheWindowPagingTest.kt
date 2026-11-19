@@ -78,8 +78,7 @@ class GridRankCacheWindowPagingTest :
 
         fun uncachedRepository() = JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
 
-        fun cachedRepository(window: Int) =
-            JdbcGridRepository(dataSource, rankCacheTtl = Duration.ofMinutes(5), rankCacheWindow = window)
+        fun cachedRepository(window: Int) = JdbcGridRepository(dataSource, rankCacheTtl = Duration.ofMinutes(5), rankCacheWindow = window)
 
         fun assertWellFormed(
             pages: List<List<UUID>>,
