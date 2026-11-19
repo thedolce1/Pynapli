@@ -16,8 +16,10 @@ import kotlin.test.assertEquals
  * when travelling, else home) within the radius step of the viewer's cell; the linked partner must
  * be eligible and not blocked with the viewer.
  *
- * Everyone sits on longitude -122.08 (one cell column) at whole-cell latitudes, so every distance is
- * a whole number of 0.01-degree cells (~1.11 km each) and none is near a radius-step boundary.
+ * Everyone but `padEdge` sits on longitude -122.08 (one cell column) at whole-cell latitudes, so
+ * every distance is a whole number of 0.01-degree cells (~1.11 km each) and none is near a
+ * radius-step boundary. `padEdge` is in range cell to cell but out of range by raw GPS, which pins
+ * the padded index pre-filter.
  */
 class SwipeLinkedOnlyDeckTest :
     StringSpec({
@@ -77,6 +79,13 @@ class SwipeLinkedOnlyDeckTest :
                 }
                 dataSource.insertDiscoverableUser(unlinked, "Single", age = 33, longitude = longitude, latitude = 37.43)
 
+                // Raw GPS about 2.1 km from A's cell centre but in cell (37.43, -122.07), 1.4 km cell to
+                // cell: inside A's 2 km step only because the index pre-filter pads the radius. 21 km from B.
+                val padEdge = id(0x101d)
+                dataSource.insertDiscoverableUser(padEdge, "Pad edge", age = 34, longitude = -122.0651, latitude = 37.4349)
+                dataSource.insertDiscoverableUser(id(0x1201), "Pad edge partner", age = 36, longitude = longitude, latitude = 30.0)
+                dataSource.insertActiveProfileLink(userId = padEdge, linkedUserId = id(0x1201))
+
                 dataSource.insertActiveTravelLocation(travellingAway, "Away", latitude = 36.42, longitude = longitude)
                 dataSource.insertActiveTravelLocation(travellingHere, "Here", latitude = 37.44, longitude = longitude)
                 dataSource.insertActiveTravelLocation(travellingHidden, "Here", latitude = 37.43, longitude = longitude)
@@ -87,19 +96,19 @@ class SwipeLinkedOnlyDeckTest :
 
                 val expectedForA =
                     mapOf(
-                        2_000 to setOf(near1Km),
-                        5_000 to setOf(near1Km, near2Km, travellingHere),
-                        10_000 to setOf(near1Km, near2Km, travellingHere, near5Km),
-                        25_000 to setOf(near1Km, near2Km, travellingHere, near5Km, near17Km),
-                        100_000 to setOf(near1Km, near2Km, travellingHere, near5Km, near17Km),
+                        2_000 to setOf(near1Km, padEdge),
+                        5_000 to setOf(near1Km, padEdge, near2Km, travellingHere),
+                        10_000 to setOf(near1Km, padEdge, near2Km, travellingHere, near5Km),
+                        25_000 to setOf(near1Km, padEdge, near2Km, travellingHere, near5Km, near17Km),
+                        100_000 to setOf(near1Km, padEdge, near2Km, travellingHere, near5Km, near17Km),
                     )
                 val expectedForB =
                     mapOf(
                         2_000 to emptySet<UUID>(),
                         5_000 to setOf(near17Km),
                         10_000 to setOf(near17Km),
-                        25_000 to setOf(near17Km, near5Km, near2Km, near1Km, travellingHere, partnerBlockedByA),
-                        100_000 to setOf(near17Km, near5Km, near2Km, near1Km, travellingHere, partnerBlockedByA),
+                        25_000 to setOf(near17Km, near5Km, near2Km, near1Km, padEdge, travellingHere, partnerBlockedByA),
+                        100_000 to setOf(near17Km, near5Km, near2Km, near1Km, padEdge, travellingHere, partnerBlockedByA),
                     )
 
                 val repository = JdbcSwipeRepository(dataSource)
