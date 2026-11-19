@@ -53,6 +53,7 @@ class SubscriptionService(
             repository = repository,
             clock = clock,
             rateLimitService = rateLimitService,
+            getEntitlement = entitlementActions::getEntitlement,
         )
     private val devStorePurchaseActions =
         SubscriptionDevStorePurchaseActions(
@@ -179,6 +180,15 @@ class SubscriptionService(
     suspend fun refundPineappleLikeInventory(inventoryId: UUID): Boolean = inventoryActions.refundPineappleLikeInventory(inventoryId)
 
     suspend fun activateBoost(userId: UUID): BoostActivationDto = inventoryActions.activateBoost(userId)
+
+    /**
+     * What [userId]'s current plan includes of [inventoryType] per period (MONETIZATION_SPEC
+     * "Included allowances"), for a caller that spends inside its own transaction (the Swipe deck).
+     */
+    suspend fun includedAllowance(
+        userId: UUID,
+        inventoryType: String,
+    ): IncludedAllowance = inventoryActions.includedAllowance(userId, inventoryType)
 
     suspend fun recordPlayStoreProductPurchase(
         userId: UUID,

@@ -98,6 +98,42 @@ interface SubscriptionRepository {
         duration: Duration,
     ): BoostActivationResult? = null
 
+    /**
+     * Grants (once per period), tops up or withholds the plan's included units of each of
+     * [allowances] (MONETIZATION_SPEC "Included allowances"). Runs before anything reads or spends
+     * the balance. Default: nothing is included (test stubs without a database).
+     */
+    suspend fun reconcileIncludedAllowances(
+        userId: UUID,
+        allowances: List<IncludedAllowance>,
+        now: Instant,
+    ) = Unit
+
+    /**
+     * [consumePineappleLikeInventoryReturningId] after bringing the plan's included Pineapple Likes up
+     * to date, so included units are spent before purchased ones. The JDBC repository does both in
+     * one transaction.
+     */
+    suspend fun consumePineappleLikeInventoryReturningId(
+        userId: UUID,
+        now: Instant,
+        includedAllowance: IncludedAllowance,
+    ): UUID? {
+        reconcileIncludedAllowances(userId, listOf(includedAllowance), now)
+        return consumePineappleLikeInventoryReturningId(userId, now)
+    }
+
+    /** [activateBoost] that can spend the plan's included monthly Boost (granted under the activation lock). */
+    suspend fun activateBoost(
+        userId: UUID,
+        now: Instant,
+        duration: Duration,
+        includedAllowance: IncludedAllowance,
+    ): BoostActivationResult? {
+        reconcileIncludedAllowances(userId, listOf(includedAllowance), now)
+        return activateBoost(userId, now, duration)
+    }
+
     /** Credits a one-time Play purchase once per purchase token (see V88). */
     suspend fun creditPlayStoreProductPurchase(
         purchaseToken: String,

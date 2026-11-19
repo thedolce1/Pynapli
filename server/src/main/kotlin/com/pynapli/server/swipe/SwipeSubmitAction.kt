@@ -103,6 +103,10 @@ internal class SwipeSubmitAction(
                 action == SwipeAction.PINEAPPLE_LIKE -> SwipeInventorySpend.PINEAPPLE_LIKE
                 else -> null
             }
+        // What the plan includes this period (Social 1, Select 5 Pineapple Likes a week), from the
+        // cached entitlement. Resolved only for a Pineapple Like, so likes and passes pay nothing.
+        val includedAllowance =
+            spendInventory?.let { spend -> subscriptionService?.includedAllowance(viewerUserId, spend.inventoryType) }
 
         val result =
             profile("swipe.action.record") {
@@ -117,6 +121,7 @@ internal class SwipeSubmitAction(
                     noteText = noteText,
                     travelLocationId = preconditions.viewerTravelLocationId,
                     spendInventory = spendInventory,
+                    includedAllowance = includedAllowance,
                 )
             }
         if (result.inventoryUnavailable) {

@@ -199,8 +199,8 @@ Included:
 - Incognito
 - Travel mode
 - Priority Likes
-- Weekly Pineapple Likes
-- Monthly Boost
+- 5 Pineapple Likes every week
+- 1 Boost every month
 - Notes on Pineapple Likes (any Pineapple Like can carry one)
 - Full read receipts
 - Typing status
@@ -221,6 +221,46 @@ The Select "Intro Notes" perk was removed with Intro Notes (2026-11-17); Select 
 weekly Pineapple Likes, each of which can carry a note, so no separate perk replaces it.
 
 Inventory should expire if unused at renewal or refresh windows, depending feature. Expiring inventory creates urgency but must be clearly disclosed.
+
+## Included Allowances (implemented 2026-11-19)
+
+The "Suggested monthly inventory" above is implemented, per period, server-side (V117):
+
+| Tier | Pineapple Likes | Boosts |
+|---|---:|---:|
+| Free | 0 | 0 |
+| Social | 1 every week | 0 (Boosts are discounted, not included) |
+| Select | 5 every week | 1 every month |
+
+Rules:
+
+- **Who:** whoever holds the tier right now under the normal entitlement resolution: own subscription,
+  admin or promo entitlement (same allowance as the tier), or the linked-partner benefit. Each person
+  gets their own allowance; inventory is never shared between partners.
+- **Periods:** a week is a 7-day window and a month a 30-day window, laid end to end from the person's
+  allowance anchor. The anchor is set once, the first time the person is granted anything, to the
+  start of the paid entitlement in force at that moment (for a subscription, its current
+  billing-period start; for a covered partner, the subscriber's), clamped to now. It is stored in
+  `included_allowance_anchors` and never moves. So people do not all reset at the same moment, and
+  cancelling, resubscribing, upgrading or relinking never opens a new window early.
+- **Lazy, exactly once:** nothing runs on a schedule. The current period's units are granted when the
+  balance is read (`GET /v1/subscriptions/inventory`) or about to be spent (Swipe Pineapple Like, Psync
+  Pineapple Like, Boost activation), in the same transaction as the spend. One row per person, type
+  and period (`premium_inventory`, `source = 'subscription'`, unique on
+  `(user_id, inventory_type, allowance_period_start)`), so concurrent requests grant once.
+- **Use it or lose it:** an included unit expires at its period end (`expires_at`); nothing carries
+  over or stacks.
+- **Included before purchased:** a spend takes the current period's included units first; purchased
+  units are only touched once those are gone, and no rollover, downgrade or lapse ever removes a
+  purchased unit. A rewound or refunded included unit goes back to its own period.
+- **Tier changes in a period:** usable included units = max(0, what the current tier includes - what
+  was used this period). An upgrade tops up to the higher tier's amount; a downgrade caps at the
+  lower amount; a lapse or unlink makes the unused units unusable (kept as `allowance_withheld`, so
+  they come back if the tier comes back within the period). No sequence of tier changes, links or
+  unlinks makes more than the period's highest entitlement usable.
+- **Display:** the Store's balances include included units; the soonest expiry shown is the period
+  end. Plan cards say "1 Pineapple Like every week", "5 Pineapple Likes every week", "1 Boost every month",
+  from the same constants the server grants with.
 
 ## Linked Partner Benefit
 
@@ -576,6 +616,7 @@ Do not experiment with:
 - [x] One active Boost per person, enforced by the database (V101) as well as the activation lock.
 - [x] A Boost lifts the person onto the first Swipe deck page, capped at one boosted card in four.
 - [x] Pineapple Like inventory exists.
+- [x] Included allowances are granted: Social 1 Pineapple Like/week, Select 5 Pineapple Likes/week + 1 Boost/month (lazy, once per period, included before purchased, no stacking; V117).
 - [x] Intro Notes merged into Pineapple Like as an optional note (V92; legacy Play SKU credited as Pineapple Likes).
 - [x] Fake ad slot and ad claims removed.
 - [x] Safety features remain free.
