@@ -10,7 +10,7 @@ import kotlin.math.round
  * arithmetic in V119). Both compute, per axis, `rint(value / 0.01) * 0.01 + 0.0` in IEEE doubles:
  * round to the NEAREST grid line, ties to even (`kotlin.math.round` is ties-to-even on every
  * platform, like C `rint`), and the trailing `+ 0.0` turns a negative zero into a positive one
- * exactly as PostGIS's `+ ipx` does. `LocationCellSqlParityTest` in `:server` runs this helper and
+ * exactly as PostGIS's `+ ipx` does. `LocationCellStorageIntegrationTest` in `:server` runs this helper and
  * the SQL function over the same points (boundaries, half-way values, negatives) so the two cannot
  * drift.
  *

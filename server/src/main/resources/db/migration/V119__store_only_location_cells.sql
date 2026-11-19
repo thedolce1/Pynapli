@@ -11,7 +11,7 @@
 --    ties to even (Postgres round(double precision) is rint). Newer PostGIS switched sub-unit grids
 --    to rint(x * 100) / 100, which can round a half-way input the other way and differ in the last
 --    bit. Spelling the 3.4 formula out keeps the stored cells, and the Kotlin twin in :shared
---    (com.pynapli.shared.location.LocationCell, checked by LocationCellSqlParityTest), identical
+--    (com.pynapli.shared.location.LocationCell, checked by LocationCellStorageIntegrationTest), identical
 --    across a PostGIS upgrade. On 3.4 this returns exactly what V94 returned.
 CREATE OR REPLACE FUNCTION pynapli_location_cell(g geography)
 RETURNS geography
@@ -79,6 +79,9 @@ $$;
 --    indexed column makes these non-HOT updates: the GiST index on geom (and the geohash btree) gets
 --    a new entry for each new row version inside the same transaction, so it stays correct; the dead
 --    versions are reclaimed by autovacuum.
+--    Rolling deploys: an instance still running the previous build after this migration writes raw
+--    points and accuracy again until it is replaced. Reads stay cell-based regardless; re-run this
+--    UPDATE once after the rollout completes to clear those rows.
 UPDATE user_locations
 SET geom = pynapli_location_cell(geom),
     accuracy_meters = NULL,

@@ -168,16 +168,15 @@ of these are free. Details: [TRUST_AND_SAFETY_SPEC.md](TRUST_AND_SAFETY_SPEC.md)
 - Every distance, list position, radius test and Playing Tonight zone another member can observe is
   computed between coarse cells (a 0.01-degree grid, about 1.1 km north-south), never between real
   positions ([GRID_IMPLEMENTATION_SPEC.md](GRID_IMPLEMENTATION_SPEC.md#location-privacy-load-bearing)).
-- The service never receives or stores a precise position. The apps snap the device fix to its cell
-  before sending it and send no accuracy figure. The server snaps again on write, whatever a client
-  sends, and stores only the cell centre (`user_locations.geom`, V119; `accuracy_meters` is always
-  NULL).
+- The service never stores a precise position, and current app versions never send one. They snap
+  the device fix to its cell before sending it and send no accuracy figure. Older versions still
+  send the precise fix; the server snaps it on write and discards it. Whatever a client sends, only
+  the cell centre is stored (`user_locations.geom`, V119; `accuracy_meters` is always NULL).
 - The device itself still reads the precise fix when the user grants precise location. Only the
   cell leaves the device.
 - Precise points stored before V119 remain in database backups and write-ahead logs until those are
   rotated. This is an operational fact for the founder; code cannot remove them.
-- Travel mode destinations are places picked from a place search (or typed coordinates), not the
-  device's position. They are stored as given and read through the same cells.
+- Travel mode destinations are places picked from a place search, not the device's position. They are stored as given and read through the same cells.
 
 What we can truthfully say (use this for any public wording):
 
