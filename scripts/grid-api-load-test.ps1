@@ -371,7 +371,7 @@ upsert_discovery AS (
         updated_at = now()
     RETURNING user_id
 )
--- Same shape the server stores (V119): the cell centre only, no accuracy, the cell's label as geohash.
+-- Same shape the server stores (V116): the cell centre only, no accuracy, the cell's label as geohash.
 INSERT INTO user_locations (
     user_id,
     geom,

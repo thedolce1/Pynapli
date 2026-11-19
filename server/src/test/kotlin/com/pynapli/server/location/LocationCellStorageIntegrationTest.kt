@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
  *  - A location update stores exactly `pynapli_location_cell` of the input, with no accuracy.
  *  - The Kotlin twin [LocationCell] (used by every client before the fix leaves the device, and by
  *    [LocationService]) matches the SQL function bit for bit, ties and negatives included.
- *  - The V119 backfill puts every stored point on the grid and is a no-op the second time.
+ *  - The V116 backfill puts every stored point on the grid and is a no-op the second time.
  */
 class LocationCellStorageIntegrationTest :
     StringSpec({
@@ -99,7 +99,7 @@ class LocationCellStorageIntegrationTest :
             }
         }
 
-        // V119 spelled the cell out as explicit arithmetic; on the PostGIS this suite runs (the one
+        // V116 spelled the cell out as explicit arithmetic; on the PostGIS this suite runs (the one
         // dev and docker-compose pin) it must be exactly what V94's ST_SnapToGrid returned, so no
         // stored cell, distance or ordering moved when the function was replaced.
         "the pinned pynapli_location_cell equals ST_SnapToGrid(g, 0.01) on this PostGIS" {
@@ -113,12 +113,12 @@ class LocationCellStorageIntegrationTest :
             }
         }
 
-        "the V119 backfill puts every stored point on the grid and is a no-op the second time" {
+        "the V116 backfill puts every stored point on the grid and is a no-op the second time" {
             runBlocking {
                 val users =
                     samplePoints().take(40).map { (longitude, latitude) ->
                         UUID.randomUUID().also { user ->
-                            // Raw, pre-V119 shape: precise point, an accuracy figure, no geohash.
+                            // Raw, pre-V116 shape: precise point, an accuracy figure, no geohash.
                             dataSource.insertDiscoverableUser(user, "Legacy", age = 30, longitude = longitude, latitude = latitude)
                         }
                     }
@@ -132,7 +132,7 @@ class LocationCellStorageIntegrationTest :
                         }
                 }
 
-                dataSource.runV119()
+                dataSource.runV116()
                 val afterFirst = users.associateWith { assertNotNull(dataSource.storedLocation(it)) }
                 afterFirst.values.forEach { stored ->
                     val (cellLongitude, cellLatitude) = dataSource.sqlCell(stored.longitude, stored.latitude)
@@ -147,7 +147,7 @@ class LocationCellStorageIntegrationTest :
                     )
                 }
 
-                dataSource.runV119()
+                dataSource.runV116()
                 val afterSecond = users.associateWith { assertNotNull(dataSource.storedLocation(it)) }
                 // Same values, and the same row versions: the second run rewrote nothing.
                 assertEquals(afterFirst, afterSecond)
@@ -237,10 +237,10 @@ private fun DataSource.snapToGrid(
             }
     }
 
-private fun DataSource.runV119() {
+private fun DataSource.runV116() {
     val sql =
         assertNotNull(
-            LocationCellStorageIntegrationTest::class.java.classLoader.getResource("db/migration/V119__store_only_location_cells.sql"),
+            LocationCellStorageIntegrationTest::class.java.classLoader.getResource("db/migration/V116__store_only_location_cells.sql"),
         ).readText()
     connection.use { connection -> connection.createStatement().use { it.execute(sql) } }
 }

@@ -85,7 +85,7 @@ every change must keep.
   centre (`pynapli_location_cell`). The single writer, `JdbcLocationRepository`, snaps in SQL whatever it
   is given. `accuracy_meters` is always NULL (the column stays; old clients may still send the field,
   which is validated and discarded). `geohash` is the cell label `"lat:lon"` to two decimals,
-  rounded to nearest (`pynapli_location_cell_label`), and nothing reads it. V119 backfilled existing rows.
+  rounded to nearest (`pynapli_location_cell_label`), and nothing reads it. V116 backfilled existing rows.
   Earlier precise points remain in backups and WAL until rotated.
 - `travel_locations.geom` and `travel_trips.latitude/longitude` are picked places, not device fixes.
   They are stored as given; every reader goes through the cell helpers.

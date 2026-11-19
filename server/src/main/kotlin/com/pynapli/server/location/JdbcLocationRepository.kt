@@ -11,7 +11,7 @@ class JdbcLocationRepository(
      * The ONE writer of `user_locations` (location privacy): the point is snapped to its cell in SQL
      * with `pynapli_location_cell`, so whatever a caller passes, only the cell centre is stored. The
      * accuracy is always NULL (it described a precise fix that is no longer kept) and the geohash is
-     * the stored cell's label (`pynapli_location_cell_label`, V119), derived from the same snapped point.
+     * the stored cell's label (`pynapli_location_cell_label`, V116), derived from the same snapped point.
      */
     override suspend fun upsertCurrentLocation(
         userId: UUID,

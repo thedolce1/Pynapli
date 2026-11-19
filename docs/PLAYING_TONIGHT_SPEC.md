@@ -83,7 +83,7 @@ Map:
 - No street-level pins.
 - Default is zone-only.
 - `zoneKey` is the owner's **effective** location (travel point when travelling) on a 0.02-degree
-  grid (~2.2 km N-S), and is omitted when the owner hides distance. Since V119 it is computed from
+  grid (~2.2 km N-S), and is omitted when the owner hides distance. Since V116 it is computed from
   the owner's **cell**, in integers: with the cell centre at k hundredths of a degree, the zone is
   `floor(k / 2)` on each axis (`pynapli_tonight_zone_x/_y`), keyed `{x}_{y}`. A cell centre on a
   zone edge (even k) belongs to the zone east / north of the edge, negative coordinates included

@@ -86,7 +86,7 @@ class JdbcTonightFeedRepository(
     companion object {
         /**
          * Zone grid for the Tonight map: 0.02 degree (~2.2 km north-south), two location cells per
-         * axis. Documentation only: the zone is computed in SQL by `pynapli_tonight_zone_x/_y` (V119)
+         * axis. Documentation only: the zone is computed in SQL by `pynapli_tonight_zone_x/_y` (V116)
          * from the owner's cell, as floor(cell hundredths / 2) on integers. A cell centre on a zone
          * edge (even hundredths) belongs to the zone east / north of that edge, negatives included.
          */
@@ -150,7 +150,7 @@ class JdbcTonightFeedRepository(
                    COALESCE(NULLIF(owner_profile.display_name, ''), 'Pynapli User') AS owner_display_name,
                    owner_ds.show_distance AS owner_show_distance,
                    pynapli_coarse_distance_m(v.geom, COALESCE(owner_travel.geom, owner_ul.geom)) AS owner_distance_meters,
-                   -- Zones come from the owner's CELL in integer arithmetic (V119), never the raw point.
+                   -- Zones come from the owner's CELL in integer arithmetic (V116), never the raw point.
                    pynapli_tonight_zone_x(COALESCE(owner_travel.geom, owner_ul.geom)) AS owner_zone_x,
                    pynapli_tonight_zone_y(COALESCE(owner_travel.geom, owner_ul.geom)) AS owner_zone_y,
                    pynapli_order_bucket_m(

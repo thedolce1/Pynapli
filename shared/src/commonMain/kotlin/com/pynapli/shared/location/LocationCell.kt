@@ -7,7 +7,7 @@ import kotlin.math.round
  * (~1.1 km north-south, narrower east-west away from the equator).
  *
  * This is the Kotlin twin of the server's SQL `pynapli_location_cell` (V94, pinned to explicit
- * arithmetic in V119). Both compute, per axis, `rint(value / 0.01) * 0.01 + 0.0` in IEEE doubles:
+ * arithmetic in V116). Both compute, per axis, `rint(value / 0.01) * 0.01 + 0.0` in IEEE doubles:
  * round to the NEAREST grid line, ties to even (`kotlin.math.round` is ties-to-even on every
  * platform, like C `rint`), and the trailing `+ 0.0` turns a negative zero into a positive one
  * exactly as PostGIS's `+ ipx` does. `LocationCellStorageIntegrationTest` in `:server` runs this helper and
