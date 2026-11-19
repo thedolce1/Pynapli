@@ -536,7 +536,18 @@ Implemented (`safety/RiskDecayPolicy.kt`, `JdbcRiskRepository`, migration V109):
 - Admin set-tier, lock and ban set the score absolutely and zero `decayable_points`, so decay never
   takes an account below an admin-set score; only minor points recorded after the admin action decay.
 - Verification reductions come off the decayable part first, then the rest; the total drops by the full
-  amount and is floored at 0.
+  amount and is floored at 0, unless an admin floor applies (next item).
+- **Verification never lowers an admin-set score (founder decision).** Admin set-tier, lock and ban
+  write `admin_floor_score` (the score they set) in the same statement; mark-reviewed does not touch it.
+  An age or photo verification reduction stops at that floor, and applies nothing when the score is
+  already at or below it. Points added after the admin action can still be reduced, down to the floor.
+  The ledger row is still written (so the photo credit counts as used); when the floor limited it, its
+  `delta` is what actually applied (possibly 0) and the metadata carries `requestedDelta`,
+  `adminFloorScore` and `limitedByAdminFloor`. An admin setting clean writes a floor of 0, which
+  removes the protection. Migration V112 backfilled the floor from the most recent `admin_review.set_*`
+  or `admin_enforcement.*` event's `score_after` and changed no score: accounts a verification had
+  already taken below their admin score stay there (they show an age or photo verification event after
+  the latest admin event with `score_after` below `admin_floor_score`).
 - Points recorded before V109 were not backfilled: they stay non-decaying.
 - Photo verification reduces score: an approved selfie verification records `verification.photo_verified`
   (-20, the same as age verification; the spec gives no amount) at most once per account, so a revoke
@@ -544,9 +555,8 @@ Implemented (`safety/RiskDecayPolicy.kt`, `JdbcRiskRepository`, migration V109):
   reason and delta, metadata `{"backfill":"V110"}`) for accounts that were photo-verified before it
   existed, applied the way a live approval applies it (decayable part first, floored at 0, tier
   recomputed; verified accounts with no risk row get a 0/clean row and the ledger row, as live does).
-  It skipped any account with an `admin_review.set_*` or `admin_enforcement.*` event: whether
-  verification may lower an admin-set score or tier is an open founder question (the live age and
-  photo paths still do lower it today). Couple verification has no approval path of its own (it is
+  It skipped any account with an `admin_review.set_*` or `admin_enforcement.*` event, consistent with
+  the admin-floor rule above. Couple verification has no approval path of its own (it is
   derived from both partners' photo verification) and gets no separate reduction.
 
 Support signal:
@@ -649,7 +659,7 @@ Important:
 - [x] Location spoofing signals exist.
 - [x] Partner subscription abuse cooldown exists.
 - [x] Selfie photo verification: server pose challenge, private selfie, optional face-count check, senior-admin decision with audit, revoke, rate limits and selfie retention.
-- [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; an approved photo verification publishes a -20 risk event once per account; the account score stays floored at 0.
+- [x] Verification lowers risk where appropriate: a verified age-verification outcome (admin review or provider callback) publishes a -20 risk event; an approved photo verification publishes a -20 risk event once per account; the account score stays floored at 0 and never drops below an admin-set score (`admin_floor_score`).
 - [x] Risk score decay: rate-limit points decay 1 per day (lazily, ledgered as `decay.minor`); severe, report, other signal and admin-set points never decay.
 - [ ] Partial: appeal review flow, admin roles and step-up MFA exist; support review workflow, account notices and senior-review separation remain.
 - [x] Moderator dashboard requirements are tracked.

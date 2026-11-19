@@ -197,11 +197,13 @@ internal fun Connection.upsertRiskState(
             user_id,
             score,
             tier,
+            admin_floor_score,
             last_event_at,
             last_reviewed_at,
             updated_at
         )
         VALUES (
+            ?,
             ?,
             ?,
             ?,
@@ -216,6 +218,9 @@ internal fun Connection.upsertRiskState(
             -- the admin action are absorbed into it. Only minor points recorded after it can decay.
             decayable_points = 0,
             decay_anchor_at = NULL,
+            -- Verification may not take the score below what the admin set (JdbcRiskRepository).
+            -- Setting clean writes 0, which removes the protection.
+            admin_floor_score = EXCLUDED.admin_floor_score,
             last_event_at = now(),
             last_reviewed_at = CASE
                 WHEN ? THEN now()
@@ -232,8 +237,9 @@ internal fun Connection.upsertRiskState(
         statement.setObject(1, userId)
         statement.setInt(2, score)
         statement.setString(3, tier)
-        statement.setBoolean(4, reviewed)
+        statement.setInt(4, score)
         statement.setBoolean(5, reviewed)
+        statement.setBoolean(6, reviewed)
         statement.executeQuery().use { rs ->
             rs.next()
             rs.toAdminRiskActionRecord()
