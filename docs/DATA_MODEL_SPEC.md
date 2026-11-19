@@ -33,7 +33,7 @@ every change must keep.
 | Partner linking | `user_profile_links`, `linked_partner_benefits` (no writer; the partner benefit is computed live from links + subscriptions) |
 | Swipe | `swipe_deck_sessions`, `swipe_deck_cards`, `swipe_actions`, `matches`, `top_pick_sessions`, `top_pick_session_cards` (Top Picks is frozen) |
 | Psync | `psync_sessions`, `psync_session_participants`, `psync_session_cards`, `psync_session_actions`, `psync_session_matches` |
-| Playing Tonight | `tonight_sessions`, `tonight_session_participants` (the legacy `profiles.tonight_available_until` flag is being merged into sessions) |
+| Playing Tonight | `tonight_sessions`, `tonight_session_participants` |
 | Messaging | `conversations`, `conversation_participants`, `direct_conversations`, `messages`, `message_media_reveals`, `message_review_queue`, `partner_chat_invites` |
 | Media and albums | `media_assets`, `media_albums`, `media_album_items`, `media_album_access_grants`, `media_album_access_requests` |
 | Activity | `activity_events` |

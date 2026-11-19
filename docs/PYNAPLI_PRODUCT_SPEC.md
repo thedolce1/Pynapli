@@ -98,8 +98,8 @@ server policy (`PYNAPLI_TRAVEL_REGION_POLICY`).
 ## Playing Tonight
 
 A short-lived session that says "available tonight", solo or together. Together mode needs both
-partners' approval. Zone-level location only, no precise pins, no couple cards. The legacy
-"Available tonight" profile toggle is being merged into sessions. Details:
+partners' approval. Zone-level location only, no precise pins, no couple cards. Sessions
+replaced the old "Available tonight" toggle. Details:
 [PLAYING_TONIGHT_SPEC.md](PLAYING_TONIGHT_SPEC.md).
 
 ## Psync

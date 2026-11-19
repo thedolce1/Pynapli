@@ -30,8 +30,7 @@ internal fun Connection.hydrateGridCards(
                    SELECT 1 FROM profiles vp
                    WHERE vp.user_id = pc.user_id AND vp.verified_at IS NOT NULL
                ) AS verified,
-               -- PLAYING_TONIGHT_SPEC: a live session is the only Tonight signal (the legacy
-               -- profiles.tonight_available_until column is no longer read). Per-tile signal only.
+               -- PLAYING_TONIGHT_SPEC: a live session is the only Tonight signal. Per-tile signal only.
                EXISTS (
                    SELECT 1
                    FROM tonight_session_participants tsp

@@ -167,19 +167,15 @@ class GridFilterDiscoveryTest :
             }
         }
 
-        "grid Tonight badge and filter come only from sessions, never the legacy availability column" {
+        "grid Tonight badge and filter come only from live sessions" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000f01")
                 val session = UUID.fromString("00000000-0000-0000-0000-000000000f02")
-                val legacyOnly = UUID.fromString("00000000-0000-0000-0000-000000000f03")
                 val noTonight = UUID.fromString("00000000-0000-0000-0000-000000000f04")
                 dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
                 dataSource.insertDiscoverableUser(session, "Tonight", age = 30, longitude = -122.0836, latitude = 37.4226)
-                dataSource.insertDiscoverableUser(legacyOnly, "Legacy", age = 31, longitude = -122.0838, latitude = 37.4228)
                 dataSource.insertDiscoverableUser(noTonight, "Plain", age = 32, longitude = -122.0830, latitude = 37.4230)
                 dataSource.insertActiveTonightSession(session)
-                // The retired "Available tonight" toggle wrote this column; it must no longer count.
-                dataSource.setTonightAvailableUntil(legacyOnly, hoursFromNow = 6)
 
                 val repository = JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
                 val tonightOnly =
@@ -194,9 +190,8 @@ class GridFilterDiscoveryTest :
                 val byId = unfiltered.associateBy { it.userId }
 
                 assertEquals(listOf(session), tonightOnly.map { it.userId })
-                assertEquals(setOf(session, legacyOnly, noTonight), byId.keys)
+                assertEquals(setOf(session, noTonight), byId.keys)
                 assertEquals(true, byId[session]?.tonightActive, "Active session must show the Tonight badge")
-                assertEquals(false, byId[legacyOnly]?.tonightActive, "Legacy column alone must not show the Tonight badge")
                 assertEquals(false, byId[noTonight]?.tonightActive)
             }
         }

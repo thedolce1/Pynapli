@@ -327,22 +327,6 @@ internal fun DataSource.setProfileIntents(
     tags: List<String>,
 ) = setProfileTagArray(userId, column = "intents", tags = tags)
 
-internal fun DataSource.setTonightAvailableUntil(
-    userId: UUID,
-    hoursFromNow: Long,
-) {
-    connection.use { connection ->
-        connection
-            .prepareStatement(
-                "UPDATE profiles SET tonight_available_until = now() + (? || ' hours')::interval WHERE user_id = ?",
-            ).use { statement ->
-                statement.setString(1, hoursFromNow.toString())
-                statement.setObject(2, userId)
-                statement.executeUpdate()
-            }
-    }
-}
-
 internal fun DataSource.setProfileTagArray(
     userId: UUID,
     column: String,

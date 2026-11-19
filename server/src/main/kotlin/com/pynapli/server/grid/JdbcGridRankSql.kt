@@ -148,8 +148,7 @@ internal fun Connection.queryGridRank(
               ${LifestyleFilterSql.predicates("p")}
               AND (cardinality(?::text[]) = 0 OR (p.logistics_tags IS NOT NULL AND p.logistics_tags && ?::text[]))
               AND (
-                  -- PLAYING_TONIGHT_SPEC: "playing tonight" means a live session (the legacy
-                  -- profiles.tonight_available_until column is no longer read). Only evaluated
+                  -- PLAYING_TONIGHT_SPEC: "playing tonight" means a live session. Only evaluated
                   -- when the filter is on; the leading boolean short-circuits the default path.
                   ?::boolean = false
                   OR EXISTS (
