@@ -199,8 +199,8 @@ Included:
 - Incognito
 - Travel mode
 - Priority Likes
-- Weekly Pineapple Likes
-- Monthly Boost
+- 5 Pineapple Likes every week
+- 1 Boost every month
 - Notes on Pineapple Likes (any Pineapple Like can carry one)
 - Full read receipts
 - Typing status
@@ -221,6 +221,46 @@ The Select "Intro Notes" perk was removed with Intro Notes (2026-11-17); Select 
 weekly Pineapple Likes, each of which can carry a note, so no separate perk replaces it.
 
 Inventory should expire if unused at renewal or refresh windows, depending feature. Expiring inventory creates urgency but must be clearly disclosed.
+
+## Included Allowances (implemented 2026-11-19)
+
+The "Suggested monthly inventory" above is implemented, per period, server-side (V117):
+
+| Tier | Pineapple Likes | Boosts |
+|---|---:|---:|
+| Free | 0 | 0 |
+| Social | 1 every week | 0 (Boosts are discounted, not included) |
+| Select | 5 every week | 1 every month |
+
+Rules:
+
+- **Who:** whoever holds the tier right now under the normal entitlement resolution: own subscription,
+  admin or promo entitlement (same allowance as the tier), or the linked-partner benefit. Each person
+  gets their own allowance; inventory is never shared between partners.
+- **Periods:** a week is a 7-day window and a month a 30-day window, laid end to end from the person's
+  allowance anchor. The anchor is set once, the first time the person is granted anything, to the
+  start of the paid entitlement in force at that moment (for a subscription, its current
+  billing-period start; for a covered partner, the subscriber's), clamped to now. It is stored in
+  `included_allowance_anchors` and never moves. So people do not all reset at the same moment, and
+  cancelling, resubscribing, upgrading or relinking never opens a new window early.
+- **Lazy, exactly once:** nothing runs on a schedule. The current period's units are granted when the
+  balance is read (`GET /v1/subscriptions/inventory`) or about to be spent (Swipe Pineapple Like, Psync
+  Pineapple Like, Boost activation), in the same transaction as the spend. One row per person, type
+  and period (`premium_inventory`, `source = 'subscription'`, unique on
+  `(user_id, inventory_type, allowance_period_start)`), so concurrent requests grant once.
+- **Use it or lose it:** an included unit expires at its period end (`expires_at`); nothing carries
+  over or stacks.
+- **Included before purchased:** a spend takes the current period's included units first; purchased
+  units are only touched once those are gone, and no rollover, downgrade or lapse ever removes a
+  purchased unit. A rewound or refunded included unit goes back to its own period.
+- **Tier changes in a period:** usable included units = max(0, what the current tier includes - what
+  was used this period). An upgrade tops up to the higher tier's amount; a downgrade caps at the
+  lower amount; a lapse or unlink makes the unused units unusable (kept as `allowance_withheld`, so
+  they come back if the tier comes back within the period). No sequence of tier changes, links or
+  unlinks makes more than the period's highest entitlement usable.
+- **Display:** the Store's balances include included units; the soonest expiry shown is the period
+  end. Plan cards say "1 Pineapple Like every week", "5 Pineapple Likes every week", "1 Boost every month",
+  from the same constants the server grants with.
 
 ## Linked Partner Benefit
 
@@ -247,9 +287,42 @@ Anti-abuse:
 - Fraud monitoring for frequent link/unlink cycles.
 - Subscription benefit should not apply retroactively to old linked partners.
 
-Product copy:
+Current implementation (server rule, `JdbcSubscriptionEntitlementSql.kt` partner branch +
+`SubscriptionRepository.findBestActiveEntitlement`):
 
-> Linked partner included while your link is active.
+- Any paid tier (Social or Select) carries it. Only the subscriber's own row in `subscriptions`
+  (status `active` or `grace`, inside its current period, any platform) reaches the partner; promo
+  and admin grants in `entitlements` never do.
+- The link must be `active` with `unlinked_at` null, and the subscriber's account must be active and
+  not deleted. One partner only: a user has at most one active link (V16/V17 unique indexes).
+- The partner gets the subscriber's tier (the whole tier policy). If the partner already has a
+  higher plan of their own, the higher one wins.
+- It ends when the link ends or the subscription lapses, with no stored grant to clean up (the
+  entitlement cache holds a result for 5 seconds). The cooldown is the partner-link one: after an
+  unlink, neither person can link again for 7 days (`ProfileLinkService`, `PROFILE_LINK_COOLDOWN`).
+  The `linked_partner_benefits` table is never written, and the other anti-abuse rules above
+  (verification requirement, link/unlink fraud monitoring) have no benefit-specific code yet.
+- Entitlement is per account, so being covered applies on every client (Android, iOS, web). Buying
+  a plan is Android-only today: the server has a Google Play verifier and no App Store one
+  (StoreKit 2 is still open), and web is read-only.
+- `SubscriptionEntitlementDto.linkedPartnerIncluded` is true for every paid entitlement, promo and
+  admin included, so clients must not read it as "your partner is covered"; use `source`.
+
+Product copy (in app since 2026-11-18; `store/StorePartnerBenefitCopy.kt`):
+
+- The Store sheet opens its plans section with the benefit, and every plans paywall lands on it.
+  Free viewer: "One subscription covers you both", then "Link your partner and they get the same
+  plan at no extra cost." plus "Solo? Every plan works just as well for one." when not linked, or
+  "Choose Social or Select and [partner] gets the same plan at no extra cost while you're linked."
+  when linked.
+- Own paid plan: "Your plan covers you and [partner]" (or "Your plan can cover your partner too"
+  with a link invitation). Covered by a partner: "You're covered by [partner]'s plan".
+- The current-plan card says who the plan covers ("Covers [partner] too", "Covered by [partner]'s
+  plan", "Covers your account only" for promo/admin). Paid tier cards list "Covers your linked
+  partner too" first.
+- The partner's display name is used only when it is on the client already (the profile-links
+  summary) and is 20 characters or fewer; otherwise the copy is generic.
+- The Travel mode and advanced-filter paywall banners carry one quiet secondary line about it.
 
 Avoid:
 
@@ -543,10 +616,12 @@ Do not experiment with:
 - [x] One active Boost per person, enforced by the database (V101) as well as the activation lock.
 - [x] A Boost lifts the person onto the first Swipe deck page, capped at one boosted card in four.
 - [x] Pineapple Like inventory exists.
+- [x] Included allowances are granted: Social 1 Pineapple Like/week, Select 5 Pineapple Likes/week + 1 Boost/month (lazy, once per period, included before purchased, no stacking; V117).
 - [x] Intro Notes merged into Pineapple Like as an optional note (V92; legacy Play SKU credited as Pineapple Likes).
 - [x] Fake ad slot and ad claims removed.
 - [x] Safety features remain free.
 - [x] Paywall copy uses Social/Select naming.
+- [x] The Store leads with the linked-partner benefit, worded for the viewer's link and plan source (2026-11-18).
 
 ## Do Not Implement
 
@@ -561,3 +636,31 @@ Do not experiment with:
 - Do not trust client-side premium flags.
 - Do not use deceptive fake Activity to sell upgrades.
 - Do not put ads in private albums, safety, partner invites, or reports.
+
+## Store listing draft (not published)
+
+**DRAFT awaiting founder and legal review. Not wired into any store listing, `web/` or metadata.**
+Written 2026-11-18 to be literally true per the code at that date (sources in brackets). It avoids
+"hookup", sexually explicit wording and any promise about meeting people (Apple guideline 1.1.4;
+Google Play sexual-content listing policy). Re-check every line against the code before use.
+
+- App Store subtitle (30 max, this is 24): **One plan covers you both**
+  (Hold until iOS can sell a plan: StoreKit 2 is not built and the server has no App Store
+  verifier, so an iOS listing that leads with a plan would point at something iOS can't sell yet.)
+- Google Play short description (80 max, this is 79), on one line so it copies as counted:
+
+  **For lifestyle couples and singles. Link your partner: one plan covers you both.**
+
+Long description, first three bullets:
+
+- **One subscription, two people.** Link your partner's account and your Social or Select plan
+  covers them too, at no extra cost, for as long as you stay linked. Your accounts stay separate.
+  [Linked Partner Benefit, "Current implementation" above.]
+- **Verified couples.** A couple shows as verified only when both partners have photo-verified, and
+  every member can filter to verified couples only. [`CoupleVerifiedFilterSql`; the filter is free:
+  `DiscoveryFilters.requiresAdvancedEntitlement` gates only lifestyle and advanced logistics tags.]
+- **Your location stays yours.** Other members never see your exact location or exact distance:
+  distances are rounded, and you can hide yours. [`DistanceRounding.kt` coarse cells and rounding,
+  applied with `showDistance` in the Grid, Swipe, Activity and profile-peek mappers and SQL;
+  Tonight uses cell-to-cell distance and coarse zones. The server does store your location to run
+  discovery, so do not claim otherwise.]

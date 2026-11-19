@@ -268,16 +268,21 @@ Scroll-UntilAnyText @("Plans and store") 8 | Out-Null
 Tap-Text "Plans and store"
 Wait-ForAnyText @("Store", "Plans") 45 | Out-Null
 $initialXml = Capture-StoreStage "storeInitial" "03_store_initial"
-Assert-TextPresent $initialXml "Pynapli Social" "Initial Store"
+# The linked-partner benefit leads the plans (2026-11-18), so the paid plans can sit below the fold.
+Assert-TextPresent $initialXml "One subscription covers you both" "Initial Store"
 
 Tap-Text "Restore"
 Wait-ForAnyText @("Store refreshed.") 45 | Out-Null
 $restoreXml = Capture-StoreStage "restoreRefreshed" "04_restore_refreshed"
 Assert-TextPresent $restoreXml "Store refreshed." "Store restore"
 
+# The paid plans are below the benefit; check they rendered before moving on to the extras.
+$socialPlan = Scroll-UntilAnyText @("Pynapli Social") 4
+Assert-TextPresent $socialPlan.Xml "Pynapli Social" "Store plans"
+
 # Scroll to the last product so the whole Boosts & extras section is on-screen. Anchor on the
 # Pineapple Likes pack's UNIQUE "5 for $3.99" price line, not the plain name: the Select plan lists
-# "Weekly Pineapple Likes", so anchoring on the name could stop at the Select card.
+# "5 Pineapple Likes every week", so anchoring on the name could stop at the Select card.
 Scroll-UntilAnyText @('5 for $3.99') 8 | Out-Null
 $productsXml = Capture-StoreStage "productsVisible" "05_products_visible"
 Assert-TextPresent $productsXml "Pineapple Likes" "Store products"

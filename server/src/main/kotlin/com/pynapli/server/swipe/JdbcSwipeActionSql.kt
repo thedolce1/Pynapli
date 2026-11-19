@@ -2,7 +2,9 @@ package com.pynapli.server.swipe
 
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.lockPairForTransaction
+import com.pynapli.server.subscriptions.IncludedAllowance
 import com.pynapli.server.subscriptions.consumePremiumInventoryRecordReturningId
+import com.pynapli.server.subscriptions.reconcileIncludedAllowances
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
@@ -18,6 +20,7 @@ internal fun Connection.recordSwipeActionTransaction(
     travelLocationId: UUID?,
     matchIdFactory: () -> UUID,
     spendInventory: SwipeInventorySpend? = null,
+    includedAllowance: IncludedAllowance? = null,
     now: Instant = Instant.now(),
     afterInsert: Connection.() -> Unit = {},
 ): SwipeActionResult {
@@ -34,6 +37,10 @@ internal fun Connection.recordSwipeActionTransaction(
                 rollback()
                 return SwipeActionResult(recorded = existing.rewoundAt == null, match = existing.match, newlyRecorded = false, sideEffects = emptyList())
             }
+            // The plan's included units for this period (granted once per period, or withheld when
+            // the tier no longer includes them), so the spend below takes them before purchased ones.
+            // One upsert on the actor's own row; the rollbacks below undo it with the swipe.
+            includedAllowance?.let { reconcileIncludedAllowances(actorUserId, listOf(it), now) }
             val spentId =
                 consumePremiumInventoryRecordReturningId(actorUserId, spendInventory.inventoryType, now)
                     ?: run {

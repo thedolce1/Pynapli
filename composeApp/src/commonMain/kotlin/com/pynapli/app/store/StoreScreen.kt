@@ -38,6 +38,8 @@ fun StoreScreen(
     focus: StorePaywallFocus? = null,
     // Shown as a Close button when the Store is a sheet.
     onClose: (() -> Unit)? = null,
+    // The viewer's partner link (from the links the app already loaded), for the partner-benefit copy.
+    partnerLink: StorePartnerLink = StorePartnerLink.Unknown,
 ) {
     val state by stateHolder.state.collectAsState()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -58,6 +60,7 @@ fun StoreScreen(
         purchasesAvailable = purchasesAvailable,
         focus = focus,
         onClose = onClose,
+        partnerLink = partnerLink,
     )
 }
 
@@ -73,6 +76,7 @@ private fun StoreScreenContent(
     onManageSubscription: () -> Unit = {},
     focus: StorePaywallFocus? = null,
     onClose: (() -> Unit)? = null,
+    partnerLink: StorePartnerLink = StorePartnerLink.Unknown,
 ) {
     val listState = rememberLazyListState()
     val focusIndex = focus?.let { storeListIndexFor(it, state, purchasesAvailable) }
@@ -144,13 +148,23 @@ private fun StoreScreenContent(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item(key = "current-plan") {
-                        CurrentPlanRow(entitlement = state.entitlement, onManageSubscription = onManageSubscription)
+                        CurrentPlanRow(
+                            entitlement = state.entitlement,
+                            onManageSubscription = onManageSubscription,
+                            partnerLink = partnerLink,
+                        )
                     }
 
                     if (!purchasesAvailable) {
                         item(key = "manage-on-mobile") {
                             StoreManageOnMobileRow()
                         }
+                    }
+
+                    // The linked-partner benefit leads the plans (the Plans paywall focus lands here):
+                    // one subscription covers both partners, worded for this viewer's link state.
+                    item(key = "linked-partner-benefit") {
+                        StoreLinkedPartnerBenefitRow(copy = storePartnerBenefitCopy(state.entitlement, partnerLink))
                     }
 
                     item(key = "tiers-title") {
@@ -175,12 +189,6 @@ private fun StoreScreenContent(
                             purchasesAvailable = purchasesAvailable,
                             localizedPrices = state.localizedPrices,
                         )
-                    }
-
-                    // Subscription benefit note sits with the tiers (handoff order), above the
-                    // one-time Boosts & extras.
-                    item(key = "linked-partner-benefit") {
-                        StoreLinkedPartnerBenefitRow()
                     }
 
                     if (state.premiumProducts.isNotEmpty()) {

@@ -468,9 +468,11 @@ upsert_discovery AS (
         updated_at = now()
     RETURNING user_id
 )
+-- Same shape the server stores (V116): the cell centre only, no accuracy, the cell's label as geohash.
 INSERT INTO user_locations (
     user_id,
     geom,
+    geohash,
     location_source,
     accuracy_meters,
     city,
@@ -480,9 +482,10 @@ INSERT INTO user_locations (
 )
 SELECT
     user_id,
-    ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
+    pynapli_location_cell(ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography),
+    pynapli_location_cell_label(ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography),
     'gps',
-    12,
+    NULL::integer,
     'Mountain View',
     'CA',
     'US',
@@ -490,8 +493,9 @@ SELECT
 FROM candidates
 ON CONFLICT (user_id) DO UPDATE
 SET geom = EXCLUDED.geom,
+    geohash = EXCLUDED.geohash,
     location_source = EXCLUDED.location_source,
-    accuracy_meters = EXCLUDED.accuracy_meters,
+    accuracy_meters = NULL,
     city = EXCLUDED.city,
     region = EXCLUDED.region,
     country = EXCLUDED.country,

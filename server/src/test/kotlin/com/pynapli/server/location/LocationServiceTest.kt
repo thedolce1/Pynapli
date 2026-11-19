@@ -1,6 +1,7 @@
 package com.pynapli.server.location
 
 import com.pynapli.server.safety.LocationRiskSignalPublisher
+import com.pynapli.shared.location.LocationCell
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
@@ -11,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LocationServiceTest {
@@ -21,7 +23,8 @@ class LocationServiceTest {
     fun updateCurrentLocationStoresCoarseResponseWithoutExactCoordinates() {
         runBlocking {
             val userId = UUID.randomUUID()
-            val service = LocationService(InMemoryLocationRepository())
+            val repository = InMemoryLocationRepository()
+            val service = LocationService(repository)
 
             val response =
                 service.updateCurrentLocation(
@@ -37,7 +40,14 @@ class LocationServiceTest {
                     ),
                 )
 
-            assertEquals(30, response.accuracyMeters)
+            // No accuracy figure is kept or echoed any more (it described the precise fix).
+            assertNull(response.accuracyMeters)
+            // The repository only ever receives the cell centre, never the precise fix.
+            val stored = assertNotNull(repository.lastUpdate)
+            assertEquals(4550, LocationCell.hundredths(stored.latitude))
+            assertEquals(-7357, LocationCell.hundredths(stored.longitude))
+            assertEquals(LocationCell.snapCoordinate(45.5017), stored.latitude)
+            assertEquals(LocationCell.snapCoordinate(-73.5673), stored.longitude)
             assertEquals("gps", response.source)
             assertEquals("Montreal", response.city)
             // L-40: the write acknowledgement echoes no location of any kind (no bucket, no
@@ -272,17 +282,18 @@ private class InMemoryLocationRepository(
 ) : LocationRepository {
     var upserts = 0
         private set
+    var lastUpdate: LocationUpdate? = null
+        private set
 
     override suspend fun upsertCurrentLocation(
         userId: UUID,
         update: LocationUpdate,
     ): CurrentLocationRecord {
         upserts += 1
+        lastUpdate = update
         return CurrentLocationRecord(
             updatedAt = Instant.parse("2026-04-24T00:00:00Z"),
-            accuracyMeters = update.accuracyMeters,
             source = update.source,
-            geohash = update.geohash,
             city = update.city,
             region = update.region,
             country = update.country,

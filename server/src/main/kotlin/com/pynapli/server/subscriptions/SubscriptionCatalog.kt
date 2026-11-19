@@ -52,6 +52,7 @@ internal object SubscriptionCatalog {
                         "More Activity reveal",
                         "Saved filters",
                         "Travel preview",
+                        includedPineappleLikesLine(IncludedAllowancePlan.SOCIAL_WEEKLY_PINEAPPLE_LIKES),
                     ),
             ),
             SubscriptionTierDto(
@@ -66,11 +67,16 @@ internal object SubscriptionCatalog {
                         "Advanced filters",
                         "Incognito",
                         "Travel mode",
-                        "Weekly Pineapple Likes",
-                        "Monthly Boost",
+                        includedPineappleLikesLine(IncludedAllowancePlan.SELECT_WEEKLY_PINEAPPLE_LIKES),
+                        includedBoostsLine(IncludedAllowancePlan.SELECT_MONTHLY_BOOSTS),
                     ),
             ),
         )
+
+    // The plan card states what the server grants (IncludedAllowancePlan), from the same constants.
+    internal fun includedPineappleLikesLine(perWeek: Int): String = if (perWeek == 1) "1 Pineapple Like every week" else "$perWeek Pineapple Likes every week"
+
+    internal fun includedBoostsLine(perMonth: Int): String = if (perMonth == 1) "1 Boost every month" else "$perMonth Boosts every month"
 
     private fun premiumProducts(): List<PremiumProductDto> =
         listOf(

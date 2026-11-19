@@ -41,8 +41,11 @@ internal fun linkedPartnerBenefitSummary(
     val entitlement = state.entitlement
     return when {
         entitlement?.source == EntitlementSource.LINKED_PARTNER_BENEFIT -> "Active via your partner"
-        entitlement?.linkedPartnerIncluded == true ->
+        // Only the subscriber's own paid subscription reaches a partner (the server's partner branch
+        // reads subscriptions, never promo/admin grants), though linkedPartnerIncluded is true for all.
+        entitlement != null && entitlement.source == EntitlementSource.OWN_SUBSCRIPTION && entitlement.tier != SubscriptionTier.FREE ->
             if (profileLinksState.current != null) "Shared with your partner" else "Included — link a partner"
+        entitlement != null && entitlement.tier != SubscriptionTier.FREE -> "Not shared on this plan"
         entitlement == null && state.isLoading -> "Loading"
         else -> "Not included on Free"
     }

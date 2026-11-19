@@ -55,6 +55,8 @@ import com.pynapli.server.safety.ReportService
 import com.pynapli.server.safety.RiskFalsePositiveMetrics
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.safety.RiskService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 internal class CoreDependencies(
     val accountLifecycleService: AccountLifecycleService,
@@ -90,6 +92,8 @@ internal fun buildCoreDependencies(
     config: ServerConfig,
     database: Database,
     redisCache: RedisCache,
+    // The server's background scope (cancelled on shutdown) for work that runs after a response.
+    backgroundScope: CoroutineScope,
 ): CoreDependencies {
     val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource)
     val accountExportStorage = buildAccountExportStorage(config)
@@ -175,6 +179,9 @@ internal fun buildCoreDependencies(
                 } else {
                     UnconfiguredPasswordResetMailer
                 },
+            // A member's lookup, code write and email run off the request path, so a reset request
+            // takes the same time whether or not the address has an account.
+            launchResetWork = { work -> backgroundScope.launch { work() } },
             rateLimitService = rateLimitService,
             onSessionsRevoked = authService::invalidateCachedSessionsForUser,
         )

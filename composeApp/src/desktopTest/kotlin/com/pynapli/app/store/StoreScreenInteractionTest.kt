@@ -43,6 +43,8 @@ class StoreScreenInteractionTest {
             }
 
             waitUntil(timeoutMillis = 5_000) { repository.loadCount == 1 }
+            // The linked-partner benefit leads the plans.
+            onNodeWithText(ONE_SUBSCRIPTION_HEADLINE).assertIsDisplayed()
             onNodeWithText("Plans").assertExists()
             onNodeWithText("Pynapli Select").assertExists()
             onNodeWithTag(StoreTestTags.LIST).performScrollToNode(hasText("Boosts & extras"))

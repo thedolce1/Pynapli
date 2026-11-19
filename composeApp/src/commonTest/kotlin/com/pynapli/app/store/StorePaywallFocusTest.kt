@@ -29,12 +29,14 @@ class StorePaywallFocusTest {
                 },
         )
 
-    // List order: current plan, plans title, Free, Social, Select, partner benefit, extras title,
-    // Boost, Pineapple Likes. Web adds a "manage on mobile" row after the current plan.
+    // List order: current plan, partner benefit, plans title, Free, Social, Select, extras title,
+    // Boost, Pineapple Likes. Web adds a "manage on mobile" row after the current plan. The Plans
+    // focus lands on the partner benefit, so every plans paywall opens on it.
     @Test
     fun eachPaywallLandsOnItsSectionOfTheStoreList() {
         assertEquals(1, storeListIndexFor(StorePaywallFocus.Plans, state, purchasesAvailable = true))
-        assertEquals(4, storeListIndexFor(StorePaywallFocus.Select, state, purchasesAvailable = true))
+        assertEquals(2, storeListIndexFor(StorePaywallFocus.Plans, state, purchasesAvailable = false))
+        assertEquals(5, storeListIndexFor(StorePaywallFocus.Select, state, purchasesAvailable = true))
         assertEquals(8, storeListIndexFor(StorePaywallFocus.PineappleLikes, state, purchasesAvailable = true))
         assertEquals(9, storeListIndexFor(StorePaywallFocus.PineappleLikes, state, purchasesAvailable = false))
     }

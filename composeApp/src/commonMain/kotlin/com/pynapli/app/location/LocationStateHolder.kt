@@ -2,6 +2,7 @@ package com.pynapli.app.location
 
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.location.snapToLocationCell
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
@@ -54,7 +55,10 @@ class LocationStateHolder(
             return LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
         }
 
-        return when (val result = repository.updateCurrentLocation(location)) {
+        // Location privacy: only the cell centre leaves the device, with no accuracy figure. The
+        // precise fix stays in memory as the movement anchor so the 250 m / 1 km decisions above
+        // behave exactly as before; it is never persisted or logged.
+        return when (val result = repository.updateCurrentLocation(location.toCell())) {
             is AppResult.Success -> {
                 lastSubmittedDeviceLocation = location
                 _state.update { current ->
@@ -124,6 +128,13 @@ enum class GridLocationRefresh {
     Refresh,
 }
 
+/** The fix snapped to its 0.01-degree cell (the server's `pynapli_location_cell`), without accuracy. */
+internal fun DeviceLocation.toCell(): DeviceLocation {
+    val cell = snapToLocationCell(latitude = latitude, longitude = longitude)
+    return DeviceLocation(latitude = cell.latitude, longitude = cell.longitude, accuracyMeters = null)
+}
+
+/** Receives only cell-snapped locations from [LocationStateHolder]. */
 interface LocationUpdateRepository {
     suspend fun updateCurrentLocation(location: DeviceLocation): AppResult<CurrentLocationDto>
 }
@@ -131,13 +142,17 @@ interface LocationUpdateRepository {
 class ApiLocationUpdateRepository(
     private val apiClient: PynapliApiClient,
 ) : LocationUpdateRepository {
-    override suspend fun updateCurrentLocation(location: DeviceLocation): AppResult<CurrentLocationDto> =
-        apiClient.updateCurrentLocation(
+    override suspend fun updateCurrentLocation(location: DeviceLocation): AppResult<CurrentLocationDto> {
+        // Snapping is idempotent, so snapping again here costs nothing and keeps the request
+        // cell-only even if a future caller skips the state holder.
+        val cell = location.toCell()
+        return apiClient.updateCurrentLocation(
             UpdateCurrentLocationRequestDto(
-                latitude = location.latitude,
-                longitude = location.longitude,
-                accuracyMeters = location.accuracyMeters,
+                latitude = cell.latitude,
+                longitude = cell.longitude,
+                accuracyMeters = null,
                 source = "gps",
             ),
         )
+    }
 }

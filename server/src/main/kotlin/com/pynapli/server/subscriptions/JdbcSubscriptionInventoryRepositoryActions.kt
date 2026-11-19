@@ -26,6 +26,30 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
             connection.consumePremiumInventoryRecordReturningId(userId, "pineapple_like", now)
         }
 
+    /** Grants (or withholds) the plan's included units, then spends one, in one transaction. */
+    suspend fun consumePineappleLikeInventoryReturningId(
+        userId: UUID,
+        now: Instant,
+        includedAllowance: IncludedAllowance,
+    ): UUID? =
+        dataSource.withConnection { connection ->
+            connection.inTransaction {
+                connection.reconcileIncludedAllowances(userId, listOf(includedAllowance), now)
+                connection.consumePremiumInventoryRecordReturningId(userId, "pineapple_like", now)
+            }
+        }
+
+    suspend fun reconcileIncludedAllowances(
+        userId: UUID,
+        allowances: List<IncludedAllowance>,
+        now: Instant,
+    ) {
+        if (allowances.isEmpty()) return
+        dataSource.withConnection { connection ->
+            connection.inTransaction { connection.reconcileIncludedAllowances(userId, allowances, now) }
+        }
+    }
+
     suspend fun refundInventoryById(
         inventoryId: UUID,
         now: Instant,
@@ -68,6 +92,7 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
         userId: UUID,
         now: Instant,
         duration: Duration,
+        includedAllowance: IncludedAllowance? = null,
     ): BoostActivationResult? =
         dataSource.withConnection { connection ->
             connection.inTransaction {
@@ -83,6 +108,9 @@ internal class JdbcSubscriptionInventoryRepositoryActions(
                         consumedInventory = false,
                     )
                 }
+                // The plan's monthly Boost, granted (once per period) or withheld before the spend,
+                // under the same lock, so it is spent ahead of purchased Boosts.
+                includedAllowance?.let { connection.reconcileIncludedAllowances(userId, listOf(it), now) }
                 if (!consumePremiumInventoryRecord(userId, "boost", now)) {
                     return@inTransaction null
                 }
