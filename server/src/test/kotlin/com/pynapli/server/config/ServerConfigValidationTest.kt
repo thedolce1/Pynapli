@@ -26,6 +26,31 @@ class ServerConfigValidationTest {
         assertTrue("FIREBASE_PROJECT_ID_REQUIRED" in issueCodes)
         assertTrue("ADMIN_API_TOKEN_REQUIRED" in issueCodes)
         assertTrue("RUNTIME_CURSOR_SECRETS_REQUIRED" in issueCodes)
+        assertTrue("CONTACT_BLOCK_KEYS_REQUIRED" in issueCodes)
+    }
+
+    @Test
+    fun productionLikeEnvironmentsRefuseMissingOrSharedContactBlockKeys() {
+        val missing =
+            validStagingConfig()
+                .copy(contactBlockEmailKey = "pynapli-local-dev-contact-block-email-key")
+                .startupValidationIssues()
+                .map { it.code }
+        val shared =
+            validStagingConfig()
+                .copy(contactBlockTargetKey = "contactblockemailstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        val reusedCursorSecret =
+            validStagingConfig(environment = "production")
+                .copy(contactBlockTargetKey = "discoverystagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+
+        assertEquals(listOf("CONTACT_BLOCK_KEYS_REQUIRED"), missing)
+        assertEquals(listOf("CONTACT_BLOCK_KEYS_MUST_DIFFER"), shared)
+        assertEquals(listOf("CONTACT_BLOCK_KEYS_MUST_DIFFER"), reusedCursorSecret)
+        assertEquals(emptyList(), localConfig().startupValidationIssues())
     }
 
     @Test
@@ -217,6 +242,8 @@ class ServerConfigValidationTest {
             discoveryCursorSecret = "discoverystagingruntimevalue123456789",
             activityCursorSecret = "activitystagingruntimevalue123456789",
             swipeDeckTokenSecret = "swipedeckstagingruntimevalue123456789",
+            contactBlockEmailKey = "contactblockemailstagingruntimevalue123456789",
+            contactBlockTargetKey = "contactblocktargetstagingruntimevalue123456789",
             playStoreSandboxEnabled = playStoreSandboxEnabled,
             corsAllowedOrigins = corsAllowedOrigins,
         )

@@ -183,6 +183,9 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.BLOCK_OR_HIDE, limit = 120, windowSeconds = ONE_HOUR_SECONDS),
                 // Starring and un-starring: far above real use, low enough that toggling can't hammer the DB.
                 RateLimitPolicy(action = RateLimitedAction.FAVORITE_UPDATE, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
+                // "Hide from people you know": adds per member per day (ContactBlockService.MAX_ADDS_PER_DAY).
+                // Counts every add, member or not, so the budget never depends on membership.
+                RateLimitPolicy(action = RateLimitedAction.CONTACT_BLOCK_ADD, limit = 100, windowSeconds = ONE_DAY_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.LOCATION_UPDATE, limit = 360, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.DATA_EXPORT, limit = 5, windowSeconds = ONE_DAY_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.APPEAL, limit = 10, windowSeconds = ONE_DAY_SECONDS),
@@ -253,6 +256,7 @@ object RateLimitedAction {
     const val SESSION_CREATE = "session_create"
     const val BLOCK_OR_HIDE = "block_or_hide"
     const val FAVORITE_UPDATE = "favorite_update"
+    const val CONTACT_BLOCK_ADD = "contact_block_add"
     const val LOCATION_UPDATE = "location_update"
     const val DATA_EXPORT = "data_export"
     const val APPEAL = "appeal"

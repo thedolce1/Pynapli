@@ -16,6 +16,15 @@ import com.pynapli.server.auth.PasswordRecoveryService
 import com.pynapli.server.auth.SignedInDevicesService
 import com.pynapli.server.auth.UnconfiguredPasswordResetMailer
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.contactblocks.ContactBlockResolver
+import com.pynapli.server.contactblocks.ContactBlockResolverWorker
+import com.pynapli.server.contactblocks.ContactBlockService
+import com.pynapli.server.contactblocks.ContactBlockTokens
+import com.pynapli.server.contactblocks.ContactBlockVisibility
+import com.pynapli.server.contactblocks.JdbcContactBlockRepository
+import com.pynapli.server.contactblocks.JdbcContactBlockResolverRepository
+import com.pynapli.server.contactblocks.JdbcContactBlockVisibility
+import com.pynapli.server.db.PostgresJobLock
 import com.pynapli.server.location.JdbcLocationRepository
 import com.pynapli.server.location.JdbcTravelLocationRepository
 import com.pynapli.server.location.LocationService
@@ -86,6 +95,11 @@ internal class CoreDependencies(
     val psyncBroadcaster: PsyncBroadcaster,
     val messageBroadcaster: MessageBroadcaster,
     val notificationDispatchWorker: NotificationDispatchWorker?,
+    val contactBlockTokens: ContactBlockTokens,
+    val contactBlockVisibility: ContactBlockVisibility,
+    val contactBlockResolver: ContactBlockResolver,
+    val contactBlockResolverWorker: ContactBlockResolverWorker,
+    val contactBlockService: ContactBlockService,
 )
 
 internal fun buildCoreDependencies(
@@ -95,7 +109,17 @@ internal fun buildCoreDependencies(
     // The server's background scope (cancelled on shutdown) for work that runs after a response.
     backgroundScope: CoroutineScope,
 ): CoreDependencies {
-    val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource)
+    // "Hide from people you know" (TRUST_AND_SAFETY_SPEC, "Contact blocks"): the configured keys, the
+    // viewer-side lookup every surface applies, and the off-request resolver.
+    val contactBlockTokens = ContactBlockTokens(config.contactBlockEmailKey, config.contactBlockTargetKey)
+    val contactBlockVisibility = JdbcContactBlockVisibility(database.dataSource, contactBlockTokens)
+    val contactBlockResolver = ContactBlockResolver(JdbcContactBlockResolverRepository(database.dataSource), contactBlockTokens)
+    val contactBlockResolverWorker =
+        ContactBlockResolverWorker(
+            resolver = contactBlockResolver,
+            jobLock = PostgresJobLock(database.dataSource),
+        )
+    val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)
     val accountExportStorage = buildAccountExportStorage(config)
     val accountLifecycleService =
         AccountLifecycleService(
@@ -108,7 +132,7 @@ internal fun buildCoreDependencies(
                 processor =
                     AccountDataExportProcessor(
                         repository = accountLifecycleRepository,
-                        archiver = JdbcAccountDataExportArchiver(database.dataSource),
+                        archiver = JdbcAccountDataExportArchiver(database.dataSource, contactBlockTokens = contactBlockTokens),
                         storage = accountExportStorage,
                     ),
                 intervalMillis = config.accountDataExportIntervalMillis,
@@ -168,6 +192,14 @@ internal fun buildCoreDependencies(
             deviceRiskSignalPublisher = riskService,
             productMetrics = productMetrics,
             revocationRelay = redisCache.realtimeRelay,
+            onEmailSignIn = contactBlockResolver::recordAddressAtSignIn,
+        )
+    val contactBlockService =
+        ContactBlockService(
+            repository = JdbcContactBlockRepository(database.dataSource),
+            tokens = contactBlockTokens,
+            resolutionTrigger = contactBlockResolverWorker,
+            rateLimitService = rateLimitService,
         )
     val passwordRecoveryService =
         PasswordRecoveryService(
@@ -207,7 +239,7 @@ internal fun buildCoreDependencies(
             falsePositiveMetrics = RiskFalsePositiveMetrics(),
         )
     val notificationRepository = JdbcNotificationRepository(database.dataSource)
-    val notificationService = NotificationService(notificationRepository)
+    val notificationService = NotificationService(notificationRepository, contactBlockVisibility = contactBlockVisibility)
     // Every replica publishes its deltas to Redis and delivers the others' to its own sockets.
     val activityBroadcaster = ActivityBroadcaster(relay = redisCache.realtimeRelay)
     val psyncBroadcaster = PsyncBroadcaster(relay = redisCache.realtimeRelay)
@@ -257,6 +289,11 @@ internal fun buildCoreDependencies(
         psyncBroadcaster = psyncBroadcaster,
         messageBroadcaster = messageBroadcaster,
         notificationDispatchWorker = notificationDispatchWorker,
+        contactBlockTokens = contactBlockTokens,
+        contactBlockVisibility = contactBlockVisibility,
+        contactBlockResolver = contactBlockResolver,
+        contactBlockResolverWorker = contactBlockResolverWorker,
+        contactBlockService = contactBlockService,
     )
 }
 

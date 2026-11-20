@@ -161,6 +161,9 @@ class ServerDependencies(
     val photoVerificationRetentionWorker: PhotoVerificationRetentionWorker? = null,
     val accountLifecycleService: AccountLifecycleService,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
+    val contactBlockService: com.pynapli.server.contactblocks.ContactBlockService? = null,
+    val contactBlockResolverWorker: com.pynapli.server.contactblocks.ContactBlockResolverWorker? = null,
+    val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
     private val profileActivityScope: CoroutineScope,
     private val probes: List<DependencyProbe>,
 ) : AutoCloseable {
@@ -180,6 +183,7 @@ class ServerDependencies(
         runCatching { psyncPresenceWatcher?.close() }
         runCatching { travelTripWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
+        runCatching { contactBlockResolverWorker?.close() }
         runCatching { profileActivityScope.cancel() }
         probes.asReversed().forEach { probe ->
             runCatching { probe.close() }
@@ -224,6 +228,7 @@ class ServerDependencies(
                     authService = core.authService,
                     rateLimitService = core.rateLimitService,
                     backgroundScope = profileActivityScope,
+                    onAccountVerified = core.contactBlockResolver::bindNewlyVerifiedAccount,
                 )
             val media =
                 buildMediaDependencies(
@@ -539,6 +544,9 @@ class ServerDependencies(
                 photoVerificationRetentionWorker = photoVerificationRetentionWorker,
                 accountLifecycleService = core.accountLifecycleService,
                 requestProfilerFactory = requestProfilerFactory,
+                contactBlockService = core.contactBlockService,
+                contactBlockResolverWorker = core.contactBlockResolverWorker,
+                contactBlockVisibility = core.contactBlockVisibility,
                 profileActivityScope = profileActivityScope,
                 probes = listOf(postgres, redis),
             )

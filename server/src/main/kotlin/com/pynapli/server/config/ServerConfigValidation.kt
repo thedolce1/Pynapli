@@ -263,6 +263,25 @@ private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config
         message = "Discovery, Activity, and Swipe deck secrets must be different values.",
     )
     require(
+        condition =
+            config.contactBlockEmailKey.isStrongRuntimeSecret() &&
+                config.contactBlockTargetKey.isStrongRuntimeSecret(),
+        code = "CONTACT_BLOCK_KEYS_REQUIRED",
+        message = "Production-like environments need explicit, strong PYNAPLI_CONTACT_BLOCK_EMAIL_KEY and PYNAPLI_CONTACT_BLOCK_TARGET_KEY values.",
+    )
+    require(
+        condition =
+            setOf(
+                config.contactBlockEmailKey,
+                config.contactBlockTargetKey,
+                config.discoveryCursorSecret,
+                config.activityCursorSecret,
+                config.swipeDeckTokenSecret,
+            ).size == 5,
+        code = "CONTACT_BLOCK_KEYS_MUST_DIFFER",
+        message = "The two contact block keys must differ from each other and from every cursor/deck secret.",
+    )
+    require(
         condition = !config.apiProfilingEnabled || config.apiProfilingHeaderRequired,
         code = "API_PROFILING_HEADER_REQUIRED",
         message = "API profiling may be enabled only when gated by X-Pynapli-Profile.",

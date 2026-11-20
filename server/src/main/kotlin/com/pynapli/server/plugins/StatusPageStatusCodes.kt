@@ -214,6 +214,7 @@ internal fun safetyStatusFor(code: String): HttpStatusCode =
         "APPEAL_REPORT_NOT_FOUND",
         -> HttpStatusCode.NotFound
         "APPEAL_ALREADY_OPEN" -> HttpStatusCode.Conflict
+        "CONTACT_BLOCK_LIMIT_REACHED" -> HttpStatusCode.Conflict
         "APPEAL_TARGET_NOT_APPEALABLE" -> HttpStatusCode.Forbidden
         "BLOCK_SELF_FORBIDDEN",
         "REPORT_SELF_FORBIDDEN",

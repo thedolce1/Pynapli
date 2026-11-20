@@ -11,6 +11,7 @@ import com.pynapli.server.admin.configureAdminUserLookupRoutes
 import com.pynapli.server.auth.configureAuthRoutes
 import com.pynapli.server.auth.configureEmailSignupRoutes
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.contactblocks.configureContactBlockRoutes
 import com.pynapli.server.dependencies.ServerDependencies
 import com.pynapli.server.dependencies.closeDependenciesOnStop
 import com.pynapli.server.favorites.configureFavoriteRoutes
@@ -104,6 +105,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.accountDataExportWorker?.start()
     dependencies.playStoreSubscriptionSyncWorker?.start()
     dependencies.presenceOfflineScanner.start()
+    dependencies.contactBlockResolverWorker?.start()
     configureSerialization()
     configureStatusPages()
     configureMonitoring()
@@ -191,6 +193,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         authService = dependencies.authService,
         broadcaster = dependencies.presenceBroadcaster,
         blockRepository = dependencies.blockRepository,
+        contactBlockVisibility = dependencies.contactBlockVisibility,
     )
     configureGridRoutes(dependencies.authService, dependencies.gridService, dependencies.requestProfilerFactory)
     dependencies.favoriteService?.let { service -> configureFavoriteRoutes(dependencies.authService, service) }
@@ -216,6 +219,9 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         hiddenProfileService = dependencies.hiddenProfileService,
         reportService = dependencies.reportService,
     )
+    dependencies.contactBlockService?.let { service ->
+        configureContactBlockRoutes(dependencies.authService, service)
+    }
     configureAppealRoutes(dependencies.authService, dependencies.appealService, dependencies.config.trustedProxyHops)
     configureSwipeRoutes(
         authService = dependencies.authService,

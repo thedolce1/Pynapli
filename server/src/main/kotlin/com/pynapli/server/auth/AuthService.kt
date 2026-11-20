@@ -29,6 +29,8 @@ class AuthService(
     deviceRiskSignalPublisher: DeviceRiskSignalPublisher? = null,
     private val productMetrics: ProductMetrics? = null,
     private val revocationRelay: RealtimeRelay = LocalOnlyRealtimeRelay,
+    /** After a successful email sign-in, with the account and the normalised typed address. */
+    private val onEmailSignIn: (suspend (userId: UUID, normalisedEmail: String) -> Unit)? = null,
 ) {
     private val validator = AuthRequestValidator(clock)
     private val rateLimitGuard = AuthRateLimitGuard(rateLimitService)
@@ -90,6 +92,10 @@ class AuthService(
     ): AuthSessionDto {
         val identity = verifyCredentials(email, password, clientIp)
         if (identity.userStatus != "active") throw AuthException("ACCOUNT_NOT_ACTIVE")
+        // The typed address matched the account, so it is the owner's: an account verified before
+        // contact tokens existed gets its token now, and "Hide from people you know" rows naming it are
+        // settled, all before this sign-in hands back a session (TRUST_AND_SAFETY_SPEC, "Contact blocks").
+        onEmailSignIn?.invoke(identity.userId, normalizeEmail(email))
 
         val session = sessionManager.createSession(UserRecord(identity.userId, identity.userStatus), deviceId, platform, appVersion)
         productMetrics?.record(ProductMetrics.LOGIN)

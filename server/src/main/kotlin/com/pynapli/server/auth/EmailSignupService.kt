@@ -56,6 +56,12 @@ class EmailSignupService(
     private val launchSignupWork: (suspend () -> Unit) -> Unit,
     private val codeGenerator: () -> String = ::newSignupCode,
     private val tokenGenerator: () -> String = TokenGenerator::newToken,
+    /**
+     * Runs once the account exists and BEFORE its first session is returned, with the new account and
+     * its normalised, just-proven address: binds "Hide from people you know" rows naming the address,
+     * so the new member can't see anyone hiding from them for even one request.
+     */
+    private val onAccountVerified: (suspend (userId: UUID, normalisedEmail: String) -> Unit)? = null,
 ) {
     private val validator = AuthRequestValidator(clock)
     private val rateLimitGuard = AuthRateLimitGuard(rateLimitService)
@@ -162,8 +168,10 @@ class EmailSignupService(
             )
         // A concurrent verify won, or the address got an account meanwhile: same answer as any other
         // failure (this branch needs the right code, so it tells a guesser nothing).
-        return user?.let { authService.startFirstSession(it, deviceId, platform, appVersion) }
-            ?: throw AuthException("INVALID_SIGNUP_CODE")
+        if (user == null) throw AuthException("INVALID_SIGNUP_CODE")
+        // Bound before the session exists, so no discovery request of the new member can come first.
+        onAccountVerified?.invoke(user.id, account)
+        return authService.startFirstSession(user, deviceId, platform, appVersion)
     }
 
     /**
@@ -207,6 +215,7 @@ class EmailSignupService(
                 privacyVersion = AUTH_PRIVACY_VERSION,
                 verifiedAt = clock.instant(),
             ) ?: throw AuthException("EMAIL_ALREADY_EXISTS")
+        onAccountVerified?.invoke(user.id, account)
         return authService.startFirstSession(user, deviceId, platform, appVersion)
     }
 

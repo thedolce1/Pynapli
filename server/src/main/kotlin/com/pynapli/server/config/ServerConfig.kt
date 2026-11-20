@@ -133,6 +133,12 @@ data class ServerConfig(
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
     val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
     val swipeDeckTokenSecret: String = "pynapli-local-dev-swipe-deck-token-secret",
+    // "Hide from people you know" (TRUST_AND_SAFETY_SPEC, "Contact blocks"): K1 keys the stored code
+    // of each added address and of each verified member's address; K2 keys which member a row points
+    // at. Fixed development values locally; staging and production refuse to start without explicit,
+    // strong, distinct values. Rotating either orphans every stored code (founder setup item).
+    val contactBlockEmailKey: String = "pynapli-local-dev-contact-block-email-key",
+    val contactBlockTargetKey: String = "pynapli-local-dev-contact-block-target-key",
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
@@ -511,6 +517,18 @@ data class ServerConfig(
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() }
                         ?: "pynapli-local-dev-swipe-deck-token-secret",
+                contactBlockEmailKey =
+                    System
+                        .getenv("PYNAPLI_CONTACT_BLOCK_EMAIL_KEY")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "pynapli-local-dev-contact-block-email-key",
+                contactBlockTargetKey =
+                    System
+                        .getenv("PYNAPLI_CONTACT_BLOCK_TARGET_KEY")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "pynapli-local-dev-contact-block-target-key",
             )
         }
     }

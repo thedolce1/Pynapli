@@ -1,6 +1,7 @@
 package com.pynapli.server.account
 
 import com.pynapli.server.auth.CLEAR_REFRESH_REPLAY_SQL
+import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
 import java.sql.Connection
@@ -9,6 +10,7 @@ import javax.sql.DataSource
 
 internal class JdbcAccountDeletionActions(
     private val dataSource: DataSource,
+    private val contactBlockTokens: ContactBlockTokens = ContactBlockTokens.localDevelopment(),
 ) {
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult? =
         dataSource.withConnection { connection ->
@@ -28,6 +30,7 @@ internal class JdbcAccountDeletionActions(
                 anonymizeProfile(connection, userId)
                 val purgedLocationCount = purgeExactLocation(connection, userId)
                 purgeFavoritesAndLastActive(connection, userId)
+                releaseContactBlocks(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)
@@ -281,6 +284,33 @@ internal class JdbcAccountDeletionActions(
             statement.executeUpdate()
         }
         connection.prepareStatement("DELETE FROM user_last_active WHERE user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
+    }
+
+    /**
+     * "Hide from people you know" (TRUST_AND_SAFETY_SPEC, "Contact blocks"): the addresses this person
+     * added go with the account; rows other people added that point at this person (hidden or exempt)
+     * go back to pending, so they bind again only if the address re-registers and is verified; and the
+     * account's own contact token is cleared (users is anonymised, not deleted, so each is explicit).
+     */
+    private fun releaseContactBlocks(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection.prepareStatement("DELETE FROM contact_blocks WHERE blocker_user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
+        connection
+            .prepareStatement("UPDATE contact_blocks SET target_token = NULL WHERE target_token IN (?, ?)")
+            .use { statement ->
+                statement.setString(1, contactBlockTokens.targetToken(userId))
+                statement.setString(2, contactBlockTokens.exemptToken(userId))
+                statement.executeUpdate()
+            }
+        connection.prepareStatement("UPDATE users SET contact_token = NULL WHERE id = ?").use { statement ->
             statement.setObject(1, userId)
             statement.executeUpdate()
         }

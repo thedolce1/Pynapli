@@ -1,5 +1,6 @@
 package com.pynapli.server.account
 
+import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.db.withConnection
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -32,6 +33,8 @@ interface AccountDataExportArchiver {
 class JdbcAccountDataExportArchiver(
     private val dataSource: DataSource,
     private val clock: Clock = Clock.systemUTC(),
+    // The server's contact block keys (ServerDependencies passes the configured ones).
+    private val contactBlockTokens: ContactBlockTokens = ContactBlockTokens.localDevelopment(),
 ) : AccountDataExportArchiver {
     override suspend fun buildArchive(userId: UUID): ExportArchive =
         dataSource.withConnection { connection ->
@@ -46,11 +49,11 @@ class JdbcAccountDataExportArchiver(
                         "sentMessages",
                         connection.queryRows("SELECT * FROM messages WHERE sender_user_id = ? ORDER BY created_at", userId),
                     )
-                    put(
-                        "activity",
-                        connection.queryRows("SELECT * FROM activity_events WHERE recipient_user_id = ? ORDER BY occurred_at", userId),
-                    )
                     EXPORT_SECTIONS.forEach { (name, sql) -> put(name, connection.queryRows(sql, userId)) }
+                    // Rows other people caused that this person was never shown ("Hide from people you
+                    // know") stay out, exactly as they stay out of every other read of theirs.
+                    val hiddenToken = contactBlockTokens.targetToken(userId)
+                    VIEWER_FILTERED_SECTIONS.forEach { (name, sql) -> put(name, connection.queryRowsForViewer(sql, userId, hiddenToken)) }
                 }
             ExportArchive(
                 filename = "pynapli-data-export-$userId.json",
@@ -66,6 +69,18 @@ class JdbcAccountDataExportArchiver(
         prepareStatement(sql).use { statement ->
             // Every placeholder is the exporting user.
             repeat(statement.parameterMetaData.parameterCount) { index -> statement.setObject(index + 1, userId) }
+            statement.executeQuery().use { rs -> rs.rowsAsJson() }
+        }
+
+    /** [VIEWER_FILTERED_SECTIONS]: parameter 1 is the exporting user, parameter 2 their hidden-from token. */
+    private fun Connection.queryRowsForViewer(
+        sql: String,
+        userId: UUID,
+        hiddenToken: String,
+    ): JsonArray =
+        prepareStatement(sql).use { statement ->
+            statement.setObject(1, userId)
+            statement.setString(2, hiddenToken)
             statement.executeQuery().use { rs -> rs.rowsAsJson() }
         }
 
@@ -103,18 +118,12 @@ class JdbcAccountDataExportArchiver(
                     "SELECT id, kind, title, visibility_status, created_at, deleted_at FROM media_albums WHERE owner_user_id = ?",
                 "albumAccessYouGave" to
                     "SELECT album_id, grantee_user_id, granted_at, revoked_at FROM media_album_access_grants WHERE owner_user_id = ? ORDER BY granted_at",
-                "albumAccessYouHave" to
-                    "SELECT album_id, owner_user_id, granted_at, revoked_at FROM media_album_access_grants WHERE grantee_user_id = ? ORDER BY granted_at",
                 "albumRequestsYouSent" to
                     "SELECT id, owner_user_id, status, requested_at, decided_at FROM media_album_access_requests WHERE requester_user_id = ? ORDER BY requested_at",
-                "albumRequestsYouReceived" to
-                    "SELECT id, requester_user_id, status, requested_at, decided_at FROM media_album_access_requests WHERE owner_user_id = ? ORDER BY requested_at",
                 "likesAndPasses" to
                     "SELECT id, target_user_id, action, note_text, created_at, rewound_at, psync_session_id FROM swipe_actions WHERE actor_user_id = ? ORDER BY created_at",
                 "matches" to
                     "SELECT id, CASE WHEN user_a = ? THEN user_b ELSE user_a END AS other_user_id, created_at FROM matches WHERE user_a = ? OR user_b = ? ORDER BY created_at",
-                "conversations" to
-                    "SELECT conversation_id, joined_at, left_at, last_read_at, invitation_status, message_expiry_seconds FROM conversation_participants WHERE user_id = ?",
                 "blocks" to
                     "SELECT blocked_user_id, reason, created_at FROM user_blocks WHERE blocker_user_id = ? ORDER BY created_at",
                 "hiddenProfiles" to
@@ -125,8 +134,10 @@ class JdbcAccountDataExportArchiver(
                     "SELECT id, reported_user_id, target_type, target_id, category, note, status, created_at FROM safety_reports WHERE reporter_user_id = ? ORDER BY created_at",
                 "appeals" to
                     "SELECT id, action_type, target_type, target_id, status, user_reason, admin_note, created_at, reviewed_at FROM moderation_appeals WHERE user_id = ? ORDER BY created_at",
-                "partnerLinks" to
-                    "SELECT id, CASE WHEN user_id = ? THEN linked_user_id ELSE user_id END AS partner_user_id, status, created_at, accepted_at, unlinked_at FROM user_profile_links WHERE user_id = ? OR linked_user_id = ? ORDER BY created_at",
+                // "Hide from people you know": only when each address was added. The server can't show
+                // the addresses (it keeps a keyed code) nor whether any belongs to a member.
+                "hideFromPeopleYouKnow" to
+                    "SELECT created_at FROM contact_blocks WHERE blocker_user_id = ? ORDER BY created_at",
                 "subscriptions" to
                     "SELECT platform, tier, status, external_product_id, external_order_id, current_period_start, current_period_end, created_at FROM subscriptions WHERE user_id = ? ORDER BY created_at",
                 // Purchased and plan-included units (source 'subscription', one row per period).
@@ -147,6 +158,63 @@ class JdbcAccountDataExportArchiver(
                     "SELECT platform, app_version, created_at, last_seen_at, revoked_at FROM user_sessions WHERE user_id = ? ORDER BY created_at",
                 "pushDevices" to
                     "SELECT platform, app_version, locale, timezone, notifications_enabled, created_at, disabled_at FROM push_devices WHERE user_id = ?",
+            )
+
+        /**
+         * Sections that hold rows other people caused. Someone hiding from this person ("Hide from
+         * people you know") never reached them, so those rows are left out here too: the export can't
+         * show what the app never did. Parameter 1 is the exporting user (`me.id`), parameter 2 their
+         * hidden-from token (`me.hidden_token`).
+         */
+        internal val VIEWER_FILTERED_SECTIONS: List<Pair<String, String>> =
+            listOf(
+                "activity" to
+                    """
+                    WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
+                    SELECT ae.* FROM activity_events ae, me
+                    WHERE ae.recipient_user_id = me.id
+                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = ae.actor_user_id)
+                    ORDER BY ae.occurred_at
+                    """.trimIndent(),
+                "albumAccessYouHave" to
+                    """
+                    WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
+                    SELECT g.album_id, g.owner_user_id, g.granted_at, g.revoked_at FROM media_album_access_grants g, me
+                    WHERE g.grantee_user_id = me.id
+                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = g.owner_user_id)
+                    ORDER BY g.granted_at
+                    """.trimIndent(),
+                "albumRequestsYouReceived" to
+                    """
+                    WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
+                    SELECT r.id, r.requester_user_id, r.status, r.requested_at, r.decided_at FROM media_album_access_requests r, me
+                    WHERE r.owner_user_id = me.id
+                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = r.requester_user_id)
+                    ORDER BY r.requested_at
+                    """.trimIndent(),
+                "conversations" to
+                    """
+                    WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
+                    SELECT cp.conversation_id, cp.joined_at, cp.left_at, cp.last_read_at, cp.invitation_status, cp.message_expiry_seconds
+                    FROM conversation_participants cp
+                    JOIN conversations c ON c.id = cp.conversation_id, me
+                    WHERE cp.user_id = me.id
+                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = c.created_by_user_id)
+                    """.trimIndent(),
+                "partnerLinks" to
+                    """
+                    WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
+                    SELECT l.id, CASE WHEN l.user_id = me.id THEN l.linked_user_id ELSE l.user_id END AS partner_user_id,
+                           l.status, l.created_at, l.accepted_at, l.unlinked_at
+                    FROM user_profile_links l, me
+                    WHERE (l.user_id = me.id OR l.linked_user_id = me.id)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM contact_blocks cb
+                          WHERE cb.target_token = me.hidden_token
+                            AND cb.blocker_user_id = CASE WHEN l.user_id = me.id THEN l.linked_user_id ELSE l.user_id END
+                      )
+                    ORDER BY l.created_at
+                    """.trimIndent(),
             )
     }
 }

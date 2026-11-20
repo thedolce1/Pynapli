@@ -27,6 +27,8 @@ fun Application.configurePresenceStreamRoutes(
     authService: AuthService,
     broadcaster: PresenceBroadcaster,
     blockRepository: BlockRepository,
+    // "Hide from people you know": a viewer never gets presence of someone hiding from them.
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     installRealtimeWebSocketsIfNeeded()
 
@@ -47,7 +49,8 @@ fun Application.configurePresenceStreamRoutes(
                         .filter { delta ->
                             val targetId = runCatching { UUID.fromString(delta.userId) }.getOrNull() ?: return@filter false
                             targetId in subscription.get() &&
-                                !blockRepository.isBlockedEitherWay(viewerId, targetId)
+                                !blockRepository.isBlockedEitherWay(viewerId, targetId) &&
+                                contactBlockVisibility?.isHiddenFrom(viewerUserId = viewerId, otherUserId = targetId) != true
                         }.collect { delta ->
                             runCatching {
                                 send(streamJson.encodeToString(PresenceDeltaDto.serializer(), delta))
