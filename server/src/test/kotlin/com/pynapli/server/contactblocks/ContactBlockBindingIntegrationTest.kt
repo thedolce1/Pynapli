@@ -183,19 +183,41 @@ class ContactBlockBindingIntegrationTest :
                 graph.verifyAddress(TARGET, TARGET_ADDRESS)
                 addAndResolve(graph)
 
-                val partnerCardForX = graph.grid.queryGrid(TARGET, GridQueryRequestDto(radiusMeters = 50_000)).items.single { it.userId == PARTNER.toString() }
+                val partnerCardForX =
+                    graph.grid
+                        .queryGrid(TARGET, GridQueryRequestDto(radiusMeters = 50_000))
+                        .items
+                        .single { it.userId == PARTNER.toString() }
                 assertNull(partnerCardForX.linkedPartner)
                 assertEquals(false, partnerCardForX.coupleVerified)
-                val partnerCardForBystander = graph.grid.queryGrid(BYSTANDER, GridQueryRequestDto(radiusMeters = 50_000)).items.single { it.userId == PARTNER.toString() }
+                val partnerCardForBystander =
+                    graph.grid
+                        .queryGrid(BYSTANDER, GridQueryRequestDto(radiusMeters = 50_000))
+                        .items
+                        .single { it.userId == PARTNER.toString() }
                 assertEquals(BLOCKER.toString(), assertNotNull(partnerCardForBystander.linkedPartner).userId)
 
-                val swipeCard = graph.swipe.queryDeck(TARGET, SwipeDeckRequestDto(radiusMeters = 50_000)).items.single { it.userId == PARTNER.toString() }
+                val swipeCard =
+                    graph.swipe
+                        .queryDeck(TARGET, SwipeDeckRequestDto(radiusMeters = 50_000))
+                        .items
+                        .single { it.userId == PARTNER.toString() }
                 assertNull(swipeCard.linkedPartner)
                 assertNull(graph.profiles.getPublicProfile(TARGET, PARTNER).linkedPartner)
 
                 val verifiedCouples = GridQueryRequestDto(radiusMeters = 50_000, verifiedCouplesOnly = true)
-                assertTrue(graph.grid.queryGrid(TARGET, verifiedCouples).items.none { it.userId == PARTNER.toString() })
-                assertTrue(graph.grid.queryGrid(BYSTANDER, verifiedCouples).items.any { it.userId == PARTNER.toString() })
+                assertTrue(
+                    graph.grid
+                        .queryGrid(TARGET, verifiedCouples)
+                        .items
+                        .none { it.userId == PARTNER.toString() },
+                )
+                assertTrue(
+                    graph.grid
+                        .queryGrid(BYSTANDER, verifiedCouples)
+                        .items
+                        .any { it.userId == PARTNER.toString() },
+                )
             }
         }
 
@@ -334,7 +356,12 @@ class ContactBlockBindingIntegrationTest :
 
                 graph.contactBlocks.remove(BLOCKER, TARGET_ADDRESS)
                 // The flirt sent while hidden now shows for X.
-                assertTrue(graph.activity.listActivity(TARGET).items.any { it.actorUserId == BLOCKER.toString() })
+                assertTrue(
+                    graph.activity
+                        .listActivity(TARGET)
+                        .items
+                        .any { it.actorUserId == BLOCKER.toString() },
+                )
                 graph.execute("UPDATE activity_events SET first_occurred_at = now() - interval '1 minute' WHERE actor_user_id = ?", BLOCKER)
                 addAndResolve(graph)
 

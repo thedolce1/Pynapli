@@ -69,7 +69,8 @@ class ProfileLinkService(
     ): ProfileLinksSummaryDto {
         val linkId = linkIdValue.toUuidOrThrow()
         val invitation =
-            repository.getPendingInvitationForRecipient(viewerUserId, linkId)
+            repository
+                .getPendingInvitationForRecipient(viewerUserId, linkId)
                 ?.takeUnless { contactBlockVisibility?.isHiddenFrom(viewerUserId, it.requesterUserId) == true }
                 ?: throw ProfileLinkException("PROFILE_LINK_INVITE_NOT_FOUND")
 

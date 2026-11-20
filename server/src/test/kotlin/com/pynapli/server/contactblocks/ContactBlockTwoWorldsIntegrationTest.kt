@@ -152,9 +152,23 @@ private val json = Json { encodeDefaults = true }
 /** Minted per request or read from the clock: different in any two runs, so not comparable. */
 private val MASKED_KEYS =
     setOf(
-        "conversationId", "messageId", "eventId", "linkId", "inviteId", "requestId", "actionId",
-        "createdAt", "updatedAt", "occurredAt", "generatedAt", "latestBadgeOccurredAt", "lastActive",
-        "deckSessionId", "rankToken", "cardToken", "nextCursor",
+        "conversationId",
+        "messageId",
+        "eventId",
+        "linkId",
+        "inviteId",
+        "requestId",
+        "actionId",
+        "createdAt",
+        "updatedAt",
+        "occurredAt",
+        "generatedAt",
+        "latestBadgeOccurredAt",
+        "lastActive",
+        "deckSessionId",
+        "rankToken",
+        "cardToken",
+        "nextCursor",
     )
 
 private fun masked(element: JsonElement): JsonElement =
@@ -241,18 +255,43 @@ private fun runWorld(
         val target =
             TargetView(
                 hiddenFromTarget = graph.visibility.hiddenFrom(X),
-                gridIds = graph.grid.queryGrid(X, GridQueryRequestDto(radiusMeters = 50_000)).items.map { UUID.fromString(it.userId) }.toSet(),
-                deckIds = graph.swipe.queryDeck(X, SwipeDeckRequestDto(radiusMeters = 50_000)).items.map { UUID.fromString(it.userId) }.toSet(),
+                gridIds =
+                    graph.grid
+                        .queryGrid(X, GridQueryRequestDto(radiusMeters = 50_000))
+                        .items
+                        .map { UUID.fromString(it.userId) }
+                        .toSet(),
+                deckIds =
+                    graph.swipe
+                        .queryDeck(X, SwipeDeckRequestDto(radiusMeters = 50_000))
+                        .items
+                        .map { UUID.fromString(it.userId) }
+                        .toSet(),
                 profileOfBlocker = observe(PublicProfileDto.serializer()) { graph.profiles.getPublicProfile(X, A) },
-                activityActorIds = graph.activity.listActivity(X).items.map { UUID.fromString(it.actorUserId) }.toSet(),
+                activityActorIds =
+                    graph.activity
+                        .listActivity(X)
+                        .items
+                        .map { UUID.fromString(it.actorUserId) }
+                        .toSet(),
                 summary = graph.activity.getActivitySummary(X),
-                inboxConversationIds = graph.messaging.listConversations(X, null).items.map { it.conversationId },
+                inboxConversationIds =
+                    graph.messaging
+                        .listConversations(X, null)
+                        .items
+                        .map { it.conversationId },
                 detailOfBlockersConversation = observe(ConversationDetailDto.serializer()) { graph.messaging.getConversationDetail(X, conversationId) },
                 replyInBlockersConversation =
                     observe(MessageDto.serializer()) { graph.messaging.sendMessage(X, conversationId, SendMessageRequestDto(body = "hi")) },
                 readMarkOfBlockersConversation =
-                    observe(com.pynapli.shared.network.dto.ConversationDto.serializer()) { graph.messaging.markConversationRead(X, conversationId) },
-                incomingLinkInvites = graph.profileLinks.getSummary(X).incomingInvites.size,
+                    observe(
+                        com.pynapli.shared.network.dto.ConversationDto
+                            .serializer(),
+                    ) { graph.messaging.markConversationRead(X, conversationId) },
+                incomingLinkInvites =
+                    graph.profileLinks
+                        .getSummary(X)
+                        .incomingInvites.size,
                 outboxFromBlocker = graph.outboxCount(recipient = X, actor = A),
                 activityDeltasToTarget = graph.activityDeltas.count { it.recipientUserId == X },
                 messageDeltasToTarget = graph.messageDeltas.count { it.recipientUserId == X },

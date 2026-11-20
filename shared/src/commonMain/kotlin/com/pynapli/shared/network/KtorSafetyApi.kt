@@ -85,8 +85,7 @@ internal class KtorSafetyApi(
 
     override suspend fun addContactBlock(email: String): AppResult<Unit> = sendNoContent(HttpMethod.Post, "/v1/me/contact-blocks", ContactBlockAddressRequestDto(email))
 
-    override suspend fun removeContactBlock(email: String): AppResult<Unit> =
-        sendNoContent(HttpMethod.Post, "/v1/me/contact-blocks/remove", ContactBlockAddressRequestDto(email))
+    override suspend fun removeContactBlock(email: String): AppResult<Unit> = sendNoContent(HttpMethod.Post, "/v1/me/contact-blocks/remove", ContactBlockAddressRequestDto(email))
 
     override suspend fun removeAllContactBlocks(): AppResult<Unit> = sendNoContent(HttpMethod.Delete, "/v1/me/contact-blocks", body = null)
 

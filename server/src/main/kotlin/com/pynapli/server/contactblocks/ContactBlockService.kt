@@ -28,8 +28,7 @@ class ContactBlockService(
     private val clock: Clock = Clock.systemUTC(),
     private val idFactory: () -> UUID = UUID::randomUUID,
 ) {
-    suspend fun summary(blockerUserId: UUID): ContactBlockSummaryDto =
-        ContactBlockSummaryDto(count = repository.count(blockerUserId), maxAddresses = MAX_ADDRESSES)
+    suspend fun summary(blockerUserId: UUID): ContactBlockSummaryDto = ContactBlockSummaryDto(count = repository.count(blockerUserId), maxAddresses = MAX_ADDRESSES)
 
     /** Same 204 for a new address, one already added, a member's or nobody's. */
     suspend fun add(

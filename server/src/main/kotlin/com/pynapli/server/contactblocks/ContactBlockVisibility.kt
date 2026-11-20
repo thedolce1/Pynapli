@@ -89,8 +89,7 @@ object ContactBlockSql {
      * "[userColumn] is not hiding from the viewer". Binds exactly ONE parameter: the viewer's token
      * ([ContactBlockVisibility.viewerToken], or [NO_VIEWER_TOKEN]).
      */
-    fun notHiddenFromViewer(userColumn: String): String =
-        "NOT EXISTS (SELECT 1 FROM contact_blocks hidden_cb WHERE hidden_cb.target_token = ? AND hidden_cb.blocker_user_id = $userColumn)"
+    fun notHiddenFromViewer(userColumn: String): String = "NOT EXISTS (SELECT 1 FROM contact_blocks hidden_cb WHERE hidden_cb.target_token = ? AND hidden_cb.blocker_user_id = $userColumn)"
 }
 
 /** The viewer's token, or the no-op token when the feature isn't wired (unit tests). */
