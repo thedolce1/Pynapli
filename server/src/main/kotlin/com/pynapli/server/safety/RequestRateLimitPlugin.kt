@@ -155,6 +155,58 @@ internal fun ApplicationCall.clientIp(trustedProxyHops: Int): String {
     return request.origin.remoteHost
 }
 
+/**
+ * A client address as the per-client sign-up budgets see it: IPv4 as is, IPv6 bucketed to its /64
+ * ("2001:db8:1:2::/64"). One host usually controls a whole /64, so keying on the full IPv6 address
+ * would hand it billions of "networks". An IPv4-mapped IPv6 address (::ffff:a.b.c.d) is its IPv4
+ * address; brackets and a zone suffix (%eth0) are dropped. Pure string work, no DNS. Anything that
+ * doesn't parse is returned trimmed, unchanged.
+ */
+internal fun rateLimitNetwork(clientIp: String): String {
+    val trimmed = clientIp.trim()
+    val raw =
+        trimmed
+            .removePrefix("[")
+            .substringBefore("]")
+            .substringBefore('%')
+    if (!raw.contains(':')) return trimmed
+    val groups = ipv6Groups(raw) ?: return trimmed.lowercase()
+    if (groups.take(5).all { it == 0 } && groups[5] == 0xffff) {
+        return "${groups[6] shr 8}.${groups[6] and 0xff}.${groups[7] shr 8}.${groups[7] and 0xff}"
+    }
+    return groups.take(4).joinToString(":") { it.toString(16) } + "::/64"
+}
+
+/** The eight 16-bit groups of an IPv6 literal (compressed "::" and a dotted IPv4 tail allowed), or null. */
+private fun ipv6Groups(address: String): List<Int>? {
+    var text = address
+    val lastColon = text.lastIndexOf(':')
+    val last = text.substring(lastColon + 1)
+    if (last.contains('.')) {
+        val octets = last.split('.').map { it.toIntOrNull() ?: return null }
+        if (octets.size != 4 || octets.any { it !in 0..255 }) return null
+        val high = ((octets[0] shl 8) or octets[1]).toString(16)
+        val low = ((octets[2] shl 8) or octets[3]).toString(16)
+        text = text.substring(0, lastColon + 1) + high + ":" + low
+    }
+    val halves = text.split("::")
+    if (halves.size > 2) return null
+    val head = hexGroups(halves[0]) ?: return null
+    if (halves.size == 1) return head.takeIf { it.size == 8 }
+    val tail = hexGroups(halves[1]) ?: return null
+    val missing = 8 - head.size - tail.size
+    if (missing < 1) return null
+    return head + List(missing) { 0 } + tail
+}
+
+private fun hexGroups(part: String): List<Int>? {
+    if (part.isEmpty()) return emptyList()
+    return part.split(':').map { group ->
+        if (group.length !in 1..4) return null
+        group.toIntOrNull(16) ?: return null
+    }
+}
+
 private suspend fun ApplicationCall.respondLimit(
     status: HttpStatusCode,
     code: String,

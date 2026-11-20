@@ -12,8 +12,9 @@ import java.util.concurrent.atomic.AtomicLong
  * Runs off-request work (sign-up emails) on the application background scope with a ceiling: at
  * most [maxConcurrent] jobs touch the database pool at once, and at most [maxPending] wait or run.
  * Past that a job is dropped (counted, logged without detail). [launch] never suspends or throws,
- * so the request that queued the job answers exactly the same whether or not it was dropped; a
- * dropped sign-up just gets no email, and the person can send a new code.
+ * so the request that queued the job answers exactly the same whether or not it was dropped. A
+ * dropped sign-up creates no pending row, so "Send a new code" can't deliver anything for it either:
+ * the person recovers with "Start again" on the code step, which starts a new sign-up.
  */
 class BoundedWorkLauncher(
     private val scope: CoroutineScope,

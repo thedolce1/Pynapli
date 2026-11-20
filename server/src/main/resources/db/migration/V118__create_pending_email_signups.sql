@@ -40,20 +40,29 @@ CREATE TABLE IF NOT EXISTS pending_email_signups (
 CREATE INDEX IF NOT EXISTS idx_pending_email_signups_email_hash ON pending_email_signups (email_hash, expires_at);
 CREATE INDEX IF NOT EXISTS idx_pending_email_signups_expires_at ON pending_email_signups (expires_at);
 
--- The permanent placeholder row. A verify that matches no live sign-up spends its attempt on this row
--- instead, so every failed verify writes exactly one real row whether or not the address had a
--- pending sign-up (and so whether or not it is a member). Its hashes match nothing, its code is
--- expired, and it never expires, so retention never removes it.
+-- The permanent placeholder rows: a pool of 64, ids 00000000-0000-0000-0000-000000000000 to ...03f.
+-- A verify that matches no live sign-up spends its attempt on one of them (picked at random per call)
+-- instead, so every failed verify writes exactly one real row whether or not the address had a pending
+-- sign-up (and so whether or not it is a member), and a flood of such verifies doesn't queue on one
+-- row lock. Their hashes have the same length and alphabet as real ones (SHA-256, base64url, no
+-- padding: what Sha256.hash produces) but hash fixed strings that are never valid inputs (no "@", not
+-- "<uuid>:<code>", not a 43-character token), so they match nothing. Their code is expired and they
+-- never expire, so retention never removes them. Rows with expires_at = 'infinity' are exactly these.
 INSERT INTO pending_email_signups (
     id, email_hash, signup_token_hash, password_hash, password_salt, password_iterations,
     birthdate, accepted_at, terms_version, privacy_version, code_hash, code_expires_at,
     codes_issued, attempts, expires_at
 )
-VALUES (
-    '00000000-0000-0000-0000-000000000000', 'placeholder', 'placeholder', 'placeholder', 'placeholder', 0,
-    DATE '1900-01-01', TIMESTAMPTZ 'epoch', 'placeholder', 'placeholder', 'placeholder', TIMESTAMPTZ 'epoch',
+SELECT
+    ('00000000-0000-0000-0000-' || lpad(to_hex(n), 12, '0'))::uuid,
+    rtrim(translate(encode(sha256(convert_to('pynapli-placeholder-email:' || n, 'UTF8')), 'base64'), '+/', '-_'), '='),
+    rtrim(translate(encode(sha256(convert_to('pynapli-placeholder-token:' || n, 'UTF8')), 'base64'), '+/', '-_'), '='),
+    'placeholder', 'placeholder', 0,
+    DATE '1900-01-01', TIMESTAMPTZ 'epoch', 'placeholder', 'placeholder',
+    rtrim(translate(encode(sha256(convert_to('pynapli-placeholder-code:' || n, 'UTF8')), 'base64'), '+/', '-_'), '='),
+    TIMESTAMPTZ 'epoch',
     0, 0, TIMESTAMPTZ 'infinity'
-)
+FROM generate_series(0, 63) AS n
 ON CONFLICT (id) DO NOTHING;
 
 -- Set when the account was created through a verified email (the code flow above). Existing accounts

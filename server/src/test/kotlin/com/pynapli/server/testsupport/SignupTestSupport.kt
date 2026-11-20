@@ -170,8 +170,9 @@ internal class InMemoryEmailSignupRepository(
         codeHash: String,
         codeExpiresAt: Instant,
         maxCodes: Int,
+        maxAttempts: Int,
     ): Boolean {
-        val row = rows[pendingId]?.takeIf { it.codesIssued < maxCodes } ?: return false
+        val row = rows[pendingId]?.takeIf { it.codesIssued < maxCodes && it.attempts < maxAttempts } ?: return false
         rows[pendingId] = row.copy(codeHash = codeHash, codeExpiresAt = codeExpiresAt, codesIssued = row.codesIssued + 1)
         return true
     }

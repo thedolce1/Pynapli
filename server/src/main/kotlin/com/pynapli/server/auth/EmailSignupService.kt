@@ -7,6 +7,7 @@ import com.pynapli.server.auth.security.TokenGenerator
 import com.pynapli.server.auth.security.normalizeEmail
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.safety.RateLimitedAction
+import com.pynapli.server.safety.rateLimitNetwork
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.EmailSignupStartedDto
 import kotlinx.coroutines.CancellationException
@@ -19,6 +20,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
 import java.util.UUID
+import java.util.concurrent.ThreadLocalRandom
 
 /**
  * Email sign-up that proves the person owns the address and never reveals whether it already has
@@ -142,7 +144,7 @@ class EmailSignupService(
         val attempt = repository.consumeAttempt(emailHash, Sha256.hash(signupToken.trim()), now)
         val codeMatches = sameHash(attempt.codeHash, codeHash(attempt.id, code.trim()))
         val usable =
-            attempt.id != PLACEHOLDER_ID &&
+            !isPlaceholder(attempt.id) &&
                 attempt.attempts <= MAX_ATTEMPTS &&
                 attempt.codeExpiresAt.isAfter(now)
         if (!usable || !codeMatches) throw AuthException("INVALID_SIGNUP_CODE")
@@ -257,8 +259,9 @@ class EmailSignupService(
             // spend the address's email budget through resend.
             if (!withinSendCaps(account, clientIp)) return@runLogged
             val code = codeGenerator()
-            // A new code, never new attempts; at most MAX_CODES codes per sign-up.
-            if (repository.replaceCode(pending.id, codeHash(pending.id, code), now.plus(CODE_LIFETIME), MAX_CODES)) {
+            // A new code, never new attempts; at most MAX_CODES codes per sign-up, and none once its
+            // guesses are spent (a code it could never use would only mislead).
+            if (repository.replaceCode(pending.id, codeHash(pending.id, code), now.plus(CODE_LIFETIME), MAX_CODES, MAX_ATTEMPTS)) {
                 mailer.sendSignupCode(account, code)
             }
         }
@@ -308,7 +311,7 @@ class EmailSignupService(
     private fun addressAndClient(
         account: String,
         clientIp: String?,
-    ): String = "$account|${clientIp?.trim()?.takeIf { it.isNotEmpty() } ?: "unknown-address"}"
+    ): String = "$account|${clientIp?.trim()?.takeIf { it.isNotEmpty() }?.let(::rateLimitNetwork) ?: "unknown-address"}"
 
     private class SignupDraft(
         val account: String,
@@ -345,8 +348,17 @@ class EmailSignupService(
         /** How long a started sign-up can be finished (a resend issues a fresh code within it). */
         val PENDING_LIFETIME: Duration = Duration.ofHours(24)
 
-        /** The permanent placeholder row (V118) that failed verifies with no live sign-up write to. */
+        /**
+         * The permanent placeholder rows (V118): ids UUID(0, 0) to UUID(0, 63). A failed verify with no
+         * live sign-up spends its attempt on one of them, picked at random, so a flood of such verifies
+         * spreads over many row locks instead of queueing on one.
+         */
+        const val PLACEHOLDER_POOL_SIZE = 64
         val PLACEHOLDER_ID: UUID = UUID(0L, 0L)
+
+        fun randomPlaceholderId(): UUID = UUID(0L, ThreadLocalRandom.current().nextInt(PLACEHOLDER_POOL_SIZE).toLong())
+
+        fun isPlaceholder(id: UUID): Boolean = id.mostSignificantBits == 0L && id.leastSignificantBits in 0L until PLACEHOLDER_POOL_SIZE.toLong()
 
         private const val DEV_SIGNUP_SUBJECT = "local-dev-signup"
         private val random = SecureRandom()
@@ -382,18 +394,22 @@ interface EmailSignupRepository {
         now: Instant,
     ): PendingSignupRecord?
 
-    /** A fresh code for the same sign-up while it has had fewer than [maxCodes]; attempts untouched. */
+    /**
+     * A fresh code for the same sign-up while it has had fewer than [maxCodes] and has spent fewer than
+     * [maxAttempts] guesses; attempts untouched. False (nothing changes) otherwise.
+     */
     suspend fun replaceCode(
         pendingId: UUID,
         codeHash: String,
         codeExpiresAt: Instant,
         maxCodes: Int,
+        maxAttempts: Int,
     ): Boolean
 
     /**
      * One statement that always updates exactly one row: adds one attempt to the live sign-up for
-     * (address, token), or to the permanent placeholder row when there is none, and returns that row
-     * as it is after the increment.
+     * (address, token), or to a randomly picked permanent placeholder row when there is none, and
+     * returns that row as it is after the increment.
      */
     suspend fun consumeAttempt(
         emailHash: String,

@@ -13,8 +13,9 @@ internal object EmailAddressRules {
     private const val MAX_LOCAL_LENGTH = 64
     private const val MAX_LABEL_LENGTH = 63
 
-    // RFC 5322 "atext" without the quote characters ' and ` (and without anything that needs quoting).
-    private const val LOCAL_SPECIALS = "!#$%&*+/=?^_{|}~-"
+    // RFC 5322 "atext" without the backtick (and without anything that needs quoting). The apostrophe
+    // stays: o'brien@example.com is a common, valid mailbox. Local part only; domains never allow it.
+    private const val LOCAL_SPECIALS = "!#$%&'*+/=?^_{|}~-"
 
     fun isStrict(address: String): Boolean {
         if (address.isEmpty() || address.length > MAX_ADDRESS_LENGTH) return false

@@ -134,8 +134,17 @@ internal fun isDirectLoopbackRequest(
     remoteAddress: String,
     headerNames: Collection<String>,
 ): Boolean {
-    val peer = remoteAddress.trim().removePrefix("/").lowercase()
-    if (peer !in LOOPBACK_PEERS && !peer.startsWith("127.")) return false
+    // An IPv6 peer may carry a zone ("::1%0", "0:0:0:0:0:0:0:1%lo"); the zone never makes a
+    // non-loopback address loopback, so dropping it only stops a real loopback peer being refused.
+    val peer =
+        remoteAddress
+            .trim()
+            .removePrefix("/")
+            .removePrefix("[")
+            .substringBefore("]")
+            .substringBefore('%')
+            .lowercase()
+    if (peer !in LOOPBACK_PEERS && !isIpv4Loopback(peer)) return false
     return headerNames.none { name ->
         val header = name.lowercase()
         header in FORWARDING_HEADERS || FORWARDING_HEADER_PREFIXES.any { header.startsWith(it) }
@@ -143,7 +152,13 @@ internal fun isDirectLoopbackRequest(
 }
 
 // "localhost" is what Ktor's in-process test engine reports for its own (loopback) peer.
-private val LOOPBACK_PEERS = setOf("127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "[::1]", "localhost")
+private val LOOPBACK_PEERS = setOf("127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "localhost")
+
+// 127.0.0.0/8, as four decimal octets only (so "127.evil.example" is not loopback).
+private fun isIpv4Loopback(peer: String): Boolean {
+    val octets = peer.split('.')
+    return octets.size == 4 && octets[0] == "127" && octets.all { octet -> octet.toIntOrNull()?.let { it in 0..255 } == true }
+}
 
 private val FORWARDING_HEADERS =
     setOf(

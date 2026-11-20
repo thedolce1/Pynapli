@@ -7,6 +7,7 @@ import com.pynapli.server.auth.security.normalizeEmail
 import com.pynapli.server.dependencies.devSignupShortcutsAllowed
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
+import com.pynapli.server.retention.DataRetentionService
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.testsupport.CapturingSignupMailer
 import com.pynapli.server.testsupport.CountingRateLimitRepository
@@ -275,11 +276,33 @@ class EmailSignupIntegrationTest {
             }
 
             nextCode = "777888"
+            repository.calls.clear()
+            service.resendCode(NEWCOMER, started.signupToken, deviceId = "phone", clientIp = TEST_CLIENT_IP)
+            work.runAll()
+
+            // Nothing is sent: a code that could never work would only mislead. The answer was the same.
+            assertEquals(listOf(NEWCOMER to "123456"), mailer.codes)
+            assertTrue("replaceCode" in repository.calls)
+            assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "777888", started.signupToken) }
+            assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "123456", started.signupToken) }
+        }
+
+    @Test
+    fun aResendBeforeTheGuessesAreSpentStillWorks() =
+        runBlocking<Unit> {
+            val service = signup()
+            val started = service.start(NEWCOMER)
+            work.runAll()
+            repeat(EmailSignupService.MAX_ATTEMPTS - 1) {
+                assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "000000", started.signupToken) }
+            }
+
+            nextCode = "777888"
             service.resendCode(NEWCOMER, started.signupToken, deviceId = "phone", clientIp = TEST_CLIENT_IP)
             work.runAll()
 
             assertEquals(NEWCOMER to "777888", mailer.codes.last())
-            assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "777888", started.signupToken) }
+            service.verifyWith(NEWCOMER, "777888", started.signupToken)
         }
 
     @Test
@@ -526,6 +549,8 @@ class EmailSignupIntegrationTest {
                     "${"a".repeat(65)}@example.com",
                     "a@${"b".repeat(250)}.com",
                     "Bcc: a@example.com",
+                    "a@exam'ple.com",
+                    "a`b@example.com",
                 )
             rejected.forEach { address ->
                 val error = assertFailsWith<AuthException>(address) { service.start(address) }
@@ -626,7 +651,89 @@ class EmailSignupIntegrationTest {
         }
 
     @Test
+    fun thePlaceholderPoolLooksLikeRealRowsMatchesNothingAndSurvivesEverySweep() =
+        runBlocking<Unit> {
+            val service = signup()
+            // Puts the pool in place (the test database is truncated between tests), as V118 does.
+            assertFailsWith<AuthException> { service.verifyWith("nobody@example.com", "000000", "no-token") }
+
+            val pool =
+                dataSource.connection.use { connection ->
+                    connection.prepareStatement("SELECT id, email_hash, signup_token_hash, code_hash FROM pending_email_signups WHERE expires_at = 'infinity' ORDER BY id").use { statement ->
+                        statement.executeQuery().use { rs ->
+                            buildList { while (rs.next()) add(listOf(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4))) }
+                        }
+                    }
+                }
+            assertEquals(EmailSignupService.PLACEHOLDER_POOL_SIZE, pool.size)
+            val realLength = Sha256.hash("anything").length
+            pool.forEachIndexed { n, (id, emailHash, tokenHash, codeHash) ->
+                assertEquals(UUID(0L, n.toLong()).toString(), id)
+                assertTrue(EmailSignupService.isPlaceholder(UUID.fromString(id)))
+                // Same length and alphabet as real values, so comparisons run over the same length.
+                assertEquals(Sha256.hash("pynapli-placeholder-email:$n"), emailHash)
+                assertEquals(Sha256.hash("pynapli-placeholder-token:$n"), tokenHash)
+                assertEquals(Sha256.hash("pynapli-placeholder-code:$n"), codeHash)
+                listOf(emailHash, tokenHash, codeHash).forEach { assertEquals(realLength, it.length) }
+            }
+
+            // A sign-up, a verify that deletes the address's rows, the on-write sweep and the retention
+            // job all leave the whole pool alone.
+            val started = service.start(NEWCOMER)
+            work.runAll()
+            service.verifyWith(NEWCOMER, "123456", started.signupToken)
+            DataRetentionService(dataSource).runOnce()
+            assertEquals(EmailSignupService.PLACEHOLDER_POOL_SIZE, count("SELECT count(*) FROM pending_email_signups WHERE expires_at = 'infinity'"))
+            assertFalse(EmailSignupService.isPlaceholder(UUID.randomUUID()))
+        }
+
+    @Test
+    fun failedVerifiesWithNoSignUpSpreadOverThePool() =
+        runBlocking<Unit> {
+            val service = signup()
+            repeat(200) { assertFailsWith<AuthException> { service.verifyWith("nobody@example.com", "000000", "no-token-$it") } }
+
+            val touched = count("SELECT count(*) FROM pending_email_signups WHERE expires_at = 'infinity' AND attempts > 0")
+            assertEquals(200, count("SELECT coalesce(sum(attempts), 0) FROM pending_email_signups WHERE expires_at = 'infinity'"))
+            assertTrue(touched > 16, "200 random picks over 64 rows touch far more than a few ($touched)")
+        }
+
+    @Test
+    fun anApostropheIsFineInTheLocalPartOnly() =
+        runBlocking<Unit> {
+            val service = signup()
+            val started = service.start("O'Brien@Example.com")
+            work.runAll()
+            assertEquals(listOf("o'brien@example.com" to "123456"), mailer.codes)
+            service.verifyWith("o'brien@example.com", "123456", started.signupToken)
+
+            assertEquals("INVALID_EMAIL", assertFailsWith<AuthException> { service.start("obrien@exam'ple.com") }.code)
+        }
+
+    @Test
+    fun oneIpv6HostCannotPoseAsManyNetworks() =
+        runBlocking<Unit> {
+            val limits = RateLimitService(CountingRateLimitRepository())
+            var tokenNumber = 0
+            val service = signup(rateLimitService = limits, tokens = { "token-${tokenNumber++}" })
+
+            // Ten addresses from one /64: one network's budget (3 an hour), not ten.
+            (1..10).forEach { service.start(NEWCOMER, deviceId = null, clientIp = "2001:db8:aa:bb::$it") }
+            work.runAll()
+
+            assertEquals(3, mailer.codes.size)
+        }
+
+    @Test
     fun onlyALoopbackPeerWithoutForwardingHeadersIsADirectLocalRequest() {
+        // An IPv6 zone on a loopback peer is still loopback; it never makes anything else loopback.
+        assertTrue(isDirectLoopbackRequest("::1%0", emptySet()))
+        assertTrue(isDirectLoopbackRequest("0:0:0:0:0:0:0:1%lo", emptySet()))
+        assertTrue(isDirectLoopbackRequest("[::1%1]", emptySet()))
+        assertFalse(isDirectLoopbackRequest("fe80::1%lo", emptySet()))
+        assertFalse(isDirectLoopbackRequest("2001:db8::1%0", emptySet()))
+        assertFalse(isDirectLoopbackRequest("::1%0", setOf("X-Forwarded-For")))
+        assertFalse(isDirectLoopbackRequest("127.evil.example", emptySet()))
         assertTrue(isDirectLoopbackRequest("127.0.0.1", setOf("Content-Type", "Accept")))
         assertTrue(isDirectLoopbackRequest("0:0:0:0:0:0:0:1", emptySet()))
         assertTrue(isDirectLoopbackRequest("::1", emptySet()))
@@ -784,9 +891,10 @@ private class CountingSignupRepository(
         codeHash: String,
         codeExpiresAt: Instant,
         maxCodes: Int,
+        maxAttempts: Int,
     ): Boolean {
         calls += "replaceCode"
-        return inner.replaceCode(pendingId, codeHash, codeExpiresAt, maxCodes)
+        return inner.replaceCode(pendingId, codeHash, codeExpiresAt, maxCodes, maxAttempts)
     }
 
     override suspend fun consumeAttempt(

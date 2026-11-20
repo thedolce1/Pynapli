@@ -100,6 +100,7 @@ class JdbcEmailSignupRepository(
         codeHash: String,
         codeExpiresAt: Instant,
         maxCodes: Int,
+        maxAttempts: Int,
     ): Boolean =
         dataSource.withConnection { connection ->
             connection
@@ -107,14 +108,14 @@ class JdbcEmailSignupRepository(
                     """
                     UPDATE pending_email_signups
                     SET code_hash = ?, code_expires_at = ?, codes_issued = codes_issued + 1
-                    WHERE id = ? AND codes_issued < ? AND id <> ?
+                    WHERE id = ? AND codes_issued < ? AND attempts < ? AND $NOT_PLACEHOLDER
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setString(1, codeHash)
                     statement.setTimestamp(2, Timestamp.from(codeExpiresAt))
                     statement.setObject(3, pendingId)
                     statement.setInt(4, maxCodes)
-                    statement.setObject(5, EmailSignupService.PLACEHOLDER_ID)
+                    statement.setInt(5, maxAttempts)
                     statement.executeUpdate() > 0
                 }
         }
@@ -127,7 +128,7 @@ class JdbcEmailSignupRepository(
         dataSource.withConnection { connection ->
             connection.ensurePlaceholder()
             // A second pass only when the matched row vanished between the lookup and the update (a
-            // concurrent verify completed it): the lookup then finds nothing and the placeholder is hit.
+            // concurrent verify completed it): the lookup then finds nothing and a placeholder is hit.
             connection.spendAttempt(emailHash, signupTokenHash, now)
                 ?: connection.spendAttempt(emailHash, signupTokenHash, now)
                 ?: run {
@@ -135,7 +136,7 @@ class JdbcEmailSignupRepository(
                     connection.ensurePlaceholder()
                     connection.spendAttempt(emailHash, signupTokenHash, now)
                 }
-                ?: error("The sign-up placeholder row is missing")
+                ?: error("The sign-up placeholder rows are missing")
         }
 
     private fun Connection.spendAttempt(
@@ -147,7 +148,7 @@ class JdbcEmailSignupRepository(
             statement.setString(1, emailHash)
             statement.setString(2, signupTokenHash)
             statement.setTimestamp(3, Timestamp.from(now))
-            statement.setObject(4, EmailSignupService.PLACEHOLDER_ID)
+            statement.setObject(4, EmailSignupService.randomPlaceholderId())
             statement.executeQuery().use { rs ->
                 if (rs.next()) {
                     SignupAttemptRecord(
@@ -195,9 +196,8 @@ class JdbcEmailSignupRepository(
                             emailVerifiedAt = verifiedAt,
                         )
                     // Every other sign-up of the address (other devices, other people) ends here.
-                    prepareStatement("DELETE FROM pending_email_signups WHERE email_hash = ? AND id <> ?").use { statement ->
+                    prepareStatement("DELETE FROM pending_email_signups WHERE email_hash = ? AND $NOT_PLACEHOLDER").use { statement ->
                         statement.setString(1, emailHash)
-                        statement.setObject(2, EmailSignupService.PLACEHOLDER_ID)
                         statement.executeUpdate()
                     }
                     user
@@ -246,12 +246,12 @@ class JdbcEmailSignupRepository(
             if (error.sqlState == UNIQUE_VIOLATION) null else throw error
         }
 
-    // The migration creates the placeholder; this only restores it where something removed it (the
-    // integration tests truncate every table between tests). Once per repository instance.
+    // The migration creates the placeholder pool; this only restores it where something removed it
+    // (the integration tests truncate every table between tests). Once per repository instance.
     private fun Connection.ensurePlaceholder() {
         if (placeholderEnsured.get()) return
-        prepareStatement(INSERT_PLACEHOLDER).use { statement ->
-            statement.setObject(1, EmailSignupService.PLACEHOLDER_ID)
+        prepareStatement(INSERT_PLACEHOLDERS).use { statement ->
+            statement.setInt(1, EmailSignupService.PLACEHOLDER_POOL_SIZE - 1)
             statement.executeUpdate()
         }
         placeholderEnsured.set(true)
@@ -265,7 +265,7 @@ class JdbcEmailSignupRepository(
         prepareStatement(
             """
             DELETE FROM pending_email_signups
-            WHERE id = ? AND code_hash = ? AND attempts <= ? AND id <> ?
+            WHERE id = ? AND code_hash = ? AND attempts <= ? AND $NOT_PLACEHOLDER
             RETURNING email_hash, password_hash, password_salt, password_iterations,
                       birthdate, accepted_at, terms_version, privacy_version
             """.trimIndent(),
@@ -273,7 +273,6 @@ class JdbcEmailSignupRepository(
             statement.setObject(1, pendingId)
             statement.setString(2, expectedCodeHash)
             statement.setInt(3, maxAttempts)
-            statement.setObject(4, EmailSignupService.PLACEHOLDER_ID)
             statement.executeQuery().use { rs ->
                 if (rs.next()) {
                     TakenPendingSignup(
@@ -327,7 +326,7 @@ class JdbcEmailSignupRepository(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
             """.trimIndent()
 
-        // Always exactly one row: the live sign-up for (address, token) or the placeholder.
+        // Always exactly one row: the live sign-up for (address, token) or the given placeholder.
         val CONSUME_ATTEMPT =
             """
             UPDATE pending_email_signups
@@ -342,19 +341,27 @@ class JdbcEmailSignupRepository(
             RETURNING id, attempts, code_hash, code_expires_at, birthdate
             """.trimIndent()
 
-        // Same values as V118.
-        val INSERT_PLACEHOLDER =
+        // The placeholder pool (V118) is exactly the rows that never expire.
+        const val NOT_PLACEHOLDER = "expires_at <> 'infinity'"
+
+        // Same rows as V118.
+        val INSERT_PLACEHOLDERS =
             """
             INSERT INTO pending_email_signups (
                 id, email_hash, signup_token_hash, password_hash, password_salt, password_iterations,
                 birthdate, accepted_at, terms_version, privacy_version, code_hash, code_expires_at,
                 codes_issued, attempts, expires_at
             )
-            VALUES (
-                ?, 'placeholder', 'placeholder', 'placeholder', 'placeholder', 0,
-                DATE '1900-01-01', TIMESTAMPTZ 'epoch', 'placeholder', 'placeholder', 'placeholder', TIMESTAMPTZ 'epoch',
+            SELECT
+                ('00000000-0000-0000-0000-' || lpad(to_hex(n), 12, '0'))::uuid,
+                rtrim(translate(encode(sha256(convert_to('pynapli-placeholder-email:' || n, 'UTF8')), 'base64'), '+/', '-_'), '='),
+                rtrim(translate(encode(sha256(convert_to('pynapli-placeholder-token:' || n, 'UTF8')), 'base64'), '+/', '-_'), '='),
+                'placeholder', 'placeholder', 0,
+                DATE '1900-01-01', TIMESTAMPTZ 'epoch', 'placeholder', 'placeholder',
+                rtrim(translate(encode(sha256(convert_to('pynapli-placeholder-code:' || n, 'UTF8')), 'base64'), '+/', '-_'), '='),
+                TIMESTAMPTZ 'epoch',
                 0, 0, TIMESTAMPTZ 'infinity'
-            )
+            FROM generate_series(0, ?) AS n
             ON CONFLICT (id) DO NOTHING
             """.trimIndent()
     }
