@@ -20,6 +20,8 @@
     [string]$DiscoveryCursorSecretName = "",
     [string]$ActivityCursorSecretName = "",
     [string]$SwipeDeckTokenSecretName = "",
+    [string]$ContactBlockEmailKeySecretName = "",
+    [string]$ContactBlockTargetKeySecretName = "",
     [string]$RedisUrl = "",
     [string]$VpcConnector = "",
     [string]$ServiceAccount = "",
@@ -54,6 +56,8 @@ if ($productionLike) {
         DiscoveryCursorSecretName = $DiscoveryCursorSecretName
         ActivityCursorSecretName = $ActivityCursorSecretName
         SwipeDeckTokenSecretName = $SwipeDeckTokenSecretName
+        ContactBlockEmailKeySecretName = $ContactBlockEmailKeySecretName
+        ContactBlockTargetKeySecretName = $ContactBlockTargetKeySecretName
         RedisUrl = $RedisUrl
     }
     $missing = @($requiredValues.GetEnumerator() | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.Value) } | ForEach-Object { $_.Key })
@@ -115,6 +119,12 @@ if (-not [string]::IsNullOrWhiteSpace($ActivityCursorSecretName)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($SwipeDeckTokenSecretName)) {
     $secretVars += "PYNAPLI_SWIPE_DECK_TOKEN_SECRET=${SwipeDeckTokenSecretName}:latest"
+}
+if (-not [string]::IsNullOrWhiteSpace($ContactBlockEmailKeySecretName)) {
+    $secretVars += "PYNAPLI_CONTACT_BLOCK_EMAIL_KEY=${ContactBlockEmailKeySecretName}:latest"
+}
+if (-not [string]::IsNullOrWhiteSpace($ContactBlockTargetKeySecretName)) {
+    $secretVars += "PYNAPLI_CONTACT_BLOCK_TARGET_KEY=${ContactBlockTargetKeySecretName}:latest"
 }
 
 $deployArgs = @(

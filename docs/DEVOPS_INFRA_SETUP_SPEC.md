@@ -154,7 +154,10 @@ GitHub Actions secrets for CI, Google Secret Manager at runtime, a local `.env` 
 - Firebase/service-account JSON, `google-services.json`, `GoogleService-Info.plist`.
 - Database passwords.
 - Server signing secrets: `PYNAPLI_DISCOVERY_CURSOR_SECRET`, `PYNAPLI_ACTIVITY_CURSOR_SECRET`,
-  `PYNAPLI_SWIPE_DECK_TOKEN_SECRET`, admin token and MFA secrets. (Auth tokens are opaque and hashed;
+  `PYNAPLI_SWIPE_DECK_TOKEN_SECRET`, the two "Hide from people you know" keys
+  `PYNAPLI_CONTACT_BLOCK_EMAIL_KEY` and `PYNAPLI_CONTACT_BLOCK_TARGET_KEY` (staging/production refuse to
+  start without them; `scripts/gcp-cloud-run-deploy.ps1 -ContactBlockEmailKeySecretName ...
+  -ContactBlockTargetKeySecretName ...`), admin token and MFA secrets. (Auth tokens are opaque and hashed;
   there is no JWT signing key.)
 - Store API credentials, Apple/Google billing keys, age-verification provider keys.
 
