@@ -251,6 +251,15 @@ Privacy settings include:
 - App lock / PIN
 - Discreet app icon
 
+### Met in person badge
+
+"Show my Met in person badge" (`DiscoverySettingsDto.showMetInPersonBadge`, stored in
+`discovery_settings.show_met_in_person_badge`) is off by default. With it on, the profile sheet shows the
+server-computed "Met in person" badge (and "Met in person as a couple" when both partners have it on),
+with the helper "Confirmed by several members who've met them. Not checked by Pynapli." Turning it off
+hides the badge at once; nothing else changes. It sits in Privacy with one line explaining it. Rules:
+[TRUST_AND_SAFETY_SPEC.md](TRUST_AND_SAFETY_SPEC.md) "Met in person".
+
 ### Visibility Controls
 
 Recommended controls:

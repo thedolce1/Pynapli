@@ -51,7 +51,7 @@ Verify live state: `GET https://<cloud-run-url>/health` and `/health/deep` (both
 | # | Step | Detail |
 |---|---|---|
 | A1 | Lock project naming | above |
-| A2 | Provision GCP: APIs, Cloud SQL (Postgres+PostGIS) + `pynapli_staging` DB, Memorystore Redis + VPC connector, Artifact Registry, 6 Secret Manager secrets, GCS media bucket, runtime service account | [infra/cloud-run/README.md](../infra/cloud-run/README.md) steps 1–7 |
+| A2 | Provision GCP: APIs, Cloud SQL (Postgres+PostGIS) + `pynapli_staging` DB, Memorystore Redis + VPC connector, Artifact Registry, 7 Secret Manager secrets (including `pynapli-staging-met-in-person-token-secret`, K3 for "Met in person" tokens: `PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`, required in staging and production, never rotate or delete once confirmations exist), GCS media bucket, runtime service account | [infra/cloud-run/README.md](../infra/cloud-run/README.md) steps 1–7 |
 | A3 | Deploy the API to Cloud Run, ideally at **`api.pynapli.com`** (the PWA default) | infra README step 8, or the **Deploy Staging API** workflow |
 | A4 | Budget alerts. **Do not skip.** | infra README step 9 |
 | A5 | Verify `/health` and `/health/deep` on the live URL | |
