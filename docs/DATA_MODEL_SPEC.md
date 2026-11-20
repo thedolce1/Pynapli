@@ -139,12 +139,14 @@ every change must keep.
 - One open or under-review appeal per user/action/target. User-facing appeal history **never exposes
   `admin_reason` or audit metadata**. Severe legal/CSAM decisions are non-appealable by policy above
   the table.
-- "Met in person" (V120): `vouches` never holds the voucher in clear. `voucher_token`, the unique
-  directed `pair_token` and `conversation_token` are HMAC-SHA256 values under K3
-  (`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`); dates are whole UTC days; `voided_at` is an admin void.
-  `vouch_badges` is written only by the weekly batch (and an admin freeze, `frozen_at`);
-  `vouch_batch_schedule` is the single due-time row. Deletion removes the person's given rows by token and
-  their received rows and badge explicitly. Details: TRUST_AND_SAFETY_SPEC "Met in person".
+- "Met in person" (V120): `vouches` holds no user, conversation or link id: the unique directed
+  `pair_token` and `subject_token`, `partner_token`, `link_token` are HMAC-SHA256 values under K3
+  (`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`), one domain prefix per kind; dates are whole UTC days;
+  `voided_at` is an admin void. `met_in_person_key` holds the key check value (writes and the batch refuse
+  a different key). `vouch_badges` (by user id: published booleans and a freeze only, deleted when both are
+  off), `vouch_badge_states` (pending crossings, by subject token), `vouch_link_ends`, and
+  `vouch_batch_schedule`. Deletion removes the person's rows by recomputed tokens. Details:
+  TRUST_AND_SAFETY_SPEC "Met in person".
 - Age verification never stores raw ID or biometric data unless legally required and reviewed. A
   successful verification sets `profiles.age_verified_at`; discovery reads that timestamp, not
   provider data.

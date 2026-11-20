@@ -177,14 +177,16 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   `POST /v1/messages/threads/{id}/read` (opening the thread) clears a match on a thread with history
   for the opener; any message that becomes visible in the thread clears it for both, for good. Rules:
   [MESSAGING_SPEC.md](MESSAGING_SPEC.md) "New-matches rail".
-- `ConversationDto.metInPersonOffers` (added 2026-11-19, optional; read mark only, null elsewhere and
-  from older servers): the viewer's own "Met in person" actions, one `MetInPersonOfferDto` per other
+- "Met in person" (added 2026-11-19): `GET /v1/messages/threads/{id}/met-in-person` returns
+  `MetInPersonOffersDto { offers }`, the viewer's own actions, one `MetInPersonOfferDto` per other
   participant they can confirm (`canConfirm`, with `partner` when they may tick that person's partner) or
-  take back (`canWithdraw`, within 30 days). It depends only on facts the viewer already knows.
-  `POST /v1/messages/threads/{id}/met-in-person` (`{ subjectUserId, includePartner }`) and
-  `.../met-in-person/withdraw` (`{ subjectUserId }`) answer with the caller's own state for that person,
-  never a count or anyone else's confirmation; every refusal is `MET_IN_PERSON_NOT_AVAILABLE` (403); a
-  repeat changes nothing; withdraw is silent. Nothing is notified. `PublicProfileDto.metInPerson` and
+  take back (`canWithdraw`, within 30 days). Clients ask for it when the conversation menu opens, never on
+  open or refresh; it is not on the read mark, so it can never break opening a conversation. It depends
+  only on facts the viewer already knows (not their risk tier). `POST .../met-in-person`
+  (`{ subjectUserId, includePartner }`) and `.../met-in-person/withdraw` (`{ subjectUserId }`) answer with
+  the caller's own state for that person, never a count or anyone else's confirmation; every refusal is
+  `MET_IN_PERSON_NOT_AVAILABLE` (403); a repeat changes nothing; withdraw is silent; giving again after a
+  withdrawal waits 180 days. Nothing is notified. `PublicProfileDto.metInPerson` and
   `metInPersonAsCouple` are batch-computed booleans shown only with the person's opt-in
   (`DiscoverySettingsDto.showMetInPersonBadge`, default false). Rules:
   [TRUST_AND_SAFETY_SPEC.md](TRUST_AND_SAFETY_SPEC.md) "Met in person".
@@ -266,8 +268,8 @@ All admin routes live under `/v1/admin`, require admin auth (roles, MFA) and are
 never exposed to app clients. Only the moderation queues (reports, review queue, appeals, risk, age
 review, photo verification, pending profile photos) are active; the other admin endpoints (dashboard, user lookup, subscription support,
 partner-link review, metrics) are frozen. "Met in person" moderation (added 2026-11-19) is new routes
-under the same gate, built minimally: one read view and three actions under `/v1/admin/met-in-person`,
-each senior + step-up MFA + `X-Admin-Reason` and audited (TRUST_AND_SAFETY_SPEC "Met in person"). See
+under the same gate, built minimally: one read view and three actions (each with its undo) under
+`/v1/admin/met-in-person`, each senior + step-up MFA + `X-Admin-Reason` and audited (TRUST_AND_SAFETY_SPEC "Met in person"). See
 [ADMIN_MODERATION_CONSOLE_SPEC.md](ADMIN_MODERATION_CONSOLE_SPEC.md).
 
 ## Open items

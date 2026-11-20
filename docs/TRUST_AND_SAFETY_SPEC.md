@@ -141,132 +141,179 @@ only" filters mean. Server-owned end to end (erification/PhotoVerificationServi
 ## Met in person
 
 A member who has met someone in real life privately confirms it from their conversation; once enough
-independent confirmations exist, a weekly batch gives a badge the person can choose to show. Founder
+independent confirmations exist, the weekly batch gives a badge the person can choose to show. Founder
 decisions: threshold 3, a couple badge in v1, opt-in display (off by default). Selfie verification says a
-person is real; "Met in person" says several members met them. Neither checks what anyone did, and the
-badge is not checked by Pynapli. Code: `server/.../metinperson/`, migration V120.
+person is real; "Met in person" says several members met them. Neither says what anyone did, and the badge
+is not checked by Pynapli. Code: `server/.../metinperson/`, migration V120.
 
-### Who can confirm whom (`MetInPersonRules`)
+The promise this design keeps: nobody learns who met whom. Not the subject (whatever they do), not a
+voucher (whatever they toggle), not someone holding a copy of the database without the key K3.
+
+### Who can confirm whom (write time, `MetInPersonRules`)
 
 - Voucher and subject are both photo-verified (`profiles.verified_at`, the verified badge condition).
-- The voucher's account is at least 30 days old and their stored risk tier is clean or watch.
-- They share a conversation where both are active participants and both sent at least one visible
-  message (`message_type = 'user'`, `moderation_status = 'visible'`; held and removed messages do not
-  count, a message its sender later deleted still does); the first visible message is at least 24 hours
-  old and the last at most 90 days old. Messages are checked only when confirming, never at batch time,
-  so purging disappearing messages never voids a confirmation.
-- Never: a current or former linked partner (any `user_profile_links` row between the two, any status),
-  a shared device (`account_device_links`, same `device_hash`), a block in either direction.
-- Once per pair, directed: A confirming B and B confirming A are separate. A withdrawn (or expired) pair
-  can be given again; it is the same row restored with a new date, so it still counts once. Repeating a
+- The voucher's account is active and at least 30 days old. The voucher's risk tier is NOT checked here
+  (the menu would reveal the tier to its owner); it is applied at the batch.
+- Messages between the two of them only: each sent at least one visible message (`message_type =
+  'user'`, `moderation_status = 'visible'`; held and removed do not count, a message the sender later
+  deleted does) at or after the moment both were in the conversation (the later of their
+  `COALESCE(invitation_responded_at, joined_at)`); the earliest such message is at least 24 hours old and
+  the latest at most 90 days old. In a group, other people's messages never count. Messages are checked
+  only when confirming, never at the batch.
+- Never (at write time, facts the voucher knows): any `user_profile_links` row between the two, any
+  status; a block by the voucher.
+- Once per directed pair, ever: A confirming B and B confirming A are separate rows. A repeat of a
   standing confirmation changes nothing, not even its date.
-- At most 10 given per voucher per rolling 30 days, counting withdrawn and voided rows (giving and taking
-  back cannot reset the cap); a couple confirmation uses two.
-- Only from the conversation overflow menu, at the voucher's initiative. The subject cannot request one
-  and is never told, in any channel.
-- Withdrawal: silent, within 30 days of giving.
-
-What the menu item depends on: only facts the voucher already knows (their own account, their own
-confirmations, the conversation's messages, whether they were ever linked with or blocked the person, and
-the person's public verified badge). A block by the subject, a shared device and the subject's risk tier
-never change it: such a confirmation is accepted like any other and simply never counts at the batch, so
-the menu cannot be used to probe for them. Every refusal is the one `MET_IN_PERSON_NOT_AVAILABLE`.
+- At most 10 given per voucher per rolling 30 days, counting withdrawn and voided ones: taking one back
+  never refunds its slot. A couple confirmation uses two. One voucher's writes are serialised by an
+  advisory lock (keyed by a token), so concurrent confirms cannot pass the cap.
+- Taking back: silent, within 30 days of giving, also after leaving the conversation. After taking it
+  back, the same pair cannot give it again for 180 days (the same uniform refusal); after that, or after
+  the 24-month expiry, it is the same row restored with a new date (the first-given day never moves).
+- Only from the conversation overflow menu, at the voucher's initiative; the menu asks the server for
+  the viewer's own options when it opens (`GET .../met-in-person`), never on open or refresh. The subject
+  cannot request one and is never told, in any channel. Every refusal is `MET_IN_PERSON_NOT_AVAILABLE`.
 
 ### Couples
 
-Rule chosen: the voucher may tick "and [partner]" only when the subject's active linked partner is also an
-active participant of the same conversation (a group chat, which only forms through a partner invite, so
-the link is already shown there), both partners' partner-visibility settings show the link to the voucher,
-and the partner independently satisfies every rule above with the voucher in that conversation (their own
-visible message, the 24-hour and 90-day windows, and so on). Confirming each partner from two separate
-direct chats gives two personal credits, not a couple credit: treating two chats as "the same meeting"
-would mean naming a link the voucher may not be able to see. A person badge needs 3 qualifying vouchers. A
-couple badge needs 3 vouchers who each confirmed both partners together under the same active link
-(`vouches.link_id`, the couple's canonical link row). Unlinking clears `link_id` on those rows and the
-stored couple badge in the same statement (link rows are reused on relink, so a relink can never revive
-them); personal credits stay.
+The voucher may tick "and [partner]" only when the subject's active linked partner is also an active
+participant of the same conversation (a group chat, which only forms through a partner invite), the
+profile's own linked-partner rule shows that partner to the voucher in both directions
+(`CoupleVerifiedFilterSql.partnerShownToViewer`, shared with the couples filter: partner active, visible,
+not incognito, not quarantined or terminated, not blocked either way with the viewer, not hidden by the
+viewer, and each owner's partner visibility lets the viewer see the other), and the partner independently
+passes every rule above with the voucher in that conversation (their own messages between the two of
+them). Confirming each partner from separate direct chats gives two personal credits, not a couple credit.
+A couple badge needs 3 independent vouchers who each confirmed both partners together under the couple's
+current link. Unlinking records the end (`vouch_link_ends`) and turns the couple badge off at once; couple
+confirmations dated before the latest end never count again, and a couple badge published before the
+link's latest change never shows (link rows are reused on relink). Personal badges stay.
 
-### Counting and display
+### What counts at the batch, and whose act each exclusion is
 
-- Only `MetInPersonBadgeBatch` writes badges, never a confirmation. It runs weekly at a random moment
-  inside each UTC Monday-to-Monday week (`SecureRandom`). The due time is persisted in
-  `vouch_batch_schedule` and checked, acted on and advanced in one transaction holding that row's lock;
-  `MetInPersonBadgeWorker` ticks every 15 minutes under `JobLock`. So it runs once per week across
-  replicas and deploys, and a deploy does not re-roll the time.
-- At batch time a confirmation counts only if it is live (not withdrawn, not voided, under 24 months old),
-  its voucher resolves through K3 (below), the voucher is active, verified and not quarantined or
-  terminated, the subject is active and verified, and the two are not blocked either way, not (and never)
-  linked, and not on a shared device. A badge can therefore disappear at a later batch.
+The rule: nothing the subject does may change which confirmations count. Every exclusion is classified:
+
+| Exclusion | Whose act |
+| --- | --- |
+| Withdrawn | the voucher |
+| The voucher blocked the subject | the voucher (a block by the subject is ignored entirely) |
+| The voucher's account inactive, deleted, or not photo-verified | the voucher, or the service (ban, verification revoked) |
+| The voucher quarantined or terminated | the service. A single person's reports are capped below quarantine (`ReportScoringPolicy`), so the subject alone cannot cause it; `friction`, which one report can reach, is deliberately not excluded |
+| A partner link between the two accepted on or before the day given | fixed at that day (a link needs the voucher's own acceptance; a pending invite, which the subject can create alone, never counts; the check reads both direction rows, so a re-invite that resets one row cannot erase it) |
+| A device both used on or before the day given | fixed at that day (device rows created later are ignored) |
+| Voided by an admin | the service |
+| Older than 24 months | time |
+| The voucher's token matches none of the subject's conversation partners | never happens in practice: participant rows are never deleted |
+
+The subject's own state (active, photo-verified, not quarantined or terminated, read from the stored tier;
+lazy decay is not applied in the batch, so a tier can be stale until the account's next risk read) turns
+the whole badge off, never a single voucher; the profile also hides the badge at once for a quarantined or
+terminated subject.
+
+Independence (fakery):
+
+- Vouchers linked to each other (an accepted link, now or before) or that ever shared a device count as
+  one voucher. A voucher who shared a device with the subject before confirming does not count.
+- At least one counted voucher must be "clean": not confirmed by the subject first or on the same day
+  (first-given days never move, so the subject confirming someone later cannot change it). A same-day
+  clique of four mutual confirmers cannot badge itself.
+- The couple badge needs three independent vouchers by the same rules, at least one clean for both
+  partners.
+
+### Counting, delay and display
+
+- Only `MetInPersonBadgeBatch` writes earned badges. It runs weekly at a random moment inside each UTC
+  Monday-to-Monday week (`SecureRandom`): claimed in its own transaction holding the
+  `vouch_batch_schedule` row lock (due check and move to next week's random time together, so it runs
+  once across replicas and deploys), then members in chunks of 500, each its own short transaction; it
+  never loads every confirmation. It refuses to run when the key check fails.
+- Hysteresis (`MetInPersonHysteresis`): each crossing, on or off, takes effect only after a random 1 to 4
+  further batches, chosen per subject per crossing and stored (`vouch_badge_states`, keyed by the subject
+  token); turning off also needs the count to stay below the threshold for 2 consecutive batches first; a
+  crossing that reverses before it lands is cancelled. Resulting window: from the confirmation that
+  completes a threshold to the badge appearing is the wait for the next weekly run (0 to 7 days) plus 1
+  to 4 more weekly runs, so roughly 1 to 5 weeks, never at the batch that first sees it. From the
+  confirmation (or withdrawal, void, block) that ends it to the badge going off is the wait plus 2 runs
+  plus 1 to 4, roughly 3 to 7 weeks. A voucher toggling cannot make the badge follow them: taking back
+  costs a slot and blocks giving again for 180 days, and the off delay outlasts any weekly toggle.
 - The badge is two booleans on the profile sheet (`PublicProfileDto.metInPerson`, `metInPersonAsCouple`),
   shown only when the person turned on "Show my Met in person badge"
-  (`discovery_settings.show_met_in_person_badge`, off by default). The couple badge needs both partners'
-  opt-ins and the partner mini visible to this viewer, so it never reveals a hidden link. Never a count,
-  not a filter, not on Grid or Swipe cards in v1. An admin freeze hides both at once and the batch keeps
-  them off.
-- The voucher learns nothing: confirm and withdraw answer with the voucher's own state, built from their
-  own rows only, identical whether or not a threshold is completed.
-- Nothing is notified: the service has no notifier, Activity, broadcaster or outbox dependency, and tests
-  assert no `notification_outbox`, `activity_events` or `match_side_effect_outbox` row appears.
+  (`discovery_settings.show_met_in_person_badge`, off by default); the couple badge needs both partners'
+  opt-ins and the partner mini visible to this viewer. Never a count, not a filter, not on Grid or Swipe.
+  An admin freeze hides both at once and the batch keeps them off. The subject sees their own badge state
+  (profile preview, export) exactly when everyone else would, never earlier: only published state is ever
+  read.
+- The voucher learns nothing at once: confirm and withdraw answer with the voucher's own state only.
+- Nothing is notified: no notifier, Activity, broadcaster or outbox dependency; tests assert no
+  `notification_outbox`, `activity_events` or `match_side_effect_outbox` row appears.
 
-### Storage and the key
+### Storage, the key, and what a copy of the database shows
 
-`vouches(subject_user_id, voucher_token, pair_token UNIQUE, met_partner_user_id, link_id,
-conversation_token, created_at, withdrawn_at, voided_at)` and `vouch_badges(subject_user_id, person_badge,
-couple_badge, couple_link_id, computed_at, frozen_at)`. Tokens are HMAC-SHA256 under K3
-(`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`: a fixed local default; staging and production refuse to start
-without a strong, distinct value): the voucher token hashes the voucher id, the pair token hashes the
-ordered (voucher, subject) pair, and the conversation token hashes the conversation id. Deviation from the
-brief: the conversation is tokenised, not stored in clear, because a clear conversation id names the
-voucher through `direct_conversations`. Dates are whole UTC days. The cap (voucher token and date),
-once-per-pair (pair token unique) and withdrawal (recompute the pair token) all work through the tokens;
-one voucher's writes are serialised by an advisory lock on their token. Turning a token back into a person
-needs K3 and a candidate set: the subject's conversation partners, each hashed and matched (batch, admin
-view). K3 must never be rotated or lost once confirmations exist.
+`vouches(id, pair_token UNIQUE, subject_token, partner_token, link_token, first_given_at, created_at,
+withdrawn_at, voided_at, key_version)`: no user, conversation or link id. Tokens are HMAC-SHA256 under K3
+(`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`; fixed local default; staging and production refuse to start
+without a strong, distinct value) with one domain prefix per kind: pair (ordered voucher > subject),
+subject, partner, link, audit-voucher, key check. Dates are whole UTC days. `vouch_badges` is keyed by user
+id because the profile reads it, but holds only the published booleans (plus a freeze); its row is deleted
+when both are off and the member is not frozen. `vouch_badge_states` (pending crossings) is keyed by the
+subject token. `vouch_link_ends` records when a link row last ended. `met_in_person_key` holds a check
+value (an HMAC of a constant): writes, the menu, the admin view and the batch refuse to run when the
+configured key does not reproduce it, so a lost or rotated key cannot silently reset caps or turn badges
+off; `key_version` marks rows for a future re-tokenising rotation (not built).
 
-What a database leak reveals:
+The voucher's own rows (cap, withdraw, void-all, deletion, export) are found by recomputing their pair
+tokens over everyone they ever shared a conversation with; participant rows are never hard-deleted (no
+code deletes `conversation_participants` or `conversations`), so no extra record was needed. The batch
+and admin view recompute each member's subject token and the pair tokens over that member's partners.
 
-- Without K3: who has received confirmations, how many, on which days, and which were couple
-  confirmations (`subject_user_id` is in clear; accepted so the batch, deletion and couple rules stay
-  simple, and because such a leak already holds every conversation). Not directly who gave them. But the
-  voucher token is the same across subjects, so one voucher's confirmations link to each other, and with
-  the leaked conversation tables an attacker can intersect those subjects' conversation partners: a voucher
-  who confirmed two or more people is likely identifiable without the key; for a single confirmation the
-  voucher is among the subject's conversation partners who were active in the 90 days before it.
-  Storing no voucher token (deriving the cap and "void all" from pair tokens over the voucher's
-  conversation partners) would remove the linkage; not done because the brief specifies `voucher_token`.
-  Founder call.
-- With K3: everything, by recomputing tokens over candidates.
+A copy of the database without K3 shows: the number of rows, their days (given, first given, withdrawn,
+voided), and which rows concern the same (unknown) subject, since a subject's token is stable. It shows
+who has a published badge (`vouch_badges` by user id, which is public anyway when shown). It does not show
+who any row is about, who gave it, which conversation, or that two rows are a mutual pair: in a mutual
+confirmation the two rows share no token. For a couple confirmation, the two rows (one per partner) share
+the same `link_token` and the same day, so a copy shows "one couple got a joint confirmation that day", not
+which couple or from whom; `partner_token` on each is a partner-kind token, unequal to either row's subject
+token. Correlation remains possible with outside knowledge (for example, a subject token whose row count
+rises the week a known badge appears). With K3, everything can be resolved by recomputing tokens.
 
 ### Abuse and moderation
 
-Closed: self-confirmation and a couple's own accounts (partner and device rules); farms and bought
-confirmations (verified, 30-day account age, per-voucher cap, risk filter at batch time). Admin
-(`AdminMetInPersonRoutes`): new routes under the existing admin gate (the frozen admin endpoints are not
-touched): `GET /v1/admin/met-in-person/users/{userId}` (badge state, setting, qualifying counts, each
-confirmation with its voucher resolved through K3 and flags for reciprocal, closed group and shared
-device), `POST .../confirmations/{id}/void`, `POST .../vouchers/void` (voucher id in the body, never the
-path) and `POST .../users/{userId}/freeze` (`{"frozen": false}` unfreezes). All need a senior admin,
-step-up MFA and `X-Admin-Reason`, and write `met_in_person.*` audit rows naming the subject and counts; a
-voucher appears in the audit log only as their token. A void is invisible to the voucher, whose sheet stays
-as it was.
+Admin (`AdminMetInPersonRoutes`, new routes under the existing admin gate; the frozen admin endpoints are
+untouched): `GET /v1/admin/met-in-person/users/{userId}` (published state, setting, independent
+qualifying count now, each confirmation with its voucher resolved through K3 and reciprocal, closed-group
+and shared-device flags), `POST .../confirmations/{id}/void` (body `{subjectUserId, voided}`; false
+un-voids), `POST .../vouchers/void` (body `{voucherUserId, voided}`; the id is never in the path, which
+request audit rows store) and `POST .../users/{userId}/freeze` (`{"frozen": false}` unfreezes). All need a
+senior admin, step-up MFA and `X-Admin-Reason`, and write `met_in_person.*` audit rows. An audit row never
+holds a voucher id in clear: it carries `voucherRef` (an audit-voucher K3 token) and the confirmation ids,
+so a key holder can tell whose confirmations were voided and lower roles cannot. A void is invisible to
+the voucher.
 
 Not closed:
 
-- A ring of three real, verified friends can badge each other, or a fake couple. The reciprocal and
-  closed-group flags help a moderator see it; nothing prevents it.
-- A subject who has met few people can guess roughly who confirmed when the badge appears; the weekly
-  random time only blurs it.
-- A voucher whose confirmation completes the threshold learns nothing at once, but may notice the badge
+- A ring of three real, verified, unlinked friends on different devices who did not confirm each other
+  first can badge each other (or a fake couple). Larger collusion goes further: a clique that staggers its
+  confirmations over days (each confirms someone before being confirmed back) passes the clean-voucher
+  rule, and five or more mutual friends always can. The reciprocal and closed-group flags help a moderator
+  see it; nothing prevents it.
+- The clean-voucher rule treats a same-day confirmation by the subject as "first". A subject who happens
+  to confirm someone on the exact day that person confirmed them makes that one voucher unclean; this
+  only matters if that voucher was the only clean one, and the subject cannot see days.
+- A subject who has met few people can guess roughly who confirmed when the badge appears; the delay only
+  blurs it.
+- A voucher whose confirmation completes the threshold learns nothing at once but may notice the badge
   weeks later.
-- Without K3, one voucher's confirmations are linkable to each other (above).
+- The batch reads stored risk tiers (no lazy decay) and the couple badge's write re-checks the link at
+  write time; the display then also requires the badge to postdate the link's last change, which covers
+  an unlink racing the batch.
 
 ### Account deletion and export
 
-Deletion, inside the deletion transaction: the confirmations the person gave are deleted by their voucher
-token, the ones they received and their badge are deleted, and couple credit with them is cleared from
-their partner's rows. Export: a voucher's archive lists what they gave (the subject's display name at
-export time, the day, the day withdrawn, with partner or not); a subject's archive holds only their badge
-state and setting, never who confirmed or a count.
+Deletion, inside the deletion transaction: the confirmations the person gave (their pair tokens over
+their conversation partners), the ones they received (their subject token), their pending state and their
+badge are deleted, and couple credit with them is cleared from their partner's rows. Export: a voucher's
+archive lists what they gave (the subject's display name at export time, the day, the day withdrawn, with
+partner or not); a subject's archive holds only their published badge state and setting.
 
 ## Suspicious Signals
 
@@ -800,7 +847,7 @@ Important:
 - [x] False-positive metrics exist.
 - [x] Severe hard-ban triggers exist.
 - [x] Fake/deceptive degradation is not implemented.
-- [x] "Met in person": private confirmations with tokenised vouchers, a weekly randomised batch, opt-in person and couple badges, admin view and actions (see "Met in person").
+- [x] "Met in person": private confirmations stored only as K3 tokens, a weekly randomised batch with per-subject hysteresis, independence and subject-proof exclusions, opt-in person and couple badges, admin view and actions with undo (see "Met in person").
 
 ## Do Not Implement
 
