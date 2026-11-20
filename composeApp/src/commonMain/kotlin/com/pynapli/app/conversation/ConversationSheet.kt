@@ -72,7 +72,8 @@ fun ConversationSheet(
                 onDismiss = onDismiss,
                 participant = onOpenParticipantProfile?.let { state.detail?.conversation?.primaryOtherParticipant(state.viewerUserId) },
                 onOpenParticipantProfile = onOpenParticipantProfile ?: {},
-                metInPersonItems = state.metInPersonMenuItems(),
+                metInPersonMenu = state.metInPersonMenuUi().takeIf { state.detail != null && !state.isViewerInvited },
+                onMetInPersonMenuOpened = metInPersonCallbacks.onMenuOpened,
                 onMetInPerson = metInPersonCallbacks.onOpen,
             )
 
@@ -134,6 +135,7 @@ fun ConversationScreen(
             onBack = onBack,
             onOpenParticipantProfile = onOpenParticipantProfile,
             onMetInPerson = metInPersonCallbacks.onOpen,
+            onMetInPersonMenuOpened = metInPersonCallbacks.onMenuOpened,
         )
         ConversationContextStrip(conversation = state.detail?.conversation)
         ConversationContent(
@@ -347,6 +349,7 @@ private fun ColumnScope.ConversationContent(
 
 /** Callbacks for the "We've met in person" item and sheet; all default to no-ops. */
 class MetInPersonCallbacks(
+    val onMenuOpened: () -> Unit = {},
     val onOpen: (subjectUserId: String) -> Unit = {},
     val onIncludePartnerChange: (Boolean) -> Unit = {},
     val onConfirm: () -> Unit = {},

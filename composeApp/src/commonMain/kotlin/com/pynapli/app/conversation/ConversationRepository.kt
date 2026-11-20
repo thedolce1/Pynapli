@@ -75,6 +75,13 @@ interface ConversationRepository {
                 .AppError(code = "NOT_SUPPORTED", message = "Not available."),
         )
 
+    /** The viewer's own "Met in person" actions in this conversation (asked for when the menu opens). */
+    suspend fun metInPersonOffers(conversationId: String): AppResult<List<MetInPersonOfferDto>> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
+
     /** "We've met in person": the server answers with the viewer's own state for that person. */
     suspend fun confirmMetInPerson(
         conversationId: String,

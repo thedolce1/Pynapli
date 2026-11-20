@@ -109,6 +109,12 @@ class ApiConversationRepository(
 
     override suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = apiClient.leaveConversation(conversationId)
 
+    override suspend fun metInPersonOffers(conversationId: String): AppResult<List<com.pynapli.shared.network.dto.MetInPersonOfferDto>> =
+        when (val result = apiClient.getMetInPersonOffers(conversationId)) {
+            is AppResult.Success -> AppResult.Success(result.value.offers)
+            is AppResult.Failure -> result
+        }
+
     override suspend fun confirmMetInPerson(
         conversationId: String,
         subjectUserId: String,

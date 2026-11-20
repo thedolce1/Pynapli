@@ -15,7 +15,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The menu item, the sheet's states and the holder's calls follow the server's offers and nothing else. */
+/** The menu, the sheet's states and the holder's calls follow the server's offers and nothing else. */
 class ConversationMetInPersonTest {
     private val available = MetInPersonOfferDto(subjectUserId = "target", subjectDisplayName = "Maya", canConfirm = true)
 
@@ -34,17 +34,17 @@ class ConversationMetInPersonTest {
                         participants = listOf(ConversationParticipantDto("viewer", "You"), ConversationParticipantDto("target", "Maya")),
                         unreadCount = 0,
                         updatedAt = "2026-11-18T12:00:00Z",
-                        metInPersonOffers = offers,
                     ),
                 messages = emptyList(),
             ),
         metInPersonSheet = sheet,
+        metInPersonOffers = offers,
     )
 
     @Test
     fun theMenuItemShowsOnlyWhenTheServerOffersIt() {
         assertEquals(listOf("We've met in person"), stateWith(listOf(available)).metInPersonMenuItems().map { it.label })
-        assertTrue(stateWith(null).metInPersonMenuItems().isEmpty(), "older server")
+        assertTrue(stateWith(null).metInPersonMenuItems().isEmpty(), "not fetched yet")
         assertTrue(stateWith(emptyList()).metInPersonMenuItems().isEmpty())
         assertTrue(stateWith(listOf(available.copy(canConfirm = false))).metInPersonMenuItems().isEmpty())
     }
@@ -59,13 +59,9 @@ class ConversationMetInPersonTest {
     }
 
     @Test
-    fun theConfirmSheetWordsThePromiseAndOffersThePartnerOnlyWhenAllowed() {
+    fun theConfirmSheetSaysWhoCanSeeAndOffersThePartnerOnlyWhenAllowed() {
         val ui = assertNotNull(stateWith(listOf(available), MetInPersonSheetState("target")).metInPersonSheetUi())
-        assertEquals(
-            "Have you met Maya in person, and were they who their profile says? Only you'll know you answered. " +
-                "They won't be told, and nobody sees who confirmed.",
-            ui.body,
-        )
+        assertEquals("Have you met Maya in person? They won't be told. Pynapli's safety team can see confirmations if needed.", ui.body)
         assertTrue(ui.showConfirm)
         assertFalse(ui.showTakeBack)
         assertNull(ui.partnerTickLabel)
@@ -77,12 +73,11 @@ class ConversationMetInPersonTest {
     }
 
     @Test
-    fun aGivenConfirmationOffersTakeItBackWithinThirtyDays() {
+    fun aGivenConfirmationOffersTakeItBack() {
         val given = available.copy(given = true, canConfirm = false, canWithdraw = true)
         val ui = assertNotNull(stateWith(listOf(given), MetInPersonSheetState("target")).metInPersonSheetUi())
         assertFalse(ui.showConfirm)
         assertTrue(ui.showTakeBack)
-        assertTrue(ui.body.contains("take it back"))
         assertTrue(listOf(ui.title, ui.body).none { it.contains("count", ignoreCase = true) })
     }
 
@@ -94,23 +89,24 @@ class ConversationMetInPersonTest {
 
     private class Repo(
         var offers: List<MetInPersonOfferDto>,
-        var fail: Boolean = false,
+        var failOffers: Boolean = false,
+        var failConfirm: Boolean = false,
     ) : ConversationRepository by SampleConversationRepository() {
         val confirmations = mutableListOf<Pair<String, Boolean>>()
         val withdrawals = mutableListOf<String>()
+        var offerCalls = 0
 
-        override suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto> =
-            when (val base = SampleConversationRepository().markConversationRead(conversationId)) {
-                is AppResult.Success -> AppResult.Success(base.value.copy(metInPersonOffers = offers))
-                is AppResult.Failure -> base
-            }
+        override suspend fun metInPersonOffers(conversationId: String): AppResult<List<MetInPersonOfferDto>> {
+            offerCalls++
+            return if (failOffers) AppResult.Failure(AppError(code = "SERVER_ERROR", message = "boom")) else AppResult.Success(offers)
+        }
 
         override suspend fun confirmMetInPerson(
             conversationId: String,
             subjectUserId: String,
             includePartner: Boolean,
         ): AppResult<MetInPersonOfferDto> {
-            if (fail) return AppResult.Failure(AppError(code = "MET_IN_PERSON_NOT_AVAILABLE", message = "no"))
+            if (failConfirm) return AppResult.Failure(AppError(code = "MET_IN_PERSON_NOT_AVAILABLE", message = "no"))
             confirmations += subjectUserId to includePartner
             val updated = offers.first { it.subjectUserId == subjectUserId }.copy(given = true, canConfirm = false, canWithdraw = true, partner = null)
             offers = offers.map { if (it.subjectUserId == subjectUserId) updated else it }
@@ -122,11 +118,28 @@ class ConversationMetInPersonTest {
             subjectUserId: String,
         ): AppResult<MetInPersonOfferDto> {
             withdrawals += subjectUserId
-            val updated = offers.first { it.subjectUserId == subjectUserId }.copy(given = false, canConfirm = true, canWithdraw = false)
+            val updated = offers.first { it.subjectUserId == subjectUserId }.copy(given = false, canConfirm = false, canWithdraw = false)
             offers = offers.map { if (it.subjectUserId == subjectUserId) updated else it }
             return AppResult.Success(updated)
         }
     }
+
+    @Test
+    fun openingAConversationNeverAsksForOffersAndAFailureOnlyEmptiesTheMenu() =
+        runTest {
+            val repo = Repo(listOf(available), failOffers = true)
+            val holder = ConversationStateHolder(repo)
+            holder.openConversationById("c1", viewerUserId = "viewer")
+            assertEquals(0, repo.offerCalls, "not on open")
+            assertNotNull(holder.state.value.detail)
+
+            holder.loadMetInPersonOffers()
+            assertEquals(1, repo.offerCalls)
+            assertNotNull(holder.state.value.detail, "the conversation is untouched")
+            assertNull(holder.state.value.errorMessage)
+            assertTrue(holder.state.value.metInPersonMenuItems().isEmpty())
+            assertFalse(holder.state.value.isLoadingMetInPersonOffers)
+        }
 
     @Test
     fun confirmingSendsThePartnerTickAndTakesTheServersAnswer() =
@@ -134,6 +147,7 @@ class ConversationMetInPersonTest {
             val repo = Repo(listOf(available.copy(partner = MetInPersonPartnerDto("riley", "Riley"))))
             val holder = ConversationStateHolder(repo)
             holder.openConversationById("c1", viewerUserId = "viewer")
+            holder.loadMetInPersonOffers()
             assertEquals(1, holder.state.value.metInPersonMenuItems().size)
 
             holder.openMetInPerson("target")
@@ -142,7 +156,7 @@ class ConversationMetInPersonTest {
 
             assertEquals(listOf("target" to true), repo.confirmations)
             assertNull(holder.state.value.metInPersonSheet)
-            val offer = holder.state.value.detail?.conversation?.metInPersonOffers?.single()
+            val offer = holder.state.value.metInPersonOffers?.single()
             assertTrue(offer?.given == true && offer.canWithdraw)
 
             holder.openMetInPerson("target")
@@ -152,11 +166,12 @@ class ConversationMetInPersonTest {
         }
 
     @Test
-    fun aFailureKeepsTheSheetOpenWithANeutralMessage() =
+    fun aFailedConfirmKeepsTheSheetOpenWithANeutralMessage() =
         runTest {
-            val repo = Repo(listOf(available), fail = true)
+            val repo = Repo(listOf(available), failConfirm = true)
             val holder = ConversationStateHolder(repo)
             holder.openConversationById("c1", viewerUserId = "viewer")
+            holder.loadMetInPersonOffers()
             holder.openMetInPerson("target")
             holder.confirmMetInPerson()
 

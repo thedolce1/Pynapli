@@ -104,6 +104,7 @@ internal fun rememberConversationActions(
             },
             metInPerson =
                 MetInPersonCallbacks(
+                    onMenuOpened = { scope.launch { conversationStateHolder.loadMetInPersonOffers() } },
                     onOpen = conversationStateHolder::openMetInPerson,
                     onIncludePartnerChange = conversationStateHolder::setMetInPersonIncludePartner,
                     onConfirm = { scope.launch { conversationStateHolder.confirmMetInPerson() } },

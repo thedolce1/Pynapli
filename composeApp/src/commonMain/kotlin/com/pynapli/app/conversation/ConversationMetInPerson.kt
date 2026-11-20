@@ -6,8 +6,9 @@ import com.pynapli.shared.network.dto.MetInPersonOfferDto
 
 /**
  * "We've met in person" in a conversation (TRUST_AND_SAFETY_SPEC "Met in person"). The server decides
- * everything (`ConversationDto.metInPersonOffers`, sent on the read mark): whether the item shows,
- * whether the partner can be ticked, whether the viewer can take it back. This file only words it.
+ * everything (`GET .../met-in-person`, asked for when the overflow menu opens, never on open or refresh):
+ * whether an item shows, whether the partner can be ticked, whether the viewer can take it back. A
+ * failure only means the menu shows nothing; it never touches the conversation itself.
  */
 @Immutable
 data class MetInPersonSheetState(
@@ -24,6 +25,12 @@ internal data class MetInPersonMenuItemUi(
 )
 
 @Immutable
+internal data class MetInPersonMenuUi(
+    val isLoading: Boolean,
+    val items: List<MetInPersonMenuItemUi>,
+)
+
+@Immutable
 internal data class MetInPersonSheetUi(
     val title: String,
     val body: String,
@@ -36,38 +43,37 @@ internal data class MetInPersonSheetUi(
     val errorMessage: String?,
 )
 
-private fun ConversationUiState.metInPersonOffers(): List<MetInPersonOfferDto> {
+internal const val MET_IN_PERSON_TITLE = "We've met in person"
+
+private fun ConversationUiState.actionableMetInPersonOffers(): List<MetInPersonOfferDto> {
     if (isViewerInvited || isLeaving) return emptyList()
-    return detail
-        ?.conversation
-        ?.metInPersonOffers
-        .orEmpty()
-        .filter { it.canConfirm || it.canWithdraw }
+    return metInPersonOffers.orEmpty().filter { it.canConfirm || it.canWithdraw }
 }
 
 /** Overflow items; empty when the server offers nothing (or predates the feature). */
 internal fun ConversationUiState.metInPersonMenuItems(): List<MetInPersonMenuItemUi> {
-    val offers = metInPersonOffers()
+    val offers = actionableMetInPersonOffers()
     return offers.map { offer ->
         MetInPersonMenuItemUi(
             subjectUserId = offer.subjectUserId,
             // A direct chat has one other person; a group names who it is about.
-            label = if (offers.size == 1) "We've met in person" else "We've met ${offer.subjectDisplayName} in person",
+            label = if (offers.size == 1) MET_IN_PERSON_TITLE else "We've met ${offer.subjectDisplayName} in person",
         )
     }
 }
 
+internal fun ConversationUiState.metInPersonMenuUi(): MetInPersonMenuUi =
+    MetInPersonMenuUi(isLoading = isLoadingMetInPersonOffers, items = metInPersonMenuItems())
+
 internal fun ConversationUiState.metInPersonSheetUi(): MetInPersonSheetUi? {
     val sheet = metInPersonSheet ?: return null
-    val offer = metInPersonOffers().firstOrNull { it.subjectUserId == sheet.subjectUserId } ?: return null
+    val offer = actionableMetInPersonOffers().firstOrNull { it.subjectUserId == sheet.subjectUserId } ?: return null
     val name = offer.subjectDisplayName
     val partner = offer.partner?.takeIf { offer.canConfirm }
     return if (offer.canConfirm) {
         MetInPersonSheetUi(
-            title = "We've met in person",
-            body =
-                "Have you met $name in person, and were they who their profile says? Only you'll know you " +
-                    "answered. They won't be told, and nobody sees who confirmed.",
+            title = MET_IN_PERSON_TITLE,
+            body = "Have you met $name in person? They won't be told. Pynapli's safety team can see confirmations if needed.",
             partnerTickLabel = partner?.let { "And ${it.partnerDisplayName}" },
             includePartner = partner != null && sheet.includePartner,
             showConfirm = true,
@@ -77,10 +83,8 @@ internal fun ConversationUiState.metInPersonSheetUi(): MetInPersonSheetUi? {
         )
     } else {
         MetInPersonSheetUi(
-            title = "We've met in person",
-            body =
-                "You said you've met $name in person. Only you know you answered, and you can take it back " +
-                    "for 30 days after you said it.",
+            title = MET_IN_PERSON_TITLE,
+            body = "You said you've met $name in person. They weren't told. You can take it back for 30 days after you said it.",
             partnerTickLabel = null,
             includePartner = false,
             showConfirm = false,
@@ -91,12 +95,29 @@ internal fun ConversationUiState.metInPersonSheetUi(): MetInPersonSheetUi? {
     }
 }
 
-/** State transitions for the sheet; the server's answer replaces the offer, then the thread refetches. */
+/** State transitions for the menu and sheet; the server's answer replaces the offer, then the menu refetches. */
 internal class ConversationMetInPersonActions(
     private val repository: ConversationRepository,
     private val state: ConversationStateAccess,
-    private val refreshOpenConversation: suspend () -> Unit,
 ) {
+    /** Asked for when the overflow menu opens. Any failure leaves the menu empty and nothing else. */
+    suspend fun load() {
+        val conversationId = state.current.detail?.conversation?.conversationId ?: return
+        state.update { it.copy(isLoadingMetInPersonOffers = true) }
+        val offers =
+            when (val result = repository.metInPersonOffers(conversationId)) {
+                is AppResult.Success -> result.value
+                is AppResult.Failure -> emptyList()
+            }
+        state.update { existing ->
+            if (existing.detail?.conversation?.conversationId != conversationId) {
+                existing.copy(isLoadingMetInPersonOffers = false)
+            } else {
+                existing.copy(metInPersonOffers = offers, isLoadingMetInPersonOffers = false)
+            }
+        }
+    }
+
     fun open(subjectUserId: String) {
         state.update { it.copy(metInPersonSheet = MetInPersonSheetState(subjectUserId = subjectUserId)) }
     }
@@ -132,24 +153,15 @@ internal class ConversationMetInPersonActions(
         state.update { it.copy(metInPersonSheet = it.metInPersonSheet?.copy(isSubmitting = true, errorMessage = null)) }
         when (val result = call(conversationId)) {
             is AppResult.Success -> {
+                val updated = result.value
                 state.update { existing ->
-                    val detail = existing.detail
-                    if (detail?.conversation?.conversationId != conversationId) {
-                        existing.copy(metInPersonSheet = null)
-                    } else {
-                        val updated = result.value
-                        val offers =
-                            detail.conversation.metInPersonOffers
-                                .orEmpty()
-                                .map { if (it.subjectUserId == updated.subjectUserId) updated else it }
-                        existing.copy(
-                            detail = detail.copy(conversation = detail.conversation.copy(metInPersonOffers = offers)),
-                            metInPersonSheet = null,
-                        )
-                    }
+                    existing.copy(
+                        metInPersonOffers = existing.metInPersonOffers?.map { if (it.subjectUserId == updated.subjectUserId) updated else it },
+                        metInPersonSheet = null,
+                    )
                 }
                 // A couple confirmation changes the partner's entry too: take the server's word for all of it.
-                refreshOpenConversation()
+                load()
             }
 
             is AppResult.Failure -> {

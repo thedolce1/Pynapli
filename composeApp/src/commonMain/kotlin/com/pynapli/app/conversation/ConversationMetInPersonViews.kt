@@ -35,17 +35,22 @@ import com.pynapli.app.design.icons.filled.People
 
 /**
  * The conversation's overflow button. Its only items today are the server's "We've met in person"
- * offers; without any it stays the quiet, inert button it was.
+ * offers, fetched when it opens ([onMenuOpened]); while they load, or when there are none, it says so.
  */
 @Composable
 internal fun ConversationOverflowButton(
-    items: List<MetInPersonMenuItemUi>,
+    menu: MetInPersonMenuUi,
+    onMenuOpened: () -> Unit,
     onMetInPerson: (String) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    val items = menu.items
     Box {
         IconButton(
-            onClick = { if (items.isNotEmpty()) open = true },
+            onClick = {
+                open = true
+                onMenuOpened()
+            },
             modifier = Modifier.handCursor().testTag(MetInPersonTestTags.overflow),
         ) {
             Icon(
@@ -55,7 +60,15 @@ internal fun ConversationOverflowButton(
                 modifier = Modifier.size(20.dp),
             )
         }
-        DropdownMenu(expanded = open && items.isNotEmpty(), onDismissRequest = { open = false }) {
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (items.isEmpty()) {
+                DropdownMenuItem(
+                    text = { Text(if (menu.isLoading) "Loading…" else "Nothing here right now") },
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.handCursor(enabled = false),
+                )
+            }
             items.forEach { item ->
                 DropdownMenuItem(
                     text = { Text(item.label) },

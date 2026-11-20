@@ -45,6 +45,7 @@ internal fun FullScreenConversationHeader(
     onBack: () -> Unit,
     onOpenParticipantProfile: (ConversationParticipantDto) -> Unit,
     onMetInPerson: (String) -> Unit = {},
+    onMetInPersonMenuOpened: () -> Unit = {},
 ) {
     val participant = state.detail?.conversation?.primaryOtherParticipant(state.viewerUserId)
     val title = state.conversationTitle()
@@ -120,7 +121,7 @@ internal fun FullScreenConversationHeader(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            ConversationOverflowButton(items = state.metInPersonMenuItems(), onMetInPerson = onMetInPerson)
+            ConversationOverflowButton(menu = state.metInPersonMenuUi(), onMenuOpened = onMetInPersonMenuOpened, onMetInPerson = onMetInPerson)
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
     }
@@ -225,7 +226,9 @@ internal fun ConversationHeader(
     participant: ConversationParticipantDto? = null,
     onOpenParticipantProfile: (ConversationParticipantDto) -> Unit = {},
     // Server-offered "We've met in person" items; the overflow button shows only when there are any.
-    metInPersonItems: List<MetInPersonMenuItemUi> = emptyList(),
+    // The conversation's overflow menu ("We've met in person"), fetched when opened; null hides it.
+    metInPersonMenu: MetInPersonMenuUi? = null,
+    onMetInPersonMenuOpened: () -> Unit = {},
     onMetInPerson: (String) -> Unit = {},
 ) {
     Row(
@@ -261,8 +264,8 @@ internal fun ConversationHeader(
                 )
             }
         }
-        if (metInPersonItems.isNotEmpty()) {
-            ConversationOverflowButton(items = metInPersonItems, onMetInPerson = onMetInPerson)
+        metInPersonMenu?.let { menu ->
+            ConversationOverflowButton(menu = menu, onMenuOpened = onMetInPersonMenuOpened, onMetInPerson = onMetInPerson)
         }
         IconButton(onClick = onDismiss, modifier = Modifier.handCursor()) {
             Icon(
