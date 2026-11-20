@@ -21,6 +21,8 @@ import com.pynapli.server.media.configureMediaRoutes
 import com.pynapli.server.media.configureRequestMediaBaseUrl
 import com.pynapli.server.messaging.configureMessageStreamRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
+import com.pynapli.server.metinperson.configureAdminMetInPersonRoutes
+import com.pynapli.server.metinperson.configureMetInPersonRoutes
 import com.pynapli.server.metrics.OperationalMetricsSources
 import com.pynapli.server.metrics.configureProductMetricsRoutes
 import com.pynapli.server.metrics.configurePrometheusMetrics
@@ -95,6 +97,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.dataRetentionWorker?.start()
     dependencies.mediaCleanupWorker?.start()
     dependencies.photoVerificationRetentionWorker?.start()
+    dependencies.metInPersonBadgeWorker?.start()
     dependencies.tonightSessionExpiryWorker.start()
     dependencies.psyncSessionExpiryWorker?.start()
     dependencies.matchSideEffectDrainWorker?.start()
@@ -159,6 +162,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
     configureAgeVerificationCallbackRoute(dependencies.config, dependencies.ageVerificationService)
     configureAdminPhotoVerificationRoutes(dependencies.config, dependencies.photoVerificationService)
+    dependencies.adminMetInPersonService?.let { configureAdminMetInPersonRoutes(dependencies.config, it) }
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(
@@ -197,6 +201,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureSubscriptionRoutes(dependencies.config, dependencies.authService, dependencies.subscriptionService)
     configureMessagingRoutes(dependencies.authService, dependencies.messagingService)
     configureMessageStreamRoutes(dependencies.authService, dependencies.messageBroadcaster)
+    dependencies.metInPersonService?.let { configureMetInPersonRoutes(dependencies.authService, it) }
     configureMediaRoutes(
         authService = dependencies.authService,
         mediaService = dependencies.mediaService,

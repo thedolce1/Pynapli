@@ -158,6 +158,9 @@ class ServerDependencies(
     val photoVerificationService: PhotoVerificationService,
     val photoVerificationRetentionWorker: PhotoVerificationRetentionWorker? = null,
     val accountLifecycleService: AccountLifecycleService,
+    val metInPersonService: com.pynapli.server.metinperson.MetInPersonService? = null,
+    val adminMetInPersonService: com.pynapli.server.metinperson.AdminMetInPersonService? = null,
+    val metInPersonBadgeWorker: com.pynapli.server.metinperson.MetInPersonBadgeWorker? = null,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     private val profileActivityScope: CoroutineScope,
     private val probes: List<DependencyProbe>,
@@ -171,6 +174,7 @@ class ServerDependencies(
         runCatching { dataRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
         runCatching { photoVerificationRetentionWorker?.close() }
+        runCatching { metInPersonBadgeWorker?.close() }
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
         runCatching { psyncSessionExpiryWorker?.close() }
@@ -417,6 +421,7 @@ class ServerDependencies(
                 } else {
                     null
                 }
+            val metInPerson = buildMetInPersonDependencies(config, database.dataSource)
             val messaging =
                 buildMessagingDependencies(
                     dataSource = database.dataSource,
@@ -431,6 +436,7 @@ class ServerDependencies(
                     messageMediaGateway = media.messageMediaGateway,
                     productMetrics = core.productMetrics,
                     travelLocationRepository = core.travelLocationRepository,
+                    metInPersonOfferSource = metInPerson.service,
                 )
             val swipe =
                 buildSwipeDependencies(
@@ -526,6 +532,9 @@ class ServerDependencies(
                 photoVerificationService = photoVerificationService,
                 photoVerificationRetentionWorker = photoVerificationRetentionWorker,
                 accountLifecycleService = core.accountLifecycleService,
+                metInPersonService = metInPerson.service,
+                adminMetInPersonService = metInPerson.adminService,
+                metInPersonBadgeWorker = metInPerson.badgeWorker,
                 requestProfilerFactory = requestProfilerFactory,
                 profileActivityScope = profileActivityScope,
                 probes = listOf(postgres, redis),

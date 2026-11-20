@@ -95,7 +95,8 @@ internal fun buildCoreDependencies(
     // The server's background scope (cancelled on shutdown) for work that runs after a response.
     backgroundScope: CoroutineScope,
 ): CoreDependencies {
-    val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource)
+    val accountLifecycleRepository =
+        JdbcAccountLifecycleRepository(database.dataSource, metInPersonAccountData = metInPersonAccountData(config))
     val accountExportStorage = buildAccountExportStorage(config)
     val accountLifecycleService =
         AccountLifecycleService(
@@ -108,7 +109,11 @@ internal fun buildCoreDependencies(
                 processor =
                     AccountDataExportProcessor(
                         repository = accountLifecycleRepository,
-                        archiver = JdbcAccountDataExportArchiver(database.dataSource),
+                        archiver =
+                            JdbcAccountDataExportArchiver(
+                                database.dataSource,
+                                metInPersonAccountData = metInPersonAccountData(config),
+                            ),
                         storage = accountExportStorage,
                     ),
                 intervalMillis = config.accountDataExportIntervalMillis,
