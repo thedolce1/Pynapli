@@ -1,5 +1,6 @@
 package com.pynapli.server.grid
 
+import com.pynapli.server.contactblocks.ContactBlockVisibility
 import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.discovery.DiscoveryCursorException
 import com.pynapli.server.discovery.DiscoveryFilters
@@ -32,6 +33,9 @@ class GridService(
     private val subscriptionService: SubscriptionService? = null,
     private val viewerTrustRepository: GridViewerTrustRepository? = null,
     private val rateLimitService: RateLimitService? = null,
+    // "Hide from people you know": people hiding from this viewer, applied with blocks and hides
+    // after the shared ranked window (never inside it).
+    private val contactBlockVisibility: ContactBlockVisibility? = null,
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
@@ -165,9 +169,12 @@ class GridService(
                     result.cards.filterNot { it.userId in blockedRelatedIds }
                 }
             }
+        // Profiles the viewer hid, plus anyone hiding from the viewer (contact blocks): both drop the
+        // card and strip the partner mini, the same way.
         val hiddenProfileIds =
             profile("grid.hiddenProfiles") {
-                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
+                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty() +
+                    contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
             }
         val discoverableCards =
             profile("grid.hiddenFilter") {
@@ -176,6 +183,9 @@ class GridService(
                 } else {
                     visibleCards
                         .filterNot { it.userId in hiddenProfileIds }
+                        // "Verified couples only" means the badge this viewer sees: a couple whose
+                        // partner is stripped below no longer qualifies.
+                        .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenProfileIds }
                         .map { card ->
                             if (card.linkedPartnerUserId in hiddenProfileIds) {
                                 card.copy(

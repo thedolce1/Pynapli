@@ -49,6 +49,8 @@ internal class MessagingPartnerConversationActions(
                     conversationId = conversationId,
                     participants = result.conversation.participants,
                     statuses = MessagingParticipantStatuses.visible,
+                    // The change is about the invited partner: no hint to anyone that partner hides from.
+                    actorUserId = partnerUserId,
                 )
                 activityService?.recordPartnerChatInvite(
                     inviterUserId = userId,
@@ -98,6 +100,7 @@ internal class MessagingPartnerConversationActions(
             conversationId = conversationId,
             participants = accepted.conversation.participants,
             statuses = MessagingParticipantStatuses.visible,
+            actorUserId = userId,
         )
         return dtoMapper.toDto(accepted, userId)
     }
@@ -120,6 +123,7 @@ internal class MessagingPartnerConversationActions(
             conversationId = conversationId,
             participants = detailBeforeDecline.conversation.participants,
             statuses = MessagingParticipantStatuses.visible,
+            actorUserId = userId,
         )
         return ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.DECLINED)
     }
@@ -131,6 +135,10 @@ internal class MessagingPartnerConversationActions(
         val detailBeforeLeave =
             repository.getConversationDetail(userId, conversationId, limit = 1)
                 ?: throw MessagingException("CONVERSATION_NOT_FOUND")
+        // Not a conversation of theirs if everyone else in it hides from them.
+        if (detailBeforeLeave.conversation.isHiddenConversationFor(userId, conversationGuard.hiddenFrom(userId))) {
+            throw MessagingException("CONVERSATION_NOT_FOUND")
+        }
         if (!repository.leaveConversation(userId, conversationId)) {
             throw MessagingException("CONVERSATION_NOT_FOUND")
         }
@@ -139,6 +147,7 @@ internal class MessagingPartnerConversationActions(
             conversationId = conversationId,
             participants = detailBeforeLeave.conversation.participants,
             statuses = MessagingParticipantStatuses.visible,
+            actorUserId = userId,
         )
         return ConversationPartnerInviteResponseDto(status = ConversationParticipantStatus.LEFT)
     }

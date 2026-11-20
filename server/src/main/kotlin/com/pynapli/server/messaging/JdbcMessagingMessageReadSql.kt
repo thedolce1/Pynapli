@@ -1,5 +1,6 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.contactblocks.ContactBlockSql
 import java.sql.Connection
 import java.sql.Timestamp
 import java.util.UUID
@@ -8,6 +9,8 @@ internal fun Connection.loadLastMessage(
     userId: UUID,
     conversationId: UUID,
     effectiveExpirySeconds: Int?,
+    // "Hide from people you know": the viewer's token; never a message from anyone hiding from them.
+    viewerContactToken: String = ContactBlockSql.NO_VIEWER_TOKEN,
 ): MessageRecord? =
     prepareStatement(
         """
@@ -54,6 +57,7 @@ internal fun Connection.loadLastMessage(
               )
           )
           AND $MESSAGE_EXPIRY_FILTER
+          AND ${ContactBlockSql.notHiddenFromViewer("messages.sender_user_id")}
         ORDER BY created_at DESC, id DESC
         LIMIT 1
         """.trimIndent(),
@@ -65,6 +69,7 @@ internal fun Connection.loadLastMessage(
         statement.setObject(5, userId)
         statement.setObject(6, effectiveExpirySeconds, java.sql.Types.INTEGER)
         statement.setObject(7, effectiveExpirySeconds, java.sql.Types.INTEGER)
+        statement.setString(8, viewerContactToken) // hidden-from rule
         statement.executeQuery().use { rs ->
             if (rs.next()) rs.enrichMessageMedia(rs.toMessageRecord(deliveryStatus = rs.getString("delivery_status"))) else null
         }
@@ -119,6 +124,8 @@ internal fun Connection.loadMessages(
     limit: Int,
     before: MessagePageCursor?,
     effectiveExpirySeconds: Int?,
+    // "Hide from people you know": the viewer's token; messages from anyone hiding from them are left out.
+    viewerContactToken: String = ContactBlockSql.NO_VIEWER_TOKEN,
 ): MessagePageRecord {
     val pageSize = limit.coerceIn(1, 100)
     val query = buildMessagePageQuery(before)
@@ -133,6 +140,7 @@ internal fun Connection.loadMessages(
             statement.setObject(index++, userId)
             statement.setObject(index++, effectiveExpirySeconds, java.sql.Types.INTEGER)
             statement.setObject(index++, effectiveExpirySeconds, java.sql.Types.INTEGER)
+            statement.setString(index++, viewerContactToken) // hidden-from rule
             if (before != null) {
                 val beforeTimestamp = Timestamp.from(before.createdAt)
                 statement.setTimestamp(index++, beforeTimestamp)
@@ -208,6 +216,7 @@ private fun buildMessagePageQuery(before: MessagePageCursor?): String =
                   )
               )
               AND $MESSAGE_EXPIRY_FILTER
+              AND ${ContactBlockSql.notHiddenFromViewer("messages.sender_user_id")}
             """.trimIndent(),
         )
         append('\n')

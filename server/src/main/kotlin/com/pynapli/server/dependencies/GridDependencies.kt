@@ -41,6 +41,7 @@ internal fun buildGridDependencies(
     hiddenProfileRepository: HiddenProfileRepository,
     subscriptionService: SubscriptionService,
     rateLimitService: RateLimitService,
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ): GridDependencies {
     val gridService =
         GridService(
@@ -62,6 +63,7 @@ internal fun buildGridDependencies(
             subscriptionService = subscriptionService,
             viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
             rateLimitService = rateLimitService,
+            contactBlockVisibility = contactBlockVisibility,
         )
     val savedGridFilterService =
         SavedGridFilterService(

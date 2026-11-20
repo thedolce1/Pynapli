@@ -156,6 +156,7 @@ internal class MessagingMessageActions(
             participants = participants,
             messageId = deleted.messageId,
             statuses = MessagingParticipantStatuses.active,
+            actorUserId = userId,
         )
         return dtoMapper.toDto(deleted, userId)
     }
@@ -172,6 +173,7 @@ internal class MessagingMessageActions(
             participants = participants,
             messageId = UUID.fromString(message.messageId),
             statuses = MessagingParticipantStatuses.active,
+            actorUserId = userId,
         )
         notificationDispatcher.enqueueMessageNotifications(
             actorUserId = userId,

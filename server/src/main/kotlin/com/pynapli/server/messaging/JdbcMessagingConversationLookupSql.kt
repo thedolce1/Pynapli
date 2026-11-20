@@ -1,5 +1,6 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.contactblocks.ContactBlockSql
 import java.sql.Connection
 import java.time.Instant
 import java.util.UUID
@@ -8,6 +9,9 @@ internal fun Connection.listConversationIds(
     userId: UUID,
     limit: Int,
     after: ConversationPageCursor? = null,
+    // "Hide from people you know": a conversation started by someone hiding from the viewer is never
+    // listed for them (such a conversation stays direct: only the viewer could approve a third person).
+    viewerContactToken: String = ContactBlockSql.NO_VIEWER_TOKEN,
 ): List<UUID> =
     prepareStatement(
         """
@@ -39,6 +43,7 @@ internal fun Connection.listConversationIds(
                  )
            )
           )
+          AND ${ContactBlockSql.notHiddenFromViewer("c.created_by_user_id")}
         ORDER BY c.updated_at DESC, c.id DESC
         LIMIT ?
         """.trimIndent(),
@@ -50,7 +55,8 @@ internal fun Connection.listConversationIds(
         statement.setObject(4, after?.conversationId)
         statement.setObject(5, userId)
         statement.setObject(6, userId)
-        statement.setInt(7, limit.coerceIn(1, 101))
+        statement.setString(7, viewerContactToken) // hidden-from rule
+        statement.setInt(8, limit.coerceIn(1, 101))
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) add(rs.getObject("id", UUID::class.java))
@@ -128,6 +134,9 @@ internal fun Connection.insertDirectConversation(
 internal fun Connection.loadConversation(
     userId: UUID,
     conversationId: UUID,
+    // "Hide from people you know": the viewer's token, so the preview and the unread count leave out
+    // messages from anyone hiding from the viewer (participants are stripped in MessagingDtoMapper).
+    viewerContactToken: String = ContactBlockSql.NO_VIEWER_TOKEN,
 ): ConversationRecord? {
     val participants = mutableListOf<ConversationParticipantRecord>()
     var kind: String? = null
@@ -181,8 +190,8 @@ internal fun Connection.loadConversation(
         kind = kind ?: return null,
         origin = origin ?: return null,
         participants = visibleParticipants,
-        lastMessage = loadLastMessage(userId, conversationId, effectiveExpirySeconds),
-        unreadCount = loadUnreadCount(userId, conversationId),
+        lastMessage = loadLastMessage(userId, conversationId, effectiveExpirySeconds, viewerContactToken),
+        unreadCount = loadUnreadCount(userId, conversationId, viewerContactToken),
         updatedAt = updatedAt ?: return null,
         partnerInvite = viewerInvites.primaryFor(userId),
         partnerInvites = viewerInvites,

@@ -27,6 +27,10 @@ class ActivityService(
     subscriptionService: SubscriptionService? = null,
     activityBroadcaster: ActivityBroadcaster? = null,
     cursorCodec: ActivityCursorCodec = ActivityCursorCodec("pynapli-local-dev-activity-cursor-secret"),
+    // "Hide from people you know": realtime deltas an actor causes never reach someone they hide from,
+    // and that person can't flirt with or request the album of the actor by a stale id. The feed and
+    // counts apply the rule in SQL (JdbcActivityRepository's contact block tokens).
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     private val signalActions =
         ActivitySignalActions(
@@ -37,6 +41,7 @@ class ActivityService(
             rateLimitService = rateLimitService,
             riskPolicyService = riskPolicyService,
             activityBroadcaster = activityBroadcaster,
+            contactBlockVisibility = contactBlockVisibility,
         )
     private val feedActions =
         ActivityFeedActions(
@@ -46,6 +51,7 @@ class ActivityService(
             riskPolicyService = riskPolicyService,
             subscriptionService = subscriptionService,
             cursorCodec = cursorCodec,
+            contactBlockVisibility = contactBlockVisibility,
         )
     private val managementActions =
         ActivityManagementActions(

@@ -1,5 +1,7 @@
 package com.pynapli.server.activity
 
+import com.pynapli.server.contactblocks.ContactBlockSql
+
 internal object JdbcActivitySummarySql {
     val ACTIVITY_SUMMARY_QUERY =
         """
@@ -40,6 +42,8 @@ internal object JdbcActivitySummarySql {
               AND ae.visibility_status = 'visible'
               AND ae.deleted_at IS NULL
               AND COALESCE(actor_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+              -- "Hide from people you know": counts and the badge leave out anyone hiding from them.
+              AND ${ContactBlockSql.notHiddenFromViewer("ae.actor_user_id")}
               AND NOT EXISTS (
                   SELECT 1
                   FROM user_blocks block

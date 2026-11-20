@@ -15,6 +15,7 @@ internal class ActivityFeedActions(
     private val riskPolicyService: RiskPolicyService?,
     private val subscriptionService: SubscriptionService?,
     private val cursorCodec: ActivityCursorCodec,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun listActivity(
         recipientUserId: UUID,
@@ -64,11 +65,13 @@ internal class ActivityFeedActions(
                 ),
             )
         val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(recipientUserId).orEmpty()
+        val hiddenFromRecipient = contactBlockVisibility?.hiddenFrom(recipientUserId).orEmpty()
         val blockVisible =
-            if (blockedRelatedIds.isEmpty()) {
+            if (blockedRelatedIds.isEmpty() && hiddenFromRecipient.isEmpty()) {
                 events
             } else {
-                events.filterNot { it.actorUserId in blockedRelatedIds }
+                // Backstop: the SQL already leaves out anyone hiding from the recipient.
+                events.filterNot { it.actorUserId in blockedRelatedIds || it.actorUserId in hiddenFromRecipient }
             }
         val visible =
             if (riskPolicyService == null) {
@@ -98,8 +101,9 @@ internal class ActivityFeedActions(
             } else {
                 0
             }
+        // The pair name on a "liked you together" row never names someone hiding from the recipient.
         return ActivityFeedResponseDto(
-            items = revealed.foldPairLikes(blockedRelatedIds).map { it.toDto(mediaAssetUrlResolver) },
+            items = revealed.foldPairLikes(blockedRelatedIds + hiddenFromRecipient).map { it.toDto(mediaAssetUrlResolver) },
             nextCursor = nextCursor,
             entitlementTier = policy.tier,
             revealLimit = if (policy.fullActivityReveal) null else policy.activityRevealLimit,

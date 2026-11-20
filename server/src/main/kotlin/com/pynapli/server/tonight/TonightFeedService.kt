@@ -41,6 +41,9 @@ class TonightFeedService(
     // Same gates the Grid applies to lifestyle filters, so Tonight is never a bypass.
     private val viewerTrustRepository: GridViewerTrustRepository? = null,
     private val subscriptionService: SubscriptionService? = null,
+    // "Hide from people you know": someone hiding from the viewer drops like a blocked owner (and
+    // their partner mini like a blocked partner). Aggregate counts elsewhere are untouched.
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun feed(
         viewerUserId: UUID,
@@ -89,7 +92,8 @@ class TonightFeedService(
         // only suppresses the mini.
         val excludedIds =
             blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty() +
-                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
+                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty() +
+                contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
 
         val visibleRows = rows.filterNot { it.ownerUserId in excludedIds }
         if (visibleRows.isEmpty()) return TonightFeedResponseDto(items = emptyList())

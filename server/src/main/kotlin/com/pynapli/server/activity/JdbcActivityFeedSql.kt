@@ -1,5 +1,7 @@
 package com.pynapli.server.activity
 
+import com.pynapli.server.contactblocks.ContactBlockSql
+
 internal object JdbcActivityFeedSql {
     val ACTIVITY_FEED_QUERY =
         """
@@ -126,6 +128,8 @@ internal object JdbcActivityFeedSql {
               OR (ae.occurred_at = ? AND ae.id < ?)
           )
           AND COALESCE(actor_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+          -- "Hide from people you know": nothing from someone hiding from the recipient.
+          AND ${ContactBlockSql.notHiddenFromViewer("ae.actor_user_id")}
           AND NOT EXISTS (
               SELECT 1
               FROM user_blocks block

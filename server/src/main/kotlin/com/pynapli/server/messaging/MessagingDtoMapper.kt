@@ -16,6 +16,9 @@ import java.util.UUID
 internal class MessagingDtoMapper(
     private val featureAccess: MessagingFeatureAccess,
     private val messageMediaGateway: MessageMediaGateway? = null,
+    // "Hide from people you know": people hiding from the viewer are left out of what the viewer is
+    // shown of a conversation (participants, partner invites). Fan-out keeps using the full record.
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun toDto(
         detail: ConversationDetailRecord,
@@ -41,12 +44,22 @@ internal class MessagingDtoMapper(
         record: ConversationRecord,
         viewerUserId: UUID,
         readReceiptCache: MutableMap<UUID, Boolean> = mutableMapOf(),
+    ): ConversationDto {
+        val shown = record.withoutHiddenPeople(contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty())
+        return toVisibleDto(record = record, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache)
+    }
+
+    private suspend fun toVisibleDto(
+        record: ConversationRecord,
+        shown: ConversationRecord,
+        viewerUserId: UUID,
+        readReceiptCache: MutableMap<UUID, Boolean>,
     ): ConversationDto =
         ConversationDto(
             conversationId = record.conversationId.toString(),
             kind = record.kind,
             origin = record.origin,
-            participants = record.participants.map { it.toDto() },
+            participants = shown.participants.map { it.toDto() },
             lastMessage =
                 record.lastMessage?.let { message ->
                     toDto(
@@ -58,8 +71,8 @@ internal class MessagingDtoMapper(
                 },
             unreadCount = record.unreadCount,
             updatedAt = record.updatedAt.toString(),
-            partnerInvite = record.partnerInvite?.toDto(),
-            partnerInvites = record.partnerInvites.map { it.toDto() },
+            partnerInvite = shown.partnerInvite?.toDto(),
+            partnerInvites = shown.partnerInvites.map { it.toDto() },
             messageExpirySeconds = record.viewerExpirySeconds,
             effectiveMessageExpirySeconds = record.effectiveExpirySeconds,
             newMatch = record.newMatch,

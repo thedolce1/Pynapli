@@ -1,5 +1,6 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.contactblocks.ContactBlockSql
 import java.sql.Connection
 import java.util.UUID
 
@@ -59,6 +60,8 @@ internal fun Connection.markRead(
 internal fun Connection.loadUnreadCount(
     userId: UUID,
     conversationId: UUID,
+    // "Hide from people you know": the viewer's token; messages from anyone hiding from them don't count.
+    viewerContactToken: String = ContactBlockSql.NO_VIEWER_TOKEN,
 ): Int =
     prepareStatement(
         """
@@ -74,11 +77,13 @@ internal fun Connection.loadUnreadCount(
           AND m.deleted_at IS NULL
           AND m.moderation_status = 'visible'
           AND m.created_at > cp.last_read_at
+          AND ${ContactBlockSql.notHiddenFromViewer("m.sender_user_id")}
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)
         statement.setObject(2, conversationId)
         statement.setObject(3, userId)
+        statement.setString(4, viewerContactToken)
         statement.executeQuery().use { rs ->
             rs.next()
             rs.getInt("unread_count")

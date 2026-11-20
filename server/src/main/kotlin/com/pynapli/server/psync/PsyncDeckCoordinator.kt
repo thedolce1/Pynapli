@@ -20,6 +20,7 @@ internal class PsyncDeckCoordinator(
     private val mediaAssetUrlResolver: MediaAssetUrlResolver?,
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val clock: Clock,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun activateWithGeneratedDeck(
         sessionId: UUID,
@@ -83,6 +84,8 @@ internal class PsyncDeckCoordinator(
                 blockedOrHiddenTargets(session.initiatorUserId, partnerId)
             }
         val cards = repository.listDeckCards(session.id).filterNot { it.targetUserId in invalidated }
+        // A partner mini of someone hiding from this viewer comes off the card (with the couple badge).
+        val hiddenFromViewer = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
         val myActions = repository.listActionsForActor(session.id, viewerUserId).associate { it.targetUserId to it.action }
         val online = onlineFor(cards.map { it.targetUserId })
         val items =
@@ -97,7 +100,16 @@ internal class PsyncDeckCoordinator(
                     )
                 PsyncDeckCardDto(
                     // The snapshot's signed photo links expire within minutes; issue fresh ones.
-                    card = card.snapshot.copy(online = card.targetUserId in online).withFreshPhotoUrls(mediaAssetUrlResolver),
+                    card =
+                        card.snapshot
+                            .copy(online = card.targetUserId in online)
+                            .let { snapshot ->
+                                if (snapshot.linkedPartner?.userId?.let { runCatching { UUID.fromString(it) }.getOrNull() } in hiddenFromViewer) {
+                                    snapshot.copy(linkedPartner = null, coupleVerified = false)
+                                } else {
+                                    snapshot
+                                }
+                            }.withFreshPhotoUrls(mediaAssetUrlResolver),
                     cardToken = rawToken,
                     viewerAction = myActions[card.targetUserId],
                 )
@@ -118,6 +130,11 @@ internal class PsyncDeckCoordinator(
             hiddenProfileRepository?.let {
                 addAll(it.listHiddenProfileIds(partnerA))
                 addAll(it.listHiddenProfileIds(partnerB))
+            }
+            // "Hide from people you know": one-way, from either partner's side (the deck is shared).
+            contactBlockVisibility?.let {
+                addAll(it.hiddenFrom(partnerA))
+                addAll(it.hiddenFrom(partnerB))
             }
         }
 

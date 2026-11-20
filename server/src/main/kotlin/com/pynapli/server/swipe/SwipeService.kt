@@ -31,6 +31,9 @@ class SwipeService(
     activityService: ActivityService? = null,
     private val productMetrics: com.pynapli.server.metrics.ProductMetrics? = null,
     matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
+    // "Hide from people you know": viewer-side only (the deck, rewind and like-back of the person
+    // someone hides from), never the hiding member's own deck.
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
     private val sideEffects =
@@ -49,6 +52,7 @@ class SwipeService(
             deckTokenCodec = deckTokenCodec,
             deckPageBuilder = deckPageBuilder,
             clock = clock,
+            contactBlockVisibility = contactBlockVisibility,
         )
     private val submitAction =
         SwipeSubmitAction(
@@ -71,6 +75,7 @@ class SwipeService(
             presenceService = presenceService,
             deckTokenCodec = deckTokenCodec,
             clock = clock,
+            contactBlockVisibility = contactBlockVisibility,
         )
 
     suspend fun queryDeck(
@@ -109,6 +114,8 @@ class SwipeService(
             throw SwipeException("RATE_LIMITED")
         }
         if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) throw SwipeException("INVALID_SWIPE_TARGET")
+        // Someone hiding from the viewer: the same answer as when there is no like to answer.
+        if (contactBlockVisibility?.isHiddenFrom(viewerUserId, targetUserId) == true) throw SwipeException("LIKE_BACK_NOT_AVAILABLE")
         val travelLocationId = travelLocationRepository?.findActive(viewerUserId)?.id
         val result =
             repository.likeBack(UUID.randomUUID(), viewerUserId, targetUserId, travelLocationId)

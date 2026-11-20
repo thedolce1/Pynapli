@@ -5,6 +5,7 @@ import com.pynapli.server.discovery.DiscoveryCursorException
 import com.pynapli.server.grid.GridCardRecord
 import com.pynapli.server.grid.GridCursorAnchor
 import com.pynapli.server.grid.GridException
+import com.pynapli.server.grid.GridHydration
 import com.pynapli.server.grid.toGridCardDto
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
@@ -29,6 +30,9 @@ class FavoriteService internal constructor(
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val blockRepository: BlockRepository? = null,
     private val rateLimitService: RateLimitService? = null,
+    // "Hide from people you know": someone hiding from the viewer can't be starred (same answer as a
+    // missing account) and never shows in the viewer's list, nor as a partner mini on a card there.
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun add(
         viewerUserId: UUID,
@@ -38,6 +42,7 @@ class FavoriteService internal constructor(
         requireRateLimit(viewerUserId)
         // Same answer as for a missing account, so a star can't probe who blocked whom.
         if (blockRepository?.isBlockedEitherWay(viewerUserId, target) == true) throw GridException("PROFILE_NOT_FOUND")
+        if (contactBlockVisibility?.isHiddenFrom(viewerUserId, target) == true) throw GridException("PROFILE_NOT_FOUND")
         when (repository.add(viewerUserId, target, MAX_FAVORITES)) {
             FavoriteAddResult.ADDED, FavoriteAddResult.ALREADY_FAVORITE -> Unit
             FavoriteAddResult.LIMIT_REACHED -> throw GridException("FAVORITES_LIMIT_REACHED")
@@ -75,7 +80,8 @@ class FavoriteService internal constructor(
                     throw GridException("INVALID_GRID_CURSOR")
                 }
             }
-        val rows = repository.listVisible(viewerUserId, MAX_FAVORITES)
+        val hiddenFromViewer = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        val rows = repository.listVisible(viewerUserId, MAX_FAVORITES).filterNot { it.userId in hiddenFromViewer }
         if (rows.isEmpty()) return GridQueryResponseDto(items = emptyList())
 
         val online =
@@ -91,7 +97,7 @@ class FavoriteService internal constructor(
         val hydration = repository.hydrate(viewerUserId, page.map { it.first.userId })
         val cards =
             page.map { (row, _) ->
-                val h = hydration[row.userId]
+                val h = hydration[row.userId]?.let { hydrated -> if (hydrated.linkedPartnerUserId in hiddenFromViewer) hydrated.withoutPartner() else hydrated }
                 GridCardRecord(
                     userId = row.userId,
                     displayName = row.displayName,
@@ -155,3 +161,12 @@ private fun GridCursorAnchor.compareTo(other: GridCursorAnchor): Int =
             .compareUnsigned(userId.mostSignificantBits, other.userId.mostSignificantBits)
             .takeIf { it != 0 }
         ?: java.lang.Long.compareUnsigned(userId.leastSignificantBits, other.userId.leastSignificantBits)
+
+/** "Hide from people you know": the partner mini (and the couple badge it carries) comes off the card. */
+private fun GridHydration.withoutPartner(): GridHydration =
+    copy(
+        linkedPartnerUserId = null,
+        linkedPartnerDisplayName = null,
+        linkedPartnerThumbnailMediaAssetId = null,
+        linkedPartnerVerified = false,
+    )

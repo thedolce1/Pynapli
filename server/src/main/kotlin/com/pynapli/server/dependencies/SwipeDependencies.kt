@@ -56,6 +56,7 @@ internal fun buildSwipeDependencies(
     psyncBroadcaster: PsyncBroadcaster,
     productMetrics: com.pynapli.server.metrics.ProductMetrics,
     matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ): SwipeDependencies {
     val swipeRepository = JdbcSwipeRepository(dataSource)
     val swipeService =
@@ -73,6 +74,7 @@ internal fun buildSwipeDependencies(
             activityService = activityService,
             productMetrics = productMetrics,
             matchConversationOpener = matchConversationOpener,
+            contactBlockVisibility = contactBlockVisibility,
         )
     val psyncSessionService =
         PsyncSessionService(
@@ -90,6 +92,7 @@ internal fun buildSwipeDependencies(
             rateLimitService = rateLimitService,
             riskPolicyService = riskPolicyService,
             subscriptionService = subscriptionService,
+            contactBlockVisibility = contactBlockVisibility,
         )
     return SwipeDependencies(
         swipeService = swipeService,

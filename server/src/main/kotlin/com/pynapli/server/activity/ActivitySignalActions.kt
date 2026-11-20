@@ -21,17 +21,40 @@ internal class ActivitySignalActions(
     private val rateLimitService: RateLimitService?,
     private val riskPolicyService: RiskPolicyService?,
     private val activityBroadcaster: ActivityBroadcaster?,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
+    /**
+     * The realtime refresh hint for [recipientUserId], unless [actorUserId] hides from them ("Hide from
+     * people you know"). The row is written either way (the actor's own view never changes); the
+     * recipient's reads leave it out, and so does this hint.
+     */
+    private suspend fun publishDelta(
+        recipientUserId: UUID,
+        actorUserId: UUID,
+        eventType: String,
+    ) {
+        if (contactBlockVisibility?.isHiddenFrom(viewerUserId = recipientUserId, otherUserId = actorUserId) == true) return
+        activityBroadcaster.publishActivityDelta(recipientUserId, eventType)
+    }
+
+    /** True when [targetUserId] hides from [actorUserId]: the actor can't reach them by a stale id. */
+    private suspend fun targetHidesFrom(
+        actorUserId: UUID,
+        targetUserId: UUID,
+    ): Boolean = contactBlockVisibility?.isHiddenFrom(viewerUserId = actorUserId, otherUserId = targetUserId) == true
+
     suspend fun recordProfileView(
         viewerUserId: UUID,
         targetUserId: UUID,
     ) {
         if (viewerUserId == targetUserId) return
         if (blockRepository?.isBlockedEitherWay(viewerUserId, targetUserId) == true) return
+        // Backstop (the profile fetch already answers PROFILE_NOT_FOUND): no view of someone hiding from the viewer.
+        if (targetHidesFrom(viewerUserId, targetUserId)) return
         if (riskPolicyService?.shouldSuppressPassiveActivity(viewerUserId) == true) return
         if (rateLimitService?.check(viewerUserId, RateLimitedAction.PROFILE_VIEW)?.allowed == false) return
         if (!repository.recordProfileView(viewerUserId, targetUserId)) return
-        activityBroadcaster.publishActivityDelta(targetUserId, "profile_view")
+        publishDelta(recipientUserId = targetUserId, actorUserId = viewerUserId, eventType = "profile_view")
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = targetUserId,
@@ -60,6 +83,7 @@ internal class ActivitySignalActions(
         if (blockRepository?.isBlockedEitherWay(senderUserId, targetUserId) == true) {
             throw ActivityException("FLIRT_NOT_ALLOWED")
         }
+        if (targetHidesFrom(senderUserId, targetUserId)) throw ActivityException("FLIRT_NOT_ALLOWED")
         if (rateLimitService?.check(senderUserId, RateLimitedAction.FLIRT)?.allowed == false) {
             throw ActivityException("RATE_LIMITED")
         }
@@ -69,7 +93,7 @@ internal class ActivitySignalActions(
         if (!repository.recordFlirt(senderUserId, targetUserId, normalizedSource)) {
             throw ActivityException("FLIRT_NOT_ALLOWED")
         }
-        activityBroadcaster.publishActivityDelta(targetUserId, "flirt")
+        publishDelta(recipientUserId = targetUserId, actorUserId = senderUserId, eventType = "flirt")
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = targetUserId,
@@ -98,6 +122,7 @@ internal class ActivitySignalActions(
         if (blockRepository?.isBlockedEitherWay(requesterUserId, targetUserId) == true) {
             throw ActivityException("ALBUM_REQUEST_NOT_ALLOWED")
         }
+        if (targetHidesFrom(requesterUserId, targetUserId)) throw ActivityException("ALBUM_REQUEST_NOT_ALLOWED")
         if (rateLimitService?.check(requesterUserId, RateLimitedAction.ALBUM_REQUEST)?.allowed == false) {
             throw ActivityException("RATE_LIMITED")
         }
@@ -115,7 +140,7 @@ internal class ActivitySignalActions(
                 throw error
             }
         if (!mediaRequested) throw ActivityException("ALBUM_REQUEST_NOT_ALLOWED")
-        activityBroadcaster.publishActivityDelta(targetUserId, "album_request")
+        publishDelta(recipientUserId = targetUserId, actorUserId = requesterUserId, eventType = "album_request")
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = targetUserId,
@@ -144,7 +169,7 @@ internal class ActivitySignalActions(
         if (blockRepository?.isBlockedEitherWay(actorUserId, targetUserId) == true) return
         if (riskPolicyService?.isSocialActionRestricted(actorUserId) == true) return
         if (repository.recordSwipeInterest(actorUserId, targetUserId, eventType, metadataJson)) {
-            activityBroadcaster.publishActivityDelta(targetUserId, eventType)
+            publishDelta(recipientUserId = targetUserId, actorUserId = actorUserId, eventType = eventType)
         }
     }
 
@@ -156,10 +181,10 @@ internal class ActivitySignalActions(
         if (userA == userB) return
         if (blockRepository?.isBlockedEitherWay(userA, userB) == true) return
         if (repository.recordMatch(recipientUserId = userA, actorUserId = userB, matchId = matchId)) {
-            activityBroadcaster.publishActivityDelta(userA, "match")
+            publishDelta(recipientUserId = userA, actorUserId = userB, eventType = "match")
         }
         if (repository.recordMatch(recipientUserId = userB, actorUserId = userA, matchId = matchId)) {
-            activityBroadcaster.publishActivityDelta(userB, "match")
+            publishDelta(recipientUserId = userB, actorUserId = userA, eventType = "match")
         }
     }
 
@@ -172,7 +197,7 @@ internal class ActivitySignalActions(
         if (blockRepository?.isBlockedEitherWay(inviterUserId, inviteeUserId) == true) return
         if (riskPolicyService?.isSocialActionRestricted(inviterUserId) == true) return
         if (repository.recordPartnerChatInvite(inviterUserId, inviteeUserId, conversationId)) {
-            activityBroadcaster.publishActivityDelta(inviteeUserId, "partner_chat_invite")
+            publishDelta(recipientUserId = inviteeUserId, actorUserId = inviterUserId, eventType = "partner_chat_invite")
         }
     }
 
@@ -187,7 +212,7 @@ internal class ActivitySignalActions(
         if (ownerUserId == requesterUserId) return
         if (blockRepository?.isBlockedEitherWay(ownerUserId, requesterUserId) == true) return
         if (!repository.recordAlbumGranted(ownerUserId, requesterUserId)) return
-        activityBroadcaster.publishActivityDelta(requesterUserId, "album_granted")
+        publishDelta(recipientUserId = requesterUserId, actorUserId = ownerUserId, eventType = "album_granted")
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = requesterUserId,
@@ -213,7 +238,7 @@ internal class ActivitySignalActions(
         if (recipientUserId == actorUserId) return
         if (blockRepository?.isBlockedEitherWay(recipientUserId, actorUserId) == true) return
         if (repository.recordPsyncSessionEvent(recipientUserId, actorUserId, eventType, sessionId)) {
-            activityBroadcaster.publishActivityDelta(recipientUserId, eventType)
+            publishDelta(recipientUserId = recipientUserId, actorUserId = actorUserId, eventType = eventType)
         }
     }
 }

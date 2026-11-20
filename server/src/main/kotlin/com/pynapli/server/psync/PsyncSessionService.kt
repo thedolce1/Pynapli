@@ -40,6 +40,8 @@ class PsyncSessionService(
             .SwipeDeckTokenCodec(),
     clock: Clock = Clock.systemUTC(),
     json: Json = Json,
+    // "Hide from people you know": anyone hiding from EITHER partner is left out of the shared deck.
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     private val events = PsyncSessionEvents(activityService, notificationPublisher, broadcaster, clock)
     private val pineappleRefunds = PsyncPineappleRefunds(repository, pineappleInventory)
@@ -53,6 +55,7 @@ class PsyncSessionService(
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             deckTokenCodec = deckTokenCodec,
             clock = clock,
+            contactBlockVisibility = contactBlockVisibility,
         )
     private val activeSessions =
         PsyncActiveSessionActions(

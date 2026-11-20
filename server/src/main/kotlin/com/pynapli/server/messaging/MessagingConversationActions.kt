@@ -98,6 +98,7 @@ internal class MessagingConversationActions(
         conversationIdText: String,
     ): ConversationDto {
         val conversationId = conversationIdText.toMessagingUuidOrThrow()
+        conversationGuard.requireNotHiddenConversation(repository, userId, conversationId)
         val conversation =
             repository.markConversationRead(userId, conversationId)
                 ?: throw MessagingException("CONVERSATION_NOT_FOUND")
@@ -107,6 +108,7 @@ internal class MessagingConversationActions(
                 conversationId = conversationId,
                 participants = conversation.participants,
                 statuses = MessagingParticipantStatuses.active,
+                actorUserId = userId,
             )
         }
         // Every client open and refresh of a thread ends with this read mark, whose conversation replaces
@@ -166,6 +168,7 @@ internal class MessagingConversationActions(
         if (!featureAccess.messageExpiryAllowed(userId)) {
             throw MessagingException("ENTITLEMENT_REQUIRED")
         }
+        conversationGuard.requireNotHiddenConversation(repository, userId, conversationId)
 
         val result =
             repository.setConversationExpiry(
@@ -181,12 +184,14 @@ internal class MessagingConversationActions(
             participants = result.conversation.participants,
             messageId = result.systemMessage.messageId,
             statuses = MessagingParticipantStatuses.active,
+            actorUserId = userId,
         )
         realtimePublisher.publishDelta(
             type = MessageDeltaType.CONVERSATION_UPDATED,
             conversationId = conversationId,
             participants = result.conversation.participants,
             statuses = MessagingParticipantStatuses.active,
+            actorUserId = userId,
         )
         return dtoMapper.toDto(result.conversation, userId)
     }
