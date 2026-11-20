@@ -51,9 +51,15 @@ interface ConversationRepository {
 
     suspend fun inviteLinkedPartner(conversationId: String): AppResult<ConversationDto>
 
-    suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
+    suspend fun acceptPartnerInvite(
+        conversationId: String,
+        inviteId: String? = null,
+    ): AppResult<ConversationDetailDto>
 
-    suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+    suspend fun declinePartnerInvite(
+        conversationId: String,
+        inviteId: String? = null,
+    ): AppResult<ConversationPartnerInviteResponseDto>
 
     suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
 

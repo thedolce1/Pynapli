@@ -16,6 +16,12 @@ internal fun Connection.acceptOpenPartnerInvite(
         invite.thirdPartyStatus == PARTNER_INVITE_ACCEPTED ||
             role == PartnerInviteUserRole.ThirdPartyApprover
     val fullyAccepted = partnerAccepted && thirdPartyAccepted
+    // Activating the invitee must not put blocked people together: re-check against everyone present
+    // (active participants and other open invitees), whoever's accept completes it. The generic
+    // refusal; the caller's transaction rolls back.
+    if (fullyAccepted && inviteeBlockedInConversation(conversationId, invite.invitedPartnerUserId)) {
+        throw MessagingException("MESSAGING_NOT_ALLOWED")
+    }
 
     prepareStatement(
         """
@@ -38,6 +44,8 @@ internal fun Connection.acceptOpenPartnerInvite(
 
     if (fullyAccepted) {
         activateInvitedPartner(conversationId, invite.invitedPartnerUserId)
+        // Someone new is in: anyone else who had said yes must say yes again, knowing who is there.
+        resetWaitingPartnerAcceptances(conversationId)
     } else if (role == PartnerInviteUserRole.InvitedPartner) {
         recordInvitedPartnerResponse(conversationId, userId)
     }

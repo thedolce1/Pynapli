@@ -182,21 +182,32 @@ class MessagingService(
         return partnerActions.inviteLinkedPartnerToConversation(userId, conversationId)
     }
 
+    /**
+     * [inviteIdText] (optional `inviteId` query parameter) names the invite a third party approves when
+     * several are open; without it the server resolves the invite from who is acting.
+     */
     suspend fun acceptPartnerInvite(
         userId: UUID,
         conversationIdText: String,
+        inviteIdText: String? = null,
     ): ConversationDetailDto {
         val conversationId = conversationIdText.toMessagingUuidOrThrow()
-        return partnerActions.acceptPartnerInvite(userId, conversationId)
+        return partnerActions.acceptPartnerInvite(userId, conversationId, inviteIdText.toInviteIdOrThrow())
     }
 
     suspend fun declinePartnerInvite(
         userId: UUID,
         conversationIdText: String,
+        inviteIdText: String? = null,
     ): ConversationPartnerInviteResponseDto {
         val conversationId = conversationIdText.toMessagingUuidOrThrow()
-        return partnerActions.declinePartnerInvite(userId, conversationId)
+        return partnerActions.declinePartnerInvite(userId, conversationId, inviteIdText.toInviteIdOrThrow())
     }
+
+    private fun String?.toInviteIdOrThrow(): UUID? =
+        this?.takeIf { it.isNotBlank() }?.let { text ->
+            runCatching { UUID.fromString(text) }.getOrElse { throw MessagingException("PARTNER_INVITE_NOT_FOUND") }
+        }
 
     suspend fun leaveConversation(
         userId: UUID,

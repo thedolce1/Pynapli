@@ -1166,6 +1166,7 @@ private class InMemoryMessagingRepository(
     override suspend fun acceptPartnerInvite(
         userId: UUID,
         conversationId: UUID,
+        inviteId: UUID?,
     ): ConversationDetailRecord? {
         val invite = partnerInvitesByConversation[conversationId] ?: return null
         val entry =
@@ -1216,6 +1217,7 @@ private class InMemoryMessagingRepository(
     override suspend fun declinePartnerInvite(
         userId: UUID,
         conversationId: UUID,
+        inviteId: UUID?,
     ): Boolean {
         val invite = partnerInvitesByConversation[conversationId] ?: return false
         val entry =

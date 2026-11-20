@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,49 +37,45 @@ internal fun ConversationPartnerActions(
 ) {
     val conversation = state.detail?.conversation ?: return
     val viewerUserId = state.viewerUserId
-    val pendingInvite = conversation.partnerInvite
-    val viewerParticipant = conversation.participants.firstOrNull { participant -> participant.userId == viewerUserId }
-    val viewerIsInvitedPartner =
+    // Several invites can be open at once (each side bringing their own partner): each is shown and
+    // answered on its own.
+    val invites = conversation.openPartnerInvites()
+    val viewerIsActive =
         viewerUserId != null &&
-            pendingInvite?.invitedPartnerUserId == viewerUserId
-    val viewerCanApproveAsThirdParty =
-        viewerUserId != null &&
-            pendingInvite != null &&
-            viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
-            viewerUserId != pendingInvite.inviterUserId &&
-            viewerUserId != pendingInvite.invitedPartnerUserId
+            conversation.participants.any { it.userId == viewerUserId && it.status == ConversationParticipantStatus.ACTIVE }
+    val ownInvite = invites.firstOrNull { invite -> viewerUserId != null && invite.invitedPartnerUserId == viewerUserId }
     val partnerAcceptedWaiting =
-        pendingInvite?.let { invite ->
-            viewerIsInvitedPartner &&
-                invite.partnerStatus == PartnerChatInviteStatus.ACCEPTED &&
-                invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
-        } == true
-    val thirdPartyApprovalNeeded =
-        pendingInvite?.let { invite ->
-            viewerCanApproveAsThirdParty &&
-                invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
-        } == true
+        ownInvite != null &&
+            ownInvite.partnerStatus == PartnerChatInviteStatus.ACCEPTED &&
+            ownInvite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
+    // An invite by someone else that waits for the viewer's approval (never offered to an invited person).
+    val approvalInvite = state.actionablePartnerInvite?.takeIf { it.invitedPartnerUserId != viewerUserId }
+    val thirdPartyApprovalNeeded = approvalInvite != null
     val waitingForPartner =
-        pendingInvite?.let { invite ->
-            viewerCanApproveAsThirdParty &&
-                invite.thirdPartyStatus == PartnerChatInviteStatus.ACCEPTED &&
-                invite.partnerStatus == PartnerChatInviteStatus.PENDING
-        } == true
-    val inviterWaiting =
-        viewerUserId != null &&
-            pendingInvite != null &&
-            viewerUserId == pendingInvite.inviterUserId
+        viewerIsActive &&
+            invites.any { invite ->
+                invite.inviterUserId != viewerUserId &&
+                    invite.thirdPartyStatus == PartnerChatInviteStatus.ACCEPTED &&
+                    invite.partnerStatus == PartnerChatInviteStatus.PENDING
+            }
+    val inviterWaiting = invites.any { invite -> viewerUserId != null && invite.inviterUserId == viewerUserId }
     val partnerAlreadyInThread =
         linkedPartnerUserId != null &&
             conversation.participants.any { participant ->
                 participant.userId == linkedPartnerUserId &&
                     participant.status in visibleConversationParticipantStatuses
             }
+    // The server's "Bring your partner" offer replaces the small Invite partner button when present;
+    // without it (no offer, or an older server) the chrome is as before.
+    val offer = state.partnerOfferUi()
     val showInvitePartner =
         linkedPartnerUserId != null &&
             !partnerAlreadyInThread &&
             !state.isViewerInvited &&
-            !state.isLeaving
+            !state.isLeaving &&
+            offer?.bringPartnerName == null &&
+            // Server-decided: no manual re-invite during the cooldown after a decline.
+            conversation.ownPartnerInviteCoolingDown != true
     val showLeave =
         showLeaveAction &&
             conversation.kind == "group" &&
@@ -108,7 +105,9 @@ internal fun ConversationPartnerActions(
         thirdPartyApprovalNeeded -> {
             PartnerInvitePrompt(
                 title = "Partner invite request",
-                body = "Approve before the partner can join this chat.",
+                body =
+                    "Approve before ${approvalInvite?.let { conversation.invitedPartnerName(it) } ?: "the partner"} " +
+                        "can join this chat.",
                 isResponding = state.isRespondingToInvite,
                 errorMessage = state.errorMessage,
                 onAcceptInvite = onAcceptInvite,
@@ -130,8 +129,56 @@ internal fun ConversationPartnerActions(
             )
         }
 
-        showInvitePartner || showLeave || partnerFeedback != null || state.isInvitingPartner || state.isLeaving -> {
+        else -> Unit
+    }
+    val statusShown =
+        partnerAcceptedWaiting || state.isViewerInvited || thirdPartyApprovalNeeded || waitingForPartner || inviterWaiting
+    val hasActions =
+        offer != null || showInvitePartner || showLeave || partnerFeedback != null ||
+            state.isInvitingPartner || state.isLeaving
+    // With a "Bring your partner" offer the actions show beside any open invite's status, so each side
+    // can bring their own partner while the other side's invite is still open.
+    val showActions = hasActions && (offer != null || !statusShown)
+    when {
+        showActions -> {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                offer?.participantPartnerNotes?.forEach { note ->
+                    Text(
+                        text = note,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                offer?.bringPartnerName?.let { partnerName ->
+                    PartnerInviteStatusNotice(
+                        title = "Bring $partnerName into this chat?",
+                        body = "$partnerName and everyone here each need to accept. Nobody joins without saying yes.",
+                        action = {
+                            Button(
+                                onClick = onInvitePartner,
+                                enabled = !state.isInvitingPartner,
+                                modifier = Modifier.handCursor(enabled = !state.isInvitingPartner),
+                            ) {
+                                if (state.isInvitingPartner) {
+                                    CircularProgressIndicator(
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Filled.PersonAdd,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                Text(
+                                    text = "Invite $partnerName",
+                                    modifier = Modifier.padding(start = 6.dp),
+                                )
+                            }
+                        },
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -196,7 +243,7 @@ internal fun ConversationPartnerActions(
                         }
                     }
                 }
-                if (state.errorMessage != null && state.draft.isBlank()) {
+                if (state.errorMessage != null && state.draft.isBlank() && !thirdPartyApprovalNeeded) {
                     Text(
                         text = state.errorMessage,
                         color = MaterialTheme.colorScheme.error,

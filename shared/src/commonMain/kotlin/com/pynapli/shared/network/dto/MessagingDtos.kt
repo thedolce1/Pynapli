@@ -62,7 +62,11 @@ data class ConversationDto(
     val lastMessage: MessageDto? = null,
     val unreadCount: Int,
     val updatedAt: String,
+    // The single open partner invite older clients read: the one the viewer acts on first.
     val partnerInvite: PartnerChatInviteDto? = null,
+    // Every open partner invite the viewer is party to, newest first: all of them for an active
+    // participant, only their own for an invited person. Empty from a server that predates it.
+    val partnerInvites: List<PartnerChatInviteDto> = emptyList(),
     // The viewer's own disappearing-messages timer (null = off) and the effective timer for the
     // conversation (strictest of all active participants; what messages actually expire on).
     val messageExpirySeconds: Int? = null,
@@ -71,6 +75,38 @@ data class ConversationDto(
     // viewer has not acted on yet; MESSAGING_SPEC "New-matches rail"). Per viewer. Null only from a
     // server that predates the field, where clients fall back to swipe origin + no last message.
     val newMatch: Boolean? = null,
+    // Server-decided "Bring your partner" offer for the viewer (MESSAGING_SPEC "Partner Invite Flow"),
+    // sent on the read mark (POST .../read, which every open ends with) only. Null when there is nothing to
+    // offer, and from a server that predates it; clients then render the conversation as before.
+    val partnerOffers: ConversationPartnerOffersDto? = null,
+    // Server-decided, read mark only: the viewer's own partner may not be invited into this thread
+    // again yet (24 hours after a decline by either side), so the manual Invite button stays hidden.
+    // Null elsewhere and from older servers: the button shows as before.
+    val ownPartnerInviteCoolingDown: Boolean? = null,
+)
+
+/**
+ * A shortcut over the ordinary partner invite, never a separate consent path: [bringPartner] is the
+ * viewer's own linked partner, invited with the existing `POST .../partner-invite` (same accepts);
+ * [participantPartners] names another participant's linked partner the viewer is already allowed to
+ * see, so the viewer can ask that participant. The viewer can never invite someone else's partner.
+ */
+@Serializable
+data class ConversationPartnerOffersDto(
+    val bringPartner: ConversationBringPartnerDto? = null,
+    val participantPartners: List<ConversationParticipantPartnerDto> = emptyList(),
+)
+
+@Serializable
+data class ConversationBringPartnerDto(
+    val partnerUserId: String,
+    val partnerDisplayName: String,
+)
+
+@Serializable
+data class ConversationParticipantPartnerDto(
+    val participantUserId: String,
+    val partnerDisplayName: String,
 )
 
 @Serializable

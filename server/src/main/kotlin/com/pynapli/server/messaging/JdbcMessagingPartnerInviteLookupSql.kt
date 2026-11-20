@@ -82,14 +82,16 @@ internal fun Connection.partnerInviteCooldownActive(
             FROM partner_chat_invites
             WHERE thread_id = ?
               AND invited_partner_user_id = ?
-              AND third_party_status = ?
+              AND (third_party_status = ? OR partner_status = ?)
               AND resolved_at > now() - interval '24 hours'
         )
         """.trimIndent(),
     ).use { statement ->
+        // A decline by either side (the third party or the invited partner) starts the cooldown.
         statement.setObject(1, conversationId)
         statement.setObject(2, partnerUserId)
         statement.setString(3, PARTNER_INVITE_DECLINED)
+        statement.setString(4, PARTNER_INVITE_DECLINED)
         statement.executeQuery().use { rs ->
             rs.next()
             rs.getBoolean(1)
@@ -124,10 +126,11 @@ internal fun Connection.insertPartnerChatInvite(
         statement.executeUpdate() > 0
     }
 
-internal fun Connection.loadOpenPartnerInvite(
+/** Every open (unresolved) invite in the conversation, newest first. Several may be open at once. */
+internal fun Connection.loadOpenPartnerInvites(
     conversationId: UUID,
     forUpdate: Boolean,
-): PartnerChatInviteRecord? {
+): List<PartnerChatInviteRecord> {
     val query =
         buildString {
             append(
@@ -143,7 +146,6 @@ internal fun Connection.loadOpenPartnerInvite(
                 WHERE thread_id = ?
                   AND resolved_at IS NULL
                 ORDER BY created_at DESC, id DESC
-                LIMIT 1
                 """.trimIndent(),
             )
             if (forUpdate) append("\nFOR UPDATE")
@@ -151,8 +153,145 @@ internal fun Connection.loadOpenPartnerInvite(
     return prepareStatement(query).use { statement ->
         statement.setObject(1, conversationId)
         statement.executeQuery().use { rs ->
-            if (rs.next()) rs.toPartnerChatInviteRecord() else null
+            buildList {
+                while (rs.next()) add(rs.toPartnerChatInviteRecord())
+            }
         }
+    }
+}
+
+/** What an accept or decline acts on ([resolvePartnerInviteAction]). */
+internal sealed interface PartnerInviteAction {
+    data class Respond(
+        val invite: PartnerChatInviteRecord,
+        val role: PartnerInviteUserRole,
+    ) : PartnerInviteAction
+
+    /** A repeat of the caller's own answer after their invite was resolved (a lost response). */
+    data object OwnInviteAlreadyResolved : PartnerInviteAction
+}
+
+/**
+ * The open invite [userId] accepts or declines, and in which role, or null when there is none.
+ *  - An invitee acts on their own invite only (at most one open per person per thread, by the unique
+ *    index); naming any other invite is refused, so an invited person never approves anyone.
+ *  - Anyone else approves or declines, as the third party, the invite named by [inviteId] (of this
+ *    conversation). The approver must be an active participant who is not that invite's inviter
+ *    ([partnerInviteUserRole]); invited partners are not active, so neither approves the other.
+ *  - Without an id (older clients): from someone who joined this thread through an accepted invite it
+ *    is a retry of their own answer (a lost response), never an approval, so such a person approves
+ *    only by naming the invite; from anyone else it acts only when exactly one open invite awaits this
+ *    caller's approval. Anything else is refused.
+ * Locks every open invite row of the thread in one order (call inside the accept/decline transaction).
+ */
+internal fun Connection.resolvePartnerInviteAction(
+    userId: UUID,
+    conversationId: UUID,
+    inviteId: UUID?,
+): PartnerInviteAction? {
+    val open = loadOpenPartnerInvites(conversationId, forUpdate = true)
+    open.firstOrNull { it.invitedPartnerUserId == userId }?.let { own ->
+        return if (inviteId == null || inviteId == own.inviteId) {
+            PartnerInviteAction.Respond(own, PartnerInviteUserRole.InvitedPartner)
+        } else {
+            null
+        }
+    }
+    if (inviteId != null) {
+        val named = open.firstOrNull { it.inviteId == inviteId } ?: return null
+        return PartnerInviteAction
+            .Respond(named, PartnerInviteUserRole.ThirdPartyApprover)
+            .takeIf { partnerInviteUserRole(userId, named) == PartnerInviteUserRole.ThirdPartyApprover }
+    }
+    if (joinedByAcceptedInvite(userId, conversationId)) {
+        return PartnerInviteAction.OwnInviteAlreadyResolved
+    }
+    return open
+        .filter { invite ->
+            invite.thirdPartyStatus == PARTNER_INVITE_PENDING &&
+                partnerInviteUserRole(userId, invite) == PartnerInviteUserRole.ThirdPartyApprover
+        }.singleOrNull()
+        ?.let { PartnerInviteAction.Respond(it, PartnerInviteUserRole.ThirdPartyApprover) }
+}
+
+private fun Connection.joinedByAcceptedInvite(
+    userId: UUID,
+    conversationId: UUID,
+): Boolean =
+    prepareStatement(
+        """
+        SELECT EXISTS (
+            SELECT 1 FROM partner_chat_invites
+            WHERE thread_id = ?
+              AND invited_partner_user_id = ?
+              AND resolved_at IS NOT NULL
+              AND partner_status = ?
+              AND third_party_status = ?
+        )
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, conversationId)
+        statement.setObject(2, userId)
+        statement.setString(3, PARTNER_INVITE_ACCEPTED)
+        statement.setString(4, PARTNER_INVITE_ACCEPTED)
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.getBoolean(1)
+        }
+    }
+
+/**
+ * Blocks between [inviteeUserId] and anyone else present in the thread (active participants and the
+ * other open invitees), checked inside the transaction that would make the invitee active.
+ */
+internal fun Connection.inviteeBlockedInConversation(
+    conversationId: UUID,
+    inviteeUserId: UUID,
+): Boolean =
+    prepareStatement(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM conversation_participants other
+            JOIN user_blocks ub
+              ON (ub.blocker_user_id = ? AND ub.blocked_user_id = other.user_id)
+              OR (ub.blocker_user_id = other.user_id AND ub.blocked_user_id = ?)
+            WHERE other.conversation_id = ?
+              AND other.user_id <> ?
+              AND other.left_at IS NULL
+              AND other.invitation_status IN ('active', 'invited')
+        )
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, inviteeUserId)
+        statement.setObject(2, inviteeUserId)
+        statement.setObject(3, conversationId)
+        statement.setObject(4, inviteeUserId)
+        statement.executeQuery().use { rs ->
+            rs.next()
+            rs.getBoolean(1)
+        }
+    }
+
+/**
+ * The people an invitee would join changed (someone became active, or an active person left): every
+ * invitee who had already said yes must say yes again, knowing who is there now. Same transaction as
+ * the change.
+ */
+internal fun Connection.resetWaitingPartnerAcceptances(conversationId: UUID) {
+    prepareStatement(
+        """
+        UPDATE partner_chat_invites
+        SET partner_status = ?
+        WHERE thread_id = ?
+          AND resolved_at IS NULL
+          AND partner_status = ?
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setString(1, PARTNER_INVITE_PENDING)
+        statement.setObject(2, conversationId)
+        statement.setString(3, PARTNER_INVITE_ACCEPTED)
+        statement.executeUpdate()
     }
 }
 

@@ -5,7 +5,7 @@ import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
-import com.pynapli.shared.network.dto.PartnerChatInviteStatus
+import com.pynapli.shared.network.dto.PartnerChatInviteDto
 
 @Immutable
 data class TypingParticipantUi(
@@ -73,20 +73,12 @@ data class ConversationUiState(
     val isViewerInvited: Boolean
         get() = viewerParticipantStatus == ConversationParticipantStatus.INVITED
 
+    /** The open partner invite the viewer answers next (several can be open; see actionablePartnerInvite). */
+    val actionablePartnerInvite: PartnerChatInviteDto?
+        get() = detail?.conversation?.actionablePartnerInvite(viewerUserId)
+
     val canRespondToPartnerInvite: Boolean
-        get() {
-            val invite = detail?.conversation?.partnerInvite ?: return false
-            val viewer = viewerUserId ?: return false
-            if (viewer == invite.invitedPartnerUserId &&
-                invite.partnerStatus == PartnerChatInviteStatus.PENDING
-            ) {
-                return true
-            }
-            return viewerParticipantStatus == ConversationParticipantStatus.ACTIVE &&
-                viewer != invite.inviterUserId &&
-                viewer != invite.invitedPartnerUserId &&
-                invite.thirdPartyStatus == PartnerChatInviteStatus.PENDING
-        }
+        get() = actionablePartnerInvite != null
 
     val canSend: Boolean
         get() =

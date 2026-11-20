@@ -72,24 +72,26 @@ internal class MessagingPartnerConversationActions(
     suspend fun acceptPartnerInvite(
         userId: UUID,
         conversationId: UUID,
+        inviteId: UUID? = null,
     ): ConversationDetailDto {
         val detail =
             repository.getConversationDetail(userId, conversationId, limit = 1)
                 ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
-        val invite = detail.conversation.partnerInvite ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
+        // Several invites can be open; the repository decides which one this person acts on.
+        val invites = detail.conversation.partnerInvites.ifEmpty { listOfNotNull(detail.conversation.partnerInvite) }
         val viewerParticipant = detail.conversation.participants.firstOrNull { it.userId == userId }
-        val viewerIsInvitedPartner = invite.invitedPartnerUserId == userId
+        val viewerIsInvitedPartner = invites.any { it.invitedPartnerUserId == userId }
         val viewerCanApproveAsThirdParty =
-            viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
-                userId != invite.inviterUserId &&
-                userId != invite.invitedPartnerUserId
+            !viewerIsInvitedPartner &&
+                viewerParticipant?.status == ConversationParticipantStatus.ACTIVE &&
+                invites.any { invite -> userId != invite.inviterUserId && (inviteId == null || invite.inviteId == inviteId) }
         if (!viewerIsInvitedPartner && !viewerCanApproveAsThirdParty) {
             throw MessagingException("PARTNER_INVITE_NOT_FOUND")
         }
         conversationGuard.requireMessagingAllowed(detail.conversation, userId)
 
         val accepted =
-            repository.acceptPartnerInvite(userId, conversationId)
+            repository.acceptPartnerInvite(userId, conversationId, inviteId)
                 ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
         realtimePublisher.publishDelta(
             type = MessageDeltaType.CONVERSATION_UPDATED,
@@ -103,11 +105,14 @@ internal class MessagingPartnerConversationActions(
     suspend fun declinePartnerInvite(
         userId: UUID,
         conversationId: UUID,
+        inviteId: UUID? = null,
     ): ConversationPartnerInviteResponseDto {
         val detailBeforeDecline =
             repository.getConversationDetail(userId, conversationId, limit = 1)
                 ?: throw MessagingException("PARTNER_INVITE_NOT_FOUND")
-        if (!repository.declinePartnerInvite(userId, conversationId)) {
+        // A thread hidden from this person by a block is not theirs to act on (as for accept and detail).
+        conversationGuard.requireVisibleToViewer(detailBeforeDecline.conversation, userId, "PARTNER_INVITE_NOT_FOUND")
+        if (!repository.declinePartnerInvite(userId, conversationId, inviteId)) {
             throw MessagingException("PARTNER_INVITE_NOT_FOUND")
         }
         realtimePublisher.publishDelta(

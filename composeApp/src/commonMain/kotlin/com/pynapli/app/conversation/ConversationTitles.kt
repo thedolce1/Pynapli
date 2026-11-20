@@ -19,7 +19,8 @@ internal val visibleConversationParticipantStatuses =
 
 internal fun ConversationUiState.partnerInviteAcceptedFeedback(detail: ConversationDetailDto): String =
     when {
-        isViewerInvited && detail.conversation.partnerInvite == null -> "Joined chat"
+        isViewerInvited &&
+            detail.conversation.openPartnerInvites().none { it.invitedPartnerUserId == viewerUserId } -> "Joined chat"
         isViewerInvited -> "Invite accepted"
         else -> "Invite approved"
     }

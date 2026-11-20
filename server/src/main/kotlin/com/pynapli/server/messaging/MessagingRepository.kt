@@ -88,20 +88,38 @@ interface MessagingRepository {
         partnerUserId: UUID,
     ): PartnerInviteResult
 
+    /** [inviteId] names the invite a third party approves; null resolves it from who is acting. */
     suspend fun acceptPartnerInvite(
         userId: UUID,
         conversationId: UUID,
+        inviteId: UUID? = null,
     ): ConversationDetailRecord?
 
     suspend fun declinePartnerInvite(
         userId: UUID,
         conversationId: UUID,
+        inviteId: UUID? = null,
     ): Boolean
 
     suspend fun leaveConversation(
         userId: UUID,
         conversationId: UUID,
     ): Boolean
+
+    /**
+     * The viewer's "Bring your partner" offer on [conversation] (JdbcMessagingPartnerOfferSql), or
+     * null when there is nothing to offer. Read-only: acting on it is the ordinary partner invite.
+     */
+    suspend fun loadPartnerOffers(
+        viewerUserId: UUID,
+        conversation: ConversationRecord,
+    ): ConversationPartnerOffersRecord? = null
+
+    /** Whether the viewer's own partner is in this thread's 24-hour invite cooldown (after a decline). */
+    suspend fun isOwnPartnerInviteCoolingDown(
+        viewerUserId: UUID,
+        conversationId: UUID,
+    ): Boolean = false
 
     /**
      * Sets the caller's disappearing-messages timer ([expirySeconds] null = off) and records a
@@ -131,7 +149,10 @@ data class ConversationRecord(
     val lastMessage: MessageRecord?,
     val unreadCount: Int = 0,
     val updatedAt: Instant,
+    // The single open invite older clients read (see primaryFor in JdbcMessagingConversationLookupSql).
     val partnerInvite: PartnerChatInviteRecord? = null,
+    // Every open invite the viewer is party to, newest first (several can be open at once).
+    val partnerInvites: List<PartnerChatInviteRecord> = emptyList(),
     // The viewer's own disappearing-messages timer (null = off).
     val viewerExpirySeconds: Int? = null,
     // Strictest non-null timer across active participants — what messages actually expire on.
@@ -139,6 +160,27 @@ data class ConversationRecord(
     // The viewer's new-matches rail: a matched pair's conversation the viewer has not acted on yet
     // (JdbcMessagingMatchRailSql). Per viewer.
     val newMatch: Boolean = false,
+    // The viewer's "Bring your partner" offer; set on the read mark (POST .../read) only.
+    val partnerOffers: ConversationPartnerOffersRecord? = null,
+    // The viewer's own partner is in this thread's invite cooldown; read mark only (null elsewhere).
+    val ownPartnerInviteCoolingDown: Boolean? = null,
+)
+
+data class ConversationPartnerOffersRecord(
+    // The viewer's own linked partner, whom the viewer may invite through the existing invite.
+    val bringPartner: BringPartnerOfferRecord?,
+    // Other participants' linked partners the viewer is allowed to see (named only, not invitable).
+    val participantPartners: List<ParticipantPartnerOfferRecord>,
+)
+
+data class BringPartnerOfferRecord(
+    val partnerUserId: UUID,
+    val partnerDisplayName: String,
+)
+
+data class ParticipantPartnerOfferRecord(
+    val participantUserId: UUID,
+    val partnerDisplayName: String,
 )
 
 data class ConversationParticipantRecord(

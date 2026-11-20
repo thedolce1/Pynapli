@@ -1,6 +1,7 @@
 package com.pynapli.app.messages
 
 import androidx.compose.runtime.Immutable
+import com.pynapli.app.conversation.actionablePartnerInvite
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.ConversationDetailDto
@@ -147,9 +148,13 @@ class MessagesStateHolder(
         }
     }
 
-    suspend fun acceptPartnerInvite(conversationId: String) {
+    suspend fun acceptPartnerInvite(
+        conversationId: String,
+        viewerUserId: String? = null,
+    ) {
+        val inviteId = actionableInviteId(conversationId, viewerUserId)
         mutatePartnerInvite(conversationId) {
-            when (val result = repository.acceptPartnerInvite(conversationId)) {
+            when (val result = repository.acceptPartnerInvite(conversationId, inviteId)) {
                 is AppResult.Success -> {
                     _state.update { current ->
                         current.copy(
@@ -181,8 +186,9 @@ class MessagesStateHolder(
                 .firstOrNull {
                     it.conversationId == conversationId
                 }?.viewerParticipantStatus(viewerUserId) == ConversationParticipantStatus.INVITED
+        val inviteId = actionableInviteId(conversationId, viewerUserId)
         mutatePartnerInvite(conversationId) {
-            when (val result = repository.declinePartnerInvite(conversationId)) {
+            when (val result = repository.declinePartnerInvite(conversationId, inviteId)) {
                 is AppResult.Success -> {
                     if (removeConversation) {
                         _state.update { current ->
@@ -215,6 +221,16 @@ class MessagesStateHolder(
         }
     }
 
+    // The invite the row's Accept/Decline answers (several can be open); null lets the server resolve it.
+    private fun actionableInviteId(
+        conversationId: String,
+        viewerUserId: String?,
+    ): String? =
+        state.value.conversations
+            .firstOrNull { it.conversationId == conversationId }
+            ?.actionablePartnerInvite(viewerUserId)
+            ?.inviteId
+
     fun clearError() {
         _state.update { it.copy(errorMessage = null) }
     }
@@ -239,9 +255,15 @@ interface MessagesRepository {
 
     suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> = AppResult.Success(ConversationListResponseDto(items = emptyList()))
 
-    suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto>
+    suspend fun acceptPartnerInvite(
+        conversationId: String,
+        inviteId: String? = null,
+    ): AppResult<ConversationDetailDto>
 
-    suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+    suspend fun declinePartnerInvite(
+        conversationId: String,
+        inviteId: String? = null,
+    ): AppResult<ConversationPartnerInviteResponseDto>
 }
 
 class ApiMessagesRepository(
@@ -251,9 +273,15 @@ class ApiMessagesRepository(
 
     override suspend fun listConversationsAfter(cursor: String): AppResult<ConversationListResponseDto> = apiClient.listConversationsAfter(cursor)
 
-    override suspend fun acceptPartnerInvite(conversationId: String): AppResult<ConversationDetailDto> = apiClient.acceptConversationPartnerInvite(conversationId)
+    override suspend fun acceptPartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationDetailDto> = apiClient.acceptConversationPartnerInvite(conversationId, inviteId)
 
-    override suspend fun declinePartnerInvite(conversationId: String): AppResult<ConversationPartnerInviteResponseDto> = apiClient.declineConversationPartnerInvite(conversationId)
+    override suspend fun declinePartnerInvite(
+        conversationId: String,
+        inviteId: String?,
+    ): AppResult<ConversationPartnerInviteResponseDto> = apiClient.declineConversationPartnerInvite(conversationId, inviteId)
 }
 
 private fun ConversationDto.viewerParticipantStatus(viewerUserId: String?): String? =

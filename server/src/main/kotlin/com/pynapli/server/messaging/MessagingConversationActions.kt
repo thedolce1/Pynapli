@@ -109,7 +109,14 @@ internal class MessagingConversationActions(
                 statuses = MessagingParticipantStatuses.active,
             )
         }
-        return dtoMapper.toDto(conversation, userId)
+        // Every client open and refresh of a thread ends with this read mark, whose conversation replaces
+        // the open one, so only it carries the "Bring your partner" offer (one query per open).
+        val partnerOffers = repository.loadPartnerOffers(userId, conversation)
+        val coolingDown = repository.isOwnPartnerInviteCoolingDown(userId, conversationId)
+        return dtoMapper.toDto(
+            conversation.copy(partnerOffers = partnerOffers, ownPartnerInviteCoolingDown = coolingDown),
+            userId,
+        )
     }
 
     suspend fun sendTypingIndicator(

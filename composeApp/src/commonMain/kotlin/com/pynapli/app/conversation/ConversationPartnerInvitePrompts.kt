@@ -112,6 +112,7 @@ internal fun PartnerInvitePrompt(
 internal fun PartnerInviteStatusNotice(
     title: String,
     body: String,
+    action: (@Composable () -> Unit)? = null,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -133,6 +134,7 @@ internal fun PartnerInviteStatusNotice(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
+            action?.invoke()
         }
     }
 }

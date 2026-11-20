@@ -63,7 +63,7 @@ fun MessagesScreen(
         onRefresh = { scope.launch { stateHolder.load() } },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
         onAcceptPartnerInvite = { conversationId ->
-            scope.launch { stateHolder.acceptPartnerInvite(conversationId) }
+            scope.launch { stateHolder.acceptPartnerInvite(conversationId, viewerUserId) }
         },
         onDeclinePartnerInvite = { conversationId ->
             scope.launch { stateHolder.declinePartnerInvite(conversationId, viewerUserId) }

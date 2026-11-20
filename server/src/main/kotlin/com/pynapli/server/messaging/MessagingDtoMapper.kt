@@ -1,9 +1,12 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.shared.network.dto.ConversationBringPartnerDto
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
+import com.pynapli.shared.network.dto.ConversationParticipantPartnerDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
+import com.pynapli.shared.network.dto.ConversationPartnerOffersDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 import java.nio.charset.StandardCharsets
@@ -56,9 +59,30 @@ internal class MessagingDtoMapper(
             unreadCount = record.unreadCount,
             updatedAt = record.updatedAt.toString(),
             partnerInvite = record.partnerInvite?.toDto(),
+            partnerInvites = record.partnerInvites.map { it.toDto() },
             messageExpirySeconds = record.viewerExpirySeconds,
             effectiveMessageExpirySeconds = record.effectiveExpirySeconds,
             newMatch = record.newMatch,
+            ownPartnerInviteCoolingDown = record.ownPartnerInviteCoolingDown,
+            partnerOffers =
+                record.partnerOffers?.let { offers ->
+                    ConversationPartnerOffersDto(
+                        bringPartner =
+                            offers.bringPartner?.let {
+                                ConversationBringPartnerDto(
+                                    partnerUserId = it.partnerUserId.toString(),
+                                    partnerDisplayName = it.partnerDisplayName,
+                                )
+                            },
+                        participantPartners =
+                            offers.participantPartners.map {
+                                ConversationParticipantPartnerDto(
+                                    participantUserId = it.participantUserId.toString(),
+                                    partnerDisplayName = it.partnerDisplayName,
+                                )
+                            },
+                    )
+                },
         )
 
     suspend fun toDto(
