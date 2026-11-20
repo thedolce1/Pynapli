@@ -116,13 +116,13 @@ class JdbcContactBlockRepository(
             """
             WITH existing AS (
                 SELECT COUNT(*) AS total,
-                       COALESCE(BOOL_OR(email_token = ?), false) AS present
+                       COALESCE(BOOL_OR(email_token = ?::text), false) AS present
                 FROM contact_blocks
                 WHERE blocker_user_id = ?
             ),
             inserted AS (
                 INSERT INTO contact_blocks (id, blocker_user_id, email_token, created_at)
-                SELECT ?, ?, ?, ?
+                SELECT ?::uuid, ?::uuid, ?::text, ?::timestamptz
                 FROM existing
                 WHERE NOT existing.present
                   AND existing.total < ?

@@ -19,6 +19,7 @@ internal class SwipeSubmitAction(
     private val riskPolicyService: RiskPolicyService?,
     private val subscriptionService: SubscriptionService?,
     private val clock: Clock,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun submitAction(
         viewerUserId: UUID,
@@ -84,6 +85,11 @@ internal class SwipeSubmitAction(
         }
 
         if (!preconditions.targetEligible) {
+            throw SwipeException("INVALID_SWIPE_TARGET")
+        }
+        // "Hide from people you know": a card dealt before the block was bound can't be used to like
+        // (and so match) someone who now hides from the viewer. Same answer as any ineligible target.
+        if (contactBlockVisibility?.isHiddenFrom(viewerUserId, targetUserId) == true) {
             throw SwipeException("INVALID_SWIPE_TARGET")
         }
 

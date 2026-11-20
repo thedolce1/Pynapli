@@ -8,37 +8,40 @@ import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
-/** A pending row together with the verified member whose address it is. */
-data class PendingContactBlockMatch(
+/** A row still pointing at nobody (target_token IS NULL). */
+data class PendingContactBlockRow(
     val rowId: UUID,
     val blockerUserId: UUID,
+    val emailToken: String,
     val createdAt: Instant,
-    val targetUserId: UUID,
 )
 
 /**
- * Off-request storage for the resolver: finding pending rows that now point at a verified member,
- * the prior-interaction check, and binding. Never called from the blocker's own requests.
+ * Off-request storage for the resolver: pending rows, verified members by their contact token, the
+ * prior-interaction check, and binding. Never called from the blocker's own requests.
  */
 interface ContactBlockResolverRepository {
-    /** Pending rows whose email token equals a live, verified member's `users.contact_token`. */
-    suspend fun findPendingMatches(limit: Int): List<PendingContactBlockMatch>
-
-    /** Pending rows of one address, matched to [targetUserId] (the member who just proved it). */
-    suspend fun findPendingForAddress(
-        emailToken: String,
-        targetUserId: UUID,
-    ): List<PendingContactBlockMatch>
-
     /**
-     * Stores [contactToken] on a live, verified account. With [onlyIfUnset] it changes nothing when a
-     * token is already there. True when the row changed.
+     * Pending rows created at or after [createdSince], in (created_at, id) order, after [after] when
+     * given (keyset paging).
      */
+    suspend fun listPendingRows(
+        createdSince: Instant,
+        after: PendingContactBlockRow?,
+        limit: Int,
+    ): List<PendingContactBlockRow>
+
+    /** Pending rows of one address. */
+    suspend fun listPendingForAddress(emailToken: String): List<PendingContactBlockRow>
+
+    /** Live, verified members whose `users.contact_token` is one of [memberTokens]: token -> member id. */
+    suspend fun findVerifiedMembers(memberTokens: Collection<String>): Map<String, UUID>
+
+    /** Stores [memberToken] as the contact token of a live, verified account (no write when it's already there). */
     suspend fun recordContactToken(
         userId: UUID,
-        contactToken: String,
-        onlyIfUnset: Boolean,
-    ): Boolean
+        memberToken: String,
+    )
 
     /** Any recorded interaction that exempts the pair ([ContactBlockInteractionSql]). */
     suspend fun hadInteraction(
@@ -48,13 +51,15 @@ interface ContactBlockResolverRepository {
     ): Boolean
 
     /**
-     * Sets the row's target token while it is still pending and the target is still the live,
-     * verified owner of the address (the target's user row is locked first, so a concurrent account
-     * deletion either runs before, and this binds nothing, or after, and clears what this set).
+     * Sets the row's target token while it is still pending and [targetUserId] is still the live,
+     * verified member holding [memberToken]. The member's user row is locked first (FOR SHARE), so a
+     * concurrent account deletion (which updates that row first) either runs before, and this binds
+     * nothing, or after, and clears what this set.
      */
     suspend fun bind(
         rowId: UUID,
         targetUserId: UUID,
+        memberToken: String,
         targetToken: String,
     ): Boolean
 }
@@ -62,63 +67,58 @@ interface ContactBlockResolverRepository {
 class JdbcContactBlockResolverRepository(
     private val dataSource: DataSource,
 ) : ContactBlockResolverRepository {
-    override suspend fun findPendingMatches(limit: Int): List<PendingContactBlockMatch> =
+    override suspend fun listPendingRows(
+        createdSince: Instant,
+        after: PendingContactBlockRow?,
+        limit: Int,
+    ): List<PendingContactBlockRow> =
         dataSource.withConnection { connection ->
-            connection.prepareStatement(FIND_PENDING_MATCHES_SQL).use { statement ->
-                statement.setInt(1, limit)
-                statement.executeQuery().use { rs ->
-                    buildList {
-                        while (rs.next()) {
-                            add(
-                                PendingContactBlockMatch(
-                                    rowId = rs.getObject("id", UUID::class.java),
-                                    blockerUserId = rs.getObject("blocker_user_id", UUID::class.java),
-                                    createdAt = rs.getTimestamp("created_at").toInstant(),
-                                    targetUserId = rs.getObject("target_user_id", UUID::class.java),
-                                ),
-                            )
-                        }
-                    }
-                }
+            connection.prepareStatement(LIST_PENDING_SQL).use { statement ->
+                val afterCreated = after?.createdAt?.let(Timestamp::from)
+                statement.setTimestamp(1, Timestamp.from(createdSince))
+                statement.setTimestamp(2, afterCreated)
+                statement.setTimestamp(3, afterCreated)
+                statement.setObject(4, after?.rowId)
+                statement.setInt(5, limit)
+                statement.executeQuery().use { rs -> rs.pendingRows() }
             }
         }
 
-    override suspend fun findPendingForAddress(
-        emailToken: String,
-        targetUserId: UUID,
-    ): List<PendingContactBlockMatch> =
+    override suspend fun listPendingForAddress(emailToken: String): List<PendingContactBlockRow> =
         dataSource.withConnection { connection ->
-            connection.prepareStatement(FIND_PENDING_FOR_ADDRESS_SQL).use { statement ->
+            connection.prepareStatement(LIST_PENDING_FOR_ADDRESS_SQL).use { statement ->
                 statement.setString(1, emailToken)
+                statement.executeQuery().use { rs -> rs.pendingRows() }
+            }
+        }
+
+    override suspend fun findVerifiedMembers(memberTokens: Collection<String>): Map<String, UUID> {
+        if (memberTokens.isEmpty()) return emptyMap()
+        return dataSource.withConnection { connection ->
+            connection.prepareStatement(FIND_MEMBERS_SQL).use { statement ->
+                statement.setArray(1, connection.createArrayOf("text", memberTokens.distinct().toTypedArray()))
                 statement.executeQuery().use { rs ->
-                    buildList {
-                        while (rs.next()) {
-                            add(
-                                PendingContactBlockMatch(
-                                    rowId = rs.getObject("id", UUID::class.java),
-                                    blockerUserId = rs.getObject("blocker_user_id", UUID::class.java),
-                                    createdAt = rs.getTimestamp("created_at").toInstant(),
-                                    targetUserId = targetUserId,
-                                ),
-                            )
-                        }
+                    buildMap {
+                        while (rs.next()) put(rs.getString("contact_token"), rs.getObject("id", UUID::class.java))
                     }
                 }
             }
         }
+    }
 
     override suspend fun recordContactToken(
         userId: UUID,
-        contactToken: String,
-        onlyIfUnset: Boolean,
-    ): Boolean =
+        memberToken: String,
+    ) {
         dataSource.withConnection { connection ->
-            connection.prepareStatement(if (onlyIfUnset) RECORD_TOKEN_IF_UNSET_SQL else RECORD_TOKEN_SQL).use { statement ->
-                statement.setString(1, contactToken)
+            connection.prepareStatement(RECORD_TOKEN_SQL).use { statement ->
+                statement.setString(1, memberToken)
                 statement.setObject(2, userId)
-                statement.executeUpdate() > 0
+                statement.setString(3, memberToken)
+                statement.executeUpdate()
             }
         }
+    }
 
     override suspend fun hadInteraction(
         blockerUserId: UUID,
@@ -137,52 +137,76 @@ class JdbcContactBlockResolverRepository(
     override suspend fun bind(
         rowId: UUID,
         targetUserId: UUID,
+        memberToken: String,
         targetToken: String,
     ): Boolean =
         dataSource.withConnection { connection ->
-            connection.inTransaction { bindLocked(rowId, targetUserId, targetToken) }
+            connection.inTransaction { bindLocked(rowId, targetUserId, memberToken, targetToken) }
         }
 
     private fun Connection.bindLocked(
         rowId: UUID,
         targetUserId: UUID,
+        memberToken: String,
         targetToken: String,
     ): Boolean {
-        val ownerToken =
+        val stillOwner =
             prepareStatement(LOCK_TARGET_SQL).use { statement ->
                 statement.setObject(1, targetUserId)
-                statement.executeQuery().use { rs -> if (rs.next()) rs.getString("contact_token") else null }
-            } ?: return false
+                statement.setString(2, memberToken)
+                statement.executeQuery().use { rs -> rs.next() }
+            }
+        if (!stillOwner) return false
         return prepareStatement(BIND_SQL).use { statement ->
             statement.setString(1, targetToken)
             statement.setObject(2, rowId)
-            statement.setString(3, ownerToken)
             statement.executeUpdate() > 0
         }
     }
 
+    private fun java.sql.ResultSet.pendingRows(): List<PendingContactBlockRow> =
+        buildList {
+            while (next()) {
+                add(
+                    PendingContactBlockRow(
+                        rowId = getObject("id", UUID::class.java),
+                        blockerUserId = getObject("blocker_user_id", UUID::class.java),
+                        emailToken = getString("email_token"),
+                        createdAt = getTimestamp("created_at").toInstant(),
+                    ),
+                )
+            }
+        }
+
     private companion object {
-        val FIND_PENDING_MATCHES_SQL =
+        val LIST_PENDING_SQL =
             """
-            SELECT cb.id, cb.blocker_user_id, cb.created_at, u.id AS target_user_id
-            FROM contact_blocks cb
-            JOIN users u
-              ON u.contact_token = cb.email_token
-             AND u.email_verified_at IS NOT NULL
-             AND u.deleted_at IS NULL
-             AND u.status <> 'deleted'
-            WHERE cb.target_token IS NULL
-            ORDER BY cb.created_at ASC, cb.id ASC
+            SELECT id, blocker_user_id, email_token, created_at
+            FROM contact_blocks
+            WHERE target_token IS NULL
+              AND created_at >= ?::timestamptz
+              AND (?::timestamptz IS NULL OR (created_at, id) > (?::timestamptz, ?::uuid))
+            ORDER BY created_at ASC, id ASC
             LIMIT ?
             """.trimIndent()
 
-        val FIND_PENDING_FOR_ADDRESS_SQL =
+        val LIST_PENDING_FOR_ADDRESS_SQL =
             """
-            SELECT id, blocker_user_id, created_at
+            SELECT id, blocker_user_id, email_token, created_at
             FROM contact_blocks
             WHERE email_token = ?
               AND target_token IS NULL
             ORDER BY created_at ASC, id ASC
+            """.trimIndent()
+
+        val FIND_MEMBERS_SQL =
+            """
+            SELECT id, contact_token
+            FROM users
+            WHERE contact_token = ANY (?)
+              AND email_verified_at IS NOT NULL
+              AND deleted_at IS NULL
+              AND status <> 'deleted'
             """.trimIndent()
 
         val RECORD_TOKEN_SQL =
@@ -192,27 +216,18 @@ class JdbcContactBlockResolverRepository(
             WHERE id = ?
               AND email_verified_at IS NOT NULL
               AND deleted_at IS NULL
-            """.trimIndent()
-
-        val RECORD_TOKEN_IF_UNSET_SQL =
-            """
-            UPDATE users
-            SET contact_token = ?
-            WHERE id = ?
-              AND email_verified_at IS NOT NULL
-              AND deleted_at IS NULL
-              AND contact_token IS NULL
+              AND contact_token IS DISTINCT FROM ?
             """.trimIndent()
 
         val LOCK_TARGET_SQL =
             """
-            SELECT contact_token
+            SELECT 1
             FROM users
             WHERE id = ?
+              AND contact_token = ?
               AND email_verified_at IS NOT NULL
               AND deleted_at IS NULL
               AND status <> 'deleted'
-              AND contact_token IS NOT NULL
             FOR SHARE
             """.trimIndent()
 
@@ -222,7 +237,6 @@ class JdbcContactBlockResolverRepository(
             SET target_token = ?
             WHERE id = ?
               AND target_token IS NULL
-              AND email_token = ?
             """.trimIndent()
     }
 }

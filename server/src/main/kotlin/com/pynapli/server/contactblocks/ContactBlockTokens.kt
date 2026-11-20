@@ -8,9 +8,10 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * The keyed tokens behind "Hide from people you know" (TRUST_AND_SAFETY_SPEC, "Contact blocks").
  *
- * - [emailToken]: HMAC-SHA256(K1, normalised address). Stored for each added address and, as
- *   `users.contact_token`, for each member whose address is verified. Never the plain SHA-256 that
- *   `users.email_hash` holds, so the table can't be joined to users without K1.
+ * - [emailToken]: HMAC-SHA256(K1, normalised address), stored for each added address. Never the plain
+ *   SHA-256 that `users.email_hash` holds, so the table can't be joined to `email_hash` without K1.
+ * - [memberToken]: HMAC-SHA256(K2, "member:" + emailToken), stored as `users.contact_token` for each
+ *   member whose address is verified, so rows and members can't be joined without K2 either.
  * - [targetToken]: HMAC-SHA256(K2, "target:" + member id), written when a row is bound to the member
  *   who owns the address. A viewer's own token is computed per request to find who hides from them.
  * - [exemptToken]: HMAC-SHA256(K2, "exempt:" + member id), written instead when the pair had already
@@ -32,6 +33,13 @@ class ContactBlockTokens(
 
     /** [normalisedEmail] must already be normalised exactly as `users.email_hash` is (normalizeEmail). */
     fun emailToken(normalisedEmail: String): String = hmac(emailKeySpec, normalisedEmail)
+
+    /**
+     * What `users.contact_token` holds for a verified member: HMAC-SHA256(K2, "member:" + [emailToken]).
+     * Deliberately not the row's [emailToken] itself, so a copy of both tables can't be joined without
+     * K2 (the resolver computes this per pending row and looks members up by it).
+     */
+    fun memberToken(emailToken: String): String = hmac(targetKeySpec, "member:$emailToken")
 
     fun targetToken(userId: UUID): String = hmac(targetKeySpec, "target:$userId")
 

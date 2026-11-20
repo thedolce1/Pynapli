@@ -89,6 +89,7 @@ internal class PsyncActiveSessionActions(
         val card =
             repository.findCardByTokenHash(sessionId, deckTokenCodec.tokenHash(request.cardToken))
                 ?: throw PsyncException("PSYNC_INVALID_CARD")
+        if (deckCoordinator.targetHidesFromSession(session, card.targetUserId)) throw PsyncException("PSYNC_INVALID_CARD")
         val spentInventoryId = spendPineappleLikeIfNew(sessionId, userId, card.targetUserId, request.action)
         // Non-cancellable: a request cancelled mid-write still commits the row, which then owns the
         // spend. Cancellation surfaces after the refund decision, never in place of the outcome.

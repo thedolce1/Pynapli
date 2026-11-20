@@ -117,6 +117,18 @@ internal class PsyncDeckCoordinator(
         return PsyncDeckResponseDto(sessionId = session.id.toString(), deckSize = session.deckSize, cards = items)
     }
 
+    /**
+     * "Hide from people you know": [targetUserId] hides from either partner of [session]. A card dealt
+     * before the block was bound can't then be acted on (the deck response already leaves it out).
+     */
+    suspend fun targetHidesFromSession(
+        session: PsyncSession,
+        targetUserId: UUID,
+    ): Boolean {
+        val visibility = contactBlockVisibility ?: return false
+        return session.participants.any { participant -> visibility.isHiddenFrom(participant.userId, targetUserId) }
+    }
+
     /** Targets blocked (either direction) or hidden by EITHER partner — invalid for the deck. */
     suspend fun blockedOrHiddenTargets(
         partnerA: UUID,

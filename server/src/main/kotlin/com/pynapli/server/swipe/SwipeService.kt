@@ -63,6 +63,7 @@ class SwipeService(
             riskPolicyService = riskPolicyService,
             subscriptionService = subscriptionService,
             clock = clock,
+            contactBlockVisibility = contactBlockVisibility,
         )
     private val rewindAction =
         SwipeRewindAction(
