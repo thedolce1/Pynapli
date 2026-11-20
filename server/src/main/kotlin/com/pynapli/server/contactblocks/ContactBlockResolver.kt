@@ -163,7 +163,9 @@ class ContactBlockResolverWorker(
                     tick++
                     try {
                         jobLock.runExclusive(JOB_NAME) {
-                            if (tick % fullSweepEvery == 0) resolver.resolveAllPending() else resolver.resolveRecent()
+                            // The first tick of every instance sweeps everything: with scale-to-zero an
+                            // instance may never live long enough to reach the periodic full sweep.
+                            if (tick == 1 || tick % fullSweepEvery == 0) resolver.resolveAllPending() else resolver.resolveRecent()
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled

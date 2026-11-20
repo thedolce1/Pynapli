@@ -52,13 +52,13 @@ Verify live state: `GET https://<cloud-run-url>/health` and `/health/deep` (both
 | # | Step | Detail |
 |---|---|---|
 | A1 | Lock project naming | above |
-| A2 | Provision GCP: APIs, Cloud SQL (Postgres+PostGIS) + `pynapli_staging` DB, Memorystore Redis + VPC connector, Artifact Registry, 6 Secret Manager secrets, GCS media bucket, runtime service account | [infra/cloud-run/README.md](../infra/cloud-run/README.md) steps 1–7 |
+| A2 | Provision GCP: APIs, Cloud SQL (Postgres+PostGIS) + `pynapli_staging` DB, Memorystore Redis + VPC connector, Artifact Registry, 8 Secret Manager secrets, GCS media bucket, runtime service account | [infra/cloud-run/README.md](../infra/cloud-run/README.md) steps 1–7 |
 | A3 | Deploy the API to Cloud Run, ideally at **`api.pynapli.com`** (the PWA default) | infra README step 8, or the **Deploy Staging API** workflow |
 | A4 | Budget alerts. **Do not skip.** | infra README step 9 |
 | A5 | Verify `/health` and `/health/deep` on the live URL | |
 | A6 | **Choose and wire a transactional email provider.** Sign-up now emails a 6-digit code before any account exists, so without a provider *no one can create an account* outside local development (sign-up answers `503 SIGNUP_UNAVAILABLE`; reset answers `PASSWORD_RESET_UNAVAILABLE`). A provider must implement both server interfaces: `SignupMailer` (`sendSignupCode(email, code)`, `sendAlreadyRegisteredNotice(email)`, `isConfigured = true`) and `PasswordResetMailer` (`sendResetCode(email, code)`), be selected by a new `PYNAPLI_PASSWORD_RESET_MAILER` value (today only `log`, local-only, and `none` exist) wired in `buildEmailSignupDependencies` and `buildCoreDependencies`, take its API key from Secret Manager, send from a neutral sender with the exact wording in `SignupEmailWording` (no product name in sender or subject), and have SPF/DKIM/DMARC set up for the sending domain. | ONBOARDING_AUTH_SPEC "Membership Privacy" |
 | A7 | **Decide Cloud Run CPU allocation for background work (cost).** Sign-up emails (and password-reset emails) are sent on the server's background scope *after* the response. With Cloud Run's default request-based CPU, an instance may be throttled to near zero CPU between requests, so those emails can be delayed until the next request or lost on scale-down. `scripts/gcp-cloud-run-deploy.ps1` does not set `--no-cpu-throttling` (CPU always allocated), which fixes this but bills CPU for the instance's whole lifetime. Founder decision: always-on CPU (more cost), or keep throttling and accept delays (or move email sending to a queue later). Not changed in the script. | ONBOARDING_AUTH_SPEC "Email Sign-up" |
-| A8 | **Create the two "Hide from people you know" keys.** Staging and production refuse to start without `PYNAPLI_CONTACT_BLOCK_EMAIL_KEY` (K1) and `PYNAPLI_CONTACT_BLOCK_TARGET_KEY` (K2): two strong random values (32+ characters), different from each other and from the three cursor/deck secrets. Store them as two Secret Manager secrets and deploy with `scripts/gcp-cloud-run-deploy.ps1 -ContactBlockEmailKeySecretName <name> -ContactBlockTargetKeySecretName <name>` (8 secrets in total now). Never rotate them casually: a new key silently orphans every stored code. Keep them out of reach of database-only access: with the database alone a leak shows counts, not who; with K2 it shows who hides from whom. | TRUST_AND_SAFETY_SPEC "Contact Blocks" |
+| A8 | **Create the two "Hide from people you know" keys.** Staging and production refuse to start without `PYNAPLI_CONTACT_BLOCK_EMAIL_KEY` (K1) and `PYNAPLI_CONTACT_BLOCK_TARGET_KEY` (K2): two strong random values (32+ characters), different from each other and from the three cursor/deck secrets. Store them as two Secret Manager secrets and deploy with `scripts/gcp-cloud-run-deploy.ps1 -ContactBlockEmailKeySecretName <name> -ContactBlockTargetKeySecretName <name>` (8 secrets in total now). Never rotate them casually: a new key silently orphans every stored code. Keep them out of reach of database-only access: with the database alone a leak shows counts, not who; with K2 it shows who hides from whom. The resolver for blocks on existing members runs on a background worker, so it needs CPU between requests (A7); each instance also sweeps every pending row on its first tick. | TRUST_AND_SAFETY_SPEC "Contact Blocks" |
 
 **A3 done = Android testers and the PWA both become possible.**
 
@@ -100,7 +100,7 @@ GitHub secrets:
 | `GCP_CI_SERVICE_ACCOUNT` | Service account for Artifact Registry, Cloud Run, App Distribution |
 | `FIREBASE_ANDROID_APP_ID` | Firebase Android app id (`1:...:android:...`) for App Distribution |
 
-Also required: the GCP resources and six secrets from Track A; App Check registered for
+Also required: the GCP resources and eight secrets from Track A; App Check registered for
 `com.pynapli.app` with staging/debug devices allowlisted; at least one App Distribution tester group
 (default `founders`).
 

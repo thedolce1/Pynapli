@@ -120,18 +120,18 @@ class ContactBlockRequestPathTest {
     @Test
     fun productionWiringHandsTheRuleToEverySurface() {
         val root = repositoryRoot().resolve("server/src/main/kotlin/com/pynapli/server/dependencies")
-        val server = root.resolve("ServerDependencies.kt").readText()
-        val core = root.resolve("CoreDependencies.kt").readText()
+        val server = root.resolve("ServerDependencies.kt").readText().compact()
+        val core = root.resolve("CoreDependencies.kt").readText().compact()
 
         listOf(
             "JdbcActivityRepository(database.dataSource, contactBlockTokens = core.contactBlockTokens)",
             "contactBlockTokens = core.contactBlockTokens,",
             "onAccountVerified = core.contactBlockResolver::bindNewlyVerifiedAccount",
             "contactBlockVisibility = core.contactBlockVisibility,",
-        ).forEach { wiring -> assertTrue(wiring in server, "ServerDependencies must pass: $wiring") }
+        ).forEach { wiring -> assertTrue(wiring.compact() in server, "ServerDependencies must pass: $wiring") }
         // Activity, favorites, profile, profile links, media, grid, tonight, messaging, swipe, the field.
         assertTrue(
-            Regex("""contactBlockVisibility = core\.contactBlockVisibility""").findAll(server).count() >= 10,
+            Regex("""contactBlockVisibility=core\.contactBlockVisibility""").findAll(server).count() >= 10,
             "every service builder in ServerDependencies must get the viewer-side rule",
         )
         listOf(
@@ -139,12 +139,15 @@ class ContactBlockRequestPathTest {
             "NotificationService(notificationRepository, contactBlockVisibility = contactBlockVisibility)",
             "JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)",
             "JdbcAccountDataExportArchiver(database.dataSource, contactBlockTokens = contactBlockTokens)",
-        ).forEach { wiring -> assertTrue(wiring in core, "CoreDependencies must pass: $wiring") }
+        ).forEach { wiring -> assertTrue(wiring.compact() in core, "CoreDependencies must pass: $wiring") }
         listOf("GridDependencies.kt", "SwipeDependencies.kt", "TonightDependencies.kt", "MessagingDependencies.kt", "MediaDependencies.kt").forEach { file ->
-            assertTrue("contactBlockVisibility = contactBlockVisibility" in root.resolve(file).readText(), "$file must forward the rule")
+            assertTrue("contactBlockVisibility=contactBlockVisibility" in root.resolve(file).readText().compact(), "$file must forward the rule")
         }
-        assertTrue("JdbcMessagingRepository(dataSource, contactBlockTokens = contactBlockTokens)" in root.resolve("MessagingDependencies.kt").readText())
+        assertTrue("JdbcMessagingRepository(dataSource,contactBlockTokens=contactBlockTokens)" in root.resolve("MessagingDependencies.kt").readText().compact())
     }
+
+    /** Formatting-proof comparison: no whitespace, no trailing comma before a closing parenthesis. */
+    private fun String.compact(): String = replace(Regex("""\s+"""), "").replace(",)", ")").trimEnd(',')
 
     private fun repositoryRoot(): Path {
         var current = Path.of("").toAbsolutePath()
