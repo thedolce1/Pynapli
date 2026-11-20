@@ -212,7 +212,11 @@ class AuthStateHolderTest {
             // It has no code step, so it must not send anyone a code it can't take back.
             assertEquals(0, api.signups)
             assertFalse(holder.state.value.authenticated)
-            assertTrue(holder.state.value.errorMessage.orEmpty().isNotEmpty())
+            assertTrue(
+                holder.state.value.errorMessage
+                    .orEmpty()
+                    .isNotEmpty(),
+            )
         }
 
     private fun session(): AuthSessionDto =

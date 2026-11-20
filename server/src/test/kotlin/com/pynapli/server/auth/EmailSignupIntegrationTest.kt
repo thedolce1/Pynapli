@@ -237,11 +237,12 @@ class EmailSignupIntegrationTest {
 
             val outcomes =
                 coroutineScope {
-                    (1..GUESSES).map { index ->
-                        async(Dispatchers.IO) {
-                            runCatching { service.verifyWith(NEWCOMER, "%06d".format(index), started.signupToken) }
-                        }
-                    }.awaitAll()
+                    (1..GUESSES)
+                        .map { index ->
+                            async(Dispatchers.IO) {
+                                runCatching { service.verifyWith(NEWCOMER, "%06d".format(index), started.signupToken) }
+                            }
+                        }.awaitAll()
                 }
 
             assertTrue(outcomes.all { it.isFailure })
@@ -817,9 +818,9 @@ class EmailSignupIntegrationTest {
     /** Real pending sign-ups (never the placeholder), for one address or all. */
     private fun pendingRows(email: String? = null): Int =
         if (email == null) {
-            count("SELECT count(*) FROM pending_email_signups WHERE id <> ?", EmailSignupService.PLACEHOLDER_ID)
+            count("SELECT count(*) FROM pending_email_signups WHERE expires_at <> 'infinity'")
         } else {
-            count("SELECT count(*) FROM pending_email_signups WHERE id <> ? AND email_hash = ?", EmailSignupService.PLACEHOLDER_ID, Sha256.hash(email))
+            count("SELECT count(*) FROM pending_email_signups WHERE expires_at <> 'infinity' AND email_hash = ?", Sha256.hash(email))
         }
 
     private fun count(

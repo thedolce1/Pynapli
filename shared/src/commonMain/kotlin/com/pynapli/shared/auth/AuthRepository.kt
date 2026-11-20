@@ -131,8 +131,7 @@ class AuthRepository(
         email: String,
         signupToken: String,
         deviceId: String? = null,
-    ): AppResult<EmailSignupCodeResentDto> =
-        authApi.resendEmailSignupCode(EmailSignupResendRequestDto(email = email, signupToken = signupToken, deviceId = deviceId))
+    ): AppResult<EmailSignupCodeResentDto> = authApi.resendEmailSignupCode(EmailSignupResendRequestDto(email = email, signupToken = signupToken, deviceId = deviceId))
 
     suspend fun submitAccountAppeal(
         email: String,

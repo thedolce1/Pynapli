@@ -288,7 +288,12 @@ class OnboardingStateHolderTest {
 
             fixture.onboarding.updateSignupCode("123456")
             fixture.onboarding.verifySignupCode()
-            assertEquals("stored-token", fixture.authApi.verifyRequests.single().signupToken)
+            assertEquals(
+                "stored-token",
+                fixture.authApi.verifyRequests
+                    .single()
+                    .signupToken,
+            )
             assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
         }
 
