@@ -8,6 +8,9 @@ import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import com.pynapli.shared.settings.OnboardingProgressStore
+import com.pynapli.shared.settings.PendingSignup
+import com.pynapli.shared.settings.PendingSignupStore
+import com.pynapli.shared.settings.maskEmailAddress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,8 +38,9 @@ import kotlin.time.ExperimentalTime
  * Sign-in mode bypasses the stepper entirely.
  *
  * Resume (spec "app closed mid-signup"): before the code, [resumePendingSignupIfNeeded]
- * reopens the code step for the address that started (the device keeps the address and the
- * server's sign-up token, never the password; after 24 hours it starts over). After the code,
+ * reopens the code step for the address that started, shown masked (the [PendingSignupStore]
+ * keeps the address and the server's sign-up token, never the password: encrypted on Android,
+ * for the tab's session only on the web; after 24 hours it starts over). After the code,
  * the device-local [OnboardingProgressStore] `completed` flag is false (pinned to the new
  * account); [resumeIfNeeded] re-enters at the Profile step on next launch until the user
  * finishes, which flips the flag back. Plain sign-ins never see the stepper: the flag defaults
@@ -46,6 +50,7 @@ class OnboardingStateHolder(
     private val authStateHolder: AuthStateHolder,
     private val profileRepository: OnboardingProfileRepository,
     private val progressStore: OnboardingProgressStore,
+    private val pendingSignupStore: PendingSignupStore,
     private val todayProvider: () -> LocalDate = ::systemToday,
     private val nowEpochMillis: () -> Long = ::systemNowEpochMillis,
 ) {
@@ -184,6 +189,7 @@ class OnboardingStateHolder(
                 it.copy(
                     isSubmitting = false,
                     email = email,
+                    emailShownMasked = false,
                     password = "",
                     signupCode = "",
                     signupNotice = null,
@@ -276,20 +282,19 @@ class OnboardingStateHolder(
     suspend fun resumePendingSignupIfNeeded() {
         if (_state.value.active) return
         if (authStateHolder.state.value.session != null) return
-        val progress = runCatchingCancellable { progressStore.load() }.getOrNull() ?: return
-        val email = progress.pendingSignupEmail ?: return
-        val token = progress.pendingSignupToken ?: return
-        val startedAt = progress.pendingSignupStartedAtEpochMs ?: 0L
-        if (nowEpochMillis() - startedAt >= PENDING_SIGNUP_LIFETIME_MILLIS) {
+        val pending = runCatchingCancellable { pendingSignupStore.load() }.getOrNull() ?: return
+        if (nowEpochMillis() - pending.startedAtEpochMs >= PENDING_SIGNUP_LIFETIME_MILLIS) {
             clearPendingSignup()
             return
         }
-        pendingSignupToken = token
+        pendingSignupToken = pending.signupToken
         _state.update {
             it.copy(
                 active = true,
                 step = OnboardingStep.VerifyEmail,
-                email = email,
+                email = pending.email,
+                // Whoever opens the app next may not be the person who started: never the full address.
+                emailShownMasked = true,
                 password = "",
                 signupCode = "",
                 signupNotice = null,
@@ -358,13 +363,9 @@ class OnboardingStateHolder(
         val sessionUserId =
             authStateHolder.state.value.session
                 ?.userId ?: return
-        var progress = progressStore.load()
+        val progress = progressStore.load()
         // Signed in some other way while a sign-up waited for its code: that sign-up is moot here.
-        if (progress.pendingSignupEmail != null || progress.pendingSignupToken != null) {
-            progress = progress.copy(pendingSignupEmail = null, pendingSignupToken = null, pendingSignupStartedAtEpochMs = null)
-            val cleared = progress
-            runCatchingCancellable { progressStore.save(cleared) }
-        }
+        clearPendingSignup()
         if (progress.completed) return
         // The flag is device-local: only the account that started signup resumes.
         // Anyone else signing in on this device skips straight to the grid.
@@ -423,15 +424,10 @@ class OnboardingStateHolder(
     private suspend fun markOnboardingInProgress(userId: String?) {
         runCatchingCancellable {
             progressStore.save(
-                progressStore.load().copy(
-                    completed = false,
-                    userId = userId,
-                    pendingSignupEmail = null,
-                    pendingSignupToken = null,
-                    pendingSignupStartedAtEpochMs = null,
-                ),
+                progressStore.load().copy(completed = false, userId = userId),
             )
         }
+        clearPendingSignup()
     }
 
     private suspend fun savePendingSignup(
@@ -439,22 +435,12 @@ class OnboardingStateHolder(
         signupToken: String,
     ) {
         runCatchingCancellable {
-            progressStore.save(
-                progressStore.load().copy(
-                    pendingSignupEmail = email,
-                    pendingSignupToken = signupToken,
-                    pendingSignupStartedAtEpochMs = nowEpochMillis(),
-                ),
-            )
+            pendingSignupStore.save(PendingSignup(email = email, signupToken = signupToken, startedAtEpochMs = nowEpochMillis()))
         }
     }
 
     private suspend fun clearPendingSignup() {
-        runCatchingCancellable {
-            progressStore.save(
-                progressStore.load().copy(pendingSignupEmail = null, pendingSignupToken = null, pendingSignupStartedAtEpochMs = null),
-            )
-        }
+        runCatchingCancellable { pendingSignupStore.clear() }
     }
 
     private suspend fun restartSignup(errorMessage: String?) {
@@ -463,6 +449,7 @@ class OnboardingStateHolder(
         _state.update {
             it.copy(
                 step = OnboardingStep.Account,
+                emailShownMasked = false,
                 password = "",
                 signupCode = "",
                 signupNotice = null,
@@ -572,6 +559,8 @@ data class OnboardingUiState(
     val dob: LocalDate? = null,
     val email: String = "",
     val password: String = "",
+    // On a resumed code step the address is shown masked ([verifyEmailLabel]).
+    val emailShownMasked: Boolean = false,
     val signupCode: String = "",
     // A neutral "new code is on its way" line on the code step; never says whether the address has an account.
     val signupNotice: String? = null,
@@ -584,6 +573,10 @@ data class OnboardingUiState(
 ) {
     val dobComplete: Boolean
         get() = dobDay.isNotEmpty() && dobMonth.isNotEmpty() && dobYear.length == 4
+
+    /** The address the code step names: in full right after sign-up, masked after a resume. */
+    val verifyEmailLabel: String
+        get() = if (emailShownMasked) maskEmailAddress(email) else email
 }
 
 interface OnboardingProfileRepository {

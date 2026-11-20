@@ -430,7 +430,7 @@ private fun VerifyEmailStep(
     StepTitle(
         title = "Check your email",
         subtitle =
-            "If ${state.email} can be used for a new account, we've sent a 6-digit code to it. " +
+            "If ${state.verifyEmailLabel} can be used for a new account, we've sent a 6-digit code to it. " +
                 "It works for 30 minutes. If that address already has an account, the email says how to sign in instead.",
     )
     Spacer(modifier = Modifier.height(20.dp))

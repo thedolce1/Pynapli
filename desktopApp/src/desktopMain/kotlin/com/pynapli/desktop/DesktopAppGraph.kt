@@ -27,6 +27,7 @@ import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.jvmRealtimeStreams
+import com.pynapli.shared.settings.InMemoryPendingSignupStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.datetime.TimeZone
@@ -101,6 +102,8 @@ class DesktopAppGraph {
             authStateHolder = authStateHolder,
             profileRepository = ApiOnboardingProfileRepository(apiClient),
             progressStore = DesktopOnboardingProgressStore(),
+            // Dev-only shell: memory only (a restart before the code starts the sign-up over).
+            pendingSignupStore = InMemoryPendingSignupStore(),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */

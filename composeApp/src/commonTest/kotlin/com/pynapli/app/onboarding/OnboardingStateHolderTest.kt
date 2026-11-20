@@ -24,8 +24,11 @@ import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import com.pynapli.shared.settings.InMemoryPendingSignupStore
 import com.pynapli.shared.settings.OnboardingProgress
 import com.pynapli.shared.settings.OnboardingProgressStore
+import com.pynapli.shared.settings.PendingSignup
+import com.pynapli.shared.settings.maskEmailAddress
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -171,9 +174,9 @@ class OnboardingStateHolderTest {
             // No account and no session until the emailed code checks out.
             assertNull(fixture.auth.state.value.session)
             assertTrue(fixture.progressStore.progress.completed)
-            assertEquals("new@pynapli.local", fixture.progressStore.progress.pendingSignupEmail)
-            assertEquals("signup-token", fixture.progressStore.progress.pendingSignupToken)
-            assertEquals(fixture.nowMillis, fixture.progressStore.progress.pendingSignupStartedAtEpochMs)
+            assertEquals(PendingSignup("new@pynapli.local", "signup-token", fixture.nowMillis), fixture.pendingStore.load())
+            // Right after sign-up the person typed the address themselves: shown in full.
+            assertEquals("new@pynapli.local", state.verifyEmailLabel)
         }
 
     @Test
@@ -193,8 +196,7 @@ class OnboardingStateHolderTest {
             assertNotNull(fixture.auth.state.value.session)
             assertFalse(fixture.progressStore.progress.completed)
             assertEquals("user-1", fixture.progressStore.progress.userId)
-            assertNull(fixture.progressStore.progress.pendingSignupEmail)
-            assertNull(fixture.progressStore.progress.pendingSignupToken)
+            assertNull(fixture.pendingStore.load())
         }
 
     @Test
@@ -237,7 +239,7 @@ class OnboardingStateHolderTest {
             assertEquals("That code isn't right or has expired. Check the newest email, or send a new code.", failed.errorMessage)
             assertEquals("", failed.signupCode)
             assertNull(fixture.auth.state.value.session)
-            assertEquals("signup-token", fixture.progressStore.progress.pendingSignupToken)
+            assertEquals("signup-token", fixture.pendingStore.load()?.signupToken)
 
             fixture.onboarding.resendSignupCode()
 
@@ -259,8 +261,7 @@ class OnboardingStateHolderTest {
             fixture.onboarding.useDifferentEmail()
 
             assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
-            assertNull(fixture.progressStore.progress.pendingSignupEmail)
-            assertNull(fixture.progressStore.progress.pendingSignupToken)
+            assertNull(fixture.pendingStore.load())
             // Nothing left to verify with: a stray verify restarts instead of calling the server.
             fixture.onboarding.updateSignupCode("123456")
             fixture.onboarding.verifySignupCode()
@@ -272,14 +273,7 @@ class OnboardingStateHolderTest {
         runTest {
             val fixture =
                 Fixture(
-                    progressStore =
-                        InMemoryProgressStore(
-                            OnboardingProgress(
-                                pendingSignupEmail = "new@pynapli.local",
-                                pendingSignupToken = "stored-token",
-                                pendingSignupStartedAtEpochMs = NOW_MILLIS - 60 * 60 * 1_000,
-                            ),
-                        ),
+                    pendingStore = InMemoryPendingSignupStore(PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS - 60 * 60 * 1_000)),
                 )
 
             fixture.onboarding.resumePendingSignupIfNeeded()
@@ -289,6 +283,8 @@ class OnboardingStateHolderTest {
             assertEquals(OnboardingStep.VerifyEmail, state.step)
             assertEquals("new@pynapli.local", state.email)
             assertEquals("", state.password)
+            // Whoever opens the app next may not be the person who started: never the full address.
+            assertEquals("n•••@p•••.local", state.verifyEmailLabel)
 
             fixture.onboarding.updateSignupCode("123456")
             fixture.onboarding.verifySignupCode()
@@ -301,21 +297,16 @@ class OnboardingStateHolderTest {
         runTest {
             val fixture =
                 Fixture(
-                    progressStore =
-                        InMemoryProgressStore(
-                            OnboardingProgress(
-                                pendingSignupEmail = "new@pynapli.local",
-                                pendingSignupToken = "stored-token",
-                                pendingSignupStartedAtEpochMs = NOW_MILLIS - OnboardingStateHolder.PENDING_SIGNUP_LIFETIME_MILLIS - 1,
-                            ),
+                    pendingStore =
+                        InMemoryPendingSignupStore(
+                            PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS - OnboardingStateHolder.PENDING_SIGNUP_LIFETIME_MILLIS - 1),
                         ),
                 )
 
             fixture.onboarding.resumePendingSignupIfNeeded()
 
             assertFalse(fixture.onboarding.state.value.active)
-            assertNull(fixture.progressStore.progress.pendingSignupEmail)
-            assertNull(fixture.progressStore.progress.pendingSignupToken)
+            assertNull(fixture.pendingStore.load())
         }
 
     @Test
@@ -323,10 +314,7 @@ class OnboardingStateHolderTest {
         runTest {
             val fixture =
                 Fixture(
-                    progressStore =
-                        InMemoryProgressStore(
-                            OnboardingProgress(pendingSignupEmail = "new@pynapli.local", pendingSignupToken = "stored-token", pendingSignupStartedAtEpochMs = NOW_MILLIS),
-                        ),
+                    pendingStore = InMemoryPendingSignupStore(PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS)),
                 )
             fixture.signIn()
 
@@ -335,7 +323,7 @@ class OnboardingStateHolderTest {
             fixture.onboarding.resumeIfNeeded()
 
             assertFalse(fixture.onboarding.state.value.active)
-            assertNull(fixture.progressStore.progress.pendingSignupToken)
+            assertNull(fixture.pendingStore.load())
         }
 
     @Test
@@ -362,7 +350,7 @@ class OnboardingStateHolderTest {
             assertFalse(state.isSubmitting)
             // Failed signup must not arm either resume flow.
             assertTrue(fixture.progressStore.progress.completed)
-            assertNull(fixture.progressStore.progress.pendingSignupToken)
+            assertNull(fixture.pendingStore.load())
         }
 
     @Test
@@ -502,6 +490,13 @@ class OnboardingStateHolderTest {
         }
 
     @Test
+    fun theResumedAddressIsMasked() {
+        assertEquals("j•••@g•••.com", maskEmailAddress("jane.doe@gmail.com"))
+        assertEquals("a•••@e•••.co", maskEmailAddress("a@example.co"))
+        assertEquals("•••", maskEmailAddress("not-an-address"))
+    }
+
+    @Test
     fun photoNudgeEligibilityIsBounded() =
         runTest {
             // Fresh completed account: eligible.
@@ -561,6 +556,7 @@ class OnboardingStateHolderTest {
 
     private inner class Fixture(
         val progressStore: InMemoryProgressStore = InMemoryProgressStore(),
+        val pendingStore: InMemoryPendingSignupStore = InMemoryPendingSignupStore(),
         val nowMillis: Long = NOW_MILLIS,
         val authApi: FakeAuthApi = FakeAuthApi(),
         val profileRepository: FakeOnboardingProfileRepository = FakeOnboardingProfileRepository(),
@@ -584,6 +580,7 @@ class OnboardingStateHolderTest {
                 progressStore = progressStore,
                 todayProvider = { today },
                 nowEpochMillis = { nowMillis },
+                pendingSignupStore = pendingStore,
             )
 
         fun enterDob(

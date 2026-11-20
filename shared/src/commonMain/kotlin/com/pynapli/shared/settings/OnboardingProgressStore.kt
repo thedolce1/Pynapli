@@ -24,13 +24,8 @@ data class OnboardingProgress(
     val userId: String? = null,
     val photoNudgeDismissed: Boolean = false,
     val photoNudgeSessionsSeen: Int = 0,
-    // A sign-up waiting for its emailed code (ONBOARDING_AUTH_SPEC, "Membership privacy"), so an app
-    // killed between sign-up and verification reopens on the code step for that address. Never the
-    // password: only the address, the server's random sign-up token (useless without the code) and
-    // when it started, so a sign-up older than the server keeps it (24 hours) restarts cleanly.
-    val pendingSignupEmail: String? = null,
-    val pendingSignupToken: String? = null,
-    val pendingSignupStartedAtEpochMs: Long? = null,
+    // A sign-up waiting for its emailed code is NOT kept here: see PendingSignupStore, which each
+    // platform keeps as privately as it can (this blob is plain device storage, localStorage on web).
 )
 
 interface OnboardingProgressStore {
