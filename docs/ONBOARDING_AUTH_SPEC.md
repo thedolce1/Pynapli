@@ -103,7 +103,8 @@ half of "Membership Privacy (no account oracles)" above.
 ### Flow
 
 1. `POST /v1/auth/email/signup` validates the request (format; **one strict address**: exactly one
-   `@`, no whitespace, control characters, commas, semicolons, angle brackets or quotes, local part
+   `@`, no whitespace, control characters, commas, semicolons, angle brackets, double quotes or
+   backticks (an apostrophe is fine in the local part: `o'brien@example.com`), local part
    at most 64 and whole address at most 254 characters, a dotted domain of letters/digits/hyphens;
    12+ character password; the age gate; 18+/Terms/Privacy acceptances; those errors are about the
    request, not the address) and then answers **202 with the same `EmailSignupStartedDto`** for every
@@ -127,8 +128,10 @@ half of "Membership Privacy (no account oracles)" above.
    - **Deleted account's address:** treated as new, as before (deletion frees the address).
 3. `POST /v1/auth/email/signup/verify` with email, code and the token. It first **spends one attempt**
    in a single statement that always updates exactly one real row: the live sign-up for (address,
-   token), or a **permanent placeholder row** (created by V118, never expires, matches nothing) when
-   there is none. Only then is the code compared, and only if that attempt was within the budget.
+   token), or, when there is none, one of a **pool of 64 permanent placeholder rows** picked at random
+   (created by V118; they never expire, and their hashes have the real format and length but hash
+   fixed strings that are never valid inputs, so comparisons run over the same length and match
+   nothing). Only then is the code compared, and only if that attempt was within the budget.
    Success creates the account from the pending row in one transaction, with exactly the rows sign-up
    always created (user, email identity, profile, discovery settings) plus `users.email_verified_at`,
    deletes every pending row of the address, and returns the session. Every failure (wrong code,
@@ -137,7 +140,7 @@ half of "Membership Privacy (no account oracles)" above.
    same work: the one attempt write on one row.
 4. `POST /v1/auth/email/signup/resend` with email and token: always `202 {sent: true}`, and the
    request does no database work at all. Off the request path, only a live sign-up whose token matches
-   gets a new code; attempts are never given back.
+   and whose guesses are not yet spent gets a new code; attempts are never given back.
 5. No email provider configured: sign-up and resend answer `503 SIGNUP_UNAVAILABLE` ("Creating an
    account by email isn't available right now. Contact support@pynapli.com.") for every address
    before doing anything (fail closed; same as reset's `PASSWORD_RESET_UNAVAILABLE`).
@@ -163,6 +166,9 @@ the sign-up whose token they carry, so a stranger can't burn the owner's attempt
 - Visible limits (answer `429 RATE_LIMITED`) key on **address + client IP**: sign-up 10/h, resend
   10/h, verify 15/h; plus per device (sign-up, resend) and per IP at request level (sign-up and resend
   share 30/h; verify 60/h; off in local). Someone elsewhere can't use these to stop the owner.
+- "Client IP" in every per-client key (sign-up, resend and verify limits, email caps) is the client's
+  network: IPv4 as is, IPv6 bucketed to its /64 (one host usually holds a whole /64), an IPv4-mapped
+  IPv6 address as its IPv4 address.
 - Silent email caps, counting codes and notices alike, the same for members and non-members, checked
   in order and stopping at the first that is spent: **per (address family, client IP)** 3 per hour and
   6 per day, then **per address family** 20 per day. The address family is the address with any
@@ -170,12 +176,14 @@ the sign-up whose token they carry, so a stranger can't burn the owner's attempt
   `a+1@x.com`, `a+2@x.com`... share every budget. An email refused for one network never counts
   against the family. Over a cap a sign-up is a complete no-op and the answer doesn't change. Resend
   spends the budget only after the token matched.
-- **Remaining denial of service:** one network can no longer stop the owner (it gets 6 emails a day
-  for the address; the owner's own network has its own budget, and the owner's sign-up can't be
-  replaced or evicted). An attacker with **4 or more networks** in a day can use up the family's 20
-  emails (or fill its 20 live rows), after which the owner's *new* sign-ups and resends silently send
-  nothing until the day rolls over. The owner then sees "check your email" with no email, has received
-  the attacker's unexpected codes, and any sign-up the owner had already started keeps working.
+- **Remaining denial of service (accepted):** one network (one IPv4 address or one IPv6 /64) can no
+  longer stop the owner: it gets 6 emails a day for the address, the owner's own network has its own
+  budget, and the owner's sign-up can't be replaced or evicted. An attacker with a handful of distinct
+  networks (4 or more in a day) can still use up the address's 20 emails, after which the owner's
+  *new* sign-ups and resends silently send nothing until the day rolls over. The owner sees the
+  attacker's unexpected codes arrive, sees "check your email" with nothing new, and can sign up the
+  next day; any sign-up the owner had already started keeps working. Accepted: closing it fully needs
+  something like a CAPTCHA or proof of work, which is out of scope.
 
 ### Emails
 
@@ -199,18 +207,24 @@ Android, the platform default cipher on iOS (pass-through until the Keychain pha
 default), **`sessionStorage` on the web** (gone when the tab closes, so the next person on a shared
 computer never lands on it), memory only in the dev desktop shell. An app killed before the code
 reopens on the code step with the address **masked** (`j•••@g•••.com`); past 24 hours it restarts
-cleanly. Signing in any other way drops a waiting sign-up.
+cleanly. Signing in any other way, or going back to sign-in from the stepper, drops a waiting sign-up.
+
+Two dead ends have a way out, without any server difference: the app counts its own failed code
+submissions for the current sign-up, and after the fifth (the server's budget) the code step says
+"That's too many tries for this code. Start again to get a new one." and offers **Start again**
+instead of Verify (no further guesses or resends go out). "No email? Start again" is also always on
+the code step, for a sign-up whose email work was dropped (then no pending row exists, and a resend
+can't deliver anything). Start again goes back to email and password with the same address kept;
+the person types the password again (it is never stored).
 
 ### Still distinguishable
 
 - **By the inbox owner:** which email arrives (a code or a notice). That is the owner's own inbox.
 - **Off the request path only:** the queued work differs by membership, but nobody waits on it and
   the request answers first.
-- **Verify:** every failure writes one row; which row it is (a real sign-up or the placeholder) is
-  not observable. Failed verifies with no live sign-up all update the same placeholder row, so they
-  queue on its row lock: under a flood those are slightly slower than failures on real rows. Verify
-  is rate-limited, and the difference is a lock wait, not a membership answer (a stranger's address
-  behaves the same as a member's).
+- **Verify:** every failure writes one row; which row it is (a real sign-up or a placeholder) is
+  not observable. Failures with no live sign-up spread at random over 64 placeholder rows, so a
+  flood doesn't queue on one row lock.
 - **Success** after a correct code obviously differs from failure, but a correct code proves inbox
   access.
 - **Database leak** of `pending_email_signups`: for each row, an *unsalted* SHA-256 of the address

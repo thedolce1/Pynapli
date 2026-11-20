@@ -65,6 +65,11 @@ class OnboardingStateHolder(
     // the UI state; persisted only in the device-local progress store for resume.
     private var pendingSignupToken: String? = null
 
+    // Failed code submissions for the current pending sign-up, counted here (the server answers every
+    // failure the same way and says nothing about its own count). At the server's budget the code
+    // step stops offering Verify and offers "Start again" instead.
+    private var failedCodeSubmissions = 0
+
     fun startCreateAccount() {
         _state.update {
             it.copy(
@@ -75,8 +80,22 @@ class OnboardingStateHolder(
         }
     }
 
-    fun cancelToSignIn() {
-        _state.update { it.copy(active = false, step = OnboardingStep.Dob, errorMessage = null) }
+    /** Back to sign-in; a sign-up still waiting for its code is dropped so the next launch doesn't reopen it. */
+    suspend fun cancelToSignIn() {
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
+        clearPendingSignup()
+        _state.update {
+            it.copy(
+                active = false,
+                step = OnboardingStep.Dob,
+                signupCode = "",
+                signupAttemptsSpent = false,
+                signupNotice = null,
+                accountNotice = null,
+                errorMessage = null,
+            )
+        }
     }
 
     fun updateDobDay(value: String) {
@@ -184,6 +203,7 @@ class OnboardingStateHolder(
             )
         if (started != null) {
             pendingSignupToken = started.signupToken
+            failedCodeSubmissions = 0
             savePendingSignup(email = email, signupToken = started.signupToken)
             _state.update {
                 it.copy(
@@ -193,6 +213,8 @@ class OnboardingStateHolder(
                     password = "",
                     signupCode = "",
                     signupNotice = null,
+                    accountNotice = null,
+                    signupAttemptsSpent = false,
                     step = OnboardingStep.VerifyEmail,
                 )
             }
@@ -213,7 +235,7 @@ class OnboardingStateHolder(
     /** Checks the emailed code; on success the account and session exist and the skippable steps start. */
     suspend fun verifySignupCode() {
         val current = _state.value
-        if (current.isSubmitting) return
+        if (current.isSubmitting || current.signupAttemptsSpent) return
         val token = pendingSignupToken
         if (token == null) {
             restartSignup(SIGNUP_EXPIRED_MESSAGE)
@@ -240,20 +262,34 @@ class OnboardingStateHolder(
                 )
             }
         } else {
+            failedCodeSubmissions++
+            val spent = failedCodeSubmissions >= CODE_ATTEMPTS_PER_SIGNUP
             _state.update {
                 it.copy(
                     isSubmitting = false,
                     signupCode = "",
-                    errorMessage = authStateHolder.state.value.errorMessage,
+                    signupAttemptsSpent = spent,
+                    signupNotice = null,
+                    errorMessage = if (spent) ATTEMPTS_SPENT_MESSAGE else authStateHolder.state.value.errorMessage,
                 )
             }
         }
     }
 
+    /**
+     * "Start again": a new sign-up for the same address (the old one may be out of guesses, or may
+     * never have been created if its email work was dropped). Back to email + password with the
+     * address kept; the password is not stored, so the person types it again.
+     */
+    suspend fun startSignupAgain() {
+        restartSignup(errorMessage = null)
+        _state.update { it.copy(accountNotice = START_AGAIN_NOTICE) }
+    }
+
     /** "Send a new code". The server answers the same whether or not one goes out, and so does this. */
     suspend fun resendSignupCode() {
         val current = _state.value
-        if (current.isSubmitting) return
+        if (current.isSubmitting || current.signupAttemptsSpent) return
         val token = pendingSignupToken
         if (token == null) {
             restartSignup(SIGNUP_EXPIRED_MESSAGE)
@@ -288,6 +324,7 @@ class OnboardingStateHolder(
             return
         }
         pendingSignupToken = pending.signupToken
+        failedCodeSubmissions = 0
         _state.update {
             it.copy(
                 active = true,
@@ -445,6 +482,7 @@ class OnboardingStateHolder(
 
     private suspend fun restartSignup(errorMessage: String?) {
         pendingSignupToken = null
+        failedCodeSubmissions = 0
         clearPendingSignup()
         _state.update {
             it.copy(
@@ -453,6 +491,8 @@ class OnboardingStateHolder(
                 password = "",
                 signupCode = "",
                 signupNotice = null,
+                accountNotice = null,
+                signupAttemptsSpent = false,
                 isSubmitting = false,
                 errorMessage = errorMessage,
             )
@@ -480,6 +520,11 @@ class OnboardingStateHolder(
         const val PENDING_SIGNUP_LIFETIME_MILLIS = 24L * 60 * 60 * 1_000
         const val RESENT_NOTICE = "If this address can be used, a new code is on its way. Use the newest one."
         const val SIGNUP_EXPIRED_MESSAGE = "That sign-up has expired. Enter your email again to get a new code."
+
+        /** The server's guess budget per sign-up (EmailSignupService.MAX_ATTEMPTS). */
+        const val CODE_ATTEMPTS_PER_SIGNUP = 5
+        const val ATTEMPTS_SPENT_MESSAGE = "That's too many tries for this code. Start again to get a new one."
+        const val START_AGAIN_NOTICE = "Enter your password again and we'll send a new code."
 
         /**
          * Strict calendar parse of the typed DD/MM/YYYY fields: real day for the
@@ -564,6 +609,10 @@ data class OnboardingUiState(
     val signupCode: String = "",
     // A neutral "new code is on its way" line on the code step; never says whether the address has an account.
     val signupNotice: String? = null,
+    // The code step's guesses for this sign-up are used up: offer "Start again" instead of Verify.
+    val signupAttemptsSpent: Boolean = false,
+    // A neutral line on the Account step after "Start again".
+    val accountNotice: String? = null,
     val acceptedTerms: Boolean = false,
     val acceptedPrivacy: Boolean = false,
     val displayName: String = "",

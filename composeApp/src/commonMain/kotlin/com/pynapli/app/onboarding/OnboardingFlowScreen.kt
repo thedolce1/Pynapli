@@ -86,6 +86,7 @@ fun OnboardingFlowScreen(
     onVerifySignupCode: () -> Unit,
     onResendSignupCode: () -> Unit,
     onUseDifferentEmail: () -> Unit,
+    onStartSignupAgain: () -> Unit,
     onShareLocation: () -> Unit,
     onContinueFromLocation: () -> Unit,
     onDisplayNameChanged: (String) -> Unit,
@@ -168,6 +169,7 @@ fun OnboardingFlowScreen(
                     onVerifySignupCode = onVerifySignupCode,
                     onResendSignupCode = onResendSignupCode,
                     onUseDifferentEmail = onUseDifferentEmail,
+                    onStartSignupAgain = onStartSignupAgain,
                 )
 
             OnboardingStep.Location ->
@@ -400,6 +402,16 @@ private fun AccountStep(
         colors = onboardingTextFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
+    state.accountNotice?.let { notice ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = notice,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
     StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(20.dp))
     SubmittingButton(
@@ -426,6 +438,7 @@ private fun VerifyEmailStep(
     onVerifySignupCode: () -> Unit,
     onResendSignupCode: () -> Unit,
     onUseDifferentEmail: () -> Unit,
+    onStartSignupAgain: () -> Unit,
 ) {
     StepTitle(
         title = "Check your email",
@@ -439,7 +452,7 @@ private fun VerifyEmailStep(
         onValueChange = onSignupCodeChanged,
         label = { Text("6-digit code") },
         singleLine = true,
-        enabled = !state.isSubmitting,
+        enabled = !state.isSubmitting && !state.signupAttemptsSpent,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         colors = onboardingTextFieldColors(),
         modifier = Modifier.fillMaxWidth(),
@@ -456,14 +469,28 @@ private fun VerifyEmailStep(
     }
     StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(20.dp))
-    SubmittingButton(
-        text = "Verify",
-        isSubmitting = state.isSubmitting,
-        onClick = onVerifySignupCode,
-    )
-    Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onResendSignupCode, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
-        Text("Send a new code")
+    if (state.signupAttemptsSpent) {
+        // Out of guesses for this sign-up: a new code for it could never work, so the way on is a
+        // new sign-up for the same address.
+        SubmittingButton(
+            text = "Start again",
+            isSubmitting = state.isSubmitting,
+            onClick = onStartSignupAgain,
+        )
+    } else {
+        SubmittingButton(
+            text = "Verify",
+            isSubmitting = state.isSubmitting,
+            onClick = onVerifySignupCode,
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        TextButton(onClick = onResendSignupCode, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
+            Text("Send a new code")
+        }
+        // Always there: if no email ever arrives, a new code can't help either; a new sign-up can.
+        TextButton(onClick = onStartSignupAgain, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
+            Text("No email? Start again")
+        }
     }
     TextButton(onClick = onUseDifferentEmail, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
         Text("Use a different email")

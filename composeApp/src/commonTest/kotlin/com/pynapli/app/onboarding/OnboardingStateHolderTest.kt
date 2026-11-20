@@ -490,6 +490,80 @@ class OnboardingStateHolderTest {
         }
 
     @Test
+    fun afterFiveWrongCodesTheCodeStepOffersStartAgainForTheSameAddress() =
+        runTest {
+            val fixture =
+                Fixture(
+                    authApi = FakeAuthApi(verifyResult = { AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right or has expired.")) }),
+                )
+            fixture.startSignup()
+
+            repeat(OnboardingStateHolder.CODE_ATTEMPTS_PER_SIGNUP) {
+                fixture.onboarding.updateSignupCode("000000")
+                fixture.onboarding.verifySignupCode()
+            }
+
+            val spent = fixture.onboarding.state.value
+            assertTrue(spent.signupAttemptsSpent)
+            assertEquals(OnboardingStateHolder.ATTEMPTS_SPENT_MESSAGE, spent.errorMessage)
+            assertEquals(OnboardingStateHolder.CODE_ATTEMPTS_PER_SIGNUP, fixture.authApi.verifyRequests.size)
+            // Nothing more goes to the server for this sign-up: no sixth guess, no pointless new code.
+            fixture.onboarding.updateSignupCode("123456")
+            fixture.onboarding.verifySignupCode()
+            fixture.onboarding.resendSignupCode()
+            assertEquals(OnboardingStateHolder.CODE_ATTEMPTS_PER_SIGNUP, fixture.authApi.verifyRequests.size)
+            assertTrue(fixture.authApi.resendRequests.isEmpty())
+
+            fixture.onboarding.startSignupAgain()
+
+            val again = fixture.onboarding.state.value
+            assertEquals(OnboardingStep.Account, again.step)
+            assertEquals("new@pynapli.local", again.email)
+            assertEquals("", again.password)
+            assertFalse(again.signupAttemptsSpent)
+            assertEquals(OnboardingStateHolder.START_AGAIN_NOTICE, again.accountNotice)
+            assertNull(fixture.pendingStore.load())
+
+            fixture.onboarding.updatePassword("LongEnoughPassword1!")
+            fixture.onboarding.submitAccount()
+            assertEquals("new@pynapli.local", fixture.authApi.lastSignupRequest?.email)
+            assertEquals(OnboardingStep.VerifyEmail, fixture.onboarding.state.value.step)
+            assertFalse(fixture.onboarding.state.value.signupAttemptsSpent)
+        }
+
+    @Test
+    fun withNoEmailEverArrivingStartAgainIsThereFromTheCodeStep() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            // The email work may have been dropped: a new code can't help, a new sign-up can.
+            fixture.onboarding.resendSignupCode()
+            assertEquals(OnboardingStateHolder.RESENT_NOTICE, fixture.onboarding.state.value.signupNotice)
+
+            fixture.onboarding.startSignupAgain()
+
+            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+            assertEquals("new@pynapli.local", fixture.onboarding.state.value.email)
+            assertNull(fixture.pendingStore.load())
+        }
+
+    @Test
+    fun backToSignInDropsTheWaitingSignUp() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            assertNotNull(fixture.pendingStore.load())
+
+            fixture.onboarding.cancelToSignIn()
+
+            assertFalse(fixture.onboarding.state.value.active)
+            assertNull(fixture.pendingStore.load())
+            // The next launch does not reopen the code step.
+            fixture.onboarding.resumePendingSignupIfNeeded()
+            assertFalse(fixture.onboarding.state.value.active)
+        }
+
+    @Test
     fun theResumedAddressIsMasked() {
         assertEquals("j•••@g•••.com", maskEmailAddress("jane.doe@gmail.com"))
         assertEquals("a•••@e•••.co", maskEmailAddress("a@example.co"))
