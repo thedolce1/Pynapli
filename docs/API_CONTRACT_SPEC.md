@@ -59,14 +59,14 @@ user-safe; `details` never exposes policy thresholds, risk scores or internals. 
 
 ### Email sign-up (`POST /v1/auth/email/signup`, `/verify`, `/resend`)
 
-Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#membership-privacy)).
+Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#email-sign-up-membership-privacy)).
 
 - `POST /v1/auth/email/signup` (`EmailSignupRequestDto`, unchanged) answers **`202
   EmailSignupStartedDto`** `{verificationRequired: true, signupToken, codeLength: 6,
   codeExpiresInSeconds: 1800}` for every syntactically valid request, whether or not the address has
-  an account. **No session.** Request errors are unchanged (`INVALID_EMAIL`, `PASSWORD_TOO_SHORT`, the
-  age-gate and acceptance codes, `RATE_LIMITED`); `EMAIL_ALREADY_EXISTS` is never returned here any
-  more. `503 SIGNUP_UNAVAILABLE` when no email provider is configured (for everyone).
+  an account. **No session.** Request errors are unchanged (`INVALID_EMAIL`, now also for anything but
+  one strict address, `PASSWORD_TOO_SHORT`, the age-gate and acceptance codes, `RATE_LIMITED`);
+  `EMAIL_ALREADY_EXISTS` is never returned here any more. `503 SIGNUP_UNAVAILABLE` when no email provider is configured (for everyone).
 - `POST /v1/auth/email/signup/verify` (`EmailSignupVerifyRequestDto` `{email, code, signupToken,
   deviceId?, platform?, appVersion?}`) answers `200 AuthSessionDto` (the session sign-up used to
   return) or `400 INVALID_SIGNUP_CODE` for every failure.
@@ -76,9 +76,10 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   build from before this change decodes the 202 body as `AuthSessionDto`, fails, and shows its generic
   network error; no account is created and it can't proceed. The body deliberately has no
   `accessToken`, so the shared client can't mistake it for a session.
-- Local development only (404 elsewhere): `POST /v1/dev/auth/email/signup` (verified account at once,
+- Local development only, off by default, and only for a direct loopback request with no forwarding
+  header (404 otherwise): `POST /v1/dev/auth/email/signup` (verified account at once,
   `AuthSessionDto`, 409 `EMAIL_ALREADY_EXISTS` for an existing address) and `POST
-  /v1/dev/auth/email/signup/latest-code` (`{email}` -> `DevSignupCodeDto {code?, alreadyRegisteredNoticeSent}`).
+  /v1/dev/auth/email/signup/latest-code` (`{email}` -> `DevSignupCodeDto {code?}`; codes only).
 
 ### Grid (`POST /v1/grid/query`)
 

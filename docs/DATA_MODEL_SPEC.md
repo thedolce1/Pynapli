@@ -55,13 +55,17 @@ every change must keep.
   sealed with AES-256-GCM under a key derived from that consumed token (never stored), so the blob is
   useless without the old token; revocation clears it. Password-reset codes are stored only as
   `SHA-256(userId:code)`.
-- **Email sign-up is verified first** (V118, [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#membership-privacy)).
-  `pending_email_signups` holds a started sign-up for an address with no account: one row per
-  `email_hash` (unique; a new sign-up replaces it), the password hash, birthdate, acceptance time and
-  Terms/Privacy versions, `SHA-256` of the sign-up token, `SHA-256(id:code)`, the code's expiry
-  (30 min) and failed attempts, and `expires_at` (24 h). No plaintext address, no location, no
+- **Email sign-up is verified first** (V118, [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#email-sign-up-membership-privacy)).
+  `pending_email_signups` holds a started sign-up for an address with no account: **one row per
+  sign-up token** (unique `signup_token_hash`; at most 20 live per `email_hash`, never replaced or
+  evicted), the password hash, birthdate, acceptance time and Terms/Privacy versions,
+  `SHA-256(id:code)`, the code's expiry (30 min), `codes_issued` (at most 3), `attempts` (the lifetime
+  guess budget, 5, spent before each comparison, never reset) and `expires_at` (24 h). One permanent
+  **placeholder row** (id all zeros, `expires_at` infinity, hashes that match nothing) takes the
+  attempt write of every verify that matches no live sign-up; retention never removes it. No plaintext address, no location, no
   profile, no device labels. Verify deletes the row and creates the account in one transaction;
-  expired rows go on the next sign-up write and in the data-retention job. A pending row can't sign
+  verify deletes every row of the address; expired rows go on the next sign-up write and in the
+  data-retention job. A pending row can't sign
   in and belongs to no account (out of export and deletion). `users.email_verified_at` is set for
   accounts created through it; older accounts stay NULL and nothing is gated on it yet.
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
