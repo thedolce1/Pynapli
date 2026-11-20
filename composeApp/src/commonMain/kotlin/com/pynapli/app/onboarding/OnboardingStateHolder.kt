@@ -8,6 +8,9 @@ import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import com.pynapli.shared.settings.OnboardingProgressStore
+import com.pynapli.shared.settings.PendingSignup
+import com.pynapli.shared.settings.PendingSignupStore
+import com.pynapli.shared.settings.maskEmailAddress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,22 +29,30 @@ import kotlin.time.ExperimentalTime
  * launch), policies are reviewed on a dedicated step with read links and a single
  * Accept, and photo + display name share one skippable "Your profile" step.
  *
- * Steps: Dob -> (UnderageStop) -> Policies -> Account -> Location -> Profile -> grid.
- * An underage visitor is stopped before any account data is collected. Everything
- * after Account is skippable — "do it all later" lands on the grid in seconds.
+ * Steps: Dob -> (UnderageStop) -> Policies -> Account -> VerifyEmail -> Location -> Profile -> grid.
+ * An underage visitor is stopped before any account data is collected. Account starts the
+ * sign-up without creating anything; VerifyEmail takes the emailed 6-digit code, and only then
+ * does the account (and the session) exist ("Membership privacy": the server answers the same
+ * whether or not the address already has an account, so the copy here never says which).
+ * Everything after VerifyEmail is skippable — "do it all later" lands on the grid in seconds.
  * Sign-in mode bypasses the stepper entirely.
  *
- * Resume (spec "app closed mid-signup"): signup flips the device-local
- * [OnboardingProgressStore] `completed` flag false (pinned to the signing-up
- * account); [resumeIfNeeded] re-enters at the Profile step on next launch until
- * the user finishes, which flips the flag back. Plain sign-ins never see the
- * stepper: the flag defaults true and only signup clears it.
+ * Resume (spec "app closed mid-signup"): before the code, [resumePendingSignupIfNeeded]
+ * reopens the code step for the address that started, shown masked (the [PendingSignupStore]
+ * keeps the address and the server's sign-up token, never the password: encrypted on Android,
+ * for the tab's session only on the web; after 24 hours it starts over). After the code,
+ * the device-local [OnboardingProgressStore] `completed` flag is false (pinned to the new
+ * account); [resumeIfNeeded] re-enters at the Profile step on next launch until the user
+ * finishes, which flips the flag back. Plain sign-ins never see the stepper: the flag defaults
+ * true and only sign-up clears it.
  */
 class OnboardingStateHolder(
     private val authStateHolder: AuthStateHolder,
     private val profileRepository: OnboardingProfileRepository,
     private val progressStore: OnboardingProgressStore,
+    private val pendingSignupStore: PendingSignupStore,
     private val todayProvider: () -> LocalDate = ::systemToday,
+    private val nowEpochMillis: () -> Long = ::systemNowEpochMillis,
 ) {
     private val _state = MutableStateFlow(OnboardingUiState())
     val state: StateFlow<OnboardingUiState> = _state.asStateFlow()
@@ -49,6 +60,15 @@ class OnboardingStateHolder(
     // Per-process guard so a nudge impression counts one settings session, not one
     // per recomposition of the banner.
     private var photoNudgeCountedThisSession = false
+
+    // The started sign-up's token (random, from the server): needed with the code. Kept out of
+    // the UI state; persisted only in the device-local progress store for resume.
+    private var pendingSignupToken: String? = null
+
+    // Failed code submissions for the current pending sign-up, counted here (the server answers every
+    // failure the same way and says nothing about its own count). At the server's budget the code
+    // step stops offering Verify and offers "Start again" instead.
+    private var failedCodeSubmissions = 0
 
     fun startCreateAccount() {
         _state.update {
@@ -60,8 +80,22 @@ class OnboardingStateHolder(
         }
     }
 
-    fun cancelToSignIn() {
-        _state.update { it.copy(active = false, step = OnboardingStep.Dob, errorMessage = null) }
+    /** Back to sign-in; a sign-up still waiting for its code is dropped so the next launch doesn't reopen it. */
+    suspend fun cancelToSignIn() {
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
+        clearPendingSignup()
+        _state.update {
+            it.copy(
+                active = false,
+                step = OnboardingStep.Dob,
+                signupCode = "",
+                signupAttemptsSpent = false,
+                signupNotice = null,
+                accountNotice = null,
+                errorMessage = null,
+            )
+        }
     }
 
     fun updateDobDay(value: String) {
@@ -129,7 +163,10 @@ class OnboardingStateHolder(
         _state.update { it.copy(displayName = value.take(DISPLAY_NAME_MAX_LENGTH), errorMessage = null) }
     }
 
-    /** Creates the account; on success enters the skippable post-auth steps. */
+    /**
+     * Starts the sign-up; on success moves to the code step. Nothing exists on the server yet
+     * and no session is created; the password is dropped from memory here.
+     */
     suspend fun submitAccount() {
         val current = _state.value
         if (current.isSubmitting) return
@@ -153,7 +190,7 @@ class OnboardingStateHolder(
         }
 
         _state.update { it.copy(isSubmitting = true, errorMessage = null) }
-        val created =
+        val started =
             authStateHolder.signupWithDetails(
                 email = email,
                 password = current.password,
@@ -164,16 +201,21 @@ class OnboardingStateHolder(
                 acceptedTerms = current.acceptedTerms,
                 acceptedPrivacy = current.acceptedPrivacy,
             )
-        if (created) {
-            markOnboardingInProgress(
-                authStateHolder.state.value.session
-                    ?.userId,
-            )
+        if (started != null) {
+            pendingSignupToken = started.signupToken
+            failedCodeSubmissions = 0
+            savePendingSignup(email = email, signupToken = started.signupToken)
             _state.update {
                 it.copy(
                     isSubmitting = false,
+                    email = email,
+                    emailShownMasked = false,
                     password = "",
-                    step = OnboardingStep.Location,
+                    signupCode = "",
+                    signupNotice = null,
+                    accountNotice = null,
+                    signupAttemptsSpent = false,
+                    step = OnboardingStep.VerifyEmail,
                 )
             }
         } else {
@@ -183,6 +225,118 @@ class OnboardingStateHolder(
                     errorMessage = authStateHolder.state.value.errorMessage,
                 )
             }
+        }
+    }
+
+    fun updateSignupCode(value: String) {
+        _state.update { it.copy(signupCode = value.digits(SIGNUP_CODE_LENGTH), errorMessage = null) }
+    }
+
+    /** Checks the emailed code; on success the account and session exist and the skippable steps start. */
+    suspend fun verifySignupCode() {
+        val current = _state.value
+        if (current.isSubmitting || current.signupAttemptsSpent) return
+        val token = pendingSignupToken
+        if (token == null) {
+            restartSignup(SIGNUP_EXPIRED_MESSAGE)
+            return
+        }
+        if (current.signupCode.length != SIGNUP_CODE_LENGTH) {
+            _state.update { it.copy(errorMessage = "Enter the 6-digit code from the email.") }
+            return
+        }
+        _state.update { it.copy(isSubmitting = true, errorMessage = null, signupNotice = null) }
+        val verified = authStateHolder.verifySignup(email = current.email, code = current.signupCode, signupToken = token)
+        if (verified) {
+            pendingSignupToken = null
+            markOnboardingInProgress(
+                authStateHolder.state.value.session
+                    ?.userId,
+            )
+            _state.update {
+                it.copy(
+                    isSubmitting = false,
+                    signupCode = "",
+                    signupNotice = null,
+                    step = OnboardingStep.Location,
+                )
+            }
+        } else {
+            failedCodeSubmissions++
+            val spent = failedCodeSubmissions >= CODE_ATTEMPTS_PER_SIGNUP
+            _state.update {
+                it.copy(
+                    isSubmitting = false,
+                    signupCode = "",
+                    signupAttemptsSpent = spent,
+                    signupNotice = null,
+                    errorMessage = if (spent) ATTEMPTS_SPENT_MESSAGE else authStateHolder.state.value.errorMessage,
+                )
+            }
+        }
+    }
+
+    /**
+     * "Start again": a new sign-up for the same address (the old one may be out of guesses, or may
+     * never have been created if its email work was dropped). Back to email + password with the
+     * address kept; the password is not stored, so the person types it again.
+     */
+    suspend fun startSignupAgain() {
+        restartSignup(errorMessage = null)
+        _state.update { it.copy(accountNotice = START_AGAIN_NOTICE) }
+    }
+
+    /** "Send a new code". The server answers the same whether or not one goes out, and so does this. */
+    suspend fun resendSignupCode() {
+        val current = _state.value
+        if (current.isSubmitting || current.signupAttemptsSpent) return
+        val token = pendingSignupToken
+        if (token == null) {
+            restartSignup(SIGNUP_EXPIRED_MESSAGE)
+            return
+        }
+        _state.update { it.copy(isSubmitting = true, errorMessage = null, signupNotice = null) }
+        val sent = authStateHolder.resendSignupCode(email = current.email, signupToken = token)
+        _state.update {
+            if (sent) {
+                it.copy(isSubmitting = false, signupCode = "", signupNotice = RESENT_NOTICE)
+            } else {
+                it.copy(isSubmitting = false, errorMessage = authStateHolder.state.value.errorMessage)
+            }
+        }
+    }
+
+    /** "Use a different email": drops the started sign-up and goes back to email + password. */
+    suspend fun useDifferentEmail() {
+        restartSignup(errorMessage = null)
+    }
+
+    /**
+     * Pre-auth resume: an app killed between sign-up and the code reopens the code step for
+     * that address. A sign-up older than the server keeps it restarts cleanly (nothing to do).
+     */
+    suspend fun resumePendingSignupIfNeeded() {
+        if (_state.value.active) return
+        if (authStateHolder.state.value.session != null) return
+        val pending = runCatchingCancellable { pendingSignupStore.load() }.getOrNull() ?: return
+        if (nowEpochMillis() - pending.startedAtEpochMs >= PENDING_SIGNUP_LIFETIME_MILLIS) {
+            clearPendingSignup()
+            return
+        }
+        pendingSignupToken = pending.signupToken
+        failedCodeSubmissions = 0
+        _state.update {
+            it.copy(
+                active = true,
+                step = OnboardingStep.VerifyEmail,
+                email = pending.email,
+                // Whoever opens the app next may not be the person who started: never the full address.
+                emailShownMasked = true,
+                password = "",
+                signupCode = "",
+                signupNotice = null,
+                errorMessage = null,
+            )
         }
     }
 
@@ -247,6 +401,8 @@ class OnboardingStateHolder(
             authStateHolder.state.value.session
                 ?.userId ?: return
         val progress = progressStore.load()
+        // Signed in some other way while a sign-up waited for its code: that sign-up is moot here.
+        clearPendingSignup()
         if (progress.completed) return
         // The flag is device-local: only the account that started signup resumes.
         // Anyone else signing in on this device skips straight to the grid.
@@ -308,6 +464,39 @@ class OnboardingStateHolder(
                 progressStore.load().copy(completed = false, userId = userId),
             )
         }
+        clearPendingSignup()
+    }
+
+    private suspend fun savePendingSignup(
+        email: String,
+        signupToken: String,
+    ) {
+        runCatchingCancellable {
+            pendingSignupStore.save(PendingSignup(email = email, signupToken = signupToken, startedAtEpochMs = nowEpochMillis()))
+        }
+    }
+
+    private suspend fun clearPendingSignup() {
+        runCatchingCancellable { pendingSignupStore.clear() }
+    }
+
+    private suspend fun restartSignup(errorMessage: String?) {
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
+        clearPendingSignup()
+        _state.update {
+            it.copy(
+                step = OnboardingStep.Account,
+                emailShownMasked = false,
+                password = "",
+                signupCode = "",
+                signupNotice = null,
+                accountNotice = null,
+                signupAttemptsSpent = false,
+                isSubmitting = false,
+                errorMessage = errorMessage,
+            )
+        }
     }
 
     private suspend fun markOnboardingCompleted() {
@@ -325,6 +514,17 @@ class OnboardingStateHolder(
         const val MIN_PASSWORD_LENGTH = 12
         const val MAX_PHOTO_NUDGE_SESSIONS = 3
         const val DISPLAY_NAME_MAX_LENGTH = 15
+        const val SIGNUP_CODE_LENGTH = 6
+
+        /** The server keeps a started sign-up this long (EmailSignupService.PENDING_LIFETIME). */
+        const val PENDING_SIGNUP_LIFETIME_MILLIS = 24L * 60 * 60 * 1_000
+        const val RESENT_NOTICE = "If this address can be used, a new code is on its way. Use the newest one."
+        const val SIGNUP_EXPIRED_MESSAGE = "That sign-up has expired. Enter your email again to get a new code."
+
+        /** The server's guess budget per sign-up (EmailSignupService.MAX_ATTEMPTS). */
+        const val CODE_ATTEMPTS_PER_SIGNUP = 5
+        const val ATTEMPTS_SPENT_MESSAGE = "That's too many tries for this code. Start again to get a new one."
+        const val START_AGAIN_NOTICE = "Enter your password again and we'll send a new code."
 
         /**
          * Strict calendar parse of the typed DD/MM/YYYY fields: real day for the
@@ -366,6 +566,9 @@ class OnboardingStateHolder(
 @OptIn(ExperimentalTime::class)
 private fun systemToday(): LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
 
+@OptIn(ExperimentalTime::class)
+private fun systemNowEpochMillis(): Long = Clock.System.now().toEpochMilliseconds()
+
 /** Calendar-correct age gate: 18 exactly on the 18th birthday, not the day before. */
 internal fun LocalDate.isAtLeastYearsOld(
     years: Int,
@@ -386,6 +589,7 @@ enum class OnboardingStep {
     UnderageStop,
     Policies,
     Account,
+    VerifyEmail,
     Location,
     Profile,
 }
@@ -400,6 +604,15 @@ data class OnboardingUiState(
     val dob: LocalDate? = null,
     val email: String = "",
     val password: String = "",
+    // On a resumed code step the address is shown masked ([verifyEmailLabel]).
+    val emailShownMasked: Boolean = false,
+    val signupCode: String = "",
+    // A neutral "new code is on its way" line on the code step; never says whether the address has an account.
+    val signupNotice: String? = null,
+    // The code step's guesses for this sign-up are used up: offer "Start again" instead of Verify.
+    val signupAttemptsSpent: Boolean = false,
+    // A neutral line on the Account step after "Start again".
+    val accountNotice: String? = null,
     val acceptedTerms: Boolean = false,
     val acceptedPrivacy: Boolean = false,
     val displayName: String = "",
@@ -409,6 +622,10 @@ data class OnboardingUiState(
 ) {
     val dobComplete: Boolean
         get() = dobDay.isNotEmpty() && dobMonth.isNotEmpty() && dobYear.length == 4
+
+    /** The address the code step names: in full right after sign-up, masked after a resume. */
+    val verifyEmailLabel: String
+        get() = if (emailShownMasked) maskEmailAddress(email) else email
 }
 
 interface OnboardingProfileRepository {

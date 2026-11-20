@@ -15,6 +15,15 @@ private fun localStorageSetItem(
 
 private fun localStorageRemoveItem(key: String): Unit = js("window.localStorage.removeItem(key)")
 
+private fun sessionStorageGetItem(key: String): String? = js("window.sessionStorage.getItem(key)")
+
+private fun sessionStorageSetItem(
+    key: String,
+    value: String,
+): Unit = js("window.sessionStorage.setItem(key, value)")
+
+private fun sessionStorageRemoveItem(key: String): Unit = js("window.sessionStorage.removeItem(key)")
+
 internal fun windowLocationHostname(): String = js("window.location.hostname")
 
 // Optional prod API origin injected by index.html at deploy time (no Wasm rebuild). Empty/unset -> null.
@@ -122,6 +131,25 @@ internal object BrowserLocalStorage {
 
     fun remove(key: String) {
         runCatching { localStorageRemoveItem(key) }
+    }
+}
+
+/**
+ * Browser `sessionStorage`: like [BrowserLocalStorage] but scoped to the tab and gone when it
+ * closes. For what must not outlive the visit (a sign-up waiting for its emailed code).
+ */
+internal object BrowserSessionStorage {
+    fun get(key: String): String? = runCatching { sessionStorageGetItem(key) }.getOrNull()
+
+    fun set(
+        key: String,
+        value: String,
+    ) {
+        runCatching { sessionStorageSetItem(key, value) }
+    }
+
+    fun remove(key: String) {
+        runCatching { sessionStorageRemoveItem(key) }
     }
 }
 

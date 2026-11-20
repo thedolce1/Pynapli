@@ -6,7 +6,11 @@ import com.pynapli.shared.network.dto.AccountAppealRequestDto
 import com.pynapli.shared.network.dto.AppealDto
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
+import com.pynapli.shared.network.dto.EmailSignupCodeResentDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.EmailSignupResendRequestDto
+import com.pynapli.shared.network.dto.EmailSignupStartedDto
+import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.PasswordChangeDto
 import com.pynapli.shared.network.dto.PasswordChangedDto
@@ -22,7 +26,15 @@ import com.pynapli.shared.network.dto.SignedOutDevicesDto
  * (which now composes the per-feature interfaces). Signatures are unchanged.
  */
 interface AuthApi {
-    suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto>
+    /**
+     * Starts email sign-up (ONBOARDING_AUTH_SPEC, "Membership privacy"): no session, the same answer
+     * whether or not the address has an account. The session comes from [verifyEmailSignup].
+     */
+    suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<EmailSignupStartedDto>
+
+    suspend fun verifyEmailSignup(request: EmailSignupVerifyRequestDto): AppResult<AuthSessionDto> = notSupported()
+
+    suspend fun resendEmailSignupCode(request: EmailSignupResendRequestDto): AppResult<EmailSignupCodeResentDto> = notSupported()
 
     suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto>
 

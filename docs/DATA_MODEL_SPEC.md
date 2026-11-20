@@ -27,7 +27,7 @@ every change must keep.
 
 | Domain | Tables |
 | --- | --- |
-| Accounts and auth | `users`, `auth_identities`, `user_sessions`, `password_reset_codes`, `account_device_links`, `account_data_export_requests`, `account_deletion_events` |
+| Accounts and auth | `users`, `auth_identities`, `user_sessions`, `password_reset_codes`, `pending_email_signups`, `account_device_links`, `account_data_export_requests`, `account_deletion_events` |
 | Profile and discovery | `profiles` (incl. structured lifestyle/logistics/intent tags), `discovery_settings`, `saved_grid_filters`, `saved_swipe_filters` |
 | Location and travel | `user_locations`, `travel_locations`, `travel_trips`, `travel_places`, `travel_places_dataset` |
 | Partner linking | `user_profile_links`, `linked_partner_benefits` (no writer; the partner benefit is computed live from links + subscriptions) |
@@ -55,6 +55,22 @@ every change must keep.
   sealed with AES-256-GCM under a key derived from that consumed token (never stored), so the blob is
   useless without the old token; revocation clears it. Password-reset codes are stored only as
   `SHA-256(userId:code)`.
+- **Email sign-up is verified first** (V118, [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#email-sign-up-membership-privacy)).
+  `pending_email_signups` holds a started sign-up for an address with no account: **one row per
+  sign-up token** (unique `signup_token_hash`; at most 20 live per `email_hash`, never replaced or
+  evicted), the password hash, birthdate, acceptance time and Terms/Privacy versions,
+  `SHA-256(id:code)`, the code's expiry (30 min), `codes_issued` (at most 3), `attempts` (the lifetime
+  guess budget, 5, spent before each comparison, never reset; a resend refuses once it is spent) and
+  `expires_at` (24 h). A pool of 64 permanent **placeholder rows** (ids `UUID(0, 0..63)`, `expires_at`
+  infinity, hashes in the real format of fixed strings that match nothing) takes the attempt write of
+  every verify that matches no live sign-up, one picked at random; they are exactly the rows that
+  never expire, and retention, the on-write sweep, verify's per-address delete and the per-address
+  count all leave them alone. No plaintext address, no location, no
+  profile, no device labels. Verify deletes the row and creates the account in one transaction;
+  verify deletes every row of the address; expired rows go on the next sign-up write and in the
+  data-retention job. A pending row can't sign
+  in and belongs to no account (out of export and deletion). `users.email_verified_at` is set for
+  accounts created through it; older accounts stay NULL and nothing is gated on it yet.
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
   the integrity of retained safety/legal records. In the same transaction, GDPR/CCPA erasure nulls
   identity hashes (`email_hash`, `phone_hash`, `firebase_uid`), clears `auth_identities` credentials

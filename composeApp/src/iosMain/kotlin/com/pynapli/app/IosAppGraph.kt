@@ -24,6 +24,7 @@ import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.iosRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
+import com.pynapli.shared.settings.SqlDelightPendingSignupStore
 import com.pynapli.shared.storage.IosPynapliDatabaseFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -134,6 +135,9 @@ class IosAppGraph(
             authStateHolder = authStateHolder,
             profileRepository = ApiOnboardingProfileRepository(apiClient),
             progressStore = SqlDelightOnboardingProgressStore(database),
+            // The platform default cipher (pass-through on iOS until the Keychain phase, like the
+            // session default); never the shell's Keychain cipher, whose single slot is the session's.
+            pendingSignupStore = SqlDelightPendingSignupStore(database),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */

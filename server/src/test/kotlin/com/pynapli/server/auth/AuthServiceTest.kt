@@ -6,7 +6,9 @@ import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.testsupport.CountingRateLimitRepository
+import com.pynapli.server.testsupport.InMemoryEmailSignupRepository
 import com.pynapli.server.testsupport.denyingRateLimitService
+import com.pynapli.server.testsupport.signUpVerified
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -30,9 +32,10 @@ class AuthServiceTest {
     @Test
     fun signupCreatesSessionAndMeCanAuthenticate() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
 
-            val session = signup(service, deviceId = "device-1", platform = "android", appVersion = "0.1")
+            val session = signup(service, repository, deviceId = "device-1", platform = "android", appVersion = "0.1")
 
             val user = service.authenticate(session.accessToken)
 
@@ -43,8 +46,9 @@ class AuthServiceTest {
     @Test
     fun loginRejectsWrongPassword() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
-            signup(service)
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            signup(service, repository)
 
             val error =
                 assertFailsWith<AuthException> {
@@ -57,8 +61,9 @@ class AuthServiceTest {
     @Test
     fun refreshRotatesTokens() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
-            val session = signup(service)
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            val session = signup(service, repository)
 
             val refreshed = service.refresh(session.refreshToken)
 
@@ -70,8 +75,9 @@ class AuthServiceTest {
     @Test
     fun aRetriedRefreshWithTheConsumedTokenReturnsTheSameSession() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
-            val session = signup(service)
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            val session = signup(service, repository)
 
             val refreshed = service.refresh(session.refreshToken)
             val retried = service.refresh(session.refreshToken)
@@ -84,8 +90,9 @@ class AuthServiceTest {
     @Test
     fun refreshInvalidatesCachedOldAccessToken() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
-            val session = signup(service)
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            val session = signup(service, repository)
             service.authenticate(session.accessToken)
 
             service.refresh(session.refreshToken)
@@ -100,8 +107,9 @@ class AuthServiceTest {
     @Test
     fun logoutInvalidatesCachedAccessToken() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
-            val session = signup(service)
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            val session = signup(service, repository)
             service.authenticate(session.accessToken)
 
             assertEquals(true, service.logout(session.accessToken))
@@ -118,7 +126,7 @@ class AuthServiceTest {
         runBlocking {
             val repository = InMemoryAuthRepository()
             val service = AuthService(repository)
-            val session = signup(service)
+            val session = signup(service, repository)
             val userId = UUID.fromString(session.user.userId)
             service.authenticate(session.accessToken)
             repository.setUserStatus(userId, "deleted")
@@ -137,7 +145,7 @@ class AuthServiceTest {
         runBlocking {
             val repository = InMemoryAuthRepository()
             val service = AuthService(repository)
-            val session = signup(service)
+            val session = signup(service, repository)
             repository.setUserStatus(UUID.fromString(session.user.userId), "suspended")
 
             val error =
@@ -151,11 +159,12 @@ class AuthServiceTest {
     @Test
     fun shortPasswordIsRejected() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
 
             val error =
                 assertFailsWith<AuthException> {
-                    signup(service, password = "short")
+                    signup(service, repository, password = "short")
                 }
 
             assertEquals("PASSWORD_TOO_SHORT", error.code)
@@ -167,7 +176,7 @@ class AuthServiceTest {
             val repository = InMemoryAuthRepository()
             val service = AuthService(repository)
 
-            val session = signup(service, birthdate = "1990-05-13")
+            val session = signup(service, repository, birthdate = "1990-05-13")
             val profile = repository.signupProfiles.getValue(UUID.fromString(session.user.userId))
 
             assertEquals(LocalDate.parse("1990-05-13"), profile.birthdate)
@@ -179,11 +188,12 @@ class AuthServiceTest {
     @Test
     fun signupRequiresBirthdate() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
 
             val error =
                 assertFailsWith<AuthException> {
-                    signup(service, birthdate = null)
+                    signup(service, repository, birthdate = null)
                 }
 
             assertEquals("BIRTHDATE_REQUIRED", error.code)
@@ -192,11 +202,12 @@ class AuthServiceTest {
     @Test
     fun signupRejectsUnderageBirthdate() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
 
             val error =
                 assertFailsWith<AuthException> {
-                    signup(service, birthdate = "2010-01-01")
+                    signup(service, repository, birthdate = "2010-01-01")
                 }
 
             assertEquals("AGE_RESTRICTED", error.code)
@@ -205,19 +216,20 @@ class AuthServiceTest {
     @Test
     fun signupRequiresAgeAndTermsAcceptance() =
         runBlocking {
-            val service = AuthService(InMemoryAuthRepository())
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
 
             val adultError =
                 assertFailsWith<AuthException> {
-                    signup(service, confirmedAdult = false)
+                    signup(service, repository, confirmedAdult = false)
                 }
             val termsError =
                 assertFailsWith<AuthException> {
-                    signup(service, acceptedTerms = false)
+                    signup(service, repository, acceptedTerms = false)
                 }
             val privacyError =
                 assertFailsWith<AuthException> {
-                    signup(service, acceptedPrivacy = false)
+                    signup(service, repository, acceptedPrivacy = false)
                 }
 
             assertEquals("ADULT_CONFIRMATION_REQUIRED", adultError.code)
@@ -233,7 +245,7 @@ class AuthServiceTest {
 
             val error =
                 assertFailsWith<AuthException> {
-                    signup(service)
+                    signup(service, repository, rateLimitService = denyingRateLimitService())
                 }
 
             assertEquals("RATE_LIMITED", error.code)
@@ -259,21 +271,22 @@ class AuthServiceTest {
         runBlocking {
             val ledger = InMemoryDeviceFarmRepository()
             val publisher = RecordingDeviceRiskSignalPublisher()
+            val repository = InMemoryAuthRepository()
             val service =
                 AuthService(
-                    InMemoryAuthRepository(),
+                    repository,
                     deviceFarmRepository = ledger,
                     deviceRiskSignalPublisher = publisher,
                 )
 
             // First three accounts on the same device stay under the threshold (4).
-            signup(service, email = "farm1@example.com", deviceId = "farm-device")
-            signup(service, email = "farm2@example.com", deviceId = "farm-device")
-            signup(service, email = "farm3@example.com", deviceId = "farm-device")
+            signup(service, repository, email = "farm1@example.com", deviceId = "farm-device")
+            signup(service, repository, email = "farm2@example.com", deviceId = "farm-device")
+            signup(service, repository, email = "farm3@example.com", deviceId = "farm-device")
             assertEquals(0, publisher.signals.size)
 
             // The fourth account from the same device crosses the threshold and raises the signal.
-            signup(service, email = "farm4@example.com", deviceId = "farm-device")
+            signup(service, repository, email = "farm4@example.com", deviceId = "farm-device")
             assertEquals(1, publisher.signals.size)
             assertEquals(4, publisher.signals.single().distinctAccountCount)
             assertEquals(24L, publisher.signals.single().windowHours)
@@ -285,9 +298,10 @@ class AuthServiceTest {
             val metrics =
                 com.pynapli.server.metrics
                     .ProductMetrics()
-            val service = AuthService(InMemoryAuthRepository(), productMetrics = metrics)
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository, productMetrics = metrics)
 
-            signup(service, email = "kpi@example.com", password = "correct horse battery")
+            signup(service, repository, email = "kpi@example.com", password = "correct horse battery")
             service.loginEmail("kpi@example.com", "correct horse battery", null, null, null)
 
             assertEquals(1, metrics.countFor(com.pynapli.server.metrics.ProductMetrics.SIGNUP))
@@ -299,21 +313,24 @@ class AuthServiceTest {
         runBlocking {
             val ledger = InMemoryDeviceFarmRepository()
             val publisher = RecordingDeviceRiskSignalPublisher()
+            val repository = InMemoryAuthRepository()
             val service =
                 AuthService(
-                    InMemoryAuthRepository(),
+                    repository,
                     deviceFarmRepository = ledger,
                     deviceRiskSignalPublisher = publisher,
                 )
 
-            repeat(6) { index -> signup(service, email = "nodevice$index@example.com", deviceId = null) }
+            repeat(6) { index -> signup(service, repository, email = "nodevice$index@example.com", deviceId = null) }
 
             assertEquals(0, publisher.signals.size)
         }
 }
 
+/** An account through the real (in-memory) verified email sign-up, then its first session. */
 private suspend fun signup(
     service: AuthService,
+    repository: InMemoryAuthRepository,
     email: String = "alex@example.com",
     password: String = "correct horse battery",
     birthdate: String? = "1990-01-01",
@@ -323,16 +340,21 @@ private suspend fun signup(
     deviceId: String? = null,
     platform: String? = null,
     appVersion: String? = null,
-) = service.signupEmail(
+    rateLimitService: RateLimitService? = null,
+    passwordHasher: PasswordHasher = PasswordHasher(iterations = 1_000),
+) = service.signUpVerified(
     email = email,
     password = password,
     birthdate = birthdate,
-    confirmedAdult = confirmedAdult,
-    acceptedTerms = acceptedTerms,
-    acceptedPrivacy = acceptedPrivacy,
     deviceId = deviceId,
     platform = platform,
     appVersion = appVersion,
+    repository = InMemoryEmailSignupRepository(repository),
+    rateLimitService = rateLimitService,
+    passwordHasher = passwordHasher,
+    confirmedAdult = confirmedAdult,
+    acceptedTerms = acceptedTerms,
+    acceptedPrivacy = acceptedPrivacy,
 )
 
 private class InMemoryAuthRepository : AuthRepository {
@@ -520,24 +542,22 @@ private class RecordingDeviceRiskSignalPublisher : com.pynapli.server.safety.Dev
 
 class AuthLoginRateLimitTest {
     private val limits = CountingRateLimitRepository()
+    private val rateLimits = RateLimitService(limits)
+    private val accounts = InMemoryAuthRepository()
     private val service =
         AuthService(
-            repository = InMemoryAuthRepository(),
+            repository = accounts,
             passwordHasher = PasswordHasher(iterations = 1_000),
-            rateLimitService = RateLimitService(limits),
+            rateLimitService = rateLimits,
         )
 
+    // Sign-up shares the limiter, so the Redis-down case below covers it too.
     private suspend fun signup() =
-        service.signupEmail(
+        service.signUpVerified(
             email = EMAIL,
             password = PASSWORD,
-            birthdate = "1990-01-01",
-            confirmedAdult = true,
-            acceptedTerms = true,
-            acceptedPrivacy = true,
-            deviceId = null,
-            platform = null,
-            appVersion = null,
+            repository = InMemoryEmailSignupRepository(accounts),
+            rateLimitService = rateLimits,
         )
 
     private suspend fun login(
@@ -627,7 +647,7 @@ class LoginMembershipOracleTest {
     private val repository = InMemoryAuthRepository()
     private val service = AuthService(repository, passwordHasher = hasher)
 
-    private suspend fun signupMember() = signup(service, email = MEMBER, password = PASSWORD)
+    private suspend fun signupMember() = signup(service, repository, email = MEMBER, password = PASSWORD, passwordHasher = hasher)
 
     @Test
     fun anUnknownAddressCostsOnePasswordCheckAtTheCurrentParameters() =
@@ -649,7 +669,7 @@ class LoginMembershipOracleTest {
     fun anUnknownAddressGetsTheWrongPasswordResponseFieldForField() =
         testApplication {
             signupMember()
-            repository.setUserStatus(UUID.fromString(signup(service, email = SUSPENDED, password = PASSWORD).user.userId), "suspended")
+            repository.setUserStatus(UUID.fromString(signup(service, repository, email = SUSPENDED, password = PASSWORD, passwordHasher = hasher).user.userId), "suspended")
             application {
                 configureSerialization()
                 configureStatusPages()

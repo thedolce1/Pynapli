@@ -5,7 +5,7 @@ description: Run Pynapli locally — infra, server, seed data, dev login, web/de
 
 # Local dev environment
 
-Docker infra, server start, seed script, dev login and health checks: `README.md` ("Local Prerequisites" onward). Dev login: `dev@pynapli.local` / `PynapliDevPass123!` (after `.\scripts\seed-dev-data.ps1`; add `-SetAndroidEmulatorLocation` to set emulator GPS).
+Docker infra, server start, seed script, dev login and health checks: `README.md` ("Local Prerequisites" onward). Dev login: `dev@pynapli.local` / `PynapliDevPass123!` (after `.\scripts\seed-dev-data.ps1`; add `-SetAndroidEmulatorLocation` to set emulator GPS). Seeding, load tests and QA scripts need the server started with `$env:PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED = 'true'` (dev sign-up routes, off by default, loopback only); restart without it before `scripts/start-demo-tunnel.ps1`.
 
 Dev shells not in the README:
 

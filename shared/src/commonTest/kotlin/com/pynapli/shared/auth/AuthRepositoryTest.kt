@@ -29,6 +29,8 @@ import com.pynapli.shared.network.dto.DeleteAccountResponseDto
 import com.pynapli.shared.network.dto.DismissActivityEventResponseDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.EmailSignupStartedDto
+import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
@@ -103,16 +105,17 @@ class AuthRepositoryTest {
         }
 
     @Test
-    fun signupPersistsReturnedSession() =
+    fun signupStoresNoSessionAndVerifyStoresTheOneItReturns() =
         runTest {
             val sessionStore = InMemorySessionStore()
             val apiClient =
                 FakeApiClient(
-                    signupResult = AppResult.Success(testSession("access-2", "refresh-2")),
+                    signupResult = AppResult.Success(EmailSignupStartedDto(signupToken = "signup-token")),
+                    verifyResult = AppResult.Success(testSession("access-2", "refresh-2")),
                 )
             val repository = AuthRepository(apiClient, sessionStore)
 
-            val result =
+            val started =
                 repository.signupEmail(
                     email = "maya@example.com",
                     password = "correct horse battery",
@@ -124,13 +127,31 @@ class AuthRepositoryTest {
                     appVersion = "0.1.0",
                 )
 
-            val success = assertIs<AppResult.Success<StoredSession>>(result)
-            assertEquals("access-2", success.value.accessToken)
-            assertEquals("refresh-2", sessionStore.currentSession()?.refreshToken)
+            assertEquals("signup-token", assertIs<AppResult.Success<EmailSignupStartedDto>>(started).value.signupToken)
+            assertNull(sessionStore.currentSession(), "starting sign-up must not create a session")
             assertEquals("1990-01-01", apiClient.lastSignupRequest?.birthdate)
             assertEquals(true, apiClient.lastSignupRequest?.confirmedAdult)
             assertEquals(true, apiClient.lastSignupRequest?.acceptedTerms)
             assertEquals(true, apiClient.lastSignupRequest?.acceptedPrivacy)
+
+            val verified = repository.verifyEmailSignup("maya@example.com", "123456", "signup-token", "android", "0.1.0", deviceId = "install-abc")
+
+            assertEquals("access-2", assertIs<AppResult.Success<StoredSession>>(verified).value.accessToken)
+            assertEquals("refresh-2", sessionStore.currentSession()?.refreshToken)
+            assertEquals(EmailSignupVerifyRequestDto("maya@example.com", "123456", "signup-token", "install-abc", "android", "0.1.0"), apiClient.lastVerifyRequest)
+        }
+
+    @Test
+    fun aFailedVerifyStoresNothing() =
+        runTest {
+            val sessionStore = InMemorySessionStore()
+            val apiClient = FakeApiClient(verifyResult = AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right.")))
+            val repository = AuthRepository(apiClient, sessionStore)
+
+            val result = repository.verifyEmailSignup("maya@example.com", "000000", "signup-token", "android", "0.1.0")
+
+            assertIs<AppResult.Failure>(result)
+            assertNull(sessionStore.currentSession())
         }
 
     @Test
@@ -138,7 +159,7 @@ class AuthRepositoryTest {
         runTest {
             val apiClient =
                 FakeApiClient(
-                    signupResult = AppResult.Success(testSession("a", "r")),
+                    signupResult = AppResult.Success(EmailSignupStartedDto(signupToken = "t")),
                     loginResult = AppResult.Success(testSession("a", "r")),
                 )
             val repository = AuthRepository(apiClient, InMemorySessionStore())
@@ -345,7 +366,8 @@ private class InMemorySessionStore : SessionStore {
 }
 
 private class FakeApiClient(
-    private val signupResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
+    private val signupResult: AppResult<EmailSignupStartedDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
+    private val verifyResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
     private val loginResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
     private val logoutResult: AppResult<LogoutResponseDto> = AppResult.Success(LogoutResponseDto(loggedOut = true)),
     private val meResult: AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented.")),
@@ -357,9 +379,17 @@ private class FakeApiClient(
     var lastLoginRequest: EmailLoginRequestDto? = null
         private set
 
-    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> {
+    var lastVerifyRequest: EmailSignupVerifyRequestDto? = null
+        private set
+
+    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<EmailSignupStartedDto> {
         lastSignupRequest = request
         return signupResult
+    }
+
+    override suspend fun verifyEmailSignup(request: EmailSignupVerifyRequestDto): AppResult<AuthSessionDto> {
+        lastVerifyRequest = request
+        return verifyResult
     }
 
     override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> {

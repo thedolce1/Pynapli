@@ -5,7 +5,11 @@ import com.pynapli.shared.network.dto.AccountAppealRequestDto
 import com.pynapli.shared.network.dto.AppealDto
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
+import com.pynapli.shared.network.dto.EmailSignupCodeResentDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.EmailSignupResendRequestDto
+import com.pynapli.shared.network.dto.EmailSignupStartedDto
+import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.PasswordChangeDto
 import com.pynapli.shared.network.dto.PasswordChangedDto
@@ -21,7 +25,11 @@ import io.ktor.http.HttpMethod
 internal class KtorAuthApi(
     private val support: KtorApiSupport,
 ) : AuthApi {
-    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> = support.postJson("/v1/auth/email/signup", request)
+    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<EmailSignupStartedDto> = support.postJson("/v1/auth/email/signup", request)
+
+    override suspend fun verifyEmailSignup(request: EmailSignupVerifyRequestDto): AppResult<AuthSessionDto> = support.postJson("/v1/auth/email/signup/verify", request)
+
+    override suspend fun resendEmailSignupCode(request: EmailSignupResendRequestDto): AppResult<EmailSignupCodeResentDto> = support.postJson("/v1/auth/email/signup/resend", request)
 
     override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> = support.postJson("/v1/auth/email/login", request)
 

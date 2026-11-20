@@ -6,7 +6,11 @@ import com.pynapli.shared.network.ProfileApi
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
+import com.pynapli.shared.network.dto.EmailSignupCodeResentDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.EmailSignupResendRequestDto
+import com.pynapli.shared.network.dto.EmailSignupStartedDto
+import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
 import com.pynapli.shared.network.dto.PasswordResetDto
 import com.pynapli.shared.network.dto.PasswordResetRequestDto
 import com.pynapli.shared.network.dto.PasswordResetRequestedDto
@@ -72,6 +76,11 @@ class AuthRepository(
         return result.persistSession()
     }
 
+    /**
+     * Starts email sign-up. No session yet: the server emails a code (or, for an address that already
+     * has an account, a notice) and answers the same either way. Keep the returned signup token for
+     * [verifyEmailSignup] and [resendEmailSignupCode]; it never leaves the device otherwise.
+     */
     suspend fun signupEmail(
         email: String,
         password: String,
@@ -82,23 +91,47 @@ class AuthRepository(
         platform: String,
         appVersion: String,
         deviceId: String? = null,
-    ): AppResult<StoredSession> {
-        val result =
-            authApi.emailSignup(
-                EmailSignupRequestDto(
+    ): AppResult<EmailSignupStartedDto> =
+        authApi.emailSignup(
+            EmailSignupRequestDto(
+                email = email,
+                password = password,
+                birthdate = birthdate,
+                confirmedAdult = confirmedAdult,
+                acceptedTerms = acceptedTerms,
+                acceptedPrivacy = acceptedPrivacy,
+                deviceId = deviceId,
+                platform = platform,
+                appVersion = appVersion,
+            ),
+        )
+
+    /** Finishes sign-up with the emailed code: the account is created now and its session stored. */
+    suspend fun verifyEmailSignup(
+        email: String,
+        code: String,
+        signupToken: String,
+        platform: String,
+        appVersion: String,
+        deviceId: String? = null,
+    ): AppResult<StoredSession> =
+        authApi
+            .verifyEmailSignup(
+                EmailSignupVerifyRequestDto(
                     email = email,
-                    password = password,
-                    birthdate = birthdate,
-                    confirmedAdult = confirmedAdult,
-                    acceptedTerms = acceptedTerms,
-                    acceptedPrivacy = acceptedPrivacy,
+                    code = code,
+                    signupToken = signupToken,
                     deviceId = deviceId,
                     platform = platform,
                     appVersion = appVersion,
                 ),
-            )
-        return result.persistSession()
-    }
+            ).persistSession()
+
+    suspend fun resendEmailSignupCode(
+        email: String,
+        signupToken: String,
+        deviceId: String? = null,
+    ): AppResult<EmailSignupCodeResentDto> = authApi.resendEmailSignupCode(EmailSignupResendRequestDto(email = email, signupToken = signupToken, deviceId = deviceId))
 
     suspend fun submitAccountAppeal(
         email: String,

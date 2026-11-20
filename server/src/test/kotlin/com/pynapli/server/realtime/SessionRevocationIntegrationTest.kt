@@ -7,6 +7,7 @@ import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.moderation.AdminRiskService
 import com.pynapli.server.moderation.JdbcAdminRiskRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.header
@@ -46,7 +47,7 @@ class SessionRevocationIntegrationTest {
         revocationRelay = relay,
     )
 
-    private suspend fun AuthService.newSession(email: String): String = signupEmail(email, "revocation-pass-1", "1990-01-01", true, true, true, null, "android", "1.0").accessToken
+    private suspend fun AuthService.newSession(email: String): String = signUpVerified(email, "revocation-pass-1", platform = "android", appVersion = "1.0").accessToken
 
     @Test
     fun anOpenStreamClosesOnceItsSessionIsSignedOut() =
@@ -87,7 +88,7 @@ class SessionRevocationIntegrationTest {
     fun aBanClosesTheAccountsOpenStreamsAtOnceNotAtTheNextPeriodicCheck() =
         testApplication {
             val auth = authService()
-            val session = runBlocking { auth.signupEmail("banned-socket@example.com", "revocation-pass-1", "1990-01-01", true, true, true, null, "android", "1.0") }
+            val session = runBlocking { auth.signUpVerified("banned-socket@example.com", "revocation-pass-1", platform = "android", appVersion = "1.0") }
             val userId = UUID.fromString(session.user.userId)
             application {
                 installRealtimeWebSocketsIfNeeded()

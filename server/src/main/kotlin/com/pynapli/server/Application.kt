@@ -9,6 +9,7 @@ import com.pynapli.server.admin.configureAdminPartnerLinkReviewRoutes
 import com.pynapli.server.admin.configureAdminSubscriptionSupportRoutes
 import com.pynapli.server.admin.configureAdminUserLookupRoutes
 import com.pynapli.server.auth.configureAuthRoutes
+import com.pynapli.server.auth.configureEmailSignupRoutes
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.dependencies.ServerDependencies
 import com.pynapli.server.dependencies.closeDependenciesOnStop
@@ -171,6 +172,13 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         dependencies.signedInDevicesService,
         trustedProxyHops = dependencies.config.trustedProxyHops,
     )
+    dependencies.emailSignupService?.let { signup ->
+        configureEmailSignupRoutes(
+            signupService = signup,
+            trustedProxyHops = dependencies.config.trustedProxyHops,
+            devMailbox = dependencies.devSignupMailbox,
+        )
+    }
     configureAccountLifecycleRoutes(dependencies.authService, dependencies.accountLifecycleService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService, dependencies.requestProfilerFactory)
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)

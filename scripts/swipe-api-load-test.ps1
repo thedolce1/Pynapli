@@ -32,6 +32,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Accounts come from the local-only dev sign-up route, which is off by default: fail fast with the
+# instruction if the server wasn't started with PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliDevSignup.psm1") -Force -DisableNameChecking
+Assert-DevSignupShortcuts -BaseUrl $BaseUrl
+
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     throw "scripts/swipe-api-load-test.ps1 requires PowerShell 7+ for parallel execution."
 }
@@ -212,9 +217,11 @@ function New-LoadViewerSession {
     )
 
     $email = "swipe-load-$Index@pynapli.local"
+    # Local-only dev route: the public sign-up now only emails a code (ONBOARDING_AUTH_SPEC,
+    # "Membership privacy"). Verified account at once; 409 for an existing one; 404 off a local server.
     $signup = Invoke-PynapliJson `
         -Method POST `
-        -Path "/v1/auth/email/signup" `
+        -Path "/v1/dev/auth/email/signup" `
         -Body @{
             email = $email
             password = $Password

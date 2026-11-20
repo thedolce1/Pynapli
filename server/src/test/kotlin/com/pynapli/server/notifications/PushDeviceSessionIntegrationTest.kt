@@ -5,6 +5,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import kotlin.test.BeforeTest
@@ -23,7 +24,7 @@ class PushDeviceSessionIntegrationTest {
         PynapliTestDatabase.reset()
     }
 
-    private suspend fun signUp() = auth.signupEmail("push@example.com", "push-password-1", "1990-01-01", true, true, true, null, "android", "1.0")
+    private suspend fun signUp() = auth.signUpVerified("push@example.com", "push-password-1", platform = "android", appVersion = "1.0")
 
     private suspend fun register(
         userId: UUID,

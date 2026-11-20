@@ -7,6 +7,7 @@ import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
+import com.pynapli.shared.network.dto.EmailSignupStartedDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import kotlinx.coroutines.CoroutineStart
@@ -244,7 +245,7 @@ private class FakeRefreshApi(
         return refreshResult
     }
 
-    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<AuthSessionDto> = unimplemented()
+    override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<EmailSignupStartedDto> = unimplemented()
 
     override suspend fun emailLogin(request: EmailLoginRequestDto): AppResult<AuthSessionDto> = unimplemented()
 

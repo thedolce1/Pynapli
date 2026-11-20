@@ -7,6 +7,7 @@ import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.safety.RateLimitService
 import com.pynapli.server.testsupport.CountingRateLimitRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -71,16 +72,12 @@ class PasswordRecoveryIntegrationTest {
     }
 
     private suspend fun signUp(email: String = "reset@example.com") =
-        authService.signupEmail(
+        authService.signUpVerified(
             email = email,
             password = OLD_PASSWORD,
-            birthdate = "1990-01-01",
-            confirmedAdult = true,
-            acceptedTerms = true,
-            acceptedPrivacy = true,
-            deviceId = null,
             platform = "test",
             appVersion = "1",
+            passwordHasher = hasher,
         )
 
     private suspend fun signIn(

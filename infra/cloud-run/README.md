@@ -186,7 +186,11 @@ Silent defaults to set on purpose:
   connections against the Cloud SQL limit.
 
 Rejected outright in production: `PYNAPLI_DEV_STORE_PURCHASES_ENABLED`,
-`PYNAPLI_PLAY_STORE_SANDBOX_ENABLED`, `PYNAPLI_MEDIA_DEV_AUTO_APPROVE_UPLOADS`.
+`PYNAPLI_PLAY_STORE_SANDBOX_ENABLED`, `PYNAPLI_MEDIA_DEV_AUTO_APPROVE_UPLOADS`,
+`PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED`.
+
+Email: with no email provider wired, nobody can create an account (sign-up answers
+`503 SIGNUP_UNAVAILABLE`) or reset a password. See docs/PATH_TO_TESTERS.md step A6.
 
 ## Step 9: cost controls (do not skip)
 

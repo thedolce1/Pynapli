@@ -4,6 +4,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -40,8 +41,8 @@ class AccountDataExportContentsIntegrationTest {
     @Test
     fun theExportCoversEverySectionWithoutSecrets() =
         runBlocking<Unit> {
-            val me = auth.signupEmail("export@example.com", "export-password-1", "1990-01-01", true, true, true, null, "android", "1.0")
-            val other = auth.signupEmail("other@example.com", "export-password-1", "1990-01-01", true, true, true, null, "android", "1.0")
+            val me = auth.signUpVerified("export@example.com", "export-password-1", platform = "android", appVersion = "1.0")
+            val other = auth.signUpVerified("other@example.com", "export-password-1", platform = "android", appVersion = "1.0")
             val myId = UUID.fromString(me.user.userId)
             val otherId = UUID.fromString(other.user.userId)
             sql("INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action) VALUES (?, ?, ?, 'like')", UUID.randomUUID(), myId, otherId)

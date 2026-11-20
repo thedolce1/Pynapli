@@ -2,6 +2,7 @@ package com.pynapli.server.auth
 
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import kotlin.test.BeforeTest
@@ -24,7 +25,7 @@ class SignedInDevicesIntegrationTest {
         PynapliTestDatabase.reset()
     }
 
-    private suspend fun signUp(email: String) = authService.signupEmail(email, PASSWORD, "1990-01-01", true, true, true, deviceId = "phone", platform = "android", appVersion = "1.0")
+    private suspend fun signUp(email: String) = authService.signUpVerified(email, PASSWORD, deviceId = "phone", platform = "android", appVersion = "1.0")
 
     private suspend fun signIn(
         email: String,

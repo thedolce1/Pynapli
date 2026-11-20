@@ -18,6 +18,11 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Accounts come from the local-only dev sign-up route, which is off by default: fail fast with the
+# instruction if the server wasn't started with PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true.
+Import-Module (Join-Path $PSScriptRoot "lib\PynapliDevSignup.psm1") -Force -DisableNameChecking
+Assert-DevSignupShortcuts -BaseUrl $BaseUrl
 Add-Type -AssemblyName System.Drawing
 
 # Deterministic world: same names/positions/attributes on every run.
@@ -93,11 +98,17 @@ function Assert-Success {
     }
 }
 
+# Accounts come from the local-only dev sign-up route: the public /v1/auth/email/signup now only
+# emails a code (ONBOARDING_AUTH_SPEC, "Membership privacy"). The dev route creates a verified
+# account at once and answers 409 for an existing one; it exists only on a PYNAPLI_ENV=local server
+# with the "log" mailer and PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true, for direct loopback requests.
+# Demo flow: seed with the flag on, restart the server with it off, THEN start the tunnel
+# (scripts/start-demo-tunnel.ps1 refuses to publish a server that still serves these routes).
 function Get-DemoSession {
     param([string]$Email)
 
     $deviceId = "demo-$($Email.Split('@')[0])-$script:RunId"
-    $signup = Invoke-PynapliJson -Method POST -Path "/v1/auth/email/signup" -Body @{
+    $signup = Invoke-PynapliJson -Method POST -Path "/v1/dev/auth/email/signup" -Body @{
         email = $Email
         password = $Password
         birthdate = "1990-01-01"

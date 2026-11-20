@@ -51,6 +51,26 @@ class RouteSecurityMatrixTest {
         )
     }
 
+    @Test
+    fun devSignupShortcutsStayLocalOnly() {
+        val root = repositoryRoot()
+        val signupRoutes = root.resolve("server/src/main/kotlin/com/pynapli/server/auth/EmailSignupRoutes.kt").readText()
+        val signupDependencies = root.resolve("server/src/main/kotlin/com/pynapli/server/dependencies/EmailSignupDependencies.kt").readText()
+
+        assertTrue(
+            signupRoutes.contains("devMailbox?.let"),
+            "Dev sign-up routes should only be registered when the local mailbox is wired.",
+        )
+        assertTrue(
+            Regex("""if \(!call\.isDirectLoopbackRequest\(\)\)""").findAll(signupRoutes).count() == 2,
+            "Both dev sign-up routes must refuse anything but a direct loopback request.",
+        )
+        assertTrue(
+            signupDependencies.contains("localMailer?.takeIf { config.devSignupShortcutsAllowed() }"),
+            "The local mailbox must only be handed to the routes when the dev shortcuts are allowed.",
+        )
+    }
+
     private fun routeFiles(root: Path): List<Path> =
         Files
             .walk(root.resolve("server/src/main/kotlin/com/pynapli/server"))
@@ -73,7 +93,9 @@ class RouteSecurityMatrixTest {
     }
 
     private companion object {
-        private val EXPLICIT_PUBLIC_ROUTE_FILES = setOf("HealthRoutes.kt")
+        // EmailSignupRoutes: sign-up, verify and resend run before there is any account (rate-limited,
+        // membership-private); its dev helpers are local-only (see the test above).
+        private val EXPLICIT_PUBLIC_ROUTE_FILES = setOf("HealthRoutes.kt", "EmailSignupRoutes.kt")
 
         private val routeAuthGateRegex =
             Regex(

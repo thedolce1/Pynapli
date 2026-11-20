@@ -166,10 +166,15 @@ fun PynapliApp(
         }
 
         // Once the session is settled, re-enter an interrupted signup stepper and
-        // decide this session's add-a-photo nudge (ONBOARDING_AUTH_SPEC).
+        // decide this session's add-a-photo nudge (ONBOARDING_AUTH_SPEC). Signed out, a
+        // sign-up still waiting for its emailed code reopens on the code step.
         LaunchedEffect(authState.isCheckingSession, authState.authenticated, graph.onboardingStateHolder) {
-            if (!authState.isCheckingSession && authState.authenticated) {
-                graph.onboardingStateHolder?.onSessionReady()
+            if (!authState.isCheckingSession) {
+                if (authState.authenticated) {
+                    graph.onboardingStateHolder?.onSessionReady()
+                } else {
+                    graph.onboardingStateHolder?.resumePendingSignupIfNeeded()
+                }
             }
         }
 
@@ -211,12 +216,17 @@ fun PynapliApp(
                 onDobYearChanged = graph.onboardingStateHolder::updateDobYear,
                 onConfirmDob = graph.onboardingStateHolder::confirmDob,
                 onBackToDob = graph.onboardingStateHolder::backToDob,
-                onCancelToSignIn = graph.onboardingStateHolder::cancelToSignIn,
+                onCancelToSignIn = { scope.launch { graph.onboardingStateHolder.cancelToSignIn() } },
                 onAcceptPolicies = graph.onboardingStateHolder::acceptPolicies,
                 onBackToPolicies = graph.onboardingStateHolder::backToPolicies,
                 onEmailChanged = graph.onboardingStateHolder::updateEmail,
                 onPasswordChanged = graph.onboardingStateHolder::updatePassword,
                 onSubmitAccount = { scope.launch { graph.onboardingStateHolder.submitAccount() } },
+                onSignupCodeChanged = graph.onboardingStateHolder::updateSignupCode,
+                onVerifySignupCode = { scope.launch { graph.onboardingStateHolder.verifySignupCode() } },
+                onResendSignupCode = { scope.launch { graph.onboardingStateHolder.resendSignupCode() } },
+                onUseDifferentEmail = { scope.launch { graph.onboardingStateHolder.useDifferentEmail() } },
+                onStartSignupAgain = { scope.launch { graph.onboardingStateHolder.startSignupAgain() } },
                 onShareLocation = platform.onUseCurrentLocation,
                 onContinueFromLocation = graph.onboardingStateHolder::continueFromLocation,
                 onDisplayNameChanged = graph.onboardingStateHolder::updateDisplayName,

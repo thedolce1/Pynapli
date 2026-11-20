@@ -240,6 +240,11 @@ private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config
         message = "Production-like environments must not enable dev store purchases.",
     )
     require(
+        condition = !config.devSignupShortcutsEnabled,
+        code = "DEV_SIGNUP_SHORTCUTS_FORBIDDEN",
+        message = "Production-like environments must not enable the dev sign-up shortcuts.",
+    )
+    require(
         condition =
             config.discoveryCursorSecret.isStrongRuntimeSecret() &&
                 config.activityCursorSecret.isStrongRuntimeSecret() &&

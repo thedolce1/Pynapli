@@ -79,6 +79,12 @@ data class ServerConfig(
     val playStoreRtdnOidcAudience: String? = null,
     val playStoreRtdnOidcServiceAccountEmail: String? = null,
     val devStorePurchasesEnabled: Boolean = false,
+    // Local-only sign-up helpers for seeds and QA (`/v1/dev/auth/email/signup` creates a verified
+    // account at once; `/latest-code` reads the local file mailer's last code). Off by default
+    // everywhere (PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true turns it on), refused at startup in
+    // production-like environments, wired only when the environment is local and the local file
+    // mailer is in use, and served only to direct loopback requests without forwarding headers.
+    val devSignupShortcutsEnabled: Boolean = false,
     // Sandbox Play Billing verification: when enabled (and not production), sandbox-prefixed purchase
     // tokens are accepted by the real submit -> verify -> grant path WITHOUT Google creds, so end-to-end
     // receipt validation is provable in dev/QA. Opt-in; never selected in production.
@@ -396,6 +402,12 @@ data class ServerConfig(
                         .getenv("PYNAPLI_DEV_STORE_PURCHASES_ENABLED")
                         ?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
+                // Off unless asked for, even locally: a local server is often behind a demo tunnel.
+                devSignupShortcutsEnabled =
+                    System
+                        .getenv("PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED")
+                        ?.toBooleanStrictOrNull()
+                        ?: false,
                 playStoreSandboxEnabled =
                     System
                         .getenv("PYNAPLI_PLAY_STORE_SANDBOX_ENABLED")

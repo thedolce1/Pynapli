@@ -24,6 +24,8 @@ data class OnboardingProgress(
     val userId: String? = null,
     val photoNudgeDismissed: Boolean = false,
     val photoNudgeSessionsSeen: Int = 0,
+    // A sign-up waiting for its emailed code is NOT kept here: see PendingSignupStore, which each
+    // platform keeps as privately as it can (this blob is plain device storage, localStorage on web).
 )
 
 interface OnboardingProgressStore {

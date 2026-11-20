@@ -37,6 +37,7 @@ import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.androidRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
+import com.pynapli.shared.settings.SqlDelightPendingSignupStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -140,6 +141,8 @@ class AndroidAppGraph(
             // Dedicated store: onboarding progress must not share the AppSettings
             // blob that the server-backed settings sync read-merge-saves.
             progressStore = SqlDelightOnboardingProgressStore(database),
+            // A sign-up waiting for its code: encrypted with the session tokens' Keystore cipher.
+            pendingSignupStore = SqlDelightPendingSignupStore(database),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */

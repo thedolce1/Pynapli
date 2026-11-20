@@ -4,6 +4,7 @@ import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.security.PasswordHasher
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.signUpVerified
 import com.pynapli.shared.network.dto.PremiumInventoryType
 import com.pynapli.shared.network.dto.SubmitPlayStoreProductPurchaseRequestDto
 import com.pynapli.shared.network.dto.SubscriptionProductId
@@ -29,7 +30,7 @@ class PlayStoreProductPurchaseIntegrationTest {
         PynapliTestDatabase.reset()
     }
 
-    private suspend fun user(email: String) = UUID.fromString(auth.signupEmail(email, "store-password-1", "1990-01-01", true, true, true, null, "android", "1.0").user.userId)
+    private suspend fun user(email: String) = UUID.fromString(auth.signUpVerified(email, "store-password-1", platform = "android", appVersion = "1.0").user.userId)
 
     private fun purchase(
         productId: String = SubscriptionProductId.PINEAPPLE_LIKES_FIVE,
