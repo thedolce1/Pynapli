@@ -30,5 +30,4 @@ internal fun ConversationDto.actionablePartnerInvite(viewerUserId: String?): Par
 }
 
 /** The invited partner's name as the conversation shows it (they are an invited participant). */
-internal fun ConversationDto.invitedPartnerName(invite: PartnerChatInviteDto): String? =
-    participants.firstOrNull { it.userId == invite.invitedPartnerUserId }?.displayName
+internal fun ConversationDto.invitedPartnerName(invite: PartnerChatInviteDto): String? = participants.firstOrNull { it.userId == invite.invitedPartnerUserId }?.displayName

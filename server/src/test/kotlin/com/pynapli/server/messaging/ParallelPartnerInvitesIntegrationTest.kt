@@ -93,9 +93,27 @@ class ParallelPartnerInvitesIntegrationTest {
             assertEquals(listOf(jo.toString()), service.invites(jo, conversationId).map { it.invitedPartnerUserId })
             assertEquals(listOf(riley.toString()), service.invites(riley, conversationId).map { it.invitedPartnerUserId })
             // The single field older clients read is the invite each person answers.
-            assertEquals(jo.toString(), service.getConversationDetail(jo, conversationId).conversation.partnerInvite?.invitedPartnerUserId)
-            assertEquals(jo.toString(), service.getConversationDetail(sam, conversationId).conversation.partnerInvite?.invitedPartnerUserId)
-            assertEquals(riley.toString(), service.getConversationDetail(alex, conversationId).conversation.partnerInvite?.invitedPartnerUserId)
+            assertEquals(
+                jo.toString(),
+                service
+                    .getConversationDetail(jo, conversationId)
+                    .conversation.partnerInvite
+                    ?.invitedPartnerUserId,
+            )
+            assertEquals(
+                jo.toString(),
+                service
+                    .getConversationDetail(sam, conversationId)
+                    .conversation.partnerInvite
+                    ?.invitedPartnerUserId,
+            )
+            assertEquals(
+                riley.toString(),
+                service
+                    .getConversationDetail(alex, conversationId)
+                    .conversation.partnerInvite
+                    ?.invitedPartnerUserId,
+            )
         }
 
     @Test

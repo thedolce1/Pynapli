@@ -191,7 +191,9 @@ class PartnerInviteConsentIntegrationTest {
             val retried = service.acceptPartnerInvite(jo, conversationId)
             assertEquals(
                 ConversationParticipantStatus.ACTIVE,
-                retried.conversation.participants.single { it.userId == jo.toString() }.status,
+                retried.conversation.participants
+                    .single { it.userId == jo.toString() }
+                    .status,
             )
             assertEquals(PartnerChatInviteStatus.PENDING, service.inviteFor(riley, conversationId)?.thirdPartyStatus)
         }

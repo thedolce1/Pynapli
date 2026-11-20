@@ -122,7 +122,13 @@ class BringPartnerOfferIntegrationTest {
             assertEquals("Jo", samOffers.participantPartners.single().partnerDisplayName)
 
             // Only the read mark carries it: not the inbox list, not the plain detail read.
-            assertNull(service.listConversations(alex).items.single().partnerOffers)
+            assertNull(
+                service
+                    .listConversations(alex)
+                    .items
+                    .single()
+                    .partnerOffers,
+            )
             assertNull(service.getConversationDetail(alex, conversationId).conversation.partnerOffers)
         }
 
@@ -160,7 +166,12 @@ class BringPartnerOfferIntegrationTest {
             assertEquals(riley.toString(), service.offers(sam, conversationId)?.bringPartner?.partnerUserId)
 
             service.inviteLinkedPartnerToConversation(sam, conversationId)
-            assertEquals(2, service.getConversationDetail(alex, conversationId).conversation.partnerInvites.size)
+            assertEquals(
+                2,
+                service
+                    .getConversationDetail(alex, conversationId)
+                    .conversation.partnerInvites.size,
+            )
             assertNull(service.offers(alex, conversationId))
             assertNull(service.offers(sam, conversationId))
 
@@ -176,7 +187,9 @@ class BringPartnerOfferIntegrationTest {
             val all = service.acceptPartnerInvite(riley, conversationId)
             assertEquals(
                 setOf(ConversationParticipantStatus.ACTIVE),
-                all.conversation.participants.map { it.status }.toSet(),
+                all.conversation.participants
+                    .map { it.status }
+                    .toSet(),
             )
             assertEquals(4, all.conversation.participants.size)
             listOf(alex, sam, jo, riley).forEach { assertNull(service.offers(it, conversationId)) }
@@ -194,7 +207,13 @@ class BringPartnerOfferIntegrationTest {
             assertNull(service.offers(alex, conversationId)?.bringPartner)
             assertEquals(riley.toString(), service.offers(sam, conversationId)?.bringPartner?.partnerUserId)
             // Jo is no longer named to Sam either.
-            assertTrue(service.offers(sam, conversationId)?.participantPartners.orEmpty().isEmpty())
+            assertTrue(
+                service
+                    .offers(sam, conversationId)
+                    ?.participantPartners
+                    .orEmpty()
+                    .isEmpty(),
+            )
             // And the manual button stays hidden for Alex during the cooldown (server-decided).
             assertEquals(true, service.markConversationRead(alex, conversationId).ownPartnerInviteCoolingDown)
             assertEquals(false, service.markConversationRead(sam, conversationId).ownPartnerInviteCoolingDown)
@@ -223,7 +242,11 @@ class BringPartnerOfferIntegrationTest {
             sql("UPDATE profiles SET verified_at = now() WHERE user_id = '$alex'")
             assertEquals(
                 "Riley",
-                service.offers(alex, conversationId)?.participantPartners?.single()?.partnerDisplayName,
+                service
+                    .offers(alex, conversationId)
+                    ?.participantPartners
+                    ?.single()
+                    ?.partnerDisplayName,
             )
         }
 
@@ -236,7 +259,11 @@ class BringPartnerOfferIntegrationTest {
 
             assertEquals(
                 "Riley",
-                service.offers(alex, conversationId)?.participantPartners?.single()?.partnerDisplayName,
+                service
+                    .offers(alex, conversationId)
+                    ?.participantPartners
+                    ?.single()
+                    ?.partnerDisplayName,
             )
         }
 
@@ -386,8 +413,18 @@ class BringPartnerOfferIntegrationTest {
             service.inviteLinkedPartnerToConversation(sam, alexSam)
             assertNull(service.offers(jo, joSam))
             assertNull(service.offers(sam, joSam))
-            assertEquals(2, service.getConversationDetail(sam, alexSam).conversation.partnerInvites.size)
-            assertTrue(service.getConversationDetail(sam, joSam).conversation.partnerInvites.isEmpty())
+            assertEquals(
+                2,
+                service
+                    .getConversationDetail(sam, alexSam)
+                    .conversation.partnerInvites.size,
+            )
+            assertTrue(
+                service
+                    .getConversationDetail(sam, joSam)
+                    .conversation.partnerInvites
+                    .isEmpty(),
+            )
         }
 
     @Test
