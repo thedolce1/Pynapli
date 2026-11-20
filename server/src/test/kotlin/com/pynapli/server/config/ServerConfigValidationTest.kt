@@ -26,6 +26,7 @@ class ServerConfigValidationTest {
         assertTrue("FIREBASE_PROJECT_ID_REQUIRED" in issueCodes)
         assertTrue("ADMIN_API_TOKEN_REQUIRED" in issueCodes)
         assertTrue("RUNTIME_CURSOR_SECRETS_REQUIRED" in issueCodes)
+        assertTrue("MET_IN_PERSON_TOKEN_SECRET_REQUIRED" in issueCodes)
     }
 
     @Test
@@ -207,6 +208,7 @@ class ServerConfigValidationTest {
             discoveryCursorSecret = "discoverystagingruntimevalue123456789",
             activityCursorSecret = "activitystagingruntimevalue123456789",
             swipeDeckTokenSecret = "swipedeckstagingruntimevalue123456789",
+            metInPersonTokenSecret = "metinpersonstagingruntimevalue123456789",
             playStoreSandboxEnabled = playStoreSandboxEnabled,
             corsAllowedOrigins = corsAllowedOrigins,
         )

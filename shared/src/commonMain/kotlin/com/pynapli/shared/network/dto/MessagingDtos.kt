@@ -83,6 +83,10 @@ data class ConversationDto(
     // again yet (24 hours after a decline by either side), so the manual Invite button stays hidden.
     // Null elsewhere and from older servers: the button shows as before.
     val ownPartnerInviteCoolingDown: Boolean? = null,
+    // Server-decided, read mark only: the viewer's own "Met in person" actions in this conversation,
+    // one per other participant they can confirm or take back (TRUST_AND_SAFETY_SPEC "Met in person").
+    // Null elsewhere and from older servers: clients then show no menu item.
+    val metInPersonOffers: List<MetInPersonOfferDto>? = null,
 )
 
 /**

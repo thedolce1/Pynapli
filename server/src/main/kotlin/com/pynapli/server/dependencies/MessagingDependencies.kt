@@ -45,6 +45,7 @@ internal fun buildMessagingDependencies(
     messageMediaGateway: com.pynapli.server.messaging.MessageMediaGateway,
     productMetrics: com.pynapli.server.metrics.ProductMetrics,
     travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
+    metInPersonOfferSource: com.pynapli.server.messaging.MetInPersonOfferSource? = null,
 ): MessagingDependencies {
     val messagingService =
         MessagingService(
@@ -59,6 +60,7 @@ internal fun buildMessagingDependencies(
             activityService = activityService,
             messageMediaGateway = messageMediaGateway,
             productMetrics = productMetrics,
+            metInPersonOfferSource = metInPersonOfferSource,
         )
     val messageModerationService =
         MessageModerationService(

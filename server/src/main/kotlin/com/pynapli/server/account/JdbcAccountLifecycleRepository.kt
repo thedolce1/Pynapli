@@ -1,5 +1,6 @@
 package com.pynapli.server.account
 
+import com.pynapli.server.metinperson.MetInPersonAccountData
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -7,9 +8,10 @@ import javax.sql.DataSource
 
 class JdbcAccountLifecycleRepository(
     dataSource: DataSource,
+    metInPersonAccountData: MetInPersonAccountData? = null,
 ) : AccountLifecycleRepository {
     private val exportActions = JdbcAccountDataExportActions(dataSource)
-    private val deletionActions = JdbcAccountDeletionActions(dataSource)
+    private val deletionActions = JdbcAccountDeletionActions(dataSource, metInPersonAccountData)
 
     override suspend fun latestDataExportRequest(userId: UUID): AccountDataExportRecord? = exportActions.latestDataExportRequest(userId)
 

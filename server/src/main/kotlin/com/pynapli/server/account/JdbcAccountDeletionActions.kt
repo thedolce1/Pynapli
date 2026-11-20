@@ -3,12 +3,14 @@ package com.pynapli.server.account
 import com.pynapli.server.auth.CLEAR_REFRESH_REPLAY_SQL
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.metinperson.MetInPersonAccountData
 import java.sql.Connection
 import java.util.UUID
 import javax.sql.DataSource
 
 internal class JdbcAccountDeletionActions(
     private val dataSource: DataSource,
+    private val metInPersonAccountData: MetInPersonAccountData? = null,
 ) {
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult? =
         dataSource.withConnection { connection ->
@@ -28,6 +30,8 @@ internal class JdbcAccountDeletionActions(
                 anonymizeProfile(connection, userId)
                 val purgedLocationCount = purgeExactLocation(connection, userId)
                 purgeFavoritesAndLastActive(connection, userId)
+                // Met in person: confirmations given (by token) and received, and the badge.
+                metInPersonAccountData?.erase(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)

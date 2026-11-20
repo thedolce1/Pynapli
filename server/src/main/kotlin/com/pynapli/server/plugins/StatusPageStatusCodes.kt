@@ -184,6 +184,7 @@ internal fun messagingStatusFor(code: String): HttpStatusCode =
         "PARTNER_INVITE_NOT_FOUND",
         -> HttpStatusCode.NotFound
         "MESSAGING_NOT_ALLOWED" -> HttpStatusCode.Forbidden
+        "MET_IN_PERSON_NOT_AVAILABLE" -> HttpStatusCode.Forbidden
         "MEDIA_NOT_AVAILABLE" -> HttpStatusCode.ServiceUnavailable
         "PARTNER_INVITE_ALREADY_SENT",
         "PARTNER_ALREADY_IN_CONVERSATION",
@@ -306,6 +307,7 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         "USER_NOT_FOUND",
         -> HttpStatusCode.NotFound
         "MEDIA_REVIEW_NOT_FOUND" -> HttpStatusCode.NotFound
+        "MET_IN_PERSON_CONFIRMATION_NOT_FOUND" -> HttpStatusCode.NotFound
         "MEDIA_REVIEW_NOT_PENDING" -> HttpStatusCode.Conflict
         "INVALID_REVIEW_CURSOR" -> HttpStatusCode.BadRequest
         "INVALID_ID",

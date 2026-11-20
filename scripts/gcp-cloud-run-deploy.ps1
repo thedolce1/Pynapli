@@ -20,6 +20,7 @@
     [string]$DiscoveryCursorSecretName = "",
     [string]$ActivityCursorSecretName = "",
     [string]$SwipeDeckTokenSecretName = "",
+    [string]$MetInPersonTokenSecretName = "",
     [string]$RedisUrl = "",
     [string]$VpcConnector = "",
     [string]$ServiceAccount = "",
@@ -54,6 +55,7 @@ if ($productionLike) {
         DiscoveryCursorSecretName = $DiscoveryCursorSecretName
         ActivityCursorSecretName = $ActivityCursorSecretName
         SwipeDeckTokenSecretName = $SwipeDeckTokenSecretName
+        MetInPersonTokenSecretName = $MetInPersonTokenSecretName
         RedisUrl = $RedisUrl
     }
     $missing = @($requiredValues.GetEnumerator() | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.Value) } | ForEach-Object { $_.Key })
@@ -115,6 +117,9 @@ if (-not [string]::IsNullOrWhiteSpace($ActivityCursorSecretName)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($SwipeDeckTokenSecretName)) {
     $secretVars += "PYNAPLI_SWIPE_DECK_TOKEN_SECRET=${SwipeDeckTokenSecretName}:latest"
+}
+if (-not [string]::IsNullOrWhiteSpace($MetInPersonTokenSecretName)) {
+    $secretVars += "PYNAPLI_MET_IN_PERSON_TOKEN_SECRET=${MetInPersonTokenSecretName}:latest"
 }
 
 $deployArgs = @(

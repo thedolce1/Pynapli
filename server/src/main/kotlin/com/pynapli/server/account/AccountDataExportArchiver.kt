@@ -1,6 +1,7 @@
 package com.pynapli.server.account
 
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.metinperson.MetInPersonAccountData
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -32,6 +33,7 @@ interface AccountDataExportArchiver {
 class JdbcAccountDataExportArchiver(
     private val dataSource: DataSource,
     private val clock: Clock = Clock.systemUTC(),
+    private val metInPersonAccountData: MetInPersonAccountData? = null,
 ) : AccountDataExportArchiver {
     override suspend fun buildArchive(userId: UUID): ExportArchive =
         dataSource.withConnection { connection ->
@@ -51,6 +53,8 @@ class JdbcAccountDataExportArchiver(
                         connection.queryRows("SELECT * FROM activity_events WHERE recipient_user_id = ? ORDER BY occurred_at", userId),
                     )
                     EXPORT_SECTIONS.forEach { (name, sql) -> put(name, connection.queryRows(sql, userId)) }
+                    // Confirmations the person gave (by token); as a subject, only their badge state.
+                    metInPersonAccountData?.let { put("metInPerson", it.exportSection(connection, userId)) }
                 }
             ExportArchive(
                 filename = "pynapli-data-export-$userId.json",

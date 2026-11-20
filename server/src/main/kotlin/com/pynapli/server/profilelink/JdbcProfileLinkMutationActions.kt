@@ -158,6 +158,21 @@ internal class JdbcProfileLinkMutationActions(
                           )
                         RETURNING id
                     ),
+                    -- Met in person (TRUST_AND_SAFETY_SPEC): unlinking voids couple credit for good. The
+                    -- link row id is reused on relink, so the couple fields are cleared here rather
+                    -- than left to the link status; personal confirmations stay.
+                    cleared_met_in_person AS (
+                        UPDATE vouches
+                        SET link_id = NULL
+                        WHERE link_id IN (SELECT id FROM unlinked)
+                        RETURNING id
+                    ),
+                    cleared_met_in_person_badges AS (
+                        UPDATE vouch_badges
+                        SET couple_badge = false, couple_link_id = NULL
+                        WHERE couple_link_id IN (SELECT id FROM unlinked)
+                        RETURNING subject_user_id
+                    ),
                     -- PSYNC_SPEC edge case: ending the partner link ends any live Psync session. One
                     -- that never started is cancelled outright.
                     cancelled_psync AS (

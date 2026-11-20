@@ -1,0 +1,39 @@
+package com.pynapli.shared.network.dto
+
+import kotlinx.serialization.Serializable
+
+/**
+ * The viewer's own "Met in person" state for one other participant of a conversation
+ * (TRUST_AND_SAFETY_SPEC "Met in person"). Server-decided from facts the viewer already knows; it never
+ * says whether anyone else confirmed this person, how many did, or whether a badge exists.
+ *
+ * [canConfirm]: the overflow item "We've met in person" may be shown. [canWithdraw]: the viewer's own
+ * confirmation is less than 30 days old and can be taken back. [partner]: the person's linked partner,
+ * also in this conversation, whom the viewer may tick in the same confirmation.
+ */
+@Serializable
+data class MetInPersonOfferDto(
+    val subjectUserId: String,
+    val subjectDisplayName: String,
+    val given: Boolean = false,
+    val canConfirm: Boolean = false,
+    val canWithdraw: Boolean = false,
+    val partner: MetInPersonPartnerDto? = null,
+)
+
+@Serializable
+data class MetInPersonPartnerDto(
+    val partnerUserId: String,
+    val partnerDisplayName: String,
+)
+
+@Serializable
+data class ConfirmMetInPersonRequestDto(
+    val subjectUserId: String,
+    val includePartner: Boolean = false,
+)
+
+@Serializable
+data class WithdrawMetInPersonRequestDto(
+    val subjectUserId: String,
+)

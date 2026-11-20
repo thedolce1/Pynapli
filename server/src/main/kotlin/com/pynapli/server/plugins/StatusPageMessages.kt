@@ -143,6 +143,8 @@ internal fun userSafeMessage(code: String): String =
         "ACTIVITY_EVENT_NOT_FOUND" -> "Activity item was not found."
         "INVALID_ID", "INVALID_CONVERSATION_TARGET", "INVALID_CONVERSATION_ORIGIN" -> "Request could not be completed."
         "MESSAGING_NOT_ALLOWED" -> "This profile is not accepting grid messages."
+        "MET_IN_PERSON_NOT_AVAILABLE" -> "This isn't available in this chat right now."
+        "MET_IN_PERSON_CONFIRMATION_NOT_FOUND" -> "That confirmation was not found."
         "CONVERSATION_NOT_FOUND" -> "Conversation was not found."
         "LINKED_PARTNER_NOT_FOUND" -> "No linked partner is available."
         "PARTNER_INVITE_NOT_FOUND" -> "Chat invite was not found."

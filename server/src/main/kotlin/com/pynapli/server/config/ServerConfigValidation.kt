@@ -258,6 +258,19 @@ private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config
         message = "Discovery, Activity, and Swipe deck secrets must be different values.",
     )
     require(
+        condition =
+            config.metInPersonTokenSecret.isStrongRuntimeSecret() &&
+                config.metInPersonTokenSecret !in
+                setOf(
+                    config.discoveryCursorSecret,
+                    config.activityCursorSecret,
+                    config.swipeDeckTokenSecret,
+                    config.adminApiToken,
+                ),
+        code = "MET_IN_PERSON_TOKEN_SECRET_REQUIRED",
+        message = "Production-like environments need a strong, distinct PYNAPLI_MET_IN_PERSON_TOKEN_SECRET.",
+    )
+    require(
         condition = !config.apiProfilingEnabled || config.apiProfilingHeaderRequired,
         code = "API_PROFILING_HEADER_REQUIRED",
         message = "API profiling may be enabled only when gated by X-Pynapli-Profile.",

@@ -127,6 +127,9 @@ data class ServerConfig(
     val discoveryCursorSecret: String = "pynapli-local-dev-discovery-cursor-secret",
     val activityCursorSecret: String = "pynapli-local-dev-activity-cursor-secret",
     val swipeDeckTokenSecret: String = "pynapli-local-dev-swipe-deck-token-secret",
+    // K3: keys the "Met in person" voucher/pair/conversation tokens (PYNAPLI_MET_IN_PERSON_TOKEN_SECRET).
+    // Never rotate or lose it once confirmations exist: the tokens could no longer be matched.
+    val metInPersonTokenSecret: String = "pynapli-local-dev-met-in-person-token-secret",
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
@@ -499,6 +502,12 @@ data class ServerConfig(
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() }
                         ?: "pynapli-local-dev-swipe-deck-token-secret",
+                metInPersonTokenSecret =
+                    System
+                        .getenv("PYNAPLI_MET_IN_PERSON_TOKEN_SECRET")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "pynapli-local-dev-met-in-person-token-secret",
             )
         }
     }
