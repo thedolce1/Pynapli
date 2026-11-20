@@ -1,6 +1,7 @@
 package com.pynapli.shared.network
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.ConfirmMetInPersonRequestDto
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
@@ -9,10 +10,12 @@ import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageMediaUploadSlotDto
+import com.pynapli.shared.network.dto.MetInPersonOfferDto
 import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
+import com.pynapli.shared.network.dto.WithdrawMetInPersonRequestDto
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
@@ -45,6 +48,16 @@ internal class KtorConversationApi(
         }
 
     override suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto> = support.authPost("/v1/messages/threads/$conversationId/read")
+
+    override suspend fun confirmMetInPerson(
+        conversationId: String,
+        request: ConfirmMetInPersonRequestDto,
+    ): AppResult<MetInPersonOfferDto> = support.authSend(HttpMethod.Post, "/v1/messages/threads/$conversationId/met-in-person", request)
+
+    override suspend fun withdrawMetInPerson(
+        conversationId: String,
+        request: WithdrawMetInPersonRequestDto,
+    ): AppResult<MetInPersonOfferDto> = support.authSend(HttpMethod.Post, "/v1/messages/threads/$conversationId/met-in-person/withdraw", request)
 
     override suspend fun sendMessage(
         conversationId: String,

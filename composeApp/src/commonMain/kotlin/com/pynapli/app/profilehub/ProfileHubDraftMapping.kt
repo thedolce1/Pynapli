@@ -58,6 +58,7 @@ internal fun DiscoverySettingsDto.toPrivacyDraft(): PrivacySettingsDraft =
         visibleWhileTraveling = visibleWhileTraveling,
         sharePsyncSoloMatches = sharePsyncSoloMatches,
         partnerVisibility = partnerVisibility.takeIf { it in partnerVisibilities } ?: "public",
+        showMetInPersonBadge = showMetInPersonBadge,
     )
 
 internal fun DiscoverySettingsDto.toActivityDraft(): ActivitySettingsDraft =
@@ -78,6 +79,7 @@ internal fun PrivacySettingsDraft.toRequest(): UpdateDiscoverySettingsRequestDto
         visibleWhileTraveling = visibleWhileTraveling,
         sharePsyncSoloMatches = sharePsyncSoloMatches,
         partnerVisibility = partnerVisibility,
+        showMetInPersonBadge = showMetInPersonBadge,
     )
 
 internal fun ActivitySettingsDraft.toRequest(): UpdateDiscoverySettingsRequestDto =

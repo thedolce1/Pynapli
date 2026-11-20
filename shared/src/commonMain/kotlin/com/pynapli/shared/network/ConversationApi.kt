@@ -1,6 +1,7 @@
 package com.pynapli.shared.network
 
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.dto.ConfirmMetInPersonRequestDto
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationListResponseDto
@@ -9,10 +10,12 @@ import com.pynapli.shared.network.dto.CreateDirectConversationRequestDto
 import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageMediaUploadSlotDto
+import com.pynapli.shared.network.dto.MetInPersonOfferDto
 import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
 import com.pynapli.shared.network.dto.SetConversationExpiryRequestDto
+import com.pynapli.shared.network.dto.WithdrawMetInPersonRequestDto
 
 /**
  * Conversation / messaging slice of the API surface, split out of [PynapliApiClient]
@@ -78,4 +81,23 @@ interface ConversationApi {
     ): AppResult<ConversationPartnerInviteResponseDto>
 
     suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+
+    /** "We've met in person" (TRUST_AND_SAFETY_SPEC): the answer is the caller's own state for that person. */
+    suspend fun confirmMetInPerson(
+        conversationId: String,
+        request: ConfirmMetInPersonRequestDto,
+    ): AppResult<MetInPersonOfferDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
+
+    suspend fun withdrawMetInPerson(
+        conversationId: String,
+        request: WithdrawMetInPersonRequestDto,
+    ): AppResult<MetInPersonOfferDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
 }

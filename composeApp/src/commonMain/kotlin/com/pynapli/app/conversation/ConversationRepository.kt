@@ -5,6 +5,7 @@ import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationPartnerInviteResponseDto
 import com.pynapli.shared.network.dto.MessageDto
+import com.pynapli.shared.network.dto.MetInPersonOfferDto
 
 interface ConversationRepository {
     suspend fun createDirectConversation(
@@ -69,6 +70,26 @@ interface ConversationRepository {
         messageId: String,
         category: String,
     ): AppResult<Unit> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
+
+    /** "We've met in person": the server answers with the viewer's own state for that person. */
+    suspend fun confirmMetInPerson(
+        conversationId: String,
+        subjectUserId: String,
+        includePartner: Boolean,
+    ): AppResult<MetInPersonOfferDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
+
+    suspend fun withdrawMetInPerson(
+        conversationId: String,
+        subjectUserId: String,
+    ): AppResult<MetInPersonOfferDto> =
         AppResult.Failure(
             com.pynapli.shared.core.result
                 .AppError(code = "NOT_SUPPORTED", message = "Not available."),

@@ -490,6 +490,7 @@ private fun ColumnScope.MessagesTabContent(
             onSetExpiry = conversationActions.onSetExpiry,
             onRevealMedia = conversationActions.onRevealMedia,
             onPickPhoto = onPickConversationPhoto,
+            metInPersonCallbacks = conversationActions.metInPerson,
         )
     }
 

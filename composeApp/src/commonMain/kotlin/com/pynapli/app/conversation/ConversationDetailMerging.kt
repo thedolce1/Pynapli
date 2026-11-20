@@ -55,6 +55,7 @@ internal fun ConversationDetailDto.withPrependedPage(page: ConversationDetailDto
                 partnerOffers = page.conversation.partnerOffers ?: conversation.partnerOffers,
                 ownPartnerInviteCoolingDown =
                     page.conversation.ownPartnerInviteCoolingDown ?: conversation.ownPartnerInviteCoolingDown,
+                metInPersonOffers = page.conversation.metInPersonOffers ?: conversation.metInPersonOffers,
             ),
         messages = mergeMessages(page.messages + messages),
         nextCursor = page.nextCursor,

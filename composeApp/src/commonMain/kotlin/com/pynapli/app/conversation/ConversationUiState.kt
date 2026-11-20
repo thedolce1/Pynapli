@@ -38,6 +38,8 @@ data class ConversationUiState(
     val revealingMessageIds: Set<String> = emptySet(),
     val typingParticipants: List<TypingParticipantUi> = emptyList(),
     val partnerInviteFeedback: String? = null,
+    // The open "We've met in person" sheet, if any (server-decided offers; see ConversationMetInPerson).
+    val metInPersonSheet: MetInPersonSheetState? = null,
     val errorMessage: String? = null,
 ) {
     val visible: Boolean
