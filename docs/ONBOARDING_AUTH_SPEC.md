@@ -245,6 +245,12 @@ email a code to the address typed at sign-in (it matched the account, so it is t
 it before enabling the feature (not before using the app), and set `email_verified_at` on success.
 Not built.
 
+Contact blocking now exists (2026-11-20, TRUST_AND_SAFETY_SPEC "Contact Blocks"). Verify stores the
+account's contact token and settles rows naming the address before the first session is returned
+(`EmailSignupService.onAccountVerified`); every successful email sign-in does the same
+(`AuthService.onEmailSignIn`), which covers accounts verified between V118 and V119. Accounts with
+`email_verified_at` NULL are still never bound until the step above is built.
+
 ### Dev and QA
 
 Local only: `POST /v1/dev/auth/email/signup` creates a verified account at once through the same

@@ -38,7 +38,7 @@ every change must keep.
 | Media and albums | `media_assets`, `media_albums`, `media_album_items`, `media_album_access_grants`, `media_album_access_requests` |
 | Activity | `activity_events` |
 | Monetization | `subscriptions`, `entitlements`, `premium_inventory`, `boost_activations`, `play_store_rtdn_events`, `play_store_product_purchases` |
-| Safety and moderation | `user_blocks`, `user_hidden_profiles`, `safety_reports`, `moderation_appeals`, `account_risk_states`, `account_risk_events`, `age_verifications`, `admin_audit_log` |
+| Safety and moderation | `user_blocks`, `user_hidden_profiles`, `contact_blocks`, `safety_reports`, `moderation_appeals`, `account_risk_states`, `account_risk_events`, `age_verifications`, `admin_audit_log` |
 | Notifications | `push_devices`, `notification_preferences`, `notification_outbox` |
 
 ## Rules
@@ -71,6 +71,14 @@ every change must keep.
   data-retention job. A pending row can't sign
   in and belongs to no account (out of export and deletion). `users.email_verified_at` is set for
   accounts created through it; older accounts stay NULL and nothing is gated on it yet.
+- **Contact blocks** (V119, [TRUST_AND_SAFETY_SPEC](TRUST_AND_SAFETY_SPEC.md#contact-blocks-hide-from-people-you-know)):
+  `contact_blocks(id, blocker_user_id, email_token, target_token NULL, created_at)`, unique on
+  (blocker, email_token); `email_token = HMAC(K1, normalised address)`, `target_token` NULL (pending),
+  `HMAC(K2, "target:" + member)` (bound) or `HMAC(K2, "exempt:" + member)` (exempt). No plaintext and no
+  plain `email_hash`. `users.contact_token = HMAC(K2, "member:" + email_token)` for verified members
+  (written at verify and sign-in), so the tables can't be joined without K2. Deletion deletes the
+  blocker's rows, sends rows pointing at the deleted member back to pending, and clears their token;
+  export shows the blocker only the dates added.
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
   the integrity of retained safety/legal records. In the same transaction, GDPR/CCPA erasure nulls
   identity hashes (`email_hash`, `phone_hash`, `firebase_uid`), clears `auth_identities` credentials

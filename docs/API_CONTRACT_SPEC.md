@@ -70,6 +70,13 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
 - `POST /v1/auth/email/signup/verify` (`EmailSignupVerifyRequestDto` `{email, code, signupToken,
   deviceId?, platform?, appVersion?}`) answers `200 AuthSessionDto` (the session sign-up used to
   return) or `400 INVALID_SIGNUP_CODE` for every failure.
+- "Hide from people you know" (authenticated; [TRUST_AND_SAFETY_SPEC](TRUST_AND_SAFETY_SPEC.md#contact-blocks-hide-from-people-you-know)):
+  `GET /v1/me/contact-blocks` → `200 ContactBlockSummaryDto {count, maxAddresses}`;
+  `POST /v1/me/contact-blocks` and `POST /v1/me/contact-blocks/remove` (`ContactBlockAddressRequestDto
+  {email}`) → `204` whether or not the address belongs to a member, was already added, or (remove) was
+  ever added; `DELETE /v1/me/contact-blocks` (remove all) → `204`. Errors are about the request only:
+  `400 INVALID_EMAIL`, `409 CONTACT_BLOCK_LIMIT_REACHED` (1,000), `429 RATE_LIMITED` (100 adds a day,
+  `BLOCK_OR_HIDE` per request). No list endpoint exists.
 - `POST /v1/auth/email/signup/resend` (`EmailSignupResendRequestDto` `{email, signupToken,
   deviceId?}`) always answers `202 EmailSignupCodeResentDto {sent: true}`.
 - Old clients: there has been no store release, so no installed production client exists. A debug
