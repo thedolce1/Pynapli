@@ -145,6 +145,13 @@ class PynapliCommonGraph(
 
     val profileHubStateHolder = ProfileHubStateHolder(ApiProfileHubRepository(apiClient))
 
+    /** "Hide from people you know" (Profile > Privacy). */
+    val contactBlocksStateHolder =
+        com.pynapli.app.contactblocks.ContactBlocksStateHolder(
+            com.pynapli.app.contactblocks
+                .ApiContactBlocksRepository(apiClient),
+        )
+
     val photoVerificationStateHolder =
         PhotoVerificationStateHolder(ApiPhotoVerificationRepository(apiClient, KtorMediaByteUploader()))
 

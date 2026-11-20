@@ -324,6 +324,7 @@ fun PynapliApp(
                 playingTonightStateHolder = graph.playingTonightStateHolder,
                 onboardingStateHolder = graph.onboardingStateHolder,
                 photoVerificationStateHolder = graph.photoVerificationStateHolder,
+                contactBlocksStateHolder = graph.contactBlocksStateHolder,
                 favoritesStateHolder = graph.favoritesStateHolder,
                 conversationActions = conversationActions,
                 scope = scope,

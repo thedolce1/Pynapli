@@ -7,6 +7,7 @@ import com.pynapli.shared.network.dto.AppealListDto
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.BlockUserRequestDto
 import com.pynapli.shared.network.dto.BlocksListDto
+import com.pynapli.shared.network.dto.ContactBlockSummaryDto
 import com.pynapli.shared.network.dto.CreateAppealRequestDto
 import com.pynapli.shared.network.dto.CreateReportRequestDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
@@ -48,4 +49,14 @@ interface SafetyApi {
     suspend fun submitAppeal(request: CreateAppealRequestDto): AppResult<AppealDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 
     suspend fun withdrawAppeal(appealId: String): AppResult<AppealDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    // "Hide from people you know" (PROFILE_SETTINGS_SPEC). The server keeps only a keyed code per
+    // address, so there is no list: the count, add, remove by typing it again, and remove all.
+    suspend fun getContactBlockSummary(): AppResult<ContactBlockSummaryDto> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun addContactBlock(email: String): AppResult<Unit> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun removeContactBlock(email: String): AppResult<Unit> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
+
+    suspend fun removeAllContactBlocks(): AppResult<Unit> = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))
 }

@@ -91,6 +91,7 @@ internal fun ColumnScope.PynapliMainContent(
     playingTonightStateHolder: PlayingTonightStateHolder?,
     onboardingStateHolder: OnboardingStateHolder?,
     photoVerificationStateHolder: PhotoVerificationStateHolder?,
+    contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
     conversationActions: ConversationActions,
     scope: CoroutineScope,
     onProfileSurface: (ProfileSurface) -> Unit,
@@ -129,6 +130,7 @@ internal fun ColumnScope.PynapliMainContent(
                 discreetIconSupported = discreetIconSupported,
                 onOpenPsync = onOpenPsync,
                 photoVerificationStateHolder = photoVerificationStateHolder,
+                contactBlocksStateHolder = contactBlocksStateHolder,
                 onPickVerificationSelfie = onPickVerificationSelfie,
             )
         profileSurface == ProfileSurface.MediaAlbums -> {
@@ -235,6 +237,7 @@ private fun ColumnScope.ProfileHubSurface(
     discreetIconSupported: Boolean,
     onOpenPsync: (() -> Unit)? = null,
     photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
+    contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
     onPickVerificationSelfie: (() -> Unit)? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
@@ -313,6 +316,7 @@ private fun ColumnScope.ProfileHubSurface(
                 }
             },
         photoVerificationStateHolder = photoVerificationStateHolder,
+        contactBlocksStateHolder = contactBlocksStateHolder,
         onPickVerificationSelfie = onPickVerificationSelfie,
         // Cap + center the settings column on wide windows so it reads as an
         // intentional column instead of stretching edge-to-edge (WEB_PWA_GAMEPLAN).
