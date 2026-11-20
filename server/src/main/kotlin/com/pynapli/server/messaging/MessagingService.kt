@@ -34,7 +34,6 @@ class MessagingService(
     activityService: ActivityService? = null,
     messageMediaGateway: MessageMediaGateway? = null,
     private val productMetrics: ProductMetrics? = null,
-    private val metInPersonOfferSource: MetInPersonOfferSource? = null,
 ) {
     private val featureAccess = MessagingFeatureAccess(subscriptionService)
     private val dtoMapper = MessagingDtoMapper(featureAccess, messageMediaGateway)
@@ -130,12 +129,7 @@ class MessagingService(
     suspend fun markConversationRead(
         userId: UUID,
         conversationIdText: String,
-    ): ConversationDto {
-        val conversation = conversationActions.markConversationRead(userId, conversationIdText)
-        // Read mark only (every open and refresh ends with it): the viewer's own "Met in person" actions.
-        val source = metInPersonOfferSource ?: return conversation
-        return conversation.copy(metInPersonOffers = source.offersFor(userId, conversationIdText.toMessagingUuidOrThrow()))
-    }
+    ): ConversationDto = conversationActions.markConversationRead(userId, conversationIdText)
 
     suspend fun sendMessage(
         userId: UUID,

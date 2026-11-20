@@ -2,13 +2,15 @@ package com.pynapli.server.metinperson
 
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
-import com.pynapli.server.metinperson.MetInPersonResolution.RESOLVED_AND_ELIGIBLE_CTES
-import com.pynapli.server.metinperson.MetInPersonResolution.bindResolved
-import com.pynapli.server.metinperson.MetInPersonResolution.resolveVouchers
-import com.pynapli.server.metinperson.MetInPersonResolution.vouchesForSubject
+import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartners
+import com.pynapli.server.metinperson.JdbcMetInPersonSql.keyMatches
+import com.pynapli.server.metinperson.MetInPersonEvaluator.Companion.storedByPairTokens
+import com.pynapli.server.metinperson.MetInPersonEvaluator.Companion.storedBySubjectTokens
 import com.pynapli.server.moderation.ModerationException
 import com.pynapli.server.moderation.insertAdminAuditLog
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.sql.Connection
@@ -19,239 +21,215 @@ import javax.sql.DataSource
 
 /**
  * Moderation for "Met in person": one read view and three actions (void one confirmation, void
- * everything one voucher gave, freeze a subject's badge). Every call is audited in the same
- * transaction. Audit rows name the subject and counts; a voucher appears only as their K3 token, so
- * the audit log does not become a clear list of who met whom.
+ * everything one voucher gave, freeze a subject's badge), each with its undo. Every call is audited in
+ * the same transaction. Audit rows never hold a voucher id in clear: they carry `voucherRef`, a K3 token a
+ * key holder (senior safety staff with key access) can match by recomputing it over members, so an
+ * auditor can tell whose confirmations were voided while lower roles and a database copy cannot.
  */
 class AdminMetInPersonService(
     private val dataSource: DataSource,
     private val tokens: MetInPersonTokens,
     private val clock: Clock = Clock.systemUTC(),
 ) {
+    private val evaluator = MetInPersonEvaluator(tokens)
+
     suspend fun view(
         actorId: String,
         subjectUserId: UUID,
         reason: String,
     ): AdminMetInPersonSubjectDto =
-        dataSource.withConnection { connection ->
-            connection.inTransaction {
-                val now = clock.instant()
-                val settings = subjectSettings(subjectUserId) ?: throw ModerationException("USER_NOT_FOUND")
-                val rows = vouchesForSubject(subjectUserId)
-                val resolved = resolveVouchers(rows, tokens)
-                val live = rows.filter { it.live(now) && it.id in resolved }
-                val qualifying = qualifying(resolved.filterKeys { id -> live.any { it.id == id } })
-                val vouchers = resolved.values.toSet()
-                val edges = liveEdges(setOf(subjectUserId) + vouchers)
-                val sharedDevice = sharedDeviceWith(subjectUserId, vouchers)
-                val names = displayNames(vouchers)
-                val badge = badgeRow(subjectUserId)
-                insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "met_in_person.view",
-                    targetType = "user",
-                    targetId = subjectUserId,
-                    reason = reason,
-                    metadataJson =
-                        buildJsonObject {
-                            put("confirmations", rows.size)
-                            put("qualifyingPerson", qualifying.person.size)
-                        }.toString(),
-                )
-                AdminMetInPersonSubjectDto(
-                    subjectUserId = subjectUserId.toString(),
-                    personBadge = badge?.personBadge == true,
-                    coupleBadge = badge?.coupleBadge == true,
-                    frozen = badge?.frozen == true,
-                    showBadgeSetting = settings,
-                    qualifyingPersonCount = qualifying.person.size,
-                    qualifyingCoupleCount = qualifying.coupleVouchers.size,
-                    confirmations =
-                        rows.map { row ->
-                            val voucher = resolved[row.id]
-                            AdminMetInPersonConfirmationDto(
-                                confirmationId = row.id.toString(),
-                                voucherUserId = voucher?.toString(),
-                                voucherDisplayName = voucher?.let { names[it] },
-                                givenOn = row.createdAt.toString(),
-                                withdrawnOn = row.withdrawnAt?.toString(),
-                                voidedOn = row.voidedAt?.toString(),
-                                withPartnerUserId = row.metPartnerUserId?.toString(),
-                                coupleLinkActive = row.linkId != null,
-                                live = row.live(now),
-                                counts = row.id in qualifying.person,
-                                reciprocal = voucher != null && (subjectUserId to voucher) in edges,
-                                closedGroup =
-                                    voucher != null &&
-                                        vouchers.any { other ->
-                                            other != voucher && ((voucher to other) in edges || (other to voucher) in edges)
-                                        },
-                                sharedDevice = voucher != null && voucher in sharedDevice,
-                            )
-                        },
-                )
-            }
+        withKey { now ->
+            val settings = subjectSettings(subjectUserId) ?: throw ModerationException("USER_NOT_FOUND")
+            val evaluation = evaluator.evaluate(this, listOf(subjectUserId), now)[subjectUserId]
+            val verdicts = evaluation?.rows.orEmpty()
+            val vouchers = verdicts.mapNotNull { it.voucherUserId }.toSet()
+            val edges = liveEdges(setOf(subjectUserId) + vouchers, now)
+            val sharedDevice = sharedDeviceWith(subjectUserId, vouchers)
+            val names = displayNames(vouchers)
+            val badge = badgeRow(subjectUserId)
+            insertAdminAuditLog(
+                actorId = actorId,
+                action = "met_in_person.view",
+                targetType = "user",
+                targetId = subjectUserId,
+                reason = reason,
+                metadataJson =
+                    buildJsonObject {
+                        put("confirmations", verdicts.size)
+                        put("qualifyingPerson", evaluation?.independentVouchers ?: 0)
+                    }.toString(),
+            )
+            AdminMetInPersonSubjectDto(
+                subjectUserId = subjectUserId.toString(),
+                personBadge = badge?.personBadge == true,
+                coupleBadge = badge?.coupleBadge == true,
+                frozen = badge?.frozen == true,
+                showBadgeSetting = settings,
+                qualifyingPersonCount = evaluation?.independentVouchers ?: 0,
+                personQualifiesNow = evaluation?.personQualifies == true,
+                qualifyingCoupleCount = evaluation?.coupleVouchers?.size ?: 0,
+                confirmations =
+                    verdicts.map { verdict ->
+                        val row = verdict.vouch
+                        val voucher = verdict.voucherUserId
+                        AdminMetInPersonConfirmationDto(
+                            confirmationId = row.id.toString(),
+                            voucherUserId = voucher?.toString(),
+                            voucherDisplayName = voucher?.let { names[it] },
+                            givenOn = row.createdAt.toString(),
+                            firstGivenOn = row.firstGivenAt.toString(),
+                            withdrawnOn = row.withdrawnAt?.toString(),
+                            voidedOn = row.voidedAt?.toString(),
+                            withPartner = row.partnerToken != null,
+                            coupleLinkActive = row.linkToken != null,
+                            live = row.live(now),
+                            counts = verdict.counts,
+                            reciprocal = voucher != null && (subjectUserId to voucher) in edges,
+                            closedGroup =
+                                voucher != null &&
+                                    vouchers.any { other ->
+                                        other != voucher && ((voucher to other) in edges || (other to voucher) in edges)
+                                    },
+                            sharedDevice = voucher != null && voucher in sharedDevice,
+                        )
+                    },
+            )
         }
 
-    suspend fun voidConfirmation(
+    /** Voids (or un-voids) one confirmation of [subjectUserId]; the subject id is checked against its token. */
+    suspend fun setConfirmationVoided(
         actorId: String,
+        subjectUserId: UUID,
         confirmationId: UUID,
+        voided: Boolean,
         reason: String,
     ): AdminMetInPersonActionResultDto =
-        dataSource.withConnection { connection ->
-            connection.inTransaction {
-                val subjectUserId =
-                    prepareStatement(
-                        "UPDATE vouches SET voided_at = COALESCE(voided_at, ?) WHERE id = ? RETURNING subject_user_id",
-                    ).use { statement ->
-                        statement.setTimestamp(1, Timestamp.from(clock.instant()))
-                        statement.setObject(2, confirmationId)
-                        statement.executeQuery().use { rs ->
-                            if (!rs.next()) throw ModerationException("MET_IN_PERSON_CONFIRMATION_NOT_FOUND")
-                            rs.getObject("subject_user_id", UUID::class.java)
-                        }
-                    }
-                insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "met_in_person.void_confirmation",
-                    targetType = "met_in_person_confirmation",
-                    targetId = confirmationId,
-                    reason = reason,
-                    metadataJson = buildJsonObject { put("subjectUserId", subjectUserId.toString()) }.toString(),
-                )
-                AdminMetInPersonActionResultDto(affected = 1)
-            }
+        withKey { now ->
+            val row =
+                storedBySubjectTokens(listOf(tokens.subject(subjectUserId)))
+                    .firstOrNull { it.id == confirmationId }
+                    ?: throw ModerationException("MET_IN_PERSON_CONFIRMATION_NOT_FOUND")
+            val voucher = evaluator.evaluate(this, listOf(subjectUserId), now)[subjectUserId]?.rows?.firstOrNull { it.vouch.id == row.id }?.voucherUserId
+            val affected = setVoided(listOf(row.pairToken), voided, now)
+            insertAdminAuditLog(
+                actorId = actorId,
+                action = if (voided) "met_in_person.void_confirmation" else "met_in_person.unvoid_confirmation",
+                targetType = "met_in_person_confirmation",
+                targetId = confirmationId,
+                reason = reason,
+                metadataJson =
+                    buildJsonObject {
+                        put("subjectRef", tokens.subject(subjectUserId))
+                        put("voucherRef", voucher?.let(tokens::auditVoucher))
+                    }.toString(),
+            )
+            AdminMetInPersonActionResultDto(affected = affected)
         }
 
-    /** The voucher id arrives in the body, so the request-level audit (which stores the path) never holds it. */
-    suspend fun voidAllFromVoucher(
+    /** Voids (or un-voids) every confirmation [voucherUserId] gave, found through their pair tokens. */
+    suspend fun setVoucherVoided(
         actorId: String,
         voucherUserId: UUID,
+        voided: Boolean,
         reason: String,
     ): AdminMetInPersonActionResultDto =
-        dataSource.withConnection { connection ->
-            connection.inTransaction {
-                val voucherToken = tokens.voucher(voucherUserId)
-                val affected =
-                    prepareStatement(
-                        "UPDATE vouches SET voided_at = ? WHERE voucher_token = ? AND voided_at IS NULL",
-                    ).use { statement ->
-                        statement.setTimestamp(1, Timestamp.from(clock.instant()))
-                        statement.setString(2, voucherToken)
-                        statement.executeUpdate()
-                    }
-                insertAdminAuditLog(
-                    actorId = actorId,
-                    action = "met_in_person.void_voucher",
-                    targetType = "met_in_person_voucher",
-                    targetId = null,
-                    reason = reason,
-                    metadataJson =
-                        buildJsonObject {
-                            put("voucherToken", voucherToken)
-                            put("voided", affected)
-                        }.toString(),
-                )
-                AdminMetInPersonActionResultDto(affected = affected)
-            }
+        withKey { now ->
+            val pairTokens = conversationPartners(voucherUserId).map { tokens.pair(voucherUserId, it) }
+            val ids = storedByPairTokens(pairTokens).map { it.id.toString() }
+            val affected = setVoided(pairTokens, voided, now)
+            insertAdminAuditLog(
+                actorId = actorId,
+                action = if (voided) "met_in_person.void_voucher" else "met_in_person.unvoid_voucher",
+                targetType = "met_in_person_voucher",
+                targetId = null,
+                reason = reason,
+                metadataJson =
+                    buildJsonObject {
+                        put("voucherRef", tokens.auditVoucher(voucherUserId))
+                        put("confirmations", JsonArray(ids.map { JsonPrimitive(it) }))
+                        put("affected", affected)
+                    }.toString(),
+            )
+            AdminMetInPersonActionResultDto(affected = affected)
         }
 
-    /** Freeze hides both badges at once and keeps them off at every batch; unfreeze lets the next batch decide. */
+    /** Freeze hides both badges at once and keeps them off at every batch; unfreeze lets later batches decide. */
     suspend fun setFrozen(
         actorId: String,
         subjectUserId: UUID,
         frozen: Boolean,
         reason: String,
     ): AdminMetInPersonActionResultDto =
+        withKey { now ->
+            subjectSettings(subjectUserId) ?: throw ModerationException("USER_NOT_FOUND")
+            val at = Timestamp.from(now)
+            prepareStatement(
+                """
+                INSERT INTO vouch_badges (subject_user_id, person_badge, couple_badge, couple_link_id, updated_at, frozen_at)
+                VALUES (?, false, false, NULL, ?, CASE WHEN ? THEN ?::timestamptz END)
+                ON CONFLICT (subject_user_id) DO UPDATE
+                SET frozen_at = EXCLUDED.frozen_at,
+                    person_badge = CASE WHEN EXCLUDED.frozen_at IS NULL THEN vouch_badges.person_badge ELSE false END,
+                    couple_badge = CASE WHEN EXCLUDED.frozen_at IS NULL THEN vouch_badges.couple_badge ELSE false END,
+                    updated_at = EXCLUDED.updated_at
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, subjectUserId)
+                statement.setTimestamp(2, at)
+                statement.setBoolean(3, frozen)
+                statement.setTimestamp(4, at)
+                statement.executeUpdate()
+            }
+            insertAdminAuditLog(
+                actorId = actorId,
+                action = if (frozen) "met_in_person.freeze" else "met_in_person.unfreeze",
+                targetType = "user",
+                targetId = subjectUserId,
+                reason = reason,
+                metadataJson = "{}",
+            )
+            AdminMetInPersonActionResultDto(affected = 1)
+        }
+
+    private suspend fun <T> withKey(block: Connection.(java.time.Instant) -> T): T =
         dataSource.withConnection { connection ->
             connection.inTransaction {
-                subjectSettings(subjectUserId) ?: throw ModerationException("USER_NOT_FOUND")
-                val now = Timestamp.from(clock.instant())
-                prepareStatement(
-                    """
-                    INSERT INTO vouch_badges (subject_user_id, person_badge, couple_badge, couple_link_id, computed_at, frozen_at)
-                    VALUES (?, false, false, NULL, ?, CASE WHEN ? THEN ?::timestamptz END)
-                    ON CONFLICT (subject_user_id) DO UPDATE
-                    SET frozen_at = EXCLUDED.frozen_at,
-                        person_badge = CASE WHEN EXCLUDED.frozen_at IS NULL THEN vouch_badges.person_badge ELSE false END,
-                        couple_badge = CASE WHEN EXCLUDED.frozen_at IS NULL THEN vouch_badges.couple_badge ELSE false END
-                    """.trimIndent(),
-                ).use { statement ->
-                    statement.setObject(1, subjectUserId)
-                    statement.setTimestamp(2, now)
-                    statement.setBoolean(3, frozen)
-                    statement.setTimestamp(4, now)
-                    statement.executeUpdate()
-                }
-                insertAdminAuditLog(
-                    actorId = actorId,
-                    action = if (frozen) "met_in_person.freeze" else "met_in_person.unfreeze",
-                    targetType = "user",
-                    targetId = subjectUserId,
-                    reason = reason,
-                    metadataJson = "{}",
-                )
-                AdminMetInPersonActionResultDto(affected = 1)
+                val now = clock.instant()
+                if (!keyMatches(tokens, now)) throw ModerationException("MET_IN_PERSON_KEY_MISMATCH")
+                block(now)
             }
         }
 
-    private class Qualifying(
-        val person: Set<UUID>,
-        val coupleVouchers: Set<UUID>,
-    )
-
-    /** The same filter the batch applies, for one subject's live rows. */
-    private fun Connection.qualifying(resolved: Map<UUID, UUID>): Qualifying {
-        if (resolved.isEmpty()) return Qualifying(emptySet(), emptySet())
-        return prepareStatement(
-            """
-            WITH $RESOLVED_AND_ELIGIBLE_CTES
-            SELECT e.id,
-                   e.voucher_user_id,
-                   EXISTS (
-                       SELECT 1 FROM couple c
-                       WHERE c.subject_user_id = e.subject_user_id
-                         AND c.link_id = e.link_id
-                   ) AND EXISTS (
-                       SELECT 1 FROM eligible b
-                       WHERE b.voucher_user_id = e.voucher_user_id
-                         AND b.subject_user_id = e.met_partner_user_id
-                         AND b.met_partner_user_id = e.subject_user_id
-                         AND b.link_id = e.link_id
-                   ) AS couple_credit
-            FROM eligible e
-            """.trimIndent(),
-        ).use { statement ->
-            bindResolved(statement, resolved)
-            statement.executeQuery().use { rs ->
-                val person = mutableSetOf<UUID>()
-                val couple = mutableSetOf<UUID>()
-                while (rs.next()) {
-                    person += rs.getObject("id", UUID::class.java)
-                    if (rs.getBoolean("couple_credit")) couple += rs.getObject("voucher_user_id", UUID::class.java)
-                }
-                Qualifying(person, couple)
+    private fun Connection.setVoided(
+        pairTokens: List<String>,
+        voided: Boolean,
+        now: java.time.Instant,
+    ): Int {
+        if (pairTokens.isEmpty()) return 0
+        val sql =
+            if (voided) {
+                "UPDATE vouches SET voided_at = ? WHERE pair_token = ANY(?) AND voided_at IS NULL"
+            } else {
+                "UPDATE vouches SET voided_at = NULL WHERE ?::timestamptz IS NOT NULL AND pair_token = ANY(?) AND voided_at IS NOT NULL"
             }
+        return prepareStatement(sql).use { statement ->
+            statement.setTimestamp(1, Timestamp.from(now))
+            statement.setArray(2, createArrayOf("text", pairTokens.toTypedArray()))
+            statement.executeUpdate()
         }
     }
 
     /** Directed live confirmations among [people] (voucher, subject), found by recomputing pair tokens. */
-    private fun Connection.liveEdges(people: Set<UUID>): Set<Pair<UUID, UUID>> {
+    private fun Connection.liveEdges(
+        people: Set<UUID>,
+        now: java.time.Instant,
+    ): Set<Pair<UUID, UUID>> {
         val bounded = people.take(MAX_RING_PEOPLE)
         val byToken =
             buildMap<String, Pair<UUID, UUID>> {
                 bounded.forEach { a -> bounded.forEach { b -> if (a != b) put(tokens.pair(a, b), a to b) } }
             }
-        if (byToken.isEmpty()) return emptySet()
-        return prepareStatement(
-            "SELECT pair_token FROM vouches WHERE pair_token = ANY(?) AND withdrawn_at IS NULL AND voided_at IS NULL AND created_at > ?",
-        ).use { statement ->
-            statement.setArray(1, createArrayOf("text", byToken.keys.toTypedArray()))
-            statement.setTimestamp(2, Timestamp.from(MetInPersonRules.expiryCutoff(clock.instant())))
-            statement.executeQuery().use { rs ->
-                buildSet<Pair<UUID, UUID>> { while (rs.next()) byToken[rs.getString("pair_token")]?.let { add(it) } }
-            }
-        }
+        return storedByPairTokens(byToken.keys).filter { it.live(now) }.mapNotNull { byToken[it.pairToken] }.toSet()
     }
 
     private fun Connection.sharedDeviceWith(
@@ -331,8 +309,10 @@ data class AdminMetInPersonSubjectDto(
     val coupleBadge: Boolean,
     val frozen: Boolean,
     val showBadgeSetting: Boolean,
-    // Confirmations that would count if the batch ran now (the stored badge changes only at the batch).
+    // Independent qualifying vouchers if the batch ran now (published badges change only at batches,
+    // after the hysteresis delay).
     val qualifyingPersonCount: Int,
+    val personQualifiesNow: Boolean,
     val qualifyingCoupleCount: Int,
     val confirmations: List<AdminMetInPersonConfirmationDto>,
 )
@@ -344,9 +324,10 @@ data class AdminMetInPersonConfirmationDto(
     val voucherUserId: String? = null,
     val voucherDisplayName: String? = null,
     val givenOn: String,
+    val firstGivenOn: String,
     val withdrawnOn: String? = null,
     val voidedOn: String? = null,
-    val withPartnerUserId: String? = null,
+    val withPartner: Boolean = false,
     val coupleLinkActive: Boolean = false,
     val live: Boolean,
     val counts: Boolean,
@@ -363,8 +344,15 @@ data class AdminMetInPersonActionResultDto(
 )
 
 @Serializable
+data class AdminMetInPersonVoidRequestDto(
+    val subjectUserId: String,
+    val voided: Boolean = true,
+)
+
+@Serializable
 data class AdminMetInPersonVoidVoucherRequestDto(
     val voucherUserId: String,
+    val voided: Boolean = true,
 )
 
 @Serializable

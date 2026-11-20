@@ -6,32 +6,37 @@ import javax.crypto.spec.SecretKeySpec
 
 /**
  * Keyed pseudonyms for "Met in person" (TRUST_AND_SAFETY_SPEC "Met in person"): HMAC-SHA256 under the
- * server secret K3 (`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`), hex-encoded. Each kind has its own prefix so
- * a token of one kind can never equal a token of another.
+ * server key K3 (`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`), hex-encoded, one domain prefix per kind, so no
+ * token of one kind can equal a token of another and a token of one person differs by role.
  *
- * - [voucher]: the same for every confirmation one person gives. Used for the 30-day cap, an admin
- *   "void everything this person gave", deletion and export.
- * - [pair]: DIRECTED, voucher then subject. A confirming B and B confirming A are different pairs.
- *   Unique in storage, which is what makes a pair confirmable once.
- * - [conversation]: the conversation the confirmation was given from. Stored instead of the id,
- *   because a clear conversation id names the voucher through `direct_conversations`.
+ * - [pair]: DIRECTED, voucher then subject; the unique key of a confirmation.
+ * - [subject]: who a row is about. [partner]: the subject's partner on a couple confirmation.
+ * - [link]: the couple's canonical link row on a couple confirmation.
+ * - [checkValue]: proves the configured key is the one the rows were written with.
+ * - [auditVoucher]: names a voucher in the admin audit log for a key holder only.
  *
- * Without K3 none of these can be reversed; with K3 a token is matched by recomputing it for a
- * candidate user (everyone who shares a conversation with the subject), never decrypted.
+ * Without the key none of these can be reversed; with it, a token is matched by recomputing it over a
+ * candidate set (conversation partners), never decrypted.
  */
 class MetInPersonTokens(
     secret: String,
 ) {
     private val key = SecretKeySpec(secret.toByteArray(Charsets.UTF_8), ALGORITHM)
 
-    fun voucher(voucherUserId: UUID): String = hmac("voucher:$voucherUserId")
-
     fun pair(
         voucherUserId: UUID,
         subjectUserId: UUID,
     ): String = hmac("pair:$voucherUserId>$subjectUserId")
 
-    fun conversation(conversationId: UUID): String = hmac("conversation:$conversationId")
+    fun subject(userId: UUID): String = hmac("subject:$userId")
+
+    fun partner(userId: UUID): String = hmac("partner:$userId")
+
+    fun link(linkId: UUID): String = hmac("link:$linkId")
+
+    fun auditVoucher(userId: UUID): String = hmac("audit-voucher:$userId")
+
+    fun checkValue(): String = hmac("key-check:met-in-person")
 
     private fun hmac(input: String): String {
         // Mac is not thread-safe; one per call is cheap next to the database round trip.
@@ -47,8 +52,9 @@ class MetInPersonTokens(
         return out.toString()
     }
 
-    private companion object {
-        const val ALGORITHM = "HmacSHA256"
-        const val HEX = "0123456789abcdef"
+    companion object {
+        const val KEY_VERSION: Short = 1
+        private const val ALGORITHM = "HmacSHA256"
+        private const val HEX = "0123456789abcdef"
     }
 }

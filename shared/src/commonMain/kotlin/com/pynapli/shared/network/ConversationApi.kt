@@ -11,6 +11,7 @@ import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageMediaUploadSlotDto
 import com.pynapli.shared.network.dto.MetInPersonOfferDto
+import com.pynapli.shared.network.dto.MetInPersonOffersDto
 import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
@@ -81,6 +82,13 @@ interface ConversationApi {
     ): AppResult<ConversationPartnerInviteResponseDto>
 
     suspend fun leaveConversation(conversationId: String): AppResult<ConversationPartnerInviteResponseDto>
+
+    /** The caller's own "Met in person" actions here; asked for when the conversation menu opens. */
+    suspend fun getMetInPersonOffers(conversationId: String): AppResult<MetInPersonOffersDto> =
+        AppResult.Failure(
+            com.pynapli.shared.core.result
+                .AppError(code = "NOT_SUPPORTED", message = "Not available."),
+        )
 
     /** "We've met in person" (TRUST_AND_SAFETY_SPEC): the answer is the caller's own state for that person. */
     suspend fun confirmMetInPerson(

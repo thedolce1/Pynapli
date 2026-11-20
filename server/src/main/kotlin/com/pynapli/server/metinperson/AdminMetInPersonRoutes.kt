@@ -52,19 +52,26 @@ fun Application.configureAdminMetInPersonRoutes(
                 call.respond(service.view(actorId, call.uuidParameter("userId"), reason))
             }
 
+            // Body: { subjectUserId, voided } (false un-voids). The subject is checked against the row's token.
             post("/confirmations/{confirmationId}/void") {
                 val (actorId, reason) = call.requireSeniorWithReason()
-                call.respond(service.voidConfirmation(actorId, call.uuidParameter("confirmationId"), reason))
+                val request = call.receive<AdminMetInPersonVoidRequestDto>()
+                call.respond(
+                    service.setConfirmationVoided(
+                        actorId = actorId,
+                        subjectUserId = request.subjectUserId.toUserIdOrThrow(),
+                        confirmationId = call.uuidParameter("confirmationId"),
+                        voided = request.voided,
+                        reason = reason,
+                    ),
+                )
             }
 
             // The voucher id travels in the body, never the path (request-level audit rows store paths).
             post("/vouchers/void") {
                 val (actorId, reason) = call.requireSeniorWithReason()
                 val request = call.receive<AdminMetInPersonVoidVoucherRequestDto>()
-                val voucherUserId =
-                    runCatching { UUID.fromString(request.voucherUserId.trim()) }.getOrNull()
-                        ?: throw ModerationException("INVALID_USER_ID")
-                call.respond(service.voidAllFromVoucher(actorId, voucherUserId, reason))
+                call.respond(service.setVoucherVoided(actorId, request.voucherUserId.toUserIdOrThrow(), request.voided, reason))
             }
 
             post("/users/{userId}/freeze") {
@@ -77,3 +84,5 @@ fun Application.configureAdminMetInPersonRoutes(
 }
 
 private const val MAX_REASON_LENGTH = 500
+
+private fun String.toUserIdOrThrow(): UUID = runCatching { UUID.fromString(trim()) }.getOrNull() ?: throw ModerationException("INVALID_USER_ID")

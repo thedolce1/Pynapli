@@ -11,6 +11,7 @@ import com.pynapli.shared.network.dto.CreateMessageMediaUploadRequestDto
 import com.pynapli.shared.network.dto.MessageDto
 import com.pynapli.shared.network.dto.MessageMediaUploadSlotDto
 import com.pynapli.shared.network.dto.MetInPersonOfferDto
+import com.pynapli.shared.network.dto.MetInPersonOffersDto
 import com.pynapli.shared.network.dto.SendMediaMessageRequestDto
 import com.pynapli.shared.network.dto.SendMessageRequestDto
 import com.pynapli.shared.network.dto.SendTypingIndicatorRequestDto
@@ -48,6 +49,8 @@ internal class KtorConversationApi(
         }
 
     override suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto> = support.authPost("/v1/messages/threads/$conversationId/read")
+
+    override suspend fun getMetInPersonOffers(conversationId: String): AppResult<MetInPersonOffersDto> = support.authGet("/v1/messages/threads/$conversationId/met-in-person")
 
     override suspend fun confirmMetInPerson(
         conversationId: String,

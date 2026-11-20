@@ -8,15 +8,15 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
- * The "Met in person" rules (TRUST_AND_SAFETY_SPEC "Met in person"), as pure functions over facts the
- * repository loads, so the read-mark offer and the confirm write use exactly the same decision.
+ * The "Met in person" write-time rules (TRUST_AND_SAFETY_SPEC "Met in person"), as pure functions over
+ * facts the repository loads, so the menu offer and the confirm write make exactly the same decision.
  *
- * What the offer may depend on: only facts the viewer already knows (their own account, their own
- * confirmations, the conversation's messages, whether they were ever linked with or blocked the
- * person, whether the person is photo-verified, which is public). Facts the viewer does not know (the
- * person blocked them, the two share a device, the person's risk tier) never change the offer; they
- * are applied silently by the weekly batch, so a confirmation that can never count looks exactly like
- * one that does.
+ * The offer depends only on facts the viewer already knows: their own account (not their risk tier,
+ * which they are never shown), their own confirmations, the messages between the two of them, whether
+ * they were ever linked with or blocked the person, and the person's public verified badge. Everything
+ * the viewer does not know (the person blocked them, a shared device, either side's risk tier) is
+ * applied silently by the weekly batch, so a confirmation that will never count looks exactly like one
+ * that does.
  */
 object MetInPersonRules {
     const val PERSON_THRESHOLD = 3
@@ -29,10 +29,14 @@ object MetInPersonRules {
     val CAP_WINDOW: Duration = Duration.ofDays(30)
     val WITHDRAW_WINDOW: Duration = Duration.ofDays(30)
 
+    /** After taking a confirmation back, the same pair cannot give it again for this long. */
+    val REGIVE_WAIT: Duration = Duration.ofDays(180)
+
     /** 24 months. */
     val EXPIRY: Duration = Duration.ofDays(730)
 
-    val VOUCHER_RISK_TIERS = setOf("clean", "watch")
+    /** Risk tiers whose confirmations count at the batch (applied there, never at the offer). */
+    val COUNTED_VOUCHER_RISK_EXCLUDED = setOf("quarantine", "terminate")
 
     /** Stored dates are whole UTC days, so a confirmation cannot be lined up with a message or a session. */
     fun day(now: Instant): Instant = now.truncatedTo(ChronoUnit.DAYS)
@@ -48,8 +52,7 @@ object MetInPersonRules {
         viewer.activeAccount &&
             viewer.activeParticipant &&
             viewer.verified &&
-            !viewer.accountCreatedAt.isAfter(now.minus(MIN_ACCOUNT_AGE)) &&
-            viewer.riskTier in VOUCHER_RISK_TIERS
+            !viewer.accountCreatedAt.isAfter(now.minus(MIN_ACCOUNT_AGE))
 
     fun subjectQualifies(
         subject: MetInPersonSubjectFacts,
@@ -76,18 +79,18 @@ object MetInPersonRules {
     fun canWithdraw(
         row: MetInPersonPairRow?,
         now: Instant,
-    ): Boolean = isGiven(row, now) && !row!!.createdAt.isBefore(day(now).minus(WITHDRAW_WINDOW))
+    ): Boolean = row != null && isGiven(row, now) && !row.createdAt.isBefore(day(now).minus(WITHDRAW_WINDOW))
 
-    /** How many cap slots writing this pair takes: a row already given inside the window is counted. */
-    fun capSlotsNeeded(
+    /** Taken back less than 180 days ago: the pair cannot give it again yet. */
+    fun recentlyWithdrawn(
         row: MetInPersonPairRow?,
         now: Instant,
-    ): Int = if (row != null && !row.createdAt.isBefore(capWindowStart(now))) 0 else 1
+    ): Boolean = row?.withdrawnAt?.isAfter(day(now).minus(REGIVE_WAIT)) == true
 
     /**
      * The viewer's state for every other participant, actionable or not. [rows] holds the viewer's own
-     * confirmations by subject id; [capUsed] counts what the viewer gave in the cap window (withdrawn
-     * and voided rows included, so giving and taking back cannot reset the cap).
+     * confirmations by subject id; [capUsed] counts every confirmation the viewer gave in the cap window,
+     * withdrawn and voided ones included, so taking one back never refunds its slot.
      */
     fun states(
         viewer: MetInPersonViewerFacts,
@@ -99,29 +102,32 @@ object MetInPersonRules {
         val viewerOk = viewerQualifies(viewer, now)
         val capRemaining = MONTHLY_CAP - capUsed
         val byId = subjects.associateBy { it.subjectUserId }
+        fun confirmable(
+            facts: MetInPersonSubjectFacts,
+            row: MetInPersonPairRow?,
+        ): Boolean = !isGiven(row, now) && !recentlyWithdrawn(row, now) && subjectQualifies(facts, now)
         return subjects.map { subject ->
             val row = rows[subject.subjectUserId]
-            val given = isGiven(row, now)
-            val slots = capSlotsNeeded(row, now)
-            val canConfirm = !given && viewerOk && subjectQualifies(subject, now) && capRemaining >= slots
+            val canConfirm = viewerOk && capRemaining >= 1 && confirmable(subject, row)
             val partner =
-                if (!canConfirm) {
+                if (!canConfirm || capRemaining < 2) {
                     null
                 } else {
                     subject.partnerUserId
                         ?.takeIf { subject.partnerShown && subject.partnerLinkId != null }
                         ?.let { byId[it] }
+                        // Both partners' own profile rules show the link to this viewer.
                         ?.takeIf { partnerFacts ->
-                            val partnerRow = rows[partnerFacts.subjectUserId]
-                            subjectQualifies(partnerFacts, now) &&
-                                !isGiven(partnerRow, now) &&
-                                capRemaining >= slots + capSlotsNeeded(partnerRow, now)
-                        }?.let { MetInPersonPartnerDto(partnerUserId = it.subjectUserId.toString(), partnerDisplayName = it.displayName) }
+                            partnerFacts.partnerUserId == subject.subjectUserId &&
+                                partnerFacts.partnerShown &&
+                                confirmable(partnerFacts, rows[partnerFacts.subjectUserId])
+                        }
+                        ?.let { MetInPersonPartnerDto(partnerUserId = it.subjectUserId.toString(), partnerDisplayName = it.displayName) }
                 }
             MetInPersonOfferDto(
                 subjectUserId = subject.subjectUserId.toString(),
                 subjectDisplayName = subject.displayName,
-                given = given,
+                given = isGiven(row, now),
                 canConfirm = canConfirm,
                 canWithdraw = canWithdraw(row, now),
                 partner = partner,
@@ -136,11 +142,17 @@ object MetInPersonRules {
 data class MetInPersonViewerFacts(
     val activeAccount: Boolean,
     val activeParticipant: Boolean,
+    /** Any participant row, left or not: enough to take a confirmation back. */
+    val participant: Boolean,
     val verified: Boolean,
     val accountCreatedAt: Instant,
-    val riskTier: String,
 )
 
+/**
+ * Facts about one other participant relative to the viewer. Messages count only between the two of
+ * them: each must have sent a visible message after both were in the conversation; first and last are
+ * the earliest and latest such messages by either of them.
+ */
 data class MetInPersonSubjectFacts(
     val subjectUserId: UUID,
     val displayName: String,
@@ -155,16 +167,15 @@ data class MetInPersonSubjectFacts(
     /** The person's active linked partner, if any; offered as "and [partner]" only when also here. */
     val partnerUserId: UUID? = null,
     val partnerLinkId: UUID? = null,
-    /** Both partners' partner-visibility settings already show this link to the viewer. */
+    /** The profile's own linked-partner rule shows this partner to the viewer. */
     val partnerShown: Boolean = false,
 )
 
 data class MetInPersonPairRow(
     val pairToken: String,
-    val subjectUserId: UUID,
     val createdAt: Instant,
     val withdrawnAt: Instant?,
     val voidedAt: Instant?,
-    val metPartnerUserId: UUID?,
-    val linkId: UUID?,
+    val partnerToken: String?,
+    val linkToken: String?,
 )

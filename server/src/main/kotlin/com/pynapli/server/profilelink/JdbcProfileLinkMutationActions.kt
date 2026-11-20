@@ -159,13 +159,14 @@ internal class JdbcProfileLinkMutationActions(
                         RETURNING id
                     ),
                     -- Met in person (TRUST_AND_SAFETY_SPEC): unlinking voids couple credit for good. The
-                    -- link row id is reused on relink, so the couple fields are cleared here rather
-                    -- than left to the link status; personal confirmations stay.
-                    cleared_met_in_person AS (
-                        UPDATE vouches
-                        SET link_id = NULL
-                        WHERE link_id IN (SELECT id FROM unlinked)
-                        RETURNING id
+                    -- link row id is reused on relink, so the end is recorded: couple confirmations
+                    -- given before it never count again, and the couple badge goes off now. Personal
+                    -- confirmations stay.
+                    ended_met_in_person_links AS (
+                        INSERT INTO vouch_link_ends (link_id, ended_at)
+                        SELECT id, now() FROM unlinked
+                        ON CONFLICT (link_id) DO UPDATE SET ended_at = EXCLUDED.ended_at
+                        RETURNING link_id
                     ),
                     cleared_met_in_person_badges AS (
                         UPDATE vouch_badges

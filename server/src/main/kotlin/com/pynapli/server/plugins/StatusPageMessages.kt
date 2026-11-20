@@ -147,6 +147,7 @@ internal fun userSafeMessage(code: String): String =
         "MESSAGING_NOT_ALLOWED" -> "This profile is not accepting grid messages."
         "MET_IN_PERSON_NOT_AVAILABLE" -> "This isn't available in this chat right now."
         "MET_IN_PERSON_CONFIRMATION_NOT_FOUND" -> "That confirmation was not found."
+        "MET_IN_PERSON_KEY_MISMATCH" -> "Met in person is paused: the configured key does not match the stored one."
         "CONVERSATION_NOT_FOUND" -> "Conversation was not found."
         "LINKED_PARTNER_NOT_FOUND" -> "No linked partner is available."
         "PARTNER_INVITE_NOT_FOUND" -> "Chat invite was not found."

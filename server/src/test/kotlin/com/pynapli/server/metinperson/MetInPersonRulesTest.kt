@@ -10,16 +10,16 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The pure decision both the read-mark offer and the confirm write use. */
+/** The pure write-time decision, the hysteresis, and the tokens. */
 class MetInPersonRulesTest {
     private val now = Instant.parse("2026-11-18T12:00:00Z")
     private val viewer =
         MetInPersonViewerFacts(
             activeAccount = true,
             activeParticipant = true,
+            participant = true,
             verified = true,
             accountCreatedAt = now.minus(Duration.ofDays(30)),
-            riskTier = "clean",
         )
     private val sam = UUID.randomUUID()
     private val riley = UUID.randomUUID()
@@ -47,11 +47,10 @@ class MetInPersonRulesTest {
     )
 
     private fun row(
-        subjectUserId: UUID = sam,
         createdAt: Instant = MetInPersonRules.day(now),
         withdrawnAt: Instant? = null,
         voidedAt: Instant? = null,
-    ) = MetInPersonPairRow("token-$subjectUserId", subjectUserId, createdAt, withdrawnAt, voidedAt, null, null)
+    ) = MetInPersonPairRow("token-${UUID.randomUUID()}", createdAt, withdrawnAt, voidedAt, null, null)
 
     private fun state(
         subjects: List<MetInPersonSubjectFacts> = listOf(subject()),
@@ -69,10 +68,8 @@ class MetInPersonRulesTest {
     fun eachViewerRuleIsEnforced() {
         assertFalse(state(viewerFacts = viewer.copy(verified = false)).canConfirm)
         assertFalse(state(viewerFacts = viewer.copy(accountCreatedAt = now.minus(Duration.ofDays(29)))).canConfirm)
-        assertFalse(state(viewerFacts = viewer.copy(riskTier = "friction")).canConfirm)
-        assertFalse(state(viewerFacts = viewer.copy(riskTier = "quarantine")).canConfirm)
-        assertTrue(state(viewerFacts = viewer.copy(riskTier = "watch")).canConfirm)
         assertFalse(state(viewerFacts = viewer.copy(activeAccount = false)).canConfirm)
+        assertFalse(state(viewerFacts = viewer.copy(activeParticipant = false)).canConfirm)
     }
 
     @Test
@@ -92,56 +89,86 @@ class MetInPersonRulesTest {
     }
 
     @Test
-    fun alreadyGivenIsWithdrawableForThirtyDaysAndAVoidIsInvisible() {
+    fun givenIsWithdrawableForThirtyDaysAndAVoidIsInvisible() {
         val given = state(rows = mapOf(sam to row()))
-        assertTrue(given.given)
-        assertFalse(given.canConfirm)
-        assertTrue(given.canWithdraw)
+        assertTrue(given.given && given.canWithdraw && !given.canConfirm)
         assertEquals(given, state(rows = mapOf(sam to row(voidedAt = now))))
         val old = state(rows = mapOf(sam to row(createdAt = MetInPersonRules.day(now).minus(Duration.ofDays(31)))))
-        assertTrue(old.given)
-        assertFalse(old.canWithdraw)
+        assertTrue(old.given && !old.canWithdraw)
     }
 
     @Test
-    fun aWithdrawnOrExpiredPairCanBeGivenAgain() {
-        assertTrue(state(rows = mapOf(sam to row(withdrawnAt = now))).canConfirm)
-        assertTrue(state(rows = mapOf(sam to row(createdAt = now.minus(Duration.ofDays(731))))).canConfirm)
+    fun takenBackMeans180DaysBeforeGivingAgain() {
+        assertFalse(state(rows = mapOf(sam to row(withdrawnAt = MetInPersonRules.day(now)))).canConfirm)
+        assertFalse(state(rows = mapOf(sam to row(withdrawnAt = MetInPersonRules.day(now).minus(Duration.ofDays(179))))).canConfirm)
+        assertTrue(state(rows = mapOf(sam to row(withdrawnAt = MetInPersonRules.day(now).minus(Duration.ofDays(181))))).canConfirm)
+        assertTrue(state(rows = mapOf(sam to row(createdAt = now.minus(Duration.ofDays(731))))).canConfirm, "expired")
     }
 
     @Test
-    fun theMonthlyCapCountsSlots() {
+    fun theCapIsNeverRefundedByAWithdrawal() {
         assertTrue(state(capUsed = MetInPersonRules.MONTHLY_CAP - 1).canConfirm)
         assertFalse(state(capUsed = MetInPersonRules.MONTHLY_CAP).canConfirm)
-        // Giving again a pair withdrawn inside the window takes no new slot.
-        assertTrue(state(rows = mapOf(sam to row(withdrawnAt = now)), capUsed = MetInPersonRules.MONTHLY_CAP).canConfirm)
     }
 
     @Test
-    fun thePartnerTickNeedsThePartnerHereQualifyingAndShown() {
+    fun thePartnerTickNeedsThePartnerHereQualifyingAndShownBothWays() {
         val withPartner = listOf(subject(partner = riley), subject(id = riley, name = "Riley", partner = sam))
         assertEquals("Riley", state(subjects = withPartner).partner?.partnerDisplayName)
-        // Not in this conversation.
-        assertNull(state(subjects = listOf(subject(partner = riley))).partner)
-        // The link is hidden from this viewer.
-        assertNull(state(subjects = listOf(subject(partner = riley, shown = false), withPartner[1])).partner)
-        // The partner does not qualify on their own.
+        assertNull(state(subjects = listOf(subject(partner = riley))).partner, "not in this conversation")
+        assertNull(state(subjects = listOf(subject(partner = riley, shown = false), withPartner[1])).partner, "Sam's rule hides it")
+        assertNull(state(subjects = listOf(withPartner[0], withPartner[1].copy(partnerShown = false))).partner, "Riley's rule hides it")
         assertNull(state(subjects = listOf(withPartner[0], withPartner[1].copy(subjectSent = false))).partner)
-        // Already confirmed, or no room under the cap for both.
-        assertNull(state(subjects = withPartner, rows = mapOf(riley to row(subjectUserId = riley))).partner)
+        assertNull(state(subjects = withPartner, rows = mapOf(riley to row())).partner)
         assertNull(state(subjects = withPartner, capUsed = MetInPersonRules.MONTHLY_CAP - 1).partner)
-        assertTrue(state(subjects = withPartner, capUsed = MetInPersonRules.MONTHLY_CAP - 1).canConfirm)
     }
 
     @Test
-    fun tokensAreDirectedAndKeyed() {
+    fun aCrossingOnTakesOneToFourExtraBatches() {
+        listOf(1, 2, 3, 4).forEach { delay ->
+            var track = BadgeTrack(published = false)
+            var batches = 0
+            while (!track.published) {
+                track = MetInPersonHysteresis.step(track, qualifies = true, delay = { delay })
+                batches++
+                check(batches < 10)
+            }
+            assertEquals(1 + delay, batches)
+        }
+    }
+
+    @Test
+    fun aCrossingOffNeedsTwoBatchesBelowThenTheDelay() {
+        listOf(1, 4).forEach { delay ->
+            var track = BadgeTrack(published = true)
+            var batches = 0
+            while (track.published) {
+                track = MetInPersonHysteresis.step(track, qualifies = false, delay = { delay })
+                batches++
+                check(batches < 12)
+            }
+            assertEquals(MetInPersonHysteresis.OFF_STREAK + delay, batches)
+            assertTrue(track.idle)
+        }
+    }
+
+    @Test
+    fun aCrossingThatReversesIsCancelled() {
+        val pending = MetInPersonHysteresis.step(BadgeTrack(published = false), qualifies = true, delay = { 3 })
+        assertEquals(BadgeTrack(published = false), MetInPersonHysteresis.step(pending, qualifies = false, delay = { 3 }))
+        val dipping = MetInPersonHysteresis.step(BadgeTrack(published = true), qualifies = false, delay = { 3 })
+        assertEquals(BadgeTrack(published = true), MetInPersonHysteresis.step(dipping, qualifies = true, delay = { 3 }))
+    }
+
+    @Test
+    fun tokensAreDirectedKeyedAndSeparatedByKind() {
         val tokens = MetInPersonTokens("key-one")
         val a = UUID.randomUUID()
         val b = UUID.randomUUID()
         assertNotEquals(tokens.pair(a, b), tokens.pair(b, a))
         assertEquals(tokens.pair(a, b), MetInPersonTokens("key-one").pair(a, b))
         assertNotEquals(tokens.pair(a, b), MetInPersonTokens("key-two").pair(a, b))
-        assertNotEquals(tokens.voucher(a), tokens.conversation(a))
-        assertFalse(tokens.voucher(a).contains(a.toString()))
+        assertEquals(4, setOf(tokens.subject(a), tokens.partner(a), tokens.link(a), tokens.auditVoucher(a)).size)
+        assertNotEquals(MetInPersonTokens("key-one").checkValue(), MetInPersonTokens("key-two").checkValue())
     }
 }

@@ -4,10 +4,7 @@ import com.pynapli.server.db.JobLock
 import com.pynapli.server.db.UnlockedJobs
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
-import com.pynapli.server.metinperson.MetInPersonResolution.RESOLVED_AND_ELIGIBLE_CTES
-import com.pynapli.server.metinperson.MetInPersonResolution.bindResolved
-import com.pynapli.server.metinperson.MetInPersonResolution.liveVouches
-import com.pynapli.server.metinperson.MetInPersonResolution.resolveVouchers
+import com.pynapli.server.metinperson.JdbcMetInPersonSql.keyMatches
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,94 +22,310 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
+import java.util.UUID
 import javax.sql.DataSource
 import kotlin.random.Random
 import kotlin.random.asKotlinRandom
 
 /**
- * The only writer of badges (TRUST_AND_SAFETY_SPEC "Met in person"). Badges are recomputed once a
- * week, at a random moment inside that week (UTC Monday to Monday), never when a confirmation is
- * written, so the moment a badge appears or disappears cannot be tied to one confirmation or meeting.
+ * The only writer of earned badges (TRUST_AND_SAFETY_SPEC "Met in person"). Once a week, at a random
+ * moment inside that UTC Monday-to-Monday week, it re-evaluates every member in chunks and moves each
+ * badge one step through [MetInPersonHysteresis]; a confirmation never changes a badge directly.
  *
- * The due time lives in `vouch_batch_schedule` (one row). The check, the badge rewrite and the move to
- * next week's random time happen in one transaction holding that row's lock, so concurrent replicas
- * (or ticks) run it exactly once per week; a deploy does not re-roll the time.
+ * - The run is claimed in its own short transaction (`vouch_batch_schedule`, row lock): the due check and
+ *   the move to next week's random time happen together, so concurrent replicas or ticks run it once,
+ *   and a deploy does not re-roll the time.
+ * - Each chunk of members is its own short transaction; nothing loads every confirmation.
+ * - A couple badge is written only if its link is still active at write time, and is stamped with the
+ *   chunk's database time, so a concurrent unlink (which stamps `vouch_link_ends`) always wins and a
+ *   relink can never bring back a badge published before it.
+ * - It refuses to run when the configured key does not match the stored check value.
  */
 class MetInPersonBadgeBatch(
     private val dataSource: DataSource,
     private val tokens: MetInPersonTokens,
     private val clock: Clock = Clock.systemUTC(),
     private val random: Random = SecureRandom().asKotlinRandom(),
+    private val chunkSize: Int = 500,
 ) {
-    /** Recomputes if this week's random time has passed and it has not run since. True when it ran. */
-    suspend fun runIfDue(): Boolean =
-        dataSource.withConnection { connection ->
-            connection.inTransaction {
-                val now = clock.instant()
-                ensureSchedule(randomTimeInWeekOf(now))
-                val nextRunAt = lockedNextRunAt()
-                if (nextRunAt.isAfter(now)) return@inTransaction false
-                recompute(this, now)
-                advanceSchedule(now, randomTimeInWeekOf(weekStart(now).plus(WEEK)))
-                true
-            }
-        }
+    private val evaluator = MetInPersonEvaluator(tokens)
 
-    /** Recomputes now, outside the schedule. Tests, and an operator's one-off after a migration. */
-    suspend fun recomputeNow(): Int =
-        dataSource.withConnection { connection ->
-            connection.inTransaction { recompute(this, clock.instant()) }
-        }
+    /** Runs this week's pass if its random time has passed and it has not run. True when it ran. */
+    suspend fun runIfDue(): Boolean {
+        val now = clock.instant()
+        val claimed =
+            dataSource.withConnection { connection ->
+                connection.inTransaction {
+                    if (!keyMatches(tokens, now)) return@inTransaction false
+                    ensureSchedule(randomTimeInWeekOf(now))
+                    if (lockedNextRunAt().isAfter(now)) return@inTransaction false
+                    advanceSchedule(now, randomTimeInWeekOf(weekStart(now).plus(WEEK)))
+                    true
+                }
+            }
+        if (claimed) runPass(now)
+        return claimed
+    }
+
+    /** One pass now, outside the schedule (tests; an operator's one-off). Returns members written. */
+    suspend fun recomputeNow(): Int {
+        val now = clock.instant()
+        val keyOk = dataSource.withConnection { connection -> connection.keyMatches(tokens, now) }
+        return if (keyOk) runPass(now) else 0
+    }
 
     internal fun randomTimeInWeekOf(instant: Instant): Instant = weekStart(instant).plusSeconds(random.nextLong(WEEK.seconds))
 
-    private fun recompute(
+    private suspend fun runPass(now: Instant): Int {
+        var after: UUID? = null
+        var written = 0
+        while (true) {
+            val chunk = dataSource.withConnection { connection -> connection.userChunk(after, chunkSize) }
+            if (chunk.isEmpty()) break
+            written += dataSource.withConnection { connection -> connection.inTransaction { processChunk(this, chunk, now) } }
+            after = chunk.last()
+        }
+        return written
+    }
+
+    private fun processChunk(
         connection: Connection,
+        userIds: List<UUID>,
         now: Instant,
     ): Int {
-        val live = connection.liveVouches(now)
-        val resolved = connection.resolveVouchers(live, tokens)
-        return connection
-            .prepareStatement(
-                """
-                WITH $RESOLVED_AND_ELIGIBLE_CTES,
-                person AS (
-                    SELECT subject_user_id, count(DISTINCT voucher_user_id) AS n
-                    FROM eligible
-                    GROUP BY subject_user_id
-                ),
-                badge_subjects AS (
-                    SELECT subject_user_id FROM person
-                    UNION
-                    SELECT subject_user_id FROM vouch_badges
+        val evaluations = evaluator.evaluate(connection, userIds, now)
+        val published = connection.publishedBadges(userIds)
+        val tokenOf = userIds.associateWith { tokens.subject(it) }
+        val states = connection.badgeStates(tokenOf.values)
+        var written = 0
+        userIds.forEach { userId ->
+            val evaluation = evaluations[userId]
+            val badge = published[userId]
+            val state = states[tokenOf.getValue(userId)]
+            if (evaluation == null && badge == null && state == null) return@forEach
+            written++
+            if (badge?.frozen == true) {
+                connection.writeBadge(userId, person = false, couple = false, coupleLinkId = null, frozen = true)
+                connection.deleteState(tokenOf.getValue(userId))
+                return@forEach
+            }
+            val person =
+                MetInPersonHysteresis.step(
+                    track = BadgeTrack(published = badge?.person == true, target = state?.personTarget, remaining = state?.personRemaining, below = state?.personBelow ?: 0),
+                    qualifies = evaluation?.personQualifies == true,
+                    delay = ::extraBatches,
                 )
-                INSERT INTO vouch_badges (subject_user_id, person_badge, couple_badge, couple_link_id, computed_at)
-                SELECT s.subject_user_id,
-                       COALESCE(p.n, 0) >= ${MetInPersonRules.PERSON_THRESHOLD},
-                       c.link_id IS NOT NULL,
-                       c.link_id,
-                       ?
-                FROM badge_subjects s
-                LEFT JOIN person p ON p.subject_user_id = s.subject_user_id
-                LEFT JOIN LATERAL (
-                    SELECT cc.link_id
-                    FROM couple cc
-                    WHERE cc.subject_user_id = s.subject_user_id
-                      AND cc.n >= ${MetInPersonRules.COUPLE_THRESHOLD}
-                    ORDER BY cc.n DESC, cc.link_id
-                    LIMIT 1
-                ) c ON true
-                ON CONFLICT (subject_user_id) DO UPDATE
-                SET person_badge = EXCLUDED.person_badge AND vouch_badges.frozen_at IS NULL,
-                    couple_badge = EXCLUDED.couple_badge AND vouch_badges.frozen_at IS NULL,
-                    couple_link_id = CASE WHEN vouch_badges.frozen_at IS NULL THEN EXCLUDED.couple_link_id END,
-                    computed_at = EXCLUDED.computed_at
-                """.trimIndent(),
-            ).use { statement ->
-                connection.bindResolved(statement, resolved)
-                statement.setTimestamp(3, Timestamp.from(now))
+            val publishedCoupleToken = badge?.coupleLinkId?.takeIf { badge.couple }?.let(tokens::link)
+            val couple =
+                MetInPersonHysteresis.step(
+                    track =
+                        BadgeTrack(
+                            published = badge?.couple == true,
+                            target = state?.coupleTarget,
+                            remaining = state?.coupleRemaining,
+                            below = state?.coupleBelow ?: 0,
+                            linkToken = if (badge?.couple == true) publishedCoupleToken else state?.coupleLinkToken,
+                        ),
+                    qualifies = evaluation?.coupleLinkToken != null,
+                    token = evaluation?.coupleLinkToken,
+                    delay = ::extraBatches,
+                )
+            // The link id to publish: the one already published, or the one this batch qualified with.
+            val coupleLinkId =
+                when {
+                    !couple.published -> null
+                    badge?.couple == true -> badge.coupleLinkId
+                    else -> evaluation?.coupleLinkId
+                }
+            connection.writeBadge(userId, person = person.published, couple = couple.published && coupleLinkId != null, coupleLinkId = coupleLinkId, frozen = false)
+            if (person.idle && couple.idle) {
+                connection.deleteState(tokenOf.getValue(userId))
+            } else {
+                connection.writeState(tokenOf.getValue(userId), person, couple)
+            }
+        }
+        return written
+    }
+
+    private fun extraBatches(): Int = random.nextInt(MetInPersonHysteresis.MIN_EXTRA_BATCHES, MetInPersonHysteresis.MAX_EXTRA_BATCHES + 1)
+
+    private class Published(
+        val person: Boolean,
+        val couple: Boolean,
+        val coupleLinkId: UUID?,
+        val frozen: Boolean,
+    )
+
+    private class State(
+        val personTarget: Boolean?,
+        val personRemaining: Int?,
+        val personBelow: Int,
+        val coupleTarget: Boolean?,
+        val coupleRemaining: Int?,
+        val coupleBelow: Int,
+        val coupleLinkToken: String?,
+    )
+
+    private fun Connection.userChunk(
+        after: UUID?,
+        size: Int,
+    ): List<UUID> =
+        prepareStatement(
+            "SELECT id FROM users WHERE (?::uuid IS NULL OR id > ?::uuid) ORDER BY id LIMIT ?",
+        ).use { statement ->
+            statement.setObject(1, after)
+            statement.setObject(2, after)
+            statement.setInt(3, size)
+            statement.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getObject(1, UUID::class.java)) } }
+        }
+
+    private fun Connection.publishedBadges(userIds: List<UUID>): Map<UUID, Published> =
+        prepareStatement(
+            "SELECT subject_user_id, person_badge, couple_badge, couple_link_id, frozen_at FROM vouch_badges WHERE subject_user_id = ANY(?)",
+        ).use { statement ->
+            statement.setArray(1, createArrayOf("uuid", userIds.toTypedArray()))
+            statement.executeQuery().use { rs ->
+                buildMap {
+                    while (rs.next()) {
+                        put(
+                            rs.getObject("subject_user_id", UUID::class.java),
+                            Published(
+                                person = rs.getBoolean("person_badge"),
+                                couple = rs.getBoolean("couple_badge"),
+                                coupleLinkId = rs.getObject("couple_link_id", UUID::class.java),
+                                frozen = rs.getTimestamp("frozen_at") != null,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+    private fun Connection.badgeStates(subjectTokens: Collection<String>): Map<String, State> =
+        prepareStatement(
+            """
+            SELECT subject_token, person_target, person_remaining, person_below,
+                   couple_target, couple_remaining, couple_below, couple_link_token
+            FROM vouch_badge_states
+            WHERE subject_token = ANY(?)
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setArray(1, createArrayOf("text", subjectTokens.toTypedArray()))
+            statement.executeQuery().use { rs ->
+                buildMap {
+                    while (rs.next()) {
+                        put(
+                            rs.getString("subject_token"),
+                            State(
+                                personTarget = rs.getObject("person_target") as Boolean?,
+                                personRemaining = (rs.getObject("person_remaining") as Number?)?.toInt(),
+                                personBelow = rs.getInt("person_below"),
+                                coupleTarget = rs.getObject("couple_target") as Boolean?,
+                                coupleRemaining = (rs.getObject("couple_remaining") as Number?)?.toInt(),
+                                coupleBelow = rs.getInt("couple_below"),
+                                coupleLinkToken = rs.getString("couple_link_token"),
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+    /**
+     * Writes the published badges, or deletes the row when both are off and the member is not frozen
+     * (an all-false row would say someone once confirmed them). The couple badge is kept only while its
+     * link is active at write time; `couple_since` is this transaction's database time when it is newly
+     * published, so a link end stamped after it hides it.
+     */
+    private fun Connection.writeBadge(
+        userId: UUID,
+        person: Boolean,
+        couple: Boolean,
+        coupleLinkId: UUID?,
+        frozen: Boolean,
+    ) {
+        if (!person && !couple && !frozen) {
+            prepareStatement("DELETE FROM vouch_badges WHERE subject_user_id = ? AND frozen_at IS NULL").use { statement ->
+                statement.setObject(1, userId)
                 statement.executeUpdate()
             }
+            return
+        }
+        prepareStatement(
+            """
+            INSERT INTO vouch_badges (subject_user_id, person_badge, couple_badge, couple_link_id, couple_since, updated_at)
+            SELECT ?::uuid, ?::boolean, linked.ok, CASE WHEN linked.ok THEN ?::uuid END, CASE WHEN linked.ok THEN now() END, ?::timestamptz
+            FROM (
+                SELECT (?::boolean AND EXISTS (
+                    SELECT 1 FROM user_profile_links l
+                    WHERE l.id = ?::uuid AND l.status = 'active' AND l.unlinked_at IS NULL
+                )) AS ok
+            ) linked
+            ON CONFLICT (subject_user_id) DO UPDATE
+            SET person_badge = EXCLUDED.person_badge AND vouch_badges.frozen_at IS NULL,
+                couple_badge = EXCLUDED.couple_badge AND vouch_badges.frozen_at IS NULL,
+                couple_link_id = EXCLUDED.couple_link_id,
+                couple_since =
+                    CASE
+                        WHEN EXCLUDED.couple_badge
+                             AND vouch_badges.couple_badge
+                             AND vouch_badges.couple_link_id = EXCLUDED.couple_link_id
+                        THEN vouch_badges.couple_since
+                        ELSE EXCLUDED.couple_since
+                    END,
+                updated_at = EXCLUDED.updated_at
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, userId)
+            statement.setBoolean(2, person && !frozen)
+            statement.setObject(3, coupleLinkId)
+            statement.setTimestamp(4, Timestamp.from(clock.instant()))
+            statement.setBoolean(5, couple && !frozen)
+            statement.setObject(6, coupleLinkId)
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.writeState(
+        subjectToken: String,
+        person: BadgeTrack,
+        couple: BadgeTrack,
+    ) {
+        prepareStatement(
+            """
+            INSERT INTO vouch_badge_states (
+                subject_token, person_target, person_remaining, person_below,
+                couple_target, couple_remaining, couple_below, couple_link_token, key_version
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (subject_token) DO UPDATE
+            SET person_target = EXCLUDED.person_target,
+                person_remaining = EXCLUDED.person_remaining,
+                person_below = EXCLUDED.person_below,
+                couple_target = EXCLUDED.couple_target,
+                couple_remaining = EXCLUDED.couple_remaining,
+                couple_below = EXCLUDED.couple_below,
+                couple_link_token = EXCLUDED.couple_link_token
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setString(1, subjectToken)
+            statement.setObject(2, person.target, java.sql.Types.BOOLEAN)
+            statement.setObject(3, person.remaining?.toShort(), java.sql.Types.SMALLINT)
+            statement.setShort(4, person.below.toShort())
+            statement.setObject(5, couple.target, java.sql.Types.BOOLEAN)
+            statement.setObject(6, couple.remaining?.toShort(), java.sql.Types.SMALLINT)
+            statement.setShort(7, couple.below.toShort())
+            statement.setString(8, couple.linkToken.takeIf { couple.target != null })
+            statement.setShort(9, MetInPersonTokens.KEY_VERSION)
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.deleteState(subjectToken: String) {
+        prepareStatement("DELETE FROM vouch_badge_states WHERE subject_token = ?").use { statement ->
+            statement.setString(1, subjectToken)
+            statement.executeUpdate()
+        }
     }
 
     private fun Connection.ensureSchedule(firstRunAt: Instant) {
@@ -157,8 +370,8 @@ class MetInPersonBadgeBatch(
 }
 
 /**
- * Ticks [MetInPersonBadgeBatch.runIfDue] (cheap when not due) under the shared [JobLock], following
- * the other periodic single-run jobs (`TonightSessionExpiryWorker`, `DataRetentionWorker`).
+ * Ticks [MetInPersonBadgeBatch.runIfDue] (cheap when not due) under the shared [JobLock], following the
+ * other periodic single-run jobs (`TonightSessionExpiryWorker`, `DataRetentionWorker`).
  */
 class MetInPersonBadgeWorker(
     private val batch: MetInPersonBadgeBatch,
@@ -176,10 +389,10 @@ class MetInPersonBadgeWorker(
                 while (isActive) {
                     runCatching {
                         jobLock.runExclusive("met-in-person-badges") {
-                            if (batch.runIfDue()) logger.info("Met in person weekly badge recompute ran")
+                            if (batch.runIfDue()) logger.info("Met in person weekly badge pass ran")
                         }
                     }.onFailure { error ->
-                        logger.warn("Met in person badge recompute failed", error)
+                        logger.warn("Met in person badge pass failed", error)
                     }
                     delay(intervalMillis)
                 }

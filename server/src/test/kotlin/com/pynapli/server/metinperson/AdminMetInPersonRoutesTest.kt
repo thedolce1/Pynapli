@@ -74,6 +74,11 @@ class AdminMetInPersonRoutesTest {
 
     private fun auditRows(action: String): Int = fx.count("SELECT count(*) FROM admin_audit_log WHERE action = ?", action)
 
+    private fun settle() =
+        runBlocking {
+            repeat(8) { batch.recomputeNow() }
+        }
+
     /** Sam confirmed by three members; returns (subject, vouchers). */
     private fun confirmedSubject(): Pair<UUID, List<UUID>> =
         runBlocking {
@@ -93,6 +98,9 @@ class AdminMetInPersonRoutesTest {
             val stranger = fx.member("Stranger ${UUID.randomUUID()}")
             assertNotNull(JdbcProfileRepository(dataSource).getPublicProfile(stranger, subject)).toDto(null).metInPerson
         }
+
+    private fun firstVouchId(subject: UUID): UUID =
+        UUID.fromString(fx.queryText("SELECT id::text FROM vouches WHERE subject_token = ? ORDER BY id LIMIT 1", tokens.subject(subject)))
 
     @Test
     fun theViewNeedsTheAdminToken() =
@@ -139,7 +147,7 @@ class AdminMetInPersonRoutesTest {
     fun aSeniorAdminSeesResolvedVouchersFlagsAndTheViewIsAudited() =
         testApplication {
             val (subject, vouchers) = confirmedSubject()
-            // Voucher 1 and Sam confirmed each other; voucher 2 shares a device with Sam.
+            // Sam confirmed voucher 1 back; voucher 2 used Sam's device before confirming.
             runBlocking {
                 service.confirm(
                     subject,
@@ -158,33 +166,48 @@ class AdminMetInPersonRoutesTest {
             assertTrue(body.contains("\"reciprocal\":true"))
             assertTrue(body.contains("\"sharedDevice\":true"))
             assertEquals(1, auditRows("met_in_person.view"))
-            // The audit row names the subject, never a voucher.
-            val auditText =
-                dataSource.connection.use { connection ->
-                    connection.createStatement().use { statement ->
-                        statement.executeQuery("SELECT coalesce(target_id::text, '') || ' ' || metadata::text FROM admin_audit_log").use { rs ->
-                            buildString { while (rs.next()) append(rs.getString(1)) }
-                        }
-                    }
+            val auditText = allAuditText()
+            vouchers.forEach { assertFalse(auditText.contains(it.toString()), "the audit log never names a voucher in clear") }
+        }
+
+    private fun allAuditText(): String =
+        dataSource.connection.use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT coalesce(target_id::text, '') || ' ' || metadata::text FROM admin_audit_log").use { rs ->
+                    buildString { while (rs.next()) append(rs.getString(1)) }
                 }
-            vouchers.forEach { assertFalse(auditText.contains(it.toString())) }
+            }
         }
 
     @Test
-    fun voidingOneConfirmationEverythingAVoucherGaveAndFreezingAreAudited() =
+    fun voidingAndUnvoidingAreAuditedSoAKeyHolderCanTellWhose() =
         testApplication {
             val (subject, vouchers) = confirmedSubject()
-            runBlocking { batch.recomputeNow() }
+            settle()
             assertTrue(personBadge(subject))
             application { install(config()) }
 
-            val confirmationId = fx.firstVouchId(subject)
-            val voidOne = client.post("/v1/admin/met-in-person/confirmations/$confirmationId/void") { adminHeaders("senior-1") }
+            val confirmationId = firstVouchId(subject)
+            val voidOne =
+                client.post("/v1/admin/met-in-person/confirmations/$confirmationId/void") {
+                    adminHeaders("senior-1")
+                    jsonBody("""{"subjectUserId":"$subject"}""")
+                }
             assertEquals(HttpStatusCode.OK, voidOne.status, voidOne.bodyAsText())
             assertEquals(1, auditRows("met_in_person.void_confirmation"))
-            assertTrue(personBadge(subject), "a void changes the badge at the next batch")
-            runBlocking { batch.recomputeNow() }
+            assertTrue(personBadge(subject), "a void changes the badge only through later batches")
+            settle()
             assertFalse(personBadge(subject))
+
+            val undo =
+                client.post("/v1/admin/met-in-person/confirmations/$confirmationId/void") {
+                    adminHeaders("senior-1")
+                    jsonBody("""{"subjectUserId":"$subject","voided":false}""")
+                }
+            assertEquals(HttpStatusCode.OK, undo.status, undo.bodyAsText())
+            assertEquals(1, auditRows("met_in_person.unvoid_confirmation"))
+            settle()
+            assertTrue(personBadge(subject))
 
             val voidVoucher =
                 client.post("/v1/admin/met-in-person/vouchers/void") {
@@ -193,7 +216,9 @@ class AdminMetInPersonRoutesTest {
                 }
             assertEquals(HttpStatusCode.OK, voidVoucher.status, voidVoucher.bodyAsText())
             assertTrue(voidVoucher.bodyAsText().contains("\"affected\":1"))
-            assertEquals(1, auditRows("met_in_person.void_voucher"))
+            val auditText = allAuditText()
+            assertTrue(auditText.contains(tokens.auditVoucher(vouchers[1])), "a key holder can tell whose were voided")
+            vouchers.forEach { assertFalse(auditText.contains(it.toString())) }
 
             val freeze =
                 client.post("/v1/admin/met-in-person/users/$subject/freeze") {
@@ -209,14 +234,14 @@ class AdminMetInPersonRoutesTest {
     fun aFrozenBadgeStaysOffAtEveryBatch() {
         runBlocking {
             val (subject, _) = confirmedSubject()
-            batch.recomputeNow()
+            settle()
             assertTrue(personBadge(subject))
             admin.setFrozen("senior-1", subject, frozen = true, reason = "ring")
             assertFalse(personBadge(subject))
-            batch.recomputeNow()
+            settle()
             assertFalse(personBadge(subject))
             admin.setFrozen("senior-1", subject, frozen = false, reason = "cleared")
-            batch.recomputeNow()
+            settle()
             assertTrue(personBadge(subject))
         }
     }
@@ -225,10 +250,10 @@ class AdminMetInPersonRoutesTest {
     fun aVoidIsInvisibleToTheVoucher() {
         runBlocking {
             val (subject, vouchers) = confirmedSubject()
-            val conversation = dataSource.directConversation(vouchers[0], subject)
-            val before = service.offersFor(vouchers[0], conversation)
-            admin.voidAllFromVoucher("senior-1", vouchers[0], "farm")
-            assertEquals(before, service.offersFor(vouchers[0], conversation))
+            val conversation = dataSource.directConversation(vouchers[0], subject).toString()
+            val before = service.offers(vouchers[0], conversation)
+            admin.setVoucherVoided("senior-1", vouchers[0], voided = true, reason = "farm")
+            assertEquals(before, service.offers(vouchers[0], conversation))
         }
     }
 
@@ -236,11 +261,6 @@ class AdminMetInPersonRoutesTest {
         const val TOKEN = "met-in-person-admin-token"
     }
 }
-
-private fun MetInPersonFixtures.firstVouchId(subject: UUID): UUID =
-    UUID.fromString(
-        queryText("SELECT id::text FROM vouches WHERE subject_user_id = ? ORDER BY id LIMIT 1", subject),
-    )
 
 internal fun javax.sql.DataSource.directConversation(
     a: UUID,

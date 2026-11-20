@@ -446,7 +446,6 @@ class ServerDependencies(
                     messageMediaGateway = media.messageMediaGateway,
                     productMetrics = core.productMetrics,
                     travelLocationRepository = core.travelLocationRepository,
-                    metInPersonOfferSource = metInPerson.service,
                 )
             val swipe =
                 buildSwipeDependencies(

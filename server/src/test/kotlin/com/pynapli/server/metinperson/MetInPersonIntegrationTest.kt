@@ -35,8 +35,9 @@ import kotlin.test.assertTrue
 
 /**
  * "Met in person" end to end against the real schema (TRUST_AND_SAFETY_SPEC "Met in person"): who can
- * confirm whom, what the voucher sees, that nothing subject-facing or public changes between batches,
- * the weekly batch's thresholds and exclusions, the couple rule, deletion and export.
+ * confirm whom, what the voucher sees, that nothing observable changes between batches or at the batch
+ * that first sees a crossing, the hysteresis, the exclusions and who controls them, the couple rule,
+ * the storage a database copy shows without the key, deletion and export.
  */
 class MetInPersonIntegrationTest {
     private val dataSource = PynapliTestDatabase.dataSource
@@ -44,9 +45,9 @@ class MetInPersonIntegrationTest {
     private val tokens = MetInPersonTokens("met-in-person-integration-key-0123456789")
     private val fx = MetInPersonFixtures(dataSource, clock)
     private val service = MetInPersonService(dataSource, tokens, clock)
-    private val batch = MetInPersonBadgeBatch(dataSource, tokens, clock, Random(42))
+    private val batch = MetInPersonBadgeBatch(dataSource, tokens, clock, Random(42), chunkSize = 3)
     private val profiles = JdbcProfileRepository(dataSource)
-    private val messaging = MessagingService(JdbcMessagingRepository(dataSource), metInPersonOfferSource = service)
+    private val messaging = MessagingService(JdbcMessagingRepository(dataSource))
     private val json = Json { encodeDefaults = true }
 
     @BeforeTest
@@ -71,14 +72,19 @@ class MetInPersonIntegrationTest {
         viewer: UUID,
         conversation: UUID,
         subject: UUID,
-    ): MetInPersonOfferDto? = service.offersFor(viewer, conversation).firstOrNull { it.subjectUserId == subject.toString() }
+    ): MetInPersonOfferDto? = service.offers(viewer, conversation.toString()).offers.firstOrNull { it.subjectUserId == subject.toString() }
 
     private suspend fun publicProfile(
         viewer: UUID,
         subject: UUID,
     ): PublicProfileDto = assertNotNull(profiles.getPublicProfile(viewer, subject)).toDto(null)
 
-    private suspend fun assertNotOffered(
+    /** Enough batches for any crossing to take effect (on: 1 + up to 4; off: 2 + up to 4). */
+    private suspend fun settle() {
+        repeat(8) { batch.recomputeNow() }
+    }
+
+    private suspend fun assertRefused(
         viewer: UUID,
         conversation: UUID,
         subject: UUID,
@@ -86,131 +92,158 @@ class MetInPersonIntegrationTest {
         assertNull(offer(viewer, conversation, subject)?.takeIf { it.canConfirm })
         val refusal = assertFailsWith<MessagingException> { confirm(viewer, conversation, subject) }
         assertEquals(MetInPersonService.NOT_AVAILABLE, refusal.code)
-        assertEquals(0, fx.vouchRows())
     }
 
-    /** Three verified members who each talked with [subject] and confirm them. */
+    /** [count] verified members who each talked with [subject] and confirm them. Returns (voucher, chat). */
     private suspend fun confirmedBy(
         subject: UUID,
         count: Int,
-    ): List<UUID> =
+    ): List<Pair<UUID, UUID>> =
         (1..count).map { index ->
             val voucher = fx.member("Voucher $index")
-            confirm(voucher, fx.talked(voucher, subject), subject)
-            voucher
+            val conversation = fx.talked(voucher, subject)
+            confirm(voucher, conversation, subject)
+            voucher to conversation
         }
 
     @Test
-    fun aVerifiedMemberWhoTalkedBothWaysIsOfferedTheConfirmation() {
+    fun aVerifiedMemberWhoTalkedBothWaysIsOffered() {
         runBlocking {
             val subject = fx.member("Sam")
             val voucher = fx.member("Alex")
-            val conversation = fx.talked(voucher, subject)
-
-            val state = assertNotNull(offer(voucher, conversation, subject))
+            val state = assertNotNull(offer(voucher, fx.talked(voucher, subject), subject))
             assertTrue(state.canConfirm)
-            assertFalse(state.given)
             assertEquals("Sam", state.subjectDisplayName)
         }
     }
 
     @Test
-    fun eachEligibilityRuleRefusesWithTheSameCode() {
+    fun eachWriteTimeRuleRefusesWithTheSameCode() {
         runBlocking {
             val subject = fx.member("Sam")
-            // Unverified voucher.
-            fx.member("Unverified", verified = false).let { assertNotOffered(it, fx.talked(it, subject), subject) }
-            // Account younger than 30 days.
-            fx.member("Young", accountAge = Duration.ofDays(29)).let { assertNotOffered(it, fx.talked(it, subject), subject) }
-            // Risk tier past watch.
-            fx.member("Friction", riskTier = "friction").let { assertNotOffered(it, fx.talked(it, subject), subject) }
-            // Unverified subject.
+            fx.member("Unverified", verified = false).let { assertRefused(it, fx.talked(it, subject), subject) }
+            fx.member("Young", accountAge = Duration.ofDays(29)).let { assertRefused(it, fx.talked(it, subject), subject) }
             val unverifiedSubject = fx.member("Unverified subject", verified = false)
-            fx.member("V1").let { assertNotOffered(it, fx.talked(it, unverifiedSubject), unverifiedSubject) }
-            // Only the voucher wrote.
+            fx.member("V1").let { assertRefused(it, fx.talked(it, unverifiedSubject), unverifiedSubject) }
             fx.member("Monologue").let { voucher ->
                 val conversation = fx.conversation(voucher, subject)
                 fx.message(conversation, voucher, Duration.ofDays(5))
-                assertNotOffered(voucher, conversation, subject)
+                assertRefused(voucher, conversation, subject)
             }
-            // A held message does not count as visible.
             fx.member("Held").let { voucher ->
                 val conversation = fx.conversation(voucher, subject)
                 fx.message(conversation, voucher, Duration.ofDays(5))
                 fx.message(conversation, subject, Duration.ofDays(4), moderationStatus = "held")
-                assertNotOffered(voucher, conversation, subject)
+                assertRefused(voucher, conversation, subject)
             }
-            // Under 24 hours since the first message.
             fx.member("Hasty").let { voucher ->
                 val conversation = fx.conversation(voucher, subject)
                 fx.message(conversation, voucher, Duration.ofHours(23))
                 fx.message(conversation, subject, Duration.ofHours(22))
-                assertNotOffered(voucher, conversation, subject)
+                assertRefused(voucher, conversation, subject)
             }
-            // Over 90 days since the last message.
             fx.member("Stale").let { voucher ->
                 val conversation = fx.conversation(voucher, subject)
                 fx.message(conversation, voucher, Duration.ofDays(120))
                 fx.message(conversation, subject, Duration.ofDays(91))
-                assertNotOffered(voucher, conversation, subject)
+                assertRefused(voucher, conversation, subject)
             }
-            // Current partner, former partner (any status).
             fx.member("Partner").let { voucher ->
                 fx.link(voucher, subject)
-                assertNotOffered(voucher, fx.talked(voucher, subject), subject)
+                assertRefused(voucher, fx.talked(voucher, subject), subject)
             }
             fx.member("Ex").let { voucher ->
                 fx.link(voucher, subject, status = "unlinked")
-                assertNotOffered(voucher, fx.talked(voucher, subject), subject)
+                assertRefused(voucher, fx.talked(voucher, subject), subject)
             }
-            // The voucher blocked the subject.
             fx.member("Blocker").let { voucher ->
                 val conversation = fx.talked(voucher, subject)
                 fx.block(voucher, subject)
-                assertNotOffered(voucher, conversation, subject)
+                assertRefused(voucher, conversation, subject)
             }
-            // Watch is allowed.
-            fx.member("Watched", riskTier = "watch").let { voucher ->
-                assertTrue(assertNotNull(offer(voucher, fx.talked(voucher, subject), subject)).canConfirm)
+            assertEquals(0, fx.vouchRows())
+        }
+    }
+
+    @Test
+    fun theOfferNeverRevealsTheViewersOwnRiskTier() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            listOf("watch", "friction", "quarantine").forEach { tier ->
+                val voucher = fx.member("Tier $tier", riskTier = tier)
+                assertTrue(assertNotNull(offer(voucher, fx.talked(voucher, subject), subject)).canConfirm, tier)
             }
         }
     }
 
     @Test
-    fun aPersonBadgeAppearsOnlyAtTheBatchAndOnlyAtThree() {
+    fun inAGroupOnlyMessagesAfterBothJoinedCount() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val other = fx.member("Other")
+            val late = fx.member("Late joiner")
+            val group = fx.conversation(subject, other)
+            fx.message(group, subject, Duration.ofDays(15))
+            fx.join(group, late, Duration.ofDays(10))
+            fx.message(group, late, Duration.ofDays(9))
+            assertRefused(late, group, subject)
+            fx.message(group, subject, Duration.ofDays(8))
+            assertTrue(assertNotNull(offer(late, group, subject)).canConfirm)
+        }
+    }
+
+    @Test
+    fun aPersonBadgeNeedsThreeAndAppearsOnlyAfterTheDelay() {
         runBlocking {
             val subject = fx.member("Sam")
             val stranger = fx.member("Stranger")
             fx.optIn(subject)
             confirmedBy(subject, 2)
-            batch.recomputeNow()
+            settle()
             assertFalse(publicProfile(stranger, subject).metInPerson)
 
             val third = fx.member("Third")
             confirm(third, fx.talked(third, subject), subject)
             assertFalse(publicProfile(stranger, subject).metInPerson, "a confirmation never changes the badge by itself")
-
             batch.recomputeNow()
+            assertFalse(publicProfile(stranger, subject).metInPerson, "the batch that first sees the crossing never shows it")
+            settle()
             assertTrue(publicProfile(stranger, subject).metInPerson)
         }
     }
 
     @Test
-    fun theConfirmResponseIsTheSameWhetherOrNotItCompletesTheThreshold() {
+    fun nothingObservableDiffersBetweenAConfirmThatCompletesTheThresholdAndOneThatDoesNot() {
         runBlocking {
             val subject = fx.member("Sam")
-            val first = fx.member("V1")
-            confirm(first, fx.talked(first, subject), subject)
-            val second = fx.member("V2")
-            val beforeThreshold = confirm(second, fx.talked(second, subject), subject)
-            val third = fx.member("V3")
-            val completesThreshold = confirm(third, fx.talked(third, subject), subject)
+            val stranger = fx.member("Stranger")
+            fx.optIn(subject)
+            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, MetInPersonAccountData(tokens))
+            confirmedBy(subject, 2)
+            settle()
 
+            fun Json.metInPersonPart(text: String) = parseToJsonElement(text).jsonObject["metInPerson"].toString()
+
+            val publicBefore = json.encodeToString(PublicProfileDto.serializer(), publicProfile(stranger, subject))
+            val meBefore = json.encodeToString(MeDto.serializer(), assertNotNull(profiles.getMe(subject)).toDto())
+            val exportBefore = json.metInPersonPart(archiver.buildArchive(subject).bytes.decodeToString())
+
+            val notCompleting = fx.member("Second subject's voucher")
+            val otherSubject = fx.member("Other subject")
+            val notCompletingAnswer = confirm(notCompleting, fx.talked(notCompleting, otherSubject), otherSubject)
+            val completing = fx.member("Third")
+            val completingAnswer = confirm(completing, fx.talked(completing, subject), subject)
+            assertEquals(notCompletingAnswer.copy(subjectUserId = "", subjectDisplayName = ""), completingAnswer.copy(subjectUserId = "", subjectDisplayName = ""))
+
+            batch.recomputeNow()
+            assertEquals(publicBefore, json.encodeToString(PublicProfileDto.serializer(), publicProfile(stranger, subject)))
+            assertEquals(meBefore, json.encodeToString(MeDto.serializer(), assertNotNull(profiles.getMe(subject)).toDto()))
+            assertEquals(exportBefore, json.metInPersonPart(archiver.buildArchive(subject).bytes.decodeToString()))
             assertEquals(
-                json.encodeToString(MetInPersonOfferDto.serializer(), beforeThreshold),
-                json.encodeToString(MetInPersonOfferDto.serializer(), completesThreshold),
+                json.metInPersonPart(archiver.buildArchive(notCompleting).bytes.decodeToString()).length - "Other subject".length,
+                json.metInPersonPart(archiver.buildArchive(completing).bytes.decodeToString()).length - "Sam".length,
+                "the two vouchers' exports have the same shape",
             )
-            assertTrue(completesThreshold.given && completesThreshold.canWithdraw && !completesThreshold.canConfirm)
         }
     }
 
@@ -222,173 +255,221 @@ class MetInPersonIntegrationTest {
             fx.optIn(subject)
             val friend = fx.member("Friend")
             val friendConversation = fx.talked(friend, subject)
-            batch.recomputeNow()
-
+            settle()
             val publicBefore = json.encodeToString(PublicProfileDto.serializer(), publicProfile(stranger, subject))
             val meBefore = json.encodeToString(MeDto.serializer(), assertNotNull(profiles.getMe(subject)).toDto())
             val readBefore = readMarkJson(subject, friendConversation)
-            val friendOfferBefore = offer(subject, friendConversation, friend)
+            val subjectsOwnOfferBefore = offer(subject, friendConversation, friend)
 
             confirm(friend, friendConversation, subject)
-            val vouchers = confirmedBy(subject, 5)
+            val vouchers = confirmedBy(subject, 5).map { it.first }
 
             assertEquals(publicBefore, json.encodeToString(PublicProfileDto.serializer(), publicProfile(stranger, subject)))
             assertEquals(meBefore, json.encodeToString(MeDto.serializer(), assertNotNull(profiles.getMe(subject)).toDto()))
             assertEquals(readBefore, readMarkJson(subject, friendConversation))
-            assertEquals(friendOfferBefore, offer(subject, friendConversation, friend))
+            assertEquals(subjectsOwnOfferBefore, offer(subject, friendConversation, friend))
 
-            // No response carries a voucher id or a count.
             val publicText = json.encodeToString(PublicProfileDto.serializer(), publicProfile(stranger, subject))
             (vouchers + friend).forEach { assertFalse(publicText.contains(it.toString())) }
-            val meText = json.encodeToString(MeDto.serializer(), assertNotNull(profiles.getMe(subject)).toDto())
-            (vouchers + friend).forEach { assertFalse(meText.contains(it.toString())) }
-            listOf(publicText, meText, readMarkJson(subject, friendConversation)).forEach { text ->
+            listOf(publicText, meBefore, readBefore).forEach { text ->
                 assertFalse(Regex("\"[A-Za-z]*([Vv]ouch|MetInPerson[A-Za-z]*Count|metInPersonCount)[A-Za-z]*\"\\s*:").containsMatchIn(text), text)
             }
-            val metInPersonKeys = Json.parseToJsonElement(publicText).jsonObject.keys.filter { it.startsWith("metInPerson") }
-            assertEquals(setOf("metInPerson", "metInPersonAsCouple"), metInPersonKeys.toSet())
-
-            batch.recomputeNow()
-            assertTrue(publicProfile(stranger, subject).metInPerson)
+            assertFalse(readBefore.contains("metInPerson"), "the read mark carries nothing about it")
+            val keys = Json.parseToJsonElement(publicText).jsonObject.keys.filter { it.startsWith("metInPerson") }
+            assertEquals(setOf("metInPerson", "metInPersonAsCouple"), keys.toSet())
         }
     }
 
     private suspend fun readMarkJson(
         viewer: UUID,
         conversation: UUID,
-    ): String {
-        val dto = messaging.markConversationRead(viewer, conversation.toString())
-        return json.encodeToString(ConversationDto.serializer(), dto)
-    }
+    ): String = json.encodeToString(ConversationDto.serializer(), messaging.markConversationRead(viewer, conversation.toString()))
 
     @Test
-    fun theOptInGatesTheBadge() {
+    fun theOptInGatesTheBadgeAndAQuarantinedSubjectShowsNone() {
         runBlocking {
             val subject = fx.member("Sam")
             val stranger = fx.member("Stranger")
             confirmedBy(subject, 3)
-            batch.recomputeNow()
+            settle()
             assertFalse(publicProfile(stranger, subject).metInPerson, "off by default")
             fx.optIn(subject)
             assertTrue(publicProfile(stranger, subject).metInPerson)
-            fx.optIn(subject, on = false)
-            assertFalse(publicProfile(stranger, subject).metInPerson)
+
+            fx.setRiskTier(subject, "quarantine")
+            assertFalse(publicProfile(subject, subject).metInPerson, "not even on their own preview")
+            fx.setRiskTier(subject, "clean")
+            fx.setRiskTier(subject, "terminate")
+            settle()
+            fx.setRiskTier(subject, "clean")
+            assertFalse(publicProfile(stranger, subject).metInPerson, "the batch turned it off")
         }
     }
 
     @Test
-    fun silentExclusionsAreAcceptedButNeverCount() {
-        runBlocking {
-            val subject = fx.member("Sam")
-            val stranger = fx.member("Stranger")
-            fx.optIn(subject)
-            confirmedBy(subject, 2)
-            // The subject blocked the voucher: the voucher cannot tell, and it never counts.
-            val blockedBySubject = fx.member("Blocked")
-            val blockedConversation = fx.talked(blockedBySubject, subject)
-            fx.block(subject, blockedBySubject)
-            assertTrue(assertNotNull(offer(blockedBySubject, blockedConversation, subject)).canConfirm)
-            confirm(blockedBySubject, blockedConversation, subject)
-            // A shared device: same.
-            val sameDevice = fx.member("Same device")
-            fx.shareDevice(sameDevice, subject)
-            val deviceConversation = fx.talked(sameDevice, subject)
-            assertTrue(assertNotNull(offer(sameDevice, deviceConversation, subject)).canConfirm)
-            confirm(sameDevice, deviceConversation, subject)
-
-            batch.recomputeNow()
-            assertFalse(publicProfile(stranger, subject).metInPerson)
-        }
-    }
-
-    @Test
-    fun aRepeatChangesNothingAndThePairIsOneRowForever() {
-        runBlocking {
-            val subject = fx.member("Sam")
-            val voucher = fx.member("Alex")
-            val conversation = fx.talked(voucher, subject)
-            val first = confirm(voucher, conversation, subject)
-            val given = fx.count("SELECT count(*) FROM vouches WHERE created_at = ?", Timestamp.from(MetInPersonRules.day(clock.instant())))
-            clock.advance(Duration.ofDays(2))
-            assertEquals(first.copy(), confirm(voucher, conversation, subject))
-            assertEquals(1, fx.vouchRows())
-            assertEquals(given, fx.count("SELECT count(*) FROM vouches WHERE created_at = ?", Timestamp.from(MetInPersonRules.day(clock.instant().minus(Duration.ofDays(2))))))
-
-            // Withdraw, then give again: still one row, counted once.
-            assertFalse(withdraw(voucher, conversation, subject).given)
-            assertTrue(confirm(voucher, conversation, subject).given)
-            assertEquals(1, fx.vouchRows())
-        }
-    }
-
-    @Test
-    fun withdrawalWorksForThirtyDaysAndStopsTheConfirmationCounting() {
-        runBlocking {
-            val subject = fx.member("Sam")
-            val stranger = fx.member("Stranger")
-            fx.optIn(subject)
-            val vouchers = (1..3).map { fx.member("V$it") }
-            val conversations = vouchers.map { fx.talked(it, subject) }
-            vouchers.zip(conversations).forEach { (voucher, conversation) -> confirm(voucher, conversation, subject) }
-            batch.recomputeNow()
-            assertTrue(publicProfile(stranger, subject).metInPerson)
-
-            val taken = withdraw(vouchers[0], conversations[0], subject)
-            assertFalse(taken.given)
-            assertTrue(publicProfile(stranger, subject).metInPerson, "withdrawal is invisible until the batch")
-            batch.recomputeNow()
-            assertFalse(publicProfile(stranger, subject).metInPerson)
-
-            // Past 30 days a withdrawal does nothing and says nothing.
-            clock.advance(Duration.ofDays(31))
-            val late = withdraw(vouchers[1], conversations[1], subject)
-            assertTrue(late.given)
-            assertFalse(late.canWithdraw)
-        }
-    }
-
-    @Test
-    fun theMonthlyCapStopsTheEleventhConfirmation() {
-        runBlocking {
-            val voucher = fx.member("Busy")
-            repeat(MetInPersonRules.MONTHLY_CAP) { index ->
-                val subject = fx.member("S$index")
-                confirm(voucher, fx.talked(voucher, subject), subject)
-            }
-            val eleventh = fx.member("S11")
-            val conversation = fx.talked(voucher, eleventh)
-            assertNull(offer(voucher, conversation, eleventh))
-            assertEquals(MetInPersonService.NOT_AVAILABLE, assertFailsWith<MessagingException> { confirm(voucher, conversation, eleventh) }.code)
-
-            // The window rolls.
-            clock.advance(Duration.ofDays(32))
-            fx.message(conversation, voucher, Duration.ofDays(1))
-            assertTrue(assertNotNull(offer(voucher, conversation, eleventh)).canConfirm)
-        }
-    }
-
-    @Test
-    fun quarantinedVouchersBlocksAfterAndExpiryDropTheBadgeAtTheNextBatch() {
+    fun nothingTheSubjectDoesChangesWhatCounts() {
         runBlocking {
             val subject = fx.member("Sam")
             val stranger = fx.member("Stranger")
             fx.optIn(subject)
             val vouchers = confirmedBy(subject, 3)
-            batch.recomputeNow()
+            settle()
             assertTrue(publicProfile(stranger, subject).metInPerson)
 
-            fx.setRiskTier(vouchers[0], "quarantine")
-            assertTrue(publicProfile(stranger, subject).metInPerson, "only the batch changes it")
-            batch.recomputeNow()
-            assertFalse(publicProfile(stranger, subject).metInPerson)
+            val (target, targetConversation) = vouchers[0]
+            fx.block(subject, target)
+            settle()
+            assertTrue(publicProfile(stranger, subject).metInPerson, "blocking a voucher")
+            dataSource.connection.use { it.createStatement().use { s -> s.executeUpdate("DELETE FROM user_blocks") } }
+            confirm(subject, targetConversation, target)
+            fx.hide(subject, target)
+            fx.inviteToLink(subject, target)
+            fx.setRiskTier(target, "friction")
+            settle()
+            assertTrue(publicProfile(stranger, subject).metInPerson, "hiding, inviting to link, reporting into friction or confirming back")
+        }
+    }
 
-            fx.setRiskTier(vouchers[0], "clean")
-            batch.recomputeNow()
+    @Test
+    fun theVouchersOwnActsAndTheServiceDecide() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val stranger = fx.member("Stranger")
+            fx.optIn(subject)
+            val vouchers = confirmedBy(subject, 3).map { it.first }
+            settle()
             assertTrue(publicProfile(stranger, subject).metInPerson)
 
-            fx.block(vouchers[1], subject)
+            fx.block(vouchers[0], subject)
+            settle()
+            assertFalse(publicProfile(stranger, subject).metInPerson, "the voucher's own block")
+            dataSource.connection.use { it.createStatement().use { s -> s.executeUpdate("DELETE FROM user_blocks") } }
+            settle()
+            assertTrue(publicProfile(stranger, subject).metInPerson)
+
+            fx.setRiskTier(vouchers[1], "quarantine")
+            settle()
+            assertFalse(publicProfile(stranger, subject).metInPerson, "a quarantined voucher")
+        }
+    }
+
+    @Test
+    fun linksAndDevicesCountOnlyWhenTheyPredateTheConfirmation() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val stranger = fx.member("Stranger")
+            fx.optIn(subject)
+            val vouchers = confirmedBy(subject, 3).map { it.first }
+            // Both happen after the confirmations: they change nothing.
+            fx.shareDevice(vouchers[0], subject, ago = Duration.ofDays(-1))
+            fx.link(vouchers[1], subject)
+            dataSource.connection.use { connection ->
+                connection.prepareStatement("UPDATE user_profile_links SET accepted_at = ?").use {
+                    it.setTimestamp(1, Timestamp.from(clock.instant().plus(Duration.ofDays(2))))
+                    it.executeUpdate()
+                }
+            }
+            settle()
+            assertTrue(publicProfile(stranger, subject).metInPerson)
+
+            // A device both used before the day given: never counts.
+            val sameDevice = fx.member("Same device")
+            fx.shareDevice(sameDevice, subject)
+            val fourth = fx.member("Fourth")
+            confirm(sameDevice, fx.talked(sameDevice, subject), subject)
+            confirm(fourth, fx.talked(fourth, subject), subject)
+            val evaluation = MetInPersonEvaluator(tokens).let { evaluator -> dataSource.connection.use { evaluator.evaluate(it, listOf(subject), clock.instant()) } }
+            assertEquals(4, evaluation.getValue(subject).countedVouchers.size)
+            assertFalse(sameDevice in evaluation.getValue(subject).countedVouchers)
+        }
+    }
+
+    @Test
+    fun linkedOrDeviceSharingVouchersCountOnce() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val stranger = fx.member("Stranger")
+            fx.optIn(subject)
+            val vouchers = confirmedBy(subject, 4).map { it.first }
+            fx.link(vouchers[0], vouchers[1])
+            fx.shareDevice(vouchers[2], vouchers[3])
+            settle()
+            assertFalse(publicProfile(stranger, subject).metInPerson, "four accounts, two independent vouchers")
+            val fifth = fx.member("Fifth")
+            confirm(fifth, fx.talked(fifth, subject), subject)
+            settle()
+            assertTrue(publicProfile(stranger, subject).metInPerson)
+        }
+    }
+
+    @Test
+    fun aSameDayCliqueOfFourCannotBadgeItself() {
+        runBlocking {
+            val stranger = fx.member("Stranger")
+            val clique = (1..4).map { fx.member("Friend $it") }
+            clique.forEach { fx.optIn(it) }
+            val chats = mutableMapOf<Pair<UUID, UUID>, UUID>()
+            clique.forEach { a -> clique.forEach { b -> if (a.toString() < b.toString()) chats[a to b] = fx.talked(a, b) } }
+            fun chat(
+                a: UUID,
+                b: UUID,
+            ) = chats[a to b] ?: chats.getValue(b to a)
+            clique.forEach { a -> clique.forEach { b -> if (a != b) confirm(a, chat(a, b), b) } }
+            settle()
+            clique.forEach { assertFalse(publicProfile(stranger, it).metInPerson) }
+
+            val outsider = fx.member("Outsider")
+            confirm(outsider, fx.talked(outsider, clique[0]), clique[0])
+            settle()
+            assertTrue(publicProfile(stranger, clique[0]).metInPerson, "one voucher the subject had not confirmed first")
+        }
+    }
+
+    @Test
+    fun takingBackBlocksGivingAgainFor180DaysAndKeepsTheSlot() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val stranger = fx.member("Stranger")
+            fx.optIn(subject)
+            val vouchers = confirmedBy(subject, 3)
+            settle()
+            assertTrue(publicProfile(stranger, subject).metInPerson)
+
+            val (toggler, chat) = vouchers[0]
+            assertFalse(withdraw(toggler, chat, subject).given)
             batch.recomputeNow()
-            assertFalse(publicProfile(stranger, subject).metInPerson)
+            assertTrue(publicProfile(stranger, subject).metInPerson, "one batch below does not turn it off")
+            assertRefused(toggler, chat, subject)
+            clock.advance(Duration.ofDays(7))
+            fx.message(chat, toggler, Duration.ofDays(1))
+            assertRefused(toggler, chat, subject)
+
+            clock.advance(Duration.ofDays(174))
+            fx.message(chat, toggler, Duration.ofDays(1))
+            fx.message(chat, subject, Duration.ofDays(1))
+            assertTrue(confirm(toggler, chat, subject).given, "after 180 days it can be given again")
+            assertEquals(1, fx.count("SELECT count(*) FROM vouches WHERE pair_token = ?", tokens.pair(toggler, subject)))
+        }
+    }
+
+    @Test
+    fun aWithdrawnConfirmationStillUsesItsSlotAndConcurrentConfirmsCannotPassTheCap() {
+        runBlocking {
+            val voucher = fx.member("Busy")
+            val chats =
+                (1..MetInPersonRules.MONTHLY_CAP - 1).map { index ->
+                    val subject = fx.member("S$index")
+                    val chat = fx.talked(voucher, subject)
+                    confirm(voucher, chat, subject)
+                    subject to chat
+                }
+            withdraw(voucher, chats[0].second, chats[0].first)
+            val a = fx.member("A")
+            val b = fx.member("B")
+            val chatA = fx.talked(voucher, a)
+            val chatB = fx.talked(voucher, b)
+            val (first, second) = raceTogether({ confirm(voucher, chatA, a) }, { confirm(voucher, chatB, b) })
+            assertEquals(1, listOf(first, second).count { it.isSuccess }, "nine given (one withdrawn) leaves one slot")
         }
     }
 
@@ -399,15 +480,23 @@ class MetInPersonIntegrationTest {
             val stranger = fx.member("Stranger")
             fx.optIn(subject)
             confirmedBy(subject, 3)
-            batch.recomputeNow()
+            settle()
             assertTrue(publicProfile(stranger, subject).metInPerson)
-
-            clock.advance(Duration.ofDays(729))
-            batch.recomputeNow()
-            assertTrue(publicProfile(stranger, subject).metInPerson)
-            clock.advance(Duration.ofDays(2))
-            batch.recomputeNow()
+            clock.advance(Duration.ofDays(731))
+            settle()
             assertFalse(publicProfile(stranger, subject).metInPerson)
+        }
+    }
+
+    @Test
+    fun aVoucherCanTakeItBackAfterLeavingTheConversation() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val voucher = fx.member("Alex")
+            val chat = fx.talked(voucher, subject)
+            confirm(voucher, chat, subject)
+            fx.leave(chat, voucher)
+            assertFalse(withdraw(voucher, chat, subject).given)
         }
     }
 
@@ -423,30 +512,24 @@ class MetInPersonIntegrationTest {
             fx.message(group, voucher, Duration.ofDays(10))
             fx.message(group, sam, Duration.ofDays(9))
             fx.message(group, riley, Duration.ofDays(8))
-            val state = assertNotNull(offer(voucher, group, sam))
-            assertEquals(riley.toString(), state.partner?.partnerUserId)
+            assertEquals(riley.toString(), assertNotNull(offer(voucher, group, sam)).partner?.partnerUserId)
             confirm(voucher, group, sam, includePartner = true)
             assertTrue(assertNotNull(offer(voucher, group, riley)).given)
         }
     }
 
     @Test
-    fun aCoupleBadgeNeedsThreeVouchersWhoEachMetBothAndBothOptIns() {
+    fun aCoupleBadgeNeedsThreeIndependentVouchersWhoMetBothAndBothOptIns() {
         runBlocking {
             val sam = fx.member("Sam")
             val riley = fx.member("Riley")
             val stranger = fx.member("Stranger")
             fx.link(sam, riley)
             fx.optIn(sam)
-            coupleConfirmedBy(sam, riley, 2)
-            batch.recomputeNow()
-            assertFalse(publicProfile(stranger, sam).metInPersonAsCouple)
-
-            coupleConfirmedBy(sam, riley, 1)
-            batch.recomputeNow()
+            coupleConfirmedBy(sam, riley, 3)
+            settle()
             assertTrue(publicProfile(stranger, sam).metInPerson)
             assertFalse(publicProfile(stranger, sam).metInPersonAsCouple, "Riley has not turned it on")
-
             fx.optIn(riley)
             assertTrue(publicProfile(stranger, sam).metInPersonAsCouple)
             assertTrue(publicProfile(stranger, riley).metInPersonAsCouple)
@@ -454,27 +537,31 @@ class MetInPersonIntegrationTest {
     }
 
     @Test
-    fun separateConfirmationsOfEachPartnerAreNotACoupleCredit() {
+    fun thePartnerTickNeverNamesAPartnerTheProfileWouldHide() {
         runBlocking {
             val sam = fx.member("Sam")
             val riley = fx.member("Riley")
-            val stranger = fx.member("Stranger")
             fx.link(sam, riley)
-            fx.optIn(sam)
-            fx.optIn(riley)
-            repeat(3) { index ->
-                val voucher = fx.member("Separate $index")
-                confirm(voucher, fx.talked(voucher, sam), sam)
-                confirm(voucher, fx.talked(voucher, riley), riley)
-            }
-            batch.recomputeNow()
-            assertTrue(publicProfile(stranger, sam).metInPerson)
-            assertFalse(publicProfile(stranger, sam).metInPersonAsCouple)
+            val voucher = fx.member("Voucher")
+            val group = fx.conversation(sam, riley, voucher)
+            fx.message(group, voucher, Duration.ofDays(10))
+            fx.message(group, sam, Duration.ofDays(9))
+            fx.message(group, riley, Duration.ofDays(8))
+            assertNotNull(assertNotNull(offer(voucher, group, sam)).partner)
+
+            fx.setDiscovery(sam, "partner_visibility", "hidden")
+            assertNull(assertNotNull(offer(voucher, group, sam)).partner, "Sam hides the link")
+            fx.setDiscovery(sam, "partner_visibility", "public")
+            fx.setDiscovery(riley, "incognito", true)
+            assertNull(assertNotNull(offer(voucher, group, sam)).partner, "Riley is incognito")
+            fx.setDiscovery(riley, "incognito", false)
+            fx.hide(voucher, riley)
+            assertNull(assertNotNull(offer(voucher, group, sam)).partner, "the viewer hid Riley")
         }
     }
 
     @Test
-    fun unlinkingVoidsOnlyTheCoupleBadgeAndARelinkDoesNotRevive() {
+    fun unlinkingVoidsOnlyTheCoupleBadgeAndARelinkDoesNotReviveEvenUnderAConcurrentBatch() {
         runBlocking {
             val sam = fx.member("Sam")
             val riley = fx.member("Riley")
@@ -483,25 +570,70 @@ class MetInPersonIntegrationTest {
             fx.optIn(sam)
             fx.optIn(riley)
             coupleConfirmedBy(sam, riley, 3)
-            batch.recomputeNow()
+            settle()
             assertTrue(publicProfile(stranger, sam).metInPersonAsCouple)
 
-            assertTrue(JdbcProfileLinkRepository(dataSource).unlinkCurrent(sam))
+            val (_, unlinked) = raceTogether({ batch.recomputeNow() }, { JdbcProfileLinkRepository(dataSource).unlinkCurrent(sam) })
+            assertTrue(unlinked.getOrThrow())
             assertFalse(publicProfile(stranger, sam).metInPersonAsCouple)
             assertTrue(publicProfile(stranger, sam).metInPerson)
-            batch.recomputeNow()
-            assertFalse(publicProfile(stranger, sam).metInPersonAsCouple)
-            assertTrue(publicProfile(stranger, riley).metInPerson)
 
-            // Relinking reuses the same link rows; the old couple confirmations stay void.
             dataSource.connection.use { connection ->
                 connection.createStatement().use {
-                    it.executeUpdate("UPDATE user_profile_links SET status = 'active', unlinked_at = NULL")
+                    it.executeUpdate("UPDATE user_profile_links SET status = 'active', unlinked_at = NULL, updated_at = now()")
                 }
             }
-            batch.recomputeNow()
-            assertFalse(publicProfile(stranger, sam).metInPersonAsCouple)
-            assertTrue(publicProfile(stranger, sam).metInPerson)
+            assertFalse(publicProfile(stranger, sam).metInPersonAsCouple, "right after the relink")
+            settle()
+            assertFalse(publicProfile(stranger, sam).metInPersonAsCouple, "old couple confirmations stay void")
+            assertTrue(publicProfile(stranger, riley).metInPerson)
+        }
+    }
+
+    @Test
+    fun aCopyOfTheDatabaseDoesNotTieTwoMutualConfirmersTogether() {
+        runBlocking {
+            val a = fx.member("A")
+            val b = fx.member("B")
+            val chat = fx.talked(a, b)
+            confirm(a, chat, b)
+            confirm(b, chat, a)
+            val rows =
+                dataSource.connection.use { connection ->
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT * FROM vouches").use { rs ->
+                            val columns = (1..rs.metaData.columnCount).map { rs.metaData.getColumnLabel(it) }
+                            buildList { while (rs.next()) add(columns.associateWith { rs.getString(it) }) }
+                        }
+                    }
+                }
+            assertEquals(2, rows.size)
+            val text = rows.toString()
+            listOf(a, b, chat).forEach { assertFalse(text.contains(it.toString()), "no id in clear") }
+            listOf("pair_token", "subject_token").forEach { column ->
+                assertTrue(rows[0][column] != rows[1][column], "$column differs between the two rows")
+            }
+            val tokensOfFirst = rows[0].filterKeys { it.endsWith("_token") }.values.filterNotNull().toSet()
+            val tokensOfSecond = rows[1].filterKeys { it.endsWith("_token") }.values.filterNotNull().toSet()
+            assertTrue(tokensOfFirst.intersect(tokensOfSecond).isEmpty(), "no shared token links the two rows")
+        }
+    }
+
+    @Test
+    fun aWrongKeyIsRefusedEverywhere() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val voucher = fx.member("Alex")
+            val chat = fx.talked(voucher, subject)
+            confirm(voucher, chat, subject)
+            val wrong = MetInPersonTokens("a-different-met-in-person-key-0123456789")
+            val wrongService = MetInPersonService(dataSource, wrong, clock)
+            assertEquals(
+                MetInPersonService.NOT_AVAILABLE,
+                assertFailsWith<MessagingException> { wrongService.offers(voucher, chat.toString()) }.code,
+            )
+            assertEquals(0, MetInPersonBadgeBatch(dataSource, wrong, clock, Random(1)).recomputeNow())
+            assertEquals(1, fx.vouchRows())
         }
     }
 
@@ -511,14 +643,11 @@ class MetInPersonIntegrationTest {
             val subject = fx.member("Sam")
             fx.optIn(subject)
             val before = fx.sideEffectRows()
-            val vouchers = (1..3).map { fx.member("V$it") }
-            val conversations = vouchers.map { fx.talked(it, subject) }
-            vouchers.zip(conversations).forEach { (voucher, conversation) -> confirm(voucher, conversation, subject) }
-            service.offersFor(subject, conversations[0])
-            withdraw(vouchers[0], conversations[0], subject)
-            confirm(vouchers[0], conversations[0], subject)
-            batch.recomputeNow()
-            messaging.markConversationRead(subject, conversations[0].toString())
+            val vouchers = confirmedBy(subject, 3)
+            service.offers(subject, vouchers[0].second.toString())
+            withdraw(vouchers[0].first, vouchers[0].second, subject)
+            settle()
+            messaging.markConversationRead(subject, vouchers[0].second.toString())
             assertEquals(before, fx.sideEffectRows())
             assertEquals(0, fx.sideEffectRows())
         }
@@ -530,34 +659,32 @@ class MetInPersonIntegrationTest {
             val accountData = MetInPersonAccountData(tokens)
             val lifecycle = JdbcAccountLifecycleRepository(dataSource, metInPersonAccountData = accountData)
             val subject = fx.member("Sam")
-            val vouchers = confirmedBy(subject, 3)
+            val vouchers = confirmedBy(subject, 3).map { it.first }
             val other = fx.member("Other")
             confirm(vouchers[0], fx.talked(vouchers[0], other), other)
-            batch.recomputeNow()
+            settle()
             assertEquals(4, fx.vouchRows())
 
             lifecycle.deleteAccount(vouchers[0])
             assertEquals(2, fx.vouchRows(), "both confirmations the deleted voucher gave are gone")
 
             lifecycle.deleteAccount(subject)
-            assertEquals(0, fx.count("SELECT count(*) FROM vouches WHERE subject_user_id = ?", subject))
+            assertEquals(0, fx.vouchRows())
             assertEquals(0, fx.count("SELECT count(*) FROM vouch_badges WHERE subject_user_id = ?", subject))
         }
     }
 
     @Test
-    fun theExportListsWhatTheVoucherGaveAndOnlyTheSubjectsBadgeState() {
+    fun theExportListsWhatTheVoucherGaveAndOnlyTheSubjectsPublishedBadge() {
         runBlocking {
-            val accountData = MetInPersonAccountData(tokens)
-            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, accountData)
+            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, MetInPersonAccountData(tokens))
             val subject = fx.member("Sam")
             fx.optIn(subject)
-            val vouchers = confirmedBy(subject, 3)
-            batch.recomputeNow()
+            val vouchers = confirmedBy(subject, 3).map { it.first }
+            settle()
 
             val voucherExport = archiver.buildArchive(vouchers[0]).bytes.decodeToString()
             assertTrue(voucherExport.contains("\"subjectDisplayName\": \"Sam\""), voucherExport)
-            assertFalse(voucherExport.contains("\"subjectUserId\""))
 
             val subjectExport = archiver.buildArchive(subject).bytes.decodeToString()
             assertTrue(subjectExport.contains("\"metInPersonBadge\": true"), subjectExport)
@@ -568,22 +695,34 @@ class MetInPersonIntegrationTest {
     }
 
     @Test
-    fun theWeeklyBatchRunsOnceUnderConcurrency() {
+    fun anAllFalseBadgeRowIsNotKept() {
         runBlocking {
             val subject = fx.member("Sam")
-            fx.optIn(subject)
+            val vouchers = confirmedBy(subject, 3)
+            settle()
+            assertEquals(1, fx.count("SELECT count(*) FROM vouch_badges WHERE subject_user_id = ?", subject))
+            vouchers.forEach { (voucher, chat) -> withdraw(voucher, chat, subject) }
+            settle()
+            assertEquals(0, fx.count("SELECT count(*) FROM vouch_badges WHERE subject_user_id = ?", subject))
+            assertEquals(0, fx.count("SELECT count(*) FROM vouch_badge_states"))
+        }
+    }
+
+    @Test
+    fun theWeeklyPassRunsOnceUnderConcurrency() {
+        runBlocking {
+            val subject = fx.member("Sam")
             confirmedBy(subject, 3)
+            service.offers(subject, fx.talked(subject, fx.member("Key")).toString())
             dataSource.connection.use { connection ->
                 connection.prepareStatement("INSERT INTO vouch_batch_schedule (id, next_run_at) VALUES (1, ?)").use {
                     it.setTimestamp(1, Timestamp.from(clock.instant().minus(Duration.ofHours(1))))
                     it.executeUpdate()
                 }
             }
-
             val (first, second) = raceTogether({ batch.runIfDue() }, { batch.runIfDue() })
             assertEquals(1, listOf(first.getOrThrow(), second.getOrThrow()).count { it })
             assertFalse(batch.runIfDue(), "not due again until next week's random time")
-
             val next =
                 dataSource.connection.use { connection ->
                     connection.createStatement().use { statement ->

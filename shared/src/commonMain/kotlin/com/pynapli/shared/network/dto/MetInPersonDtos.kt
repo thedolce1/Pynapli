@@ -21,6 +21,12 @@ data class MetInPersonOfferDto(
     val partner: MetInPersonPartnerDto? = null,
 )
 
+/** `GET /v1/messages/threads/{id}/met-in-person`: the viewer's own actions, asked for when the menu opens. */
+@Serializable
+data class MetInPersonOffersDto(
+    val offers: List<MetInPersonOfferDto> = emptyList(),
+)
+
 @Serializable
 data class MetInPersonPartnerDto(
     val partnerUserId: String,

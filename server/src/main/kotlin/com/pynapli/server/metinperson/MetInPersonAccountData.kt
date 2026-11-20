@@ -1,5 +1,6 @@
 package com.pynapli.server.metinperson
 
+import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartners
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -8,43 +9,39 @@ import java.sql.Connection
 import java.util.UUID
 
 /**
- * Account deletion and data export for "Met in person". Deletion anonymises the user row instead of
- * deleting it, so nothing cascades: these statements run inside the deletion transaction.
+ * Account deletion and data export for "Met in person". Rows hold only tokens, so the person's rows are
+ * found by recomputing them: what they gave by their pair tokens over everyone they shared a
+ * conversation with (participant rows are never deleted), what they received by their subject token.
+ * Deletion anonymises the user row instead of deleting it, so these statements run inside the deletion
+ * transaction.
  */
 class MetInPersonAccountData(
     private val tokens: MetInPersonTokens,
 ) {
-    /**
-     * Removes the confirmations the person gave (found by their voucher token) and the ones they
-     * received with their badge. A partner they were confirmed with keeps their own confirmation as a
-     * personal one (couple credit ends with the link, which deletion also ends).
-     */
     fun erase(
         connection: Connection,
         userId: UUID,
     ) {
-        connection.prepareStatement("DELETE FROM vouches WHERE voucher_token = ?").use { statement ->
-            statement.setString(1, tokens.voucher(userId))
-            statement.executeUpdate()
-        }
-        connection.prepareStatement("DELETE FROM vouches WHERE subject_user_id = ?").use { statement ->
-            statement.setObject(1, userId)
-            statement.executeUpdate()
-        }
-        connection
-            .prepareStatement(
-                """
-                UPDATE vouches
-                SET met_partner_user_id = NULL, link_id = NULL
-                WHERE met_partner_user_id = ?
-                   OR link_id IN (SELECT id FROM user_profile_links WHERE user_id = ? OR linked_user_id = ?)
-                """.trimIndent(),
-            ).use { statement ->
-                statement.setObject(1, userId)
-                statement.setObject(2, userId)
-                statement.setObject(3, userId)
+        val given = connection.conversationPartners(userId).map { tokens.pair(userId, it) }
+        if (given.isNotEmpty()) {
+            connection.prepareStatement("DELETE FROM vouches WHERE pair_token = ANY(?)").use { statement ->
+                statement.setArray(1, connection.createArrayOf("text", given.toTypedArray()))
                 statement.executeUpdate()
             }
+        }
+        connection.prepareStatement("DELETE FROM vouches WHERE subject_token = ?").use { statement ->
+            statement.setString(1, tokens.subject(userId))
+            statement.executeUpdate()
+        }
+        // Their partner keeps a personal confirmation; the couple credit with them ends.
+        connection.prepareStatement("UPDATE vouches SET partner_token = NULL, link_token = NULL WHERE partner_token = ?").use { statement ->
+            statement.setString(1, tokens.partner(userId))
+            statement.executeUpdate()
+        }
+        connection.prepareStatement("DELETE FROM vouch_badge_states WHERE subject_token = ?").use { statement ->
+            statement.setString(1, tokens.subject(userId))
+            statement.executeUpdate()
+        }
         connection.prepareStatement("DELETE FROM vouch_badges WHERE subject_user_id = ?").use { statement ->
             statement.setObject(1, userId)
             statement.executeUpdate()
@@ -65,45 +62,49 @@ class MetInPersonAccountData(
 
     /**
      * The person's own part: the confirmations they gave (the subject's display name at export time and
-     * the day), and, as a subject, only their badge state and setting. Never who confirmed them, and
-     * never a count.
+     * the day), and, as a subject, only their published badge state and setting, exactly what everyone
+     * else sees, at the same moment. Never who confirmed them, never a count, never anything pending.
      */
     fun exportSection(
         connection: Connection,
         userId: UUID,
     ): JsonObject {
+        val partners = connection.conversationPartners(userId).toList()
+        val subjectByToken = partners.associateBy { tokens.pair(userId, it) }
         val given =
-            connection
-                .prepareStatement(
-                    """
-                    SELECT COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS subject_display_name,
-                           v.created_at,
-                           v.withdrawn_at,
-                           (v.met_partner_user_id IS NOT NULL) AS with_partner
-                    FROM vouches v
-                    LEFT JOIN profiles p ON p.user_id = v.subject_user_id
-                    WHERE v.voucher_token = ?
-                    ORDER BY v.created_at
-                    """.trimIndent(),
-                ).use { statement ->
-                    statement.setString(1, tokens.voucher(userId))
-                    statement.executeQuery().use { rs ->
-                        JsonArray(
-                            buildList {
-                                while (rs.next()) {
-                                    add(
-                                        buildJsonObject {
-                                            put("subjectDisplayName", rs.getString("subject_display_name"))
-                                            put("confirmedOn", rs.getTimestamp("created_at").toInstant().toString())
-                                            put("withdrawnOn", rs.getTimestamp("withdrawn_at")?.toInstant()?.toString())
-                                            put("withPartner", rs.getBoolean("with_partner"))
-                                        },
+            if (subjectByToken.isEmpty()) {
+                JsonArray(emptyList())
+            } else {
+                connection
+                    .prepareStatement(
+                        "SELECT pair_token, created_at, withdrawn_at, partner_token FROM vouches WHERE pair_token = ANY(?) ORDER BY created_at",
+                    ).use { statement ->
+                        statement.setArray(1, connection.createArrayOf("text", subjectByToken.keys.toTypedArray()))
+                        statement.executeQuery().use { rs ->
+                            val rows = mutableListOf<Triple<UUID, String, Pair<String?, Boolean>>>()
+                            while (rs.next()) {
+                                val subject = subjectByToken[rs.getString("pair_token")] ?: continue
+                                rows +=
+                                    Triple(
+                                        subject,
+                                        rs.getTimestamp("created_at").toInstant().toString(),
+                                        rs.getTimestamp("withdrawn_at")?.toInstant()?.toString() to (rs.getString("partner_token") != null),
                                     )
-                                }
-                            },
-                        )
+                            }
+                            val names = connection.displayNames(rows.map { it.first }.toSet())
+                            JsonArray(
+                                rows.map { (subject, confirmedOn, rest) ->
+                                    buildJsonObject {
+                                        put("subjectDisplayName", names[subject] ?: "Pynapli User")
+                                        put("confirmedOn", confirmedOn)
+                                        put("withdrawnOn", rest.first)
+                                        put("withPartner", rest.second)
+                                    }
+                                },
+                            )
+                        }
                     }
-                }
+            }
         val badge =
             connection
                 .prepareStatement(
@@ -131,6 +132,18 @@ class MetInPersonAccountData(
         return buildJsonObject {
             put("confirmationsYouGave", given)
             put("yourBadge", badge)
+        }
+    }
+
+    private fun Connection.displayNames(userIds: Set<UUID>): Map<UUID, String> {
+        if (userIds.isEmpty()) return emptyMap()
+        return prepareStatement(
+            "SELECT user_id, COALESCE(NULLIF(display_name, ''), 'Pynapli User') AS name FROM profiles WHERE user_id = ANY(?)",
+        ).use { statement ->
+            statement.setArray(1, createArrayOf("uuid", userIds.toTypedArray()))
+            statement.executeQuery().use { rs ->
+                buildMap { while (rs.next()) put(rs.getObject("user_id", UUID::class.java), rs.getString("name")) }
+            }
         }
     }
 }

@@ -308,6 +308,7 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         -> HttpStatusCode.NotFound
         "MEDIA_REVIEW_NOT_FOUND" -> HttpStatusCode.NotFound
         "MET_IN_PERSON_CONFIRMATION_NOT_FOUND" -> HttpStatusCode.NotFound
+        "MET_IN_PERSON_KEY_MISMATCH" -> HttpStatusCode.ServiceUnavailable
         "MEDIA_REVIEW_NOT_PENDING" -> HttpStatusCode.Conflict
         "INVALID_REVIEW_CURSOR" -> HttpStatusCode.BadRequest
         "INVALID_ID",

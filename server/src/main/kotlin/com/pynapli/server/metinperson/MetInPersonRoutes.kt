@@ -9,6 +9,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -24,6 +25,13 @@ fun Application.configureMetInPersonRoutes(
 ) {
     routing {
         route("/v1/messages/threads/{threadId}/met-in-person") {
+            // The caller's own actions for this conversation, asked for when the overflow menu opens.
+            get {
+                val user = call.authenticatedUser(authService)
+                val threadId = call.parameters["threadId"] ?: throw MessagingException(MetInPersonService.NOT_AVAILABLE)
+                call.respond(service.offers(user.id, threadId))
+            }
+
             post {
                 val user = call.authenticatedUser(authService)
                 val threadId = call.parameters["threadId"] ?: throw MessagingException(MetInPersonService.NOT_AVAILABLE)

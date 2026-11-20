@@ -149,10 +149,62 @@ internal class MetInPersonFixtures(
                 members[1],
             )
         }
-        members.forEach { member ->
-            exec("INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)", id, member)
-        }
+        members.forEach { member -> join(id, member, Duration.ofDays(20)) }
         return id
+    }
+
+    /** [member] joins [conversationId] as an active participant [ago] before now. */
+    fun join(
+        conversationId: UUID,
+        member: UUID,
+        ago: Duration,
+    ) {
+        exec(
+            "INSERT INTO conversation_participants (conversation_id, user_id, joined_at) VALUES (?, ?, ?)",
+            conversationId,
+            member,
+            now().minus(ago),
+        )
+    }
+
+    fun leave(
+        conversationId: UUID,
+        member: UUID,
+    ) {
+        exec(
+            "UPDATE conversation_participants SET invitation_status = 'left', left_at = ? WHERE conversation_id = ? AND user_id = ?",
+            now(),
+            conversationId,
+            member,
+        )
+    }
+
+    fun hide(
+        hider: UUID,
+        hidden: UUID,
+    ) {
+        exec("INSERT INTO user_hidden_profiles (id, hider_user_id, hidden_user_id) VALUES (?, ?, ?)", UUID.randomUUID(), hider, hidden)
+    }
+
+    /** A pending link invite from [from] to [to] (one row, never accepted). */
+    fun inviteToLink(
+        from: UUID,
+        to: UUID,
+    ) {
+        exec(
+            "INSERT INTO user_profile_links (id, user_id, linked_user_id, status) VALUES (?, ?, ?, 'pending')",
+            UUID.randomUUID(),
+            from,
+            to,
+        )
+    }
+
+    fun setDiscovery(
+        userId: UUID,
+        column: String,
+        value: Any,
+    ) {
+        exec("UPDATE discovery_settings SET $column = ? WHERE user_id = ?", value, userId)
     }
 
     fun message(
@@ -210,13 +262,15 @@ internal class MetInPersonFixtures(
         exec("INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id) VALUES (?, ?, ?)", UUID.randomUUID(), blocker, blocked)
     }
 
+    /** Both used one device, [ago] before now (on the test clock). */
     fun shareDevice(
         a: UUID,
         b: UUID,
+        ago: Duration = Duration.ofDays(10),
     ) {
         val hash = "device-${UUID.randomUUID()}"
-        exec("INSERT INTO account_device_links (device_hash, user_id) VALUES (?, ?)", hash, a)
-        exec("INSERT INTO account_device_links (device_hash, user_id) VALUES (?, ?)", hash, b)
+        exec("INSERT INTO account_device_links (device_hash, user_id, created_at) VALUES (?, ?, ?)", hash, a, now().minus(ago))
+        exec("INSERT INTO account_device_links (device_hash, user_id, created_at) VALUES (?, ?, ?)", hash, b, now().minus(ago))
     }
 
     fun vouchRows(): Int = count("SELECT count(*) FROM vouches")
