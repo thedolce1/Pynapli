@@ -165,7 +165,6 @@ class MetInPersonService(
     private class Snapshot(
         val facts: Map<UUID, MetInPersonSubjectFacts>,
         val rows: Map<UUID, MetInPersonPairRow>,
-        val partners: Set<UUID>,
         val states: List<MetInPersonOfferDto>,
     ) {
         fun stateFor(subjectUserId: UUID): MetInPersonOfferDto? = states.firstOrNull { it.subjectUserId == subjectUserId.toString() }
@@ -199,7 +198,6 @@ class MetInPersonService(
         return Snapshot(
             facts = subjects.associateBy { it.subjectUserId },
             rows = rows,
-            partners = partners,
             states = MetInPersonRules.states(viewer, subjects, rows, capUsed, now),
         )
     }
