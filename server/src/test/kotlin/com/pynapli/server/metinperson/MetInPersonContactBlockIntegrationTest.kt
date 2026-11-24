@@ -116,10 +116,50 @@ class MetInPersonContactBlockIntegrationTest {
             assertEquals("", takenBack.subjectDisplayName, "no name, hidden or not")
             assertEquals(1, fx.count("SELECT count(*) FROM vouches WHERE withdrawn_at IS NOT NULL"))
             assertEquals(
+                takenBack,
+                service.withdraw(viewer, chat.toString(), WithdrawMetInPersonRequestDto(hider.toString())),
+                "a retry the same day is the viewer's own state, answered the same",
+            )
+            clock.advance(Duration.ofDays(1))
+            assertEquals(
                 MetInPersonService.NOT_AVAILABLE,
                 refusalCode { service.withdraw(viewer, chat.toString(), WithdrawMetInPersonRequestDto(hider.toString())) },
                 "nothing left to take back",
             )
+        }
+    }
+
+    @Test
+    fun takingBackNeverDependsOnWhetherThePersonIsInTheConversationNamed() {
+        runBlocking {
+            val viewer = fx.member("Xan")
+            val hider = fx.member("Zephyrine Hidewell")
+            val other = fx.member("Quillon Seenmore")
+            val stranger = fx.member("Bystander")
+            val chat = fx.talked(viewer, hider)
+            assertTrue(service.confirm(viewer, chat.toString(), ConfirmMetInPersonRequestDto(hider.toString(), false)).given)
+            hide(hider, viewer)
+            // Two groups of the viewer's: one holds the hidden person, one does not.
+            val withHider = fx.conversation(viewer, hider, other)
+            val withoutHider = fx.conversation(viewer, other, stranger)
+
+            // Never confirmed: the same refusal whichever group is named.
+            val probe = WithdrawMetInPersonRequestDto(other.toString())
+            assertEquals(
+                refusalCode { service.withdraw(viewer, withHider.toString(), probe) },
+                refusalCode { service.withdraw(viewer, withoutHider.toString(), probe) },
+            )
+
+            // Confirmed: the same answer through a conversation without the person as through the right one.
+            val request = WithdrawMetInPersonRequestDto(hider.toString())
+            val viaWrongThread = service.withdraw(viewer, withoutHider.toString(), request)
+            assertEquals(viaWrongThread, service.withdraw(viewer, withHider.toString(), request))
+            assertEquals(viaWrongThread, service.withdraw(viewer, chat.toString(), request))
+            assertFalse(viaWrongThread.given)
+
+            // A conversation the viewer was never in is refused, whoever is named.
+            val notViewers = fx.conversation(hider, other)
+            assertEquals(MetInPersonService.NOT_AVAILABLE, refusalCode { service.withdraw(viewer, notViewers.toString(), request) })
         }
     }
 

@@ -276,18 +276,16 @@ internal object JdbcMetInPersonSql {
             statement.executeQuery().use { rs -> buildSet { while (rs.next()) add(rs.getObject(1, UUID::class.java)) } }
         }
 
-    /** True when both people have a participant row (left or not) in [conversationId]. */
-    fun Connection.bothParticipated(
+    /** True when [userId] has a participant row (left or not) in [conversationId]. */
+    fun Connection.participated(
         conversationId: UUID,
-        a: UUID,
-        b: UUID,
+        userId: UUID,
     ): Boolean =
         prepareStatement(
-            "SELECT count(DISTINCT user_id) = 2 FROM conversation_participants WHERE conversation_id = ? AND user_id IN (?, ?)",
+            "SELECT EXISTS (SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND user_id = ?)",
         ).use { statement ->
             statement.setObject(1, conversationId)
-            statement.setObject(2, a)
-            statement.setObject(3, b)
+            statement.setObject(2, userId)
             statement.executeQuery().use { rs -> rs.next() && rs.getBoolean(1) }
         }
 

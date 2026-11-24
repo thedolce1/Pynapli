@@ -171,7 +171,10 @@ voucher (whatever they toggle), not someone holding a copy of the database witho
   advisory lock (keyed by a token), so concurrent confirms cannot pass the cap.
 - Taking back: silent, within 30 days of giving, also after leaving the conversation, and also when the
   person now hides from the voucher ("Hide from people you know"): it works by pair token, without that
-  filter, and its answer never carries a name. Nothing to take back is the uniform refusal. After taking it
+  filter, and its answer never carries a name. Only the voucher must have been in the conversation named;
+  whether the person is in it never changes the answer, so naming different groups cannot locate someone
+  hidden. A retry the same day answers the same (the voucher's own state). Nothing to take back is the
+  uniform refusal. After taking it
   back, the same pair cannot give it again for 180 days (the same uniform refusal); after that, or after
   the 24-month expiry, it is the same row restored with a new date (the first-given day never moves).
 - Only from the conversation overflow menu, at the voucher's initiative; the menu asks the server for

@@ -6,11 +6,11 @@ import com.pynapli.server.db.lockForTransaction
 import com.pynapli.server.db.withConnection
 import com.pynapli.server.messaging.MessagingException
 import com.pynapli.server.messaging.isConversationHiddenFor
-import com.pynapli.server.metinperson.JdbcMetInPersonSql.bothParticipated
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartners
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.countGivenSince
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.keyMatches
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.pairRows
+import com.pynapli.server.metinperson.JdbcMetInPersonSql.participated
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.subjectFacts
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.upsertVouch
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.viewerFacts
@@ -118,9 +118,12 @@ class MetInPersonService(
     /**
      * Works for 30 days after giving, even after the viewer left the conversation, and by pair token
      * alone: no contact-block filter, so someone now hiding from the viewer cannot keep a confirmation
-     * the viewer wants back. Both people must have been in the conversation. The answer never carries a
-     * name (a present or missing name would tell the viewer whether the person hides from them): the
-     * client keeps the name it already had. Nothing to take back is the same refusal as everything else.
+     * the viewer wants back. Only the viewer must have been in the conversation: whether the person is in
+     * it never changes the answer, so trying a confirmation against different conversations cannot tell
+     * the viewer which one holds someone hidden from them. The answer never carries a name (a present or
+     * missing name would tell the viewer whether the person hides from them): the client keeps the name it
+     * already had. A retry of a take-back made today answers the same (the viewer's own state); nothing to
+     * take back is the same refusal as everything else.
      */
     suspend fun withdraw(
         viewerUserId: UUID,
@@ -134,11 +137,14 @@ class MetInPersonService(
                 val now = clock.instant()
                 if (!keyMatches(tokens, now)) refuse()
                 lockForTransaction(LOCK_NAMESPACE, tokens.auditVoucher(viewerUserId))
-                if (viewerUserId == subjectUserId || !bothParticipated(conversationId, viewerUserId, subjectUserId)) refuse()
+                if (viewerUserId == subjectUserId || !participated(conversationId, viewerUserId)) refuse()
                 val pairToken = tokens.pair(viewerUserId, subjectUserId)
                 val row = pairRows(listOf(pairToken))[pairToken]
-                if (row == null || !MetInPersonRules.canWithdraw(row, now)) refuse()
                 val day = MetInPersonRules.day(now)
+                // Taken back: not given, and not givable again for 180 days.
+                val takenBack = MetInPersonOfferDto(subjectUserId = subjectUserId.toString(), subjectDisplayName = "")
+                if (row?.withdrawnAt == day) return@inTransaction takenBack
+                if (row == null || !MetInPersonRules.canWithdraw(row, now)) refuse()
                 withdrawVouch(
                     pairToken = row.pairToken,
                     day = day,
@@ -156,8 +162,7 @@ class MetInPersonService(
                             )
                         }
                 }
-                // Taken back: not given, and not givable again for 180 days.
-                MetInPersonOfferDto(subjectUserId = subjectUserId.toString(), subjectDisplayName = "")
+                takenBack
             }
         }
     }
