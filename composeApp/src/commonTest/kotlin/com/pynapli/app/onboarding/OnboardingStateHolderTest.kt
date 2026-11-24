@@ -35,7 +35,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -638,8 +637,7 @@ class OnboardingStateHolderTest {
             assertTrue(fixture.progressStore.progress.photoNudgeDismissed)
         }
 
-    // Section 0 repros (onboarding + first grid plan). Each fails today and is ignored so the gates
-    // stay green; the Section 1 slice that fixes the bug removes its @Ignore.
+    // Section 0 repros (onboarding + first grid plan), un-ignored by the Section 1 fixes.
 
     // Section 0 repro: B1 auth mode not reset after sign-out — fixed in Section 1
     @Test
@@ -721,7 +719,6 @@ class OnboardingStateHolderTest {
         }
 
     // Section 0 repro: B3 grid shows while a sign-up resume waits for /me — fixed in Section 1
-    @Ignore
     @Test
     fun aResumedSignUpHoldsTheStepperWhileTheProfileLoads() =
         runTest {
@@ -748,7 +745,6 @@ class OnboardingStateHolderTest {
         }
 
     // Section 0 repro: photo nudge can arm in the sign-up session — fixed in Section 1
-    @Ignore
     @Test
     fun thePhotoNudgeNeverArmsInTheSignUpSession() =
         runTest {
@@ -774,6 +770,57 @@ class OnboardingStateHolderTest {
             // Spec: the first nudge lands a session later, never in the session the stepper ran.
             assertFalse(fixture.onboarding.state.value.active)
             assertFalse(fixture.onboarding.state.value.photoNudgeEligible)
+        }
+
+    @Test
+    fun theMainSurfacesWaitUntilTheSessionIsDecided() =
+        runTest {
+            val fixture = Fixture()
+            assertFalse(fixture.onboarding.holdsMainSurfaces(sessionUserId = null), "signed out: nothing to hold")
+
+            fixture.signIn("user-1")
+            // Before onSessionReady has run, a resume may still be coming: no grid yet.
+            assertTrue(fixture.onboarding.holdsMainSurfaces("user-1"))
+
+            fixture.onboarding.onSessionReady()
+            assertFalse(fixture.onboarding.holdsMainSurfaces("user-1"))
+            // Another account on this device is decided afresh.
+            assertTrue(fixture.onboarding.holdsMainSurfaces("user-2"))
+
+            // Signed out, then back in as the same account: decided afresh too.
+            fixture.onboarding.resumePendingSignupIfNeeded()
+            assertTrue(fixture.onboarding.holdsMainSurfaces("user-1"))
+        }
+
+    @Test
+    fun aFailingProgressStoreNeverHoldsTheMainSurfacesForever() =
+        runTest {
+            val fixture = Fixture(progressStore = InMemoryProgressStore().apply { failLoads = true })
+            fixture.signIn("user-1")
+
+            runCatching { fixture.onboarding.onSessionReady() }
+
+            assertFalse(fixture.onboarding.holdsMainSurfaces("user-1"))
+        }
+
+    @Test
+    fun aResumeKeepsANameTypedWhileTheProfileLoads() =
+        runTest {
+            val meGate = CompletableDeferred<Unit>()
+            val fixture =
+                Fixture(
+                    progressStore = InMemoryProgressStore(OnboardingProgress(completed = false, userId = "user-1")),
+                    profileRepository = FakeOnboardingProfileRepository(getMeResult = { AppResult.Success(meDto("Saved")) }, getMeGate = meGate),
+                )
+            fixture.signIn("user-1")
+            val ready = launch { fixture.onboarding.onSessionReady() }
+            runCurrent()
+
+            fixture.onboarding.updateDisplayName("Typed")
+            meGate.complete(Unit)
+            ready.join()
+
+            assertEquals("Typed", fixture.onboarding.state.value.displayName)
         }
 
     private inner class Fixture(
@@ -963,7 +1010,13 @@ private class InMemoryProgressStore(
     /** When set, every save waits for it first: models a device store slower than a frame. */
     var saveGate: CompletableDeferred<Unit>? = null
 
-    override suspend fun load(): OnboardingProgress = progress
+    /** When true, every load throws: models an unreadable device store. */
+    var failLoads: Boolean = false
+
+    override suspend fun load(): OnboardingProgress {
+        check(!failLoads) { "progress store unreadable" }
+        return progress
+    }
 
     override suspend fun save(progress: OnboardingProgress) {
         saveGate?.await()

@@ -244,6 +244,14 @@ fun PynapliApp(
             return@PynapliTheme
         }
 
+        // B3 (onboarding + first grid plan): until this session's sign-up resume is decided (a local
+        // store read), hold a plain background instead of composing the main shell, which would show
+        // (and load) the grid first. Plain on purpose: the splash itself is part B's (B5).
+        if (onboardingState?.holdsMainSurfaces(authState.session?.userId) == true) {
+            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+            return@PynapliTheme
+        }
+
         if (!authState.authenticated) {
             AuthScreen(
                 state = authState,

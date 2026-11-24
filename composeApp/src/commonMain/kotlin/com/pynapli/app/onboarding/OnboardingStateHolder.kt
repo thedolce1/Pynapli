@@ -61,6 +61,11 @@ class OnboardingStateHolder(
     // per recomposition of the banner.
     private var photoNudgeCountedThisSession = false
 
+    // Set once a sign-up's code is submitted (or a resume re-enters the stepper) in this process. The
+    // add-a-photo nudge never arms in the session the stepper ran (spec: the first nudge lands a
+    // session later). A wrong code also sets it; that only defers the nudge, never shows it early.
+    private var signupRanThisSession = false
+
     // The started sign-up's token (random, from the server): needed with the code. Kept out of
     // the UI state; persisted only in the device-local progress store for resume.
     private var pendingSignupToken: String? = null
@@ -269,6 +274,8 @@ class OnboardingStateHolder(
             return
         }
         _state.update { it.copy(isSubmitting = true, errorMessage = null, signupNotice = null) }
+        // Before the session can exist (verifySignup publishes it): see evaluatePhotoNudge.
+        signupRanThisSession = true
         val verified = authStateHolder.verifySignup(email = current.email, code = current.signupCode, signupToken = token)
         if (verified) {
             pendingSignupToken = null
@@ -339,6 +346,8 @@ class OnboardingStateHolder(
      * that address. A sign-up older than the server keeps it restarts cleanly (nothing to do).
      */
     suspend fun resumePendingSignupIfNeeded() {
+        // Signed out: the next session (even the same account's) is decided afresh.
+        _state.update { it.copy(sessionSettledFor = null) }
         if (_state.value.active) return
         if (authStateHolder.state.value.session != null) return
         val pending = runCatchingCancellable { pendingSignupStore.load() }.getOrNull() ?: return
@@ -410,9 +419,21 @@ class OnboardingStateHolder(
      * non-naggy).
      */
     suspend fun onSessionReady() {
-        resumeIfNeeded()
-        evaluatePhotoNudge()
+        try {
+            resumeIfNeeded()
+            evaluatePhotoNudge()
+        } finally {
+            // Fail open: whatever happened above, the shell may now draw the main surfaces.
+            _state.update { it.copy(sessionSettledFor = authStateHolder.state.value.session?.userId) }
+        }
     }
+
+    /**
+     * The shell holds the main surfaces (no grid composed, so no grid load) until [onSessionReady]
+     * has decided this session: otherwise a sign-up resume shows the grid for a frame or more before
+     * the stepper takes the screen (B3). Signed-out, nothing is held.
+     */
+    fun holdsMainSurfaces(sessionUserId: String?): Boolean = _state.value.holdsMainSurfaces(sessionUserId)
 
     /**
      * Re-enters the consolidated Profile step after a mid-signup app close. No-op
@@ -431,24 +452,21 @@ class OnboardingStateHolder(
         // Anyone else signing in on this device skips straight to the grid.
         if (progress.userId != sessionUserId) return
 
-        val me = profileRepository.getMe()
-        val displayName =
-            when (me) {
-                is AppResult.Success ->
-                    me.value.profile.displayName
-                        .orEmpty()
-                // Offline resume: an empty prefill is harmless — saving again later
-                // is idempotent.
-                is AppResult.Failure -> ""
-            }
+        // Take the screen first (B3): the stepper holds it while /me is in flight, so the grid never
+        // shows in between. The saved name arrives after.
+        signupRanThisSession = true
         _state.update {
             it.copy(
                 active = true,
-                displayName = displayName,
                 step = OnboardingStep.Profile,
                 errorMessage = null,
             )
         }
+        val me = profileRepository.getMe()
+        // Offline resume: no prefill, which is harmless (saving again later is idempotent).
+        val savedName = (me as? AppResult.Success)?.value?.profile?.displayName.orEmpty()
+        // Never overwrite what the person started typing while /me was in flight.
+        _state.update { if (it.displayName.isEmpty()) it.copy(displayName = savedName) else it }
     }
 
     /**
@@ -458,6 +476,13 @@ class OnboardingStateHolder(
      * live media state, not settings.
      */
     suspend fun evaluatePhotoNudge() {
+        // The stepper ran (or is running) in this process: the first nudge lands a session later. An
+        // in-memory flag, set before the session can exist, so a slow "in progress" store write can't
+        // let this read the stale `completed = true` default and arm the banner.
+        if (signupRanThisSession || _state.value.active) {
+            _state.update { it.copy(photoNudgeEligible = false) }
+            return
+        }
         val progress = runCatchingCancellable { progressStore.load() }.getOrNull() ?: return
         val eligible =
             progress.completed &&
@@ -642,9 +667,15 @@ data class OnboardingUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val photoNudgeEligible: Boolean = false,
+    // The account [OnboardingStateHolder.onSessionReady] last decided (resume + nudge) for; see
+    // [OnboardingStateHolder.holdsMainSurfaces].
+    val sessionSettledFor: String? = null,
 ) {
     val dobComplete: Boolean
         get() = dobDay.isNotEmpty() && dobMonth.isNotEmpty() && dobYear.length == 4
+
+    /** See [OnboardingStateHolder.holdsMainSurfaces]. */
+    fun holdsMainSurfaces(sessionUserId: String?): Boolean = sessionUserId != null && !active && sessionSettledFor != sessionUserId
 
     /** The address the code step names: in full right after sign-up, masked after a resume. */
     val verifyEmailLabel: String
