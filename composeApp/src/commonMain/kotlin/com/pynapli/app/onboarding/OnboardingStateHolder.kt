@@ -579,9 +579,14 @@ class OnboardingStateHolder(
                 errorMessage = null,
             )
         }
-        val me = profileRepository.getMe()
-        // Offline resume: no prefill, which is harmless (saving again later is idempotent).
-        val savedName = (me as? AppResult.Success)?.value?.profile?.displayName.orEmpty()
+        val savedName =
+            when (val me = profileRepository.getMe()) {
+                is AppResult.Success ->
+                    me.value.profile.displayName
+                        .orEmpty()
+                // Offline resume: no prefill, which is harmless (saving again later is idempotent).
+                is AppResult.Failure -> ""
+            }
         // Never overwrite what the person started typing while /me was in flight.
         _state.update { if (it.displayName.isEmpty()) it.copy(displayName = savedName) else it }
     }

@@ -102,7 +102,8 @@ class PynapliHistoryPlannerTest {
 
     @Test
     fun theUrlNeverMovesTheStepperForward() {
-        val stepper = FakeStepper(listOf(dob, policies))
+        // The stepper is back on the birthday (its own Back link), so that is all it has visited.
+        val stepper = FakeStepper(listOf(dob))
         val browser = FakeBrowser(initial = "/", stepper = stepper)
         browser.report(PynapliRoutes.LOGIN)
         listOf(dob, policies).forEach(browser::report)
