@@ -4,8 +4,10 @@ import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.location.LocationCell
 import com.pynapli.shared.network.dto.CurrentLocationDto
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -131,10 +133,8 @@ class LocationStateHolderTest {
             assertEquals(3, repository.locations.size)
         }
 
-    // Section 0 repro (onboarding + first grid plan). Fails today; the Section 1 slice that adds a
-    // sign-out reset calls it at the marked line and removes the @Ignore.
-    // Section 0 repro: B2 LocationStateHolder keeps the previous account's location after sign-out — fixed in Section 1
-    @Ignore
+    // Section 0 repro B2 (onboarding + first grid plan), fixed in Section 1: App.kt resets this holder
+    // on sign-out next to the Grid and Favorites.
     @Test
     fun theNextAccountOnThisDeviceSendsItsOwnLocation() =
         runTest {
@@ -147,8 +147,8 @@ class LocationStateHolderTest {
             assertTrue(stateHolder.submitLocation(here).submitted)
 
             // Account A signs out and account B signs up in the same process, standing in the same
-            // place. Nothing resets this holder on sign-out today (App.kt clears only the Grid and
-            // Favorites). Section 1: reset the holder here.
+            // place. App.kt's sign-out effect resets this holder.
+            stateHolder.reset()
 
             // B's Location step auto-continues on a non-null currentLocation, so B skips it ...
             assertNull(stateHolder.state.value.currentLocation, "account A's location must not carry over to account B")
@@ -158,14 +158,38 @@ class LocationStateHolderTest {
             assertTrue(forB.submitted)
             assertEquals(2, repository.locations.size)
         }
+
+    @Test
+    fun aSubmitStillInFlightAtSignOutNeverWritesIntoTheNextAccount() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val repository = FakeLocationUpdateRepository(gate = gate)
+            val stateHolder = LocationStateHolder(repository)
+            val here = DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20)
+
+            // Account A's fix is on the wire when A signs out.
+            val forA = async { stateHolder.submitLocation(here) }
+            runCurrent()
+            stateHolder.reset()
+            gate.complete(Unit)
+
+            assertFalse(forA.await().submitted)
+            assertNull(stateHolder.state.value.currentLocation, "A's answer must not land in B's state")
+            assertFalse(stateHolder.state.value.isUpdating)
+            // ... nor become B's movement anchor: B's own fix from the same spot is still sent.
+            assertTrue(stateHolder.submitLocation(here).submitted)
+        }
 }
 
-private class FakeLocationUpdateRepository : LocationUpdateRepository {
+private class FakeLocationUpdateRepository(
+    private val gate: CompletableDeferred<Unit>? = null,
+) : LocationUpdateRepository {
     val locations = mutableListOf<DeviceLocation>()
     var nextResult: AppResult<CurrentLocationDto> = AppResult.Success(testCurrentLocation())
 
     override suspend fun updateCurrentLocation(location: DeviceLocation): AppResult<CurrentLocationDto> {
         locations += location
+        if (gate != null && locations.size == 1) gate.await()
         return nextResult
     }
 }

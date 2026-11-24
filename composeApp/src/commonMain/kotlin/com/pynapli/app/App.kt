@@ -92,6 +92,8 @@ fun PynapliApp(
             if (!authState.isCheckingSession && authState.session == null) {
                 graph.gridStateHolder.clearForSignOut()
                 graph.favoritesStateHolder?.clear()
+                // And its location: the next account sends its own first fix (Section 1, B2).
+                graph.locationStateHolder.reset()
             }
         }
         PynapliAppEffects(

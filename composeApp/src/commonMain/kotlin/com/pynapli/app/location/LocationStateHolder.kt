@@ -18,6 +18,24 @@ class LocationStateHolder(
     val state: StateFlow<LocationUiState> = _state.asStateFlow()
     private var lastSubmittedDeviceLocation: DeviceLocation? = null
 
+    /**
+     * Bumped by [reset]. A submit that started under an older epoch belongs to the account that
+     * signed out, so its answer must not write that account's anchor or location into the next one.
+     */
+    private var epoch = 0
+
+    /**
+     * Signed out (or the session died): forget the previous account's location, so the next account
+     * on this device gets its own Location step and its first fix is always sent. Without this the
+     * movement anchor would drop a fix under 250 m from where the last account stood, and the
+     * non-null `currentLocation` would auto-continue the next account's Location step.
+     */
+    fun reset() {
+        epoch += 1
+        lastSubmittedDeviceLocation = null
+        _state.value = LocationUiState()
+    }
+
     fun beginUpdate() {
         _state.update { current ->
             current.copy(isUpdating = true, errorMessage = null)
@@ -58,7 +76,13 @@ class LocationStateHolder(
         // Location privacy: only the cell centre leaves the device, with no accuracy figure. The
         // precise fix stays in memory as the movement anchor so the 250 m / 1 km decisions above
         // behave exactly as before; it is never persisted or logged.
-        return when (val result = repository.updateCurrentLocation(location.toCell())) {
+        val startedEpoch = epoch
+        val result = repository.updateCurrentLocation(location.toCell())
+        if (startedEpoch != epoch) {
+            // Signed out while this was in flight: the answer belongs to the previous account.
+            return LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
+        }
+        return when (result) {
             is AppResult.Success -> {
                 lastSubmittedDeviceLocation = location
                 _state.update { current ->
