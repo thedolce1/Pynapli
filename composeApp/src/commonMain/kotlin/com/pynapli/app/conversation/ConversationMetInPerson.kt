@@ -6,7 +6,7 @@ import com.pynapli.shared.network.dto.MetInPersonOfferDto
 
 /**
  * "We've met in person" in a conversation (TRUST_AND_SAFETY_SPEC "Met in person"). The server decides
- * everything (`GET .../met-in-person`, asked for when the overflow menu opens, never on open or refresh):
+ * everything (`POST /v1/met-in-person/offers`, asked for when the overflow menu opens, never on open or refresh):
  * whether an item shows, whether the partner can be ticked, whether the viewer can take it back. A
  * failure only means the menu shows nothing; it never touches the conversation itself.
  */
@@ -83,7 +83,9 @@ internal fun ConversationUiState.metInPersonSheetUi(): MetInPersonSheetUi? {
     } else {
         MetInPersonSheetUi(
             title = MET_IN_PERSON_TITLE,
-            body = "You said you've met $name in person. They weren't told. You can take it back for 30 days after you said it.",
+            body =
+                "You said you've met $name in person. They weren't told. You can take it back for 30 days after you said it. " +
+                    "If you do, you can't say it again for 180 days, and it still uses one of this month's confirmations.",
             partnerTickLabel = null,
             includePartner = false,
             showConfirm = false,

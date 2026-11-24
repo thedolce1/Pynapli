@@ -79,6 +79,9 @@ class ConversationMetInPersonTest {
         assertFalse(ui.showConfirm)
         assertTrue(ui.showTakeBack)
         assertTrue(listOf(ui.title, ui.body).none { it.contains("count", ignoreCase = true) })
+        // Taking it back is not free: it blocks saying it again and keeps the monthly slot used.
+        assertTrue(ui.body.contains("can't say it again for 180 days"), ui.body)
+        assertTrue(ui.body.contains("still uses one of this month's confirmations"), ui.body)
     }
 
     @Test
