@@ -9,6 +9,9 @@ import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.shared.network.dto.ConfirmMetInPersonRequestDto
 import com.pynapli.shared.network.dto.WithdrawMetInPersonRequestDto
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -229,6 +232,43 @@ class MetInPersonContactBlockIntegrationTest {
             val after = archiver.buildArchive(viewer).bytes.decodeToString()
             assertFalse("Zephyrine Hidewell" in after, "the export never names someone hiding from the person")
             assertTrue("Quillon Seenmore" in after)
+        }
+    }
+
+    @Test
+    fun theLinkHistoryIsExportedByTheHideRuleAndGoesWithTheAccount() {
+        runBlocking {
+            val viewer = fx.member("Xan")
+            val hider = fx.member("Zephyrine Hidewell")
+            val other = fx.member("Quillon Seenmore")
+            val third = fx.member("Third")
+            val fourth = fx.member("Fourth")
+            fx.link(viewer, hider)
+            fx.inviteToLink(viewer, other)
+            fx.link(third, fourth)
+            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, contactTokens, MetInPersonAccountData(tokens))
+
+            suspend fun historyPartners(): List<String> =
+                kotlinx.serialization.json.Json
+                    .parseToJsonElement(archiver.buildArchive(viewer).bytes.decodeToString())
+                    .jsonObject
+                    .getValue("partnerLinkHistory")
+                    .jsonArray
+                    .map { it.jsonObject.getValue("partner_user_id").jsonPrimitive.content }
+
+            assertEquals(setOf(hider.toString(), other.toString()), historyPartners().toSet())
+            hide(hider, viewer)
+            assertEquals(listOf(other.toString()), historyPartners(), "like the partnerLinks section")
+
+            com.pynapli.server.account
+                .JdbcAccountLifecycleRepository(dataSource, contactTokens, MetInPersonAccountData(tokens))
+                .deleteAccount(viewer)
+            assertEquals(
+                0,
+                fx.count("SELECT count(*) FROM profile_link_history WHERE user_id = ? OR linked_user_id = ?", viewer, viewer),
+                "the history goes with the account, in both directions",
+            )
+            assertEquals(2, fx.count("SELECT count(*) FROM profile_link_history WHERE user_id IN (?, ?)", third, fourth), "nobody else's")
         }
     }
 

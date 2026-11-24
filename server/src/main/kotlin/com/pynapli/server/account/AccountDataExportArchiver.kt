@@ -237,6 +237,27 @@ class JdbcAccountDataExportArchiver(
                       )
                     ORDER BY l.created_at
                     """.trimIndent(),
+                // The durable link record (V124): the first invite and first acceptance per direction, by the
+                // same hide rule as partnerLinks (the act's date is the first one on record).
+                "partnerLinkHistory" to
+                    """
+                    WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
+                    SELECT CASE WHEN h.user_id = me.id THEN 'sent' ELSE 'received' END AS direction,
+                           CASE WHEN h.user_id = me.id THEN h.linked_user_id ELSE h.user_id END AS partner_user_id,
+                           h.first_invited_at, h.first_accepted_at
+                    FROM profile_link_history h, me
+                    WHERE (h.user_id = me.id OR h.linked_user_id = me.id)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM contact_blocks cb
+                          WHERE cb.target_token = me.hidden_token
+                            AND cb.blocker_user_id = CASE WHEN h.user_id = me.id THEN h.linked_user_id ELSE h.user_id END
+                            AND (
+                                cb.released_at IS NULL
+                                OR COALESCE(h.first_invited_at, h.first_accepted_at) < cb.released_at
+                            )
+                      )
+                    ORDER BY COALESCE(h.first_invited_at, h.first_accepted_at)
+                    """.trimIndent(),
                 // A Psync together match can pair this person with someone hiding from them.
                 "matches" to
                     """

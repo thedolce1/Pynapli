@@ -166,7 +166,8 @@ every change must keep.
   recomputed tokens and, like export, refuses under a key that does not match. Any database that ran this
   feature's earlier V120 must be reset. Details: TRUST_AND_SAFETY_SPEC "Met in person".
 - `profile_link_history` (V124): per directed `user_profile_links` pair, the first invite sent and the
-  first acceptance, kept by a trigger and never cleared, so a re-invite (which resets `accepted_at`) or a
+  first acceptance, kept by a trigger and cleared only by account deletion (both directions; the
+  data export lists the person's own rows by the partnerLinks hide rule), so a re-invite (which resets `accepted_at`) or a
   decline cannot erase that two people were linked. Read by the Met in person evaluator.
 - Age verification never stores raw ID or biometric data unless legally required and reviewed. A
   successful verification sets `profiles.age_verified_at`; discovery reads that timestamp, not

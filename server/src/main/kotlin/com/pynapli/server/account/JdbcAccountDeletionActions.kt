@@ -37,6 +37,8 @@ internal class JdbcAccountDeletionActions(
                 // Met in person: confirmations given (by token) and received, and the badge.
                 metInPersonAccountData.erase(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
+                // After the links end: ending them fires the history trigger, which would record again.
+                purgeLinkHistory(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)
                 disablePushDevices(connection, userId)
@@ -326,6 +328,18 @@ internal class JdbcAccountDeletionActions(
             }
         connection.prepareStatement("UPDATE users SET contact_token = NULL WHERE id = ?").use { statement ->
             statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
+    }
+
+    /** The durable partner-link record (V124) goes with the person, in either direction. */
+    private fun purgeLinkHistory(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection.prepareStatement("DELETE FROM profile_link_history WHERE user_id = ? OR linked_user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.setObject(2, userId)
             statement.executeUpdate()
         }
     }
