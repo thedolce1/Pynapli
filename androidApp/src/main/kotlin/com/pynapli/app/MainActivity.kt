@@ -148,6 +148,10 @@ class MainActivity : ComponentActivity() {
         appGraph = graph
         graph.attachBillingActivity(this)
         activityScope.launch { graph.pushRegistrationSync.followSessionAndSettings() }
+        // The notification ask waits for the first Grid (a short dwell) or the first conversation,
+        // so it never lands on the sign-up Location step; Grid time counts only while started.
+        graph.appInForeground.value = isStarted
+        activityScope.launch { graph.notificationAskTiming.run() }
         activityScope.launch {
             graph.pushRegistrationSync.notificationPermissionWanted.collectLatest { wanted ->
                 if (wanted) requestNotificationPermissionIfUseful()
@@ -180,6 +184,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         isStarted = true
+        appGraph?.appInForeground?.value = true
         appGraph?.let { startRealtimeStreams(it) }
         // Re-sync push on every foreground so a rotated FCM token is re-registered (see
         // PushRegistrationSync.syncNow); fingerprint-guarded, so a no-op when nothing changed.
@@ -206,6 +211,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         isStarted = false
+        appGraph?.appInForeground?.value = false
         pendingLocationSignal?.cancel()
         pendingLocationSignal = null
         realtimeJobs.forEach { it.cancel() }

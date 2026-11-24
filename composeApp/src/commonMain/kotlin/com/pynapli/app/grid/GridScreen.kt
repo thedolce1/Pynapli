@@ -71,6 +71,12 @@ fun GridScreen(
         stateHolder.primeFromCacheThenLoad()
     }
 
+    // On screen for as long as this is composed: the notification ask waits for some Grid time.
+    DisposableEffect(stateHolder) {
+        stateHolder.setOnScreen(true)
+        onDispose { stateHolder.setOnScreen(false) }
+    }
+
     // Leaving the tab disposes this screen; keep both grids' scroll for the way back.
     DisposableEffect(gridState, favoritesGridState) {
         onDispose {

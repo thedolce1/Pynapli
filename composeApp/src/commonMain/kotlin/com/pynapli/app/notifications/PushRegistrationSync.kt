@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 
 /** True when the user wants at least one kind of push (messages, matches, activity). */
 val AppSettings.anyPushCategoryEnabled: Boolean
@@ -22,6 +23,11 @@ class PushRegistrationSync(
     private val coordinator: PushRegistrationCoordinator,
     private val authStateHolder: AuthStateHolder,
     private val appSettingsStateHolder: AppSettingsStateHolder,
+    /**
+     * True once the moment to ask has come ([NotificationAskTiming]: after the first Grid, not during
+     * sign-up). Always true by default, for a shell that has no such timing.
+     */
+    private val askMomentReached: Flow<Boolean> = flowOf(true),
 ) {
     /** Re-registers whenever the signed-in user or the settings change. Runs until cancelled. */
     suspend fun followSessionAndSettings() {
@@ -46,11 +52,12 @@ class PushRegistrationSync(
     }
 
     /**
-     * True while the user is signed in with at least one push category on: the moment it's worth asking
+     * True while the user is signed in with at least one push category on and the ask moment has come
+     * (never on the sign-up Location step, which is authenticated too): the moment it's worth asking
      * the OS for notification permission. The shell decides whether its OS needs a prompt at all.
      */
     val notificationPermissionWanted: Flow<Boolean> =
-        combine(authStateHolder.state, appSettingsStateHolder.state) { auth, settings ->
-            auth.authenticated && settings.settings.anyPushCategoryEnabled
+        combine(authStateHolder.state, appSettingsStateHolder.state, askMomentReached) { auth, settings, moment ->
+            auth.authenticated && settings.settings.anyPushCategoryEnabled && moment
         }.distinctUntilChanged()
 }

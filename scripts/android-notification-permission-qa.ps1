@@ -108,8 +108,15 @@ Assert-NoAppErrorText $loginXml "Login"
 $loginShot = Save-Screen "00_login"
 Tap-Text "Dev login"
 
-# The OS POST_NOTIFICATIONS prompt appears once after login on Android 13+. Deny it.
-Wait-ForAnyText @("Allow", "Don", "Deny", "Use current location") 45 | Out-Null
+# The OS POST_NOTIFICATIONS prompt appears once on Android 13+, after about 20 s of Grid on screen
+# (or the first conversation), never right at login (NotificationAskTiming). Reach the Grid first,
+# then wait out the dwell for the prompt and deny it.
+Wait-ForAnyText @("Use current location", "Dense", "Grid", "Filters") 45 | Out-Null
+try {
+    Wait-ForAnyText @("Allow", "Don", "Deny") 40 | Out-Null
+} catch {
+    # Pre-Tiramisu, or already asked on this install: handled by the note below.
+}
 Start-Sleep -Milliseconds 1000
 $promptXml = Dump-Ui "01_notification_permission_prompt" -Keep
 $notificationPromptShot = $null

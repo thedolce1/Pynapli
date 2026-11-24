@@ -19,6 +19,7 @@ import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
 import com.pynapli.app.notifications.AndroidPushRegistrationStore
 import com.pynapli.app.notifications.ApiPushDeviceRegistrationRepository
+import com.pynapli.app.notifications.NotificationAskTiming
 import com.pynapli.app.notifications.PushRegistrationCoordinator
 import com.pynapli.app.notifications.PushRegistrationSync
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
@@ -41,6 +42,8 @@ import com.pynapli.shared.settings.SqlDelightPendingSignupStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import java.util.Locale
 import java.util.TimeZone
 
@@ -190,7 +193,24 @@ class AndroidAppGraph(
     }
 
     /** Keeps the device's push registration in step with the session and settings. */
-    val pushRegistrationSync = PushRegistrationSync(pushRegistrationCoordinator, authStateHolder, appSettingsStateHolder)
+    /** Set by MainActivity's onStart/onStop, so Grid time only counts while the app is in front. */
+    val appInForeground = MutableStateFlow(false)
+
+    /** After the first Grid (a short dwell) or the first conversation, never during sign-up. */
+    val notificationAskTiming =
+        NotificationAskTiming(
+            gridOnScreen = common.gridStateHolder.onScreen,
+            conversationOpen = common.conversationStateHolder.state.map { it.visible },
+            appInForeground = appInForeground,
+        )
+
+    val pushRegistrationSync =
+        PushRegistrationSync(
+            pushRegistrationCoordinator,
+            authStateHolder,
+            appSettingsStateHolder,
+            askMomentReached = notificationAskTiming.ready,
+        )
 
     /** The object MainActivity hands to `PynapliApp`: every common holder plus this shell's pieces. */
     val pynapliAppGraph: PynapliAppGraph =

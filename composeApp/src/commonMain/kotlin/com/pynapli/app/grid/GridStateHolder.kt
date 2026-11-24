@@ -302,6 +302,15 @@ class GridStateHolder(
      */
     var travelKeyWhenLeft: String? = null
 
+    private val _onScreen = MutableStateFlow(false)
+
+    /** True while the Grid screen is composed (its tab is showing); feeds the notification ask timing. */
+    val onScreen: StateFlow<Boolean> = _onScreen.asStateFlow()
+
+    fun setOnScreen(visible: Boolean) {
+        _onScreen.value = visible
+    }
+
     /** Marks the cards as expired, so the next return to the Grid refetches them quietly. */
     fun invalidate() {
         loadedAt = null
