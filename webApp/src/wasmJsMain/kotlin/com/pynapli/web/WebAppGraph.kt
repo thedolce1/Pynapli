@@ -26,6 +26,7 @@ import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.webRealtimeStreams
 import com.pynapli.web.auth.LocalStorageSessionStore
 import com.pynapli.web.platform.BrowserLocalStorage
+import com.pynapli.web.platform.onOtherTabStorageChange
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
 import com.pynapli.web.settings.LocalStorageLocationSharingConsentStore
 import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
@@ -33,6 +34,7 @@ import com.pynapli.web.settings.SessionStoragePendingSignupStore
 import com.pynapli.web.settings.SessionStorageUnderageStopStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlin.random.Random
 
@@ -173,6 +175,17 @@ class WebAppGraph {
 
     /** Refetches every surface after the app was away; see [PynapliCommonGraph.onAppForegrounded]. */
     suspend fun onAppForegrounded() = common.onAppForegrounded(signedIn = authStateHolder.state.value.authenticated)
+
+    /**
+     * Tabs share one localStorage session. When another tab signs out, or out and back in as someone
+     * else, this tab must end its own session rather than carry on with the other account's tokens
+     * under its own account's cached state (AuthStateHolder.onStoredSessionChanged decides). Call once.
+     */
+    fun followSessionChangesFromOtherTabs(scope: CoroutineScope) {
+        onOtherTabStorageChange(LocalStorageSessionStore.SESSION_KEY) {
+            scope.launch { authStateHolder.onStoredSessionChanged(sessionStore.currentSession()) }
+        }
+    }
 
     val devLoginCredentials: DevLoginCredentials? =
         if (pynapliConfig.environment == PynapliEnvironment.Local) {

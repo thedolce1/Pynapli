@@ -132,6 +132,8 @@ class GridStateHolder(
                 // Signed out (or reloaded) while this was in flight: never resurrect old cards.
                 if (generation != feedGeneration) return@onSuccess
                 loadedAt = TimeSource.Monotonic.markNow()
+                // The server ranked a grid for this account, so it holds a location for it.
+                _serverHasLocation.value = true
                 _state.update { current ->
                     current.copy(
                         cards = feed.cards,
@@ -147,6 +149,9 @@ class GridStateHolder(
                 // Persist the fresh cards for an instant first paint on next open (best-effort).
                 runCatchingCancellable { snapshotStore.save(feed.cards) }
             }.onFailure { error ->
+                if (generation == feedGeneration && (error as? GridFeedException)?.code == "LOCATION_REQUIRED") {
+                    _serverHasLocation.value = false
+                }
                 _state.update { current ->
                     val code = (error as? GridFeedException)?.code
                     val entitlementRequired = code == "ENTITLEMENT_REQUIRED"
@@ -302,6 +307,16 @@ class GridStateHolder(
      */
     var travelKeyWhenLeft: String? = null
 
+    private val _serverHasLocation = MutableStateFlow<Boolean?>(null)
+
+    /**
+     * Whether the server holds a location for this account, as the last live first-page answer this
+     * session showed it: true after a grid came back, false after `LOCATION_REQUIRED`, null before
+     * any live answer (cached cards say nothing). Read by the location sharing gate's rule (b); no
+     * location is echoed to the client for this.
+     */
+    val serverHasLocation: StateFlow<Boolean?> = _serverHasLocation.asStateFlow()
+
     private val _onScreen = MutableStateFlow(false)
 
     /** True while the Grid screen is composed (its tab is showing); feeds the notification ask timing. */
@@ -336,6 +351,7 @@ class GridStateHolder(
         loadedAt = null
         scrollAnchor = GridScrollAnchor()
         travelKeyWhenLeft = null
+        _serverHasLocation.value = null
         _state.value = GridUiState(isRefreshing = true, cacheChecked = false)
         runCatchingCancellable { snapshotStore.clear() }
     }

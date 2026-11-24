@@ -15,79 +15,102 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** The silent resume refresh follows what each account chose in the app, not the per-install OS grant. */
+/** The silent resume refresh follows what each account chose, not the per-install OS grant. */
 class LocationSharingGateTest {
     private val here = DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20)
 
+    private suspend fun LocationSharingGate.allows(
+        onboardingActive: Boolean = false,
+        osPermissionGranted: Boolean = true,
+        serverHasLocation: Boolean = false,
+    ) = allowsSilentRefresh(onboardingActive, osPermissionGranted, serverHasLocation)
+
     @Test
-    fun noSilentRefreshUntilThisAccountSharesInTheApp() =
+    fun anOsGrantAloneIsNotThisAccountsChoice() =
         runTest {
             val gate = LocationSharingGate(InMemoryLocationSharingConsentStore(), currentUserId = { "user-a" })
 
-            assertFalse(gate.allowsSilentRefresh(onboardingActive = false), "an OS grant alone is not this account's choice")
+            assertFalse(gate.allows())
             gate.recordSharedInApp()
-            assertTrue(gate.allowsSilentRefresh(onboardingActive = false))
+            assertTrue(gate.allows())
+            assertFalse(gate.allows(osPermissionGranted = false), "never without the permission: no prompt")
         }
 
     @Test
-    fun accountAsShareNeverCoversAccountBsSignUp() =
+    fun aMemberWhoseLocationTheServerAlreadyHoldsIsCoveredAndRecorded() =
+        runTest {
+            // Shared before this record existed (or on another device): no in-app share here, but the
+            // first live Grid answer came back with cards, not LOCATION_REQUIRED.
+            val store = InMemoryLocationSharingConsentStore()
+            val gate = LocationSharingGate(store, currentUserId = { "user-a" })
+
+            assertTrue(gate.allows(serverHasLocation = true))
+            assertEquals(LocationSharingConsent(userId = "user-a", shared = true), store.load(), "recorded when seen")
+            // Recorded: it holds on a later resume before this session's Grid has answered.
+            assertTrue(gate.allows(serverHasLocation = false))
+        }
+
+    @Test
+    fun accountAsGrantNeverReachesAccountBsSignUp() =
         runTest {
             var userId = "user-a"
-            val gate = LocationSharingGate(InMemoryLocationSharingConsentStore(), currentUserId = { userId })
+            val store = InMemoryLocationSharingConsentStore()
+            val gate = LocationSharingGate(store, currentUserId = { userId })
             gate.recordSharedInApp()
 
-            // A signs out; B signs up on the same device (the OS permission is still granted).
+            // A signs out (record cleared); B signs up on the same device, OS permission still granted.
+            gate.clearForSignOut()
             userId = "user-b"
 
-            assertFalse(gate.allowsSilentRefresh(onboardingActive = true))
-            // Even after B's stepper is done, B has not shared: B's location is never sent silently.
-            assertFalse(gate.allowsSilentRefresh(onboardingActive = false))
+            assertFalse(gate.allows(onboardingActive = true))
+            gate.recordSkipped()
+            // After the stepper: B skipped and the server has no location for B (LOCATION_REQUIRED).
+            assertFalse(gate.allows(serverHasLocation = false))
         }
 
     @Test
-    fun skippingStopsTheSilentRefreshUntilTheNextShare() =
+    fun aSkipWinsOverTheServerHavingALocationUntilTheMemberShares() =
         runTest {
             val gate = LocationSharingGate(InMemoryLocationSharingConsentStore(), currentUserId = { "user-a" })
             gate.recordSharedInApp()
 
             gate.recordSkipped()
-            assertFalse(gate.allowsSilentRefresh(onboardingActive = false))
+            assertFalse(gate.allows(serverHasLocation = true), "rule (b) must not re-grant after Skip")
 
             gate.recordSharedInApp()
-            assertTrue(gate.allowsSilentRefresh(onboardingActive = false))
+            assertTrue(gate.allows())
         }
 
     @Test
     fun neverWhileTheSignUpStepperIsOnScreen() =
         runTest {
-            // A resumed sign-up whose account already shared: the stepper still owns the screen, and
-            // the Location step auto-continues on a location, so nothing is sent behind it.
             val gate = LocationSharingGate(InMemoryLocationSharingConsentStore(), currentUserId = { "user-a" })
             gate.recordSharedInApp()
 
-            assertFalse(gate.allowsSilentRefresh(onboardingActive = true))
+            assertFalse(gate.allows(onboardingActive = true, serverHasLocation = true))
         }
 
     @Test
-    fun signedOutIsNeverAllowedAndRecordsNothing() =
+    fun onlyTheCurrentAccountIsKeptAndSignOutClearsIt() =
         runTest {
+            var userId: String? = "user-a"
             val store = InMemoryLocationSharingConsentStore()
-            val gate = LocationSharingGate(store, currentUserId = { null })
-
+            val gate = LocationSharingGate(store, currentUserId = { userId })
             gate.recordSharedInApp()
 
-            assertFalse(gate.allowsSilentRefresh(onboardingActive = false))
-            assertTrue(store.load().sharedInAppUserIds.isEmpty())
+            // Another account's record counts as none, and is replaced by the next write.
+            userId = "user-b"
+            assertFalse(gate.allows())
+            gate.recordSharedInApp()
+            assertEquals("user-b", store.load().userId)
+
+            gate.clearForSignOut()
+            assertEquals(LocationSharingConsent(), store.load())
+            userId = null
+            gate.recordSharedInApp()
+            assertFalse(gate.allows(serverHasLocation = true), "signed out: never")
+            assertEquals(LocationSharingConsent(), store.load())
         }
-
-    @Test
-    fun theDeviceListStaysSmall() {
-        val consent = (1..12).fold(LocationSharingConsent()) { acc, n -> acc.withShared("user-$n") }
-
-        assertEquals(LocationSharingConsent.MAX_ACCOUNTS, consent.sharedInAppUserIds.size)
-        assertFalse(consent.sharedInApp("user-1"), "the oldest falls off first")
-        assertTrue(consent.sharedInApp("user-12"))
-    }
 
     @Test
     fun anAcceptedShareRecordsTheChoiceAndARefusedOneDoesNot() =
@@ -99,11 +122,14 @@ class LocationSharingGateTest {
 
             repository.next = AppResult.Failure(AppError(code = "NETWORK_ERROR", message = "No connection."))
             holder.shareAndRefresh(here, grid, gate)
-            assertFalse(gate.allowsSilentRefresh(onboardingActive = false), "a share the server never took is not recorded")
+            assertFalse(gate.allows(), "a share the server never took is not recorded")
+            // ... but once a Grid answer shows the server has a location, rule (b) covers it.
+            assertTrue(gate.allows(serverHasLocation = true))
 
+            gate.recordSkipped()
             repository.next = AppResult.Success(location())
             holder.shareAndRefresh(here, grid, gate)
-            assertTrue(gate.allowsSilentRefresh(onboardingActive = false))
+            assertTrue(gate.allows(), "an in-app Share undoes an earlier Skip")
         }
 
     private object EmptyGrid : GridFeedRepository {

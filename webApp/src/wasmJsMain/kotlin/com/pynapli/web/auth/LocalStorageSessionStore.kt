@@ -45,8 +45,9 @@ class LocalStorageSessionStore(
         BrowserLocalStorage.remove(SESSION_KEY)
     }
 
-    private companion object {
-        private const val SESSION_KEY = "pynapli.auth.session.v1"
+    companion object {
+        /** The localStorage key the session lives under; the web shell watches it for other tabs. */
+        const val SESSION_KEY = "pynapli.auth.session.v1"
     }
 }
 

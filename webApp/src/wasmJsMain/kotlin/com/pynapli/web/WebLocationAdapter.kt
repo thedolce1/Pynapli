@@ -66,14 +66,21 @@ class WebLocationAdapter(
     fun refreshIfAlreadyGranted() {
         if (!geolocationAvailable()) return
         val gate = sharingGate ?: return
-        scope.launch {
-            if (!gate.allowsSilentRefresh(onboardingActive())) return@launch
-            whenGeolocationAlreadyGranted {
+        // Only reached when the site already holds the permission, so it is passed as granted.
+        suspend fun allowed(): Boolean =
+            gate.allowsSilentRefresh(
+                onboardingActive = onboardingActive(),
+                osPermissionGranted = true,
+                serverHasLocation = gridStateHolder.serverHasLocation.value == true,
+            )
+        whenGeolocationAlreadyGranted {
+            scope.launch {
+                if (!allowed()) return@launch
                 requestBrowserGeolocation(
                     onSuccess = { latitude, longitude, accuracyMeters ->
                         scope.launch {
                             // Checked again: the fix can take seconds, and a sign-up may have started.
-                            if (!gate.allowsSilentRefresh(onboardingActive())) return@launch
+                            if (!allowed()) return@launch
                             locationStateHolder.refreshInBackground(
                                 DeviceLocation(
                                     latitude = latitude,

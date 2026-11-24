@@ -28,6 +28,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
@@ -78,6 +79,9 @@ fun main() {
     // the moment that stops being true.
     graph.startRealtime(appScope)
 
+    // Another tab signing out (or in as someone else) ends this tab's session, never hands it over.
+    graph.followSessionChangesFromOtherTabs(appScope)
+
     // Tab wake: HTTP stays canonical, so returning to a backgrounded tab refetches
     // state the throttled socket may have missed (the stream clients reconnect on
     // their own backoff).
@@ -89,7 +93,10 @@ fun main() {
     // A page load signed in counts as a return too (the same silent, granted-only refresh).
     appScope.launch {
         val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
-        if (settled.authenticated) locationAdapter.refreshIfAlreadyGranted()
+        if (!settled.authenticated) return@launch
+        // Bounded wait for the first live Grid answer (LocationSharingGate rule (b) reads it).
+        withTimeoutOrNull(20_000L) { graph.pynapliAppGraph.gridStateHolder.serverHasLocation.first { it != null } }
+        locationAdapter.refreshIfAlreadyGranted()
     }
 
     // A direct /signup link starts the create-account stepper — but only once the

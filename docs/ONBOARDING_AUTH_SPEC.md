@@ -344,7 +344,9 @@ Location:
     now needs no prompt. Nothing is sent silently while the stepper is on screen, so the step is
     always answered by the member's own Share or Skip, never by a resume. Outside the stepper the
     resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy) runs only for an account that
-    shared in the app on this device; "Skip for now" turns it off for that account until it shares.
+    consented: it shared in the app on this device, or the server already holds a location for it
+    (a live grid answer that is not `LOCATION_REQUIRED`). "Skip for now" turns it off for that
+    account until it taps Share, whatever the server holds.
 - A plain first refusal keeps the existing copy and the share button, which can ask again.
 
 Notifications:
@@ -379,7 +381,12 @@ the shell and paints the cached grid; `GET /v1/me` checks the session in the bac
 (`AuthStateHolder.restoreSession`). A terminal answer (revoked, refresh rejected, account not
 active) signs out with "Your session ended. Please sign in again."; a network error keeps the member
 in with what is cached. A session stored without an access token is still checked before anything
-shows. The resume decision for an interrupted sign-up is unchanged: it reads the device-local
+shows. If the stored session turns out to belong to another account (signed out and back in as
+someone else in another browser tab), this tab's session ends the same way; it never adopts the
+other account. The web shell also listens for the session key's `storage` event, so a live tab
+reacts the moment another tab signs out or switches account (`AuthStateHolder.onStoredSessionChanged`).
+A member's own logout never shows the "session ended" notice, even if a request racing it was
+rejected. The resume decision for an interrupted sign-up is unchanged: it reads the device-local
 progress store in `OnboardingStateHolder.onSessionReady`, which App.kt calls once the session has
 settled, now simply sooner. Signing out also resets the location holder, so the next account on the
 device gets its own Location step and its first fix is always sent.

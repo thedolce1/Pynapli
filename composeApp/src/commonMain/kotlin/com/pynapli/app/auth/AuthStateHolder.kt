@@ -2,6 +2,7 @@ package com.pynapli.app.auth
 
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.PasswordRules
+import com.pynapli.shared.auth.StoredSession
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.APPEAL_REASON_MAX_LENGTH
@@ -40,12 +41,34 @@ class AuthStateHolder(
     suspend fun observeSessionInvalidations() {
         sessionInvalidations.collect {
             _state.update { current ->
-                if (current.session == null) {
+                // A logout in progress revokes the session on the server first, so a request racing
+                // it can end in a terminal refresh rejection. That is the member's own sign-out, not
+                // a session that "ended": logout's welcome landing shows, not the notice.
+                if (current.session == null || logoutInProgress) {
                     current
                 } else {
                     // Straight to the sign-in form (not the welcome landing) so the reason is visible.
                     current.endedSession()
                 }
+            }
+        }
+    }
+
+    /**
+     * Another process changed the stored session (a second browser tab on the same localStorage; the
+     * web shell calls this from the `storage` event). This tab keeps showing its own account's state,
+     * so a stored session that is gone, or now belongs to someone else, ends this tab's session the
+     * same way a terminal answer does: through signed-out, so every per-account reset runs, and onto
+     * the sign-in form. The other account's session is never adopted. The same account's rotated
+     * session (the other tab refreshed) is simply carried. A signed-out tab stays signed out.
+     */
+    fun onStoredSessionChanged(stored: StoredSession?) {
+        _state.update { current ->
+            val mine = current.session
+            when {
+                mine == null || logoutInProgress -> current
+                stored == null || stored.userId != mine.userId -> current.endedSession()
+                else -> current.copy(session = stored)
             }
         }
     }
@@ -421,13 +444,21 @@ class AuthStateHolder(
     }
 
     suspend fun logout() {
-        runCatchingCancellable { beforeLogout() }
-        authRepository.logout()
-        // Back to the welcome landing in sign-in mode, whatever the session was doing before. The
-        // address goes too: on a shared device the next person must not see whose account was here
-        // (that alone confirms the address is a member).
-        _state.update { current -> current.clearedForm(mode = AuthMode.SignIn, showWelcome = true).copy(session = null, email = "") }
+        logoutInProgress = true
+        try {
+            runCatchingCancellable { beforeLogout() }
+            authRepository.logout()
+            // Back to the welcome landing in sign-in mode, whatever the session was doing before. The
+            // address goes too: on a shared device the next person must not see whose account was here
+            // (that alone confirms the address is a member).
+            _state.update { current -> current.clearedForm(mode = AuthMode.SignIn, showWelcome = true).copy(session = null, email = "") }
+        } finally {
+            logoutInProgress = false
+        }
     }
+
+    /** True from the start of [logout] until its state lands; see [observeSessionInvalidations]. */
+    private var logoutInProgress = false
 
     private companion object {
         private const val RESET_CODE_LENGTH = 6
