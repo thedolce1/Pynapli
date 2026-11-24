@@ -44,14 +44,7 @@ class AuthStateHolder(
                     current
                 } else {
                     // Straight to the sign-in form (not the welcome landing) so the reason is visible.
-                    current.copy(
-                        mode = AuthMode.SignIn,
-                        showWelcome = false,
-                        session = null,
-                        password = "",
-                        isSubmitting = false,
-                        errorMessage = "Your session ended. Please sign in again.",
-                    )
+                    current.endedSession()
                 }
             }
         }
@@ -78,17 +71,29 @@ class AuthStateHolder(
             when {
                 // Signed out, or signed in as someone else, while /me was on the wire: not ours to change.
                 current.session != stored -> current
-                validated == null ->
-                    current.copy(
-                        session = null,
-                        password = "",
-                        errorMessage = "Your session ended. Please sign in again.",
-                    )
-                // Another tab rotated the stored session meanwhile: carry the live one.
+                // Dead (terminal answer), or the stored session now belongs to another account (signed
+                // out and back in as someone else in another tab). Both end this tab's session: it is
+                // showing the first account's cached state, so it must never pick up the other
+                // account's tokens. Going through "signed out" lets every per-account reset run
+                // (Grid, Favorites, location, overlays); handing over the new session directly
+                // could skip them. Straight to the sign-in form, like observeSessionInvalidations,
+                // so the reason is visible.
+                validated == null || validated.userId != stored.userId -> current.endedSession()
+                // Another tab rotated the same account's session meanwhile: carry the live one.
                 else -> current.copy(session = validated)
             }
         }
     }
+
+    private fun AuthUiState.endedSession(): AuthUiState =
+        copy(
+            mode = AuthMode.SignIn,
+            showWelcome = false,
+            session = null,
+            password = "",
+            isSubmitting = false,
+            errorMessage = SESSION_ENDED_MESSAGE,
+        )
 
     fun updateEmail(value: String) {
         _state.update { current -> current.copy(email = value, errorMessage = null, accountSuspended = false, appealSent = false) }
@@ -422,5 +427,6 @@ class AuthStateHolder(
     private companion object {
         private const val RESET_CODE_LENGTH = 6
         private const val MIN_APPEAL_REASON = 10
+        private const val SESSION_ENDED_MESSAGE = "Your session ended. Please sign in again."
     }
 }
