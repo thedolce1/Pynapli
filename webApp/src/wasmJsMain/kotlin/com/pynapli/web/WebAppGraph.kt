@@ -16,6 +16,7 @@ import com.pynapli.app.store.UnavailableStorePurchaseGateway
 import com.pynapli.app.swipe.NoOpSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorPynapliApiClient
@@ -52,6 +53,10 @@ class WebAppGraph {
 
     // Terminal mid-session invalidation (revoked session / suspended account) routes back to sign-in.
     private val sessionInvalidationBus = SessionInvalidationBus()
+
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -64,6 +69,7 @@ class WebAppGraph {
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                     // Tabs share the localStorage session but not the refresh mutex: give a tab that
                     // lost a refresh race time to see the winning tab's saved session.
                     settleAttempts = 5,
@@ -74,6 +80,7 @@ class WebAppGraph {
         AuthRepository(
             apiClient = apiClient,
             sessionStore = sessionStore,
+            sessionLock = sessionLock,
         )
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()

@@ -19,13 +19,20 @@ class AuthRepository(
     private val authApi: AuthApi,
     private val profileApi: ProfileApi,
     private val sessionStore: SessionStore,
+    // The same instance the shell gives this store's StoredSessionRefresher (see [logout]).
+    private val sessionLock: SessionMutationLock = SessionMutationLock(),
 ) {
     // Convenience for production call sites that hold the aggregate client; the
     // primary constructor takes only the segments this repository actually uses.
-    constructor(apiClient: PynapliApiClient, sessionStore: SessionStore) : this(
+    constructor(
+        apiClient: PynapliApiClient,
+        sessionStore: SessionStore,
+        sessionLock: SessionMutationLock = SessionMutationLock(),
+    ) : this(
         authApi = apiClient,
         profileApi = apiClient,
         sessionStore = sessionStore,
+        sessionLock = sessionLock,
     )
 
     suspend fun currentSession(): StoredSession? = sessionStore.currentSession()
@@ -164,8 +171,11 @@ class AuthRepository(
         }
 
     suspend fun logout() {
+        // Outside the lock: the logout call is authenticated and may itself need a refresh.
         authApi.logout()
-        sessionStore.clear()
+        // Inside it: a refresh still on the wire finishes (and saves) first, then this clear wins,
+        // instead of the refresh saving its rotated session after the clear and signing back in.
+        sessionLock.withLock { sessionStore.clear() }
     }
 
     private suspend fun AppResult<AuthSessionDto>.persistSession(): AppResult<StoredSession> =

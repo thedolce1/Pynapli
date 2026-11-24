@@ -31,6 +31,7 @@ import com.pynapli.app.swipe.DebugFaultInjectingSwipeRepository
 import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.network.KtorPynapliApiClient
@@ -63,6 +64,10 @@ class AndroidAppGraph(
     // Terminal mid-session invalidation (revoked session / suspended account) flows from the
     // refresher to the auth state holder through this bus, dropping the app back to sign-in.
     private val sessionInvalidationBus = SessionInvalidationBus()
+
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -75,12 +80,14 @@ class AndroidAppGraph(
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                 )
         }
     private val authRepository =
         AuthRepository(
             apiClient = apiClient,
             sessionStore = sessionStore,
+            sessionLock = sessionLock,
         )
     private val playBillingPurchaseGateway =
         AndroidPlayBillingPurchaseGateway(
