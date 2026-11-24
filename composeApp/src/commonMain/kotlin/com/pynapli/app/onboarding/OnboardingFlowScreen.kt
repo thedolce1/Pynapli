@@ -34,7 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -66,6 +68,7 @@ import com.pynapli.shared.core.config.LegalLinks
  * Driven entirely by [OnboardingStateHolder] state; platform work (OS location
  * prompt, photo picker) arrives via callbacks.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun OnboardingFlowScreen(
     state: OnboardingUiState,
@@ -92,9 +95,16 @@ fun OnboardingFlowScreen(
     onDisplayNameChanged: (String) -> Unit,
     onPickPhoto: () -> Unit,
     onFinishProfile: () -> Unit,
+    // System back: one step back (OnboardingStateHolder.stepBack), never out of the app mid-sign-up.
+    onStepBack: () -> Unit = {},
     testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
+    // B6. Always enabled while the stepper is up: a disabled handler would let back close the app.
+    // The holder ignores it while a request is in flight and on the post-code steps. Deprecated in
+    // CMP 1.11 but deliberately retained; see the note in AppOverlays.kt. The crop overlay composes
+    // after this screen, so its own handler wins while it is open.
+    BackHandler(onBack = onStepBack)
     PynapliMaxWidthColumn(
         maxWidth = PynapliContentWidth.Form,
         modifier = modifier,

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeViewport
 import com.pynapli.app.PynapliApp
 import com.pynapli.app.PynapliPlatform
+import com.pynapli.app.PynapliRoutes
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.design.pynapliTextScaleForBrowserFont
@@ -21,6 +22,7 @@ import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.web.platform.browserDefaultFontSizePx
 import com.pynapli.web.platform.onDocumentVisible
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -28,9 +30,20 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     val graph = WebAppGraph()
-    val router = WebUrlRouter(graph.deepLinkStateHolder)
-    router.start()
     val appScope = MainScope()
+    val onboarding = graph.onboardingStateHolder
+    val router =
+        WebUrlRouter(
+            deepLinks = graph.deepLinkStateHolder,
+            // Browser back inside the sign-up stepper (B6). UNDISPATCHED runs stepBack's state change
+            // before this returns (it changes state before its first suspension), so the router reads
+            // the resulting step right away; the store cleanup finishes on its own.
+            signupStepBack = {
+                appScope.launch(start = CoroutineStart.UNDISPATCHED) { onboarding.stepBack() }
+                onboarding.state.value.takeIf { it.active }?.let { PynapliRoutes.signupPath(it.step) }
+            },
+        )
+    router.start()
     val locationAdapter =
         WebLocationAdapter(
             locationStateHolder = graph.pynapliAppGraph.locationStateHolder,

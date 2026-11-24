@@ -24,7 +24,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -42,6 +44,7 @@ import com.pynapli.app.design.handCursor
  * create-account form here: Create account always opens the onboarding stepper
  * ([onStartCreateAccount]), which has the birthday gate and the emailed code.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun AuthScreen(
     state: AuthUiState,
@@ -71,6 +74,12 @@ fun AuthScreen(
             modifier = modifier,
         )
         return
+    }
+
+    // System back: reset -> sign-in form -> welcome landing (the welcome itself lets back leave the
+    // app as usual). Deprecated in CMP 1.11 but deliberately retained; see the note in AppOverlays.kt.
+    BackHandler(enabled = !state.isSubmitting) {
+        if (state.mode == AuthMode.ResetPassword) onModeSelected(AuthMode.SignIn) else onShowWelcome()
     }
 
     PynapliMaxWidthColumn(

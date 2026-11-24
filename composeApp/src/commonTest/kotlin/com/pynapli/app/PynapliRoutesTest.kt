@@ -1,5 +1,6 @@
 package com.pynapli.app
 
+import com.pynapli.app.onboarding.OnboardingStep
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -148,5 +149,31 @@ class PynapliRoutesTest {
                 tonightOpen = true,
             ),
         )
+    }
+
+    @Test
+    fun eachSignUpStepHasItsOwnPathAndTheFirstKeepsTheBareSignup() {
+        val paths = OnboardingStep.entries.map(PynapliRoutes::signupPath)
+        assertEquals(PynapliRoutes.SIGNUP, PynapliRoutes.signupPath(OnboardingStep.Dob))
+        assertEquals(paths.size, paths.toSet().size, "no two steps share a path")
+        assertTrue(paths.all(PynapliRoutes::isSignupPath))
+        assertFalse(PynapliRoutes.isSignupPath("/signupx"))
+        assertFalse(PynapliRoutes.isSignupPath(PynapliRoutes.LOGIN))
+        assertEquals(
+            "/signup/code",
+            pynapliRouteFor(
+                authenticated = false,
+                onboardingActive = true,
+                tab = PynapliTab.Grid,
+                profileSurface = ProfileSurface.None,
+                conversationId = null,
+                onboardingStep = OnboardingStep.VerifyEmail,
+            ),
+        )
+    }
+
+    @Test
+    fun aSignUpStepPathIsNeverADeepLink() {
+        assertFalse(PynapliRoutes.openPath("/signup/profile", AppDeepLinkStateHolder()))
     }
 }

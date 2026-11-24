@@ -29,6 +29,7 @@ import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PhotoCropOverlay
 import com.pynapli.app.onboarding.OnboardingFlowScreen
+import com.pynapli.app.onboarding.OnboardingStep
 import com.pynapli.app.perf.PynapliPerfMarks
 import com.pynapli.app.store.StorePaywallFocus
 import com.pynapli.app.store.StorePaywallSheet
@@ -138,12 +139,12 @@ fun PynapliApp(
         // the early returns below so it fires for auth/onboarding states too; skipped
         // while the session restore is settling so the address bar never flashes /login.
         if (platform.onNavigationRouteChanged != null && !authState.isCheckingSession) {
-            val onboardingActiveForRoute =
+            val onboardingForRoute =
                 graph.onboardingStateHolder
                     ?.state
                     ?.collectAsState()
                     ?.value
-                    ?.active == true
+            val onboardingActiveForRoute = onboardingForRoute?.active == true
             val openConversationId =
                 if (conversationState.visible) {
                     conversationState.detail
@@ -162,6 +163,8 @@ fun PynapliApp(
                     tonightOpen = tonightVisible && graph.playingTonightStateHolder != null,
                     psyncOpen = psyncVisible && psyncStateHolder != null,
                     storeOpen = storePaywallFocus != null,
+                    // One history entry per sign-up step on the web (B6).
+                    onboardingStep = onboardingForRoute?.step ?: OnboardingStep.Dob,
                 )
             LaunchedEffect(route) { platform.onNavigationRouteChanged(route) }
         }
@@ -236,6 +239,7 @@ fun PynapliApp(
                 onDisplayNameChanged = graph.onboardingStateHolder::updateDisplayName,
                 onPickPhoto = { platform.onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
                 onFinishProfile = { scope.launch { graph.onboardingStateHolder.finishProfile() } },
+                onStepBack = { scope.launch { graph.onboardingStateHolder.stepBack() } },
                 testerDiagnosticLabel = platform.testerDiagnosticLabel,
             )
             // Composed after the stepper so the crop step draws above it; the main

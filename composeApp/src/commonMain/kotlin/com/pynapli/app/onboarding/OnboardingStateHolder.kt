@@ -164,6 +164,33 @@ class OnboardingStateHolder(
     }
 
     /**
+     * System back (Android) and browser back (web) inside the stepper (B6): one step back, never out
+     * of the app mid-sign-up.
+     *
+     * Dob -> the welcome landing; UnderageStop and Policies -> Dob; Account -> Policies; VerifyEmail
+     * -> Account, dropping the started sign-up like "Use a different email". Location and Profile
+     * come after the code (the account exists), so back is consumed there and nothing changes.
+     * Ignored while a request is in flight.
+     *
+     * Every state change happens before the first suspension point: the web router reads the
+     * resulting step synchronously (see [com.pynapli.app.PynapliHistoryPlanner]).
+     *
+     * @return true when the step changed (or the stepper closed); false when back was consumed.
+     */
+    suspend fun stepBack(): Boolean {
+        val current = _state.value
+        if (!current.active || current.isSubmitting) return false
+        when (current.step) {
+            OnboardingStep.Dob -> cancelToWelcome()
+            OnboardingStep.UnderageStop, OnboardingStep.Policies -> backToDob()
+            OnboardingStep.Account -> backToPolicies()
+            OnboardingStep.VerifyEmail -> useDifferentEmail()
+            OnboardingStep.Location, OnboardingStep.Profile -> return false
+        }
+        return true
+    }
+
+    /**
      * The Policies step presents both documents with read links; one Accept tap
      * records both acceptances (Grindr-reference pattern) and the server contract
      * still receives them as separate explicit fields.
@@ -528,13 +555,16 @@ class OnboardingStateHolder(
         runCatchingCancellable { pendingSignupStore.clear() }
     }
 
+    // State first, store second: the web router reads the step synchronously after a back press.
     private suspend fun restartSignup(errorMessage: String?) {
         pendingSignupToken = null
         failedCodeSubmissions = 0
-        clearPendingSignup()
         _state.update {
             it.copy(
                 step = OnboardingStep.Account,
+                // A resumed address was only ever shown masked: never put it in full into the field
+                // (whoever opened the app may not be the person who started).
+                email = if (it.emailShownMasked) "" else it.email,
                 emailShownMasked = false,
                 password = "",
                 signupCode = "",
@@ -545,6 +575,7 @@ class OnboardingStateHolder(
                 errorMessage = errorMessage,
             )
         }
+        clearPendingSignup()
     }
 
     private suspend fun markOnboardingCompleted() {

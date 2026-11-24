@@ -35,6 +35,8 @@ internal fun historyPushState(path: String): Unit = js("window.history.pushState
 
 internal fun historyReplaceState(path: String): Unit = js("window.history.replaceState(null, '', path)")
 
+internal fun historyGo(delta: Int): Unit = js("window.history.go(delta)")
+
 internal fun onWindowPopState(handler: () -> Unit): Unit = js("window.addEventListener('popstate', handler)")
 
 internal fun onWindowEvent(

@@ -793,6 +793,106 @@ class OnboardingStateHolderTest {
         }
 
     @Test
+    fun backStepsThroughThePreCodeStepsAndFromTheFirstToTheWelcome() =
+        runTest {
+            val fixture = Fixture()
+            fixture.advanceToAccount()
+            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+
+            assertTrue(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Policies, fixture.onboarding.state.value.step)
+            assertTrue(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+            assertTrue(fixture.onboarding.stepBack())
+
+            assertFalse(fixture.onboarding.state.value.active, "back from the birthday leaves the stepper")
+            assertTrue(fixture.auth.state.value.showWelcome, "...for the welcome landing, not out of the app")
+        }
+
+    @Test
+    fun backFromTheUnderageStopReturnsToTheBirthday() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.enterDob(day = "01", month = "01", year = "2020")
+            fixture.onboarding.confirmDob()
+            assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+
+            assertTrue(fixture.onboarding.stepBack())
+
+            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun backFromTheCodeStepDropsTheStartedSignUpAndKeepsATypedAddress() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            assertTrue(fixture.onboarding.stepBack())
+
+            val state = fixture.onboarding.state.value
+            assertEquals(OnboardingStep.Account, state.step)
+            assertEquals("new@pynapli.local", state.email)
+            assertNull(fixture.pendingStore.load())
+        }
+
+    @Test
+    fun backFromAResumedCodeStepNeverRevealsTheMaskedAddress() =
+        runTest {
+            val fixture =
+                Fixture(
+                    pendingStore = InMemoryPendingSignupStore(PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS)),
+                )
+            fixture.onboarding.resumePendingSignupIfNeeded()
+
+            fixture.onboarding.stepBack()
+
+            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+            assertEquals("", fixture.onboarding.state.value.email)
+        }
+
+    @Test
+    fun backIsConsumedAfterTheCodeBecauseTheAccountExists() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            fixture.onboarding.updateSignupCode("123456")
+            fixture.onboarding.verifySignupCode()
+            assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
+
+            assertFalse(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
+
+            fixture.onboarding.continueFromLocation()
+            assertFalse(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Profile, fixture.onboarding.state.value.step)
+            assertTrue(fixture.onboarding.state.value.active)
+        }
+
+    @Test
+    fun backIsIgnoredWhileARequestIsInFlightAndOutsideTheStepper() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val fixture = Fixture(authApi = FakeAuthApi(signupGate = gate))
+            assertFalse(fixture.onboarding.stepBack(), "nothing to step back from")
+
+            fixture.advanceToAccount()
+            fixture.onboarding.updateEmail("new@pynapli.local")
+            fixture.onboarding.updatePassword("LongEnoughPassword1!")
+            val submitting = launch { fixture.onboarding.submitAccount() }
+            runCurrent()
+            assertTrue(fixture.onboarding.state.value.isSubmitting)
+
+            assertFalse(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+
+            gate.complete(Unit)
+            submitting.join()
+            assertEquals(OnboardingStep.VerifyEmail, fixture.onboarding.state.value.step)
+        }
+
+    @Test
     fun aFailingProgressStoreNeverHoldsTheMainSurfacesForever() =
         runTest {
             val fixture = Fixture(progressStore = InMemoryProgressStore().apply { failLoads = true })
@@ -946,6 +1046,8 @@ private const val NOW_MILLIS = 1_781_000_000_000L
 private class FakeAuthApi(
     private val signupResult: () -> AppResult<EmailSignupStartedDto> = { AppResult.Success(EmailSignupStartedDto(signupToken = "signup-token")) },
     private val verifyResult: (EmailSignupVerifyRequestDto) -> AppResult<AuthSessionDto> = { AppResult.Success(testSessionDto()) },
+    // When set, emailSignup waits for it first: lets a test look at the state while the request is in flight.
+    private val signupGate: CompletableDeferred<Unit>? = null,
 ) : AuthApi {
     var lastSignupRequest: EmailSignupRequestDto? = null
         private set
@@ -954,6 +1056,7 @@ private class FakeAuthApi(
 
     override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<EmailSignupStartedDto> {
         lastSignupRequest = request
+        signupGate?.await()
         return signupResult()
     }
 
