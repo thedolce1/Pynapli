@@ -29,6 +29,7 @@ import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.PhotoCropOverlay
 import com.pynapli.app.onboarding.OnboardingFlowScreen
+import com.pynapli.app.perf.PynapliPerfMarks
 import com.pynapli.app.store.StorePaywallFocus
 import com.pynapli.app.store.StorePaywallSheet
 import com.pynapli.app.store.toStorePartnerLink
@@ -221,7 +222,10 @@ fun PynapliApp(
                 onBackToPolicies = graph.onboardingStateHolder::backToPolicies,
                 onEmailChanged = graph.onboardingStateHolder::updateEmail,
                 onPasswordChanged = graph.onboardingStateHolder::updatePassword,
-                onSubmitAccount = { scope.launch { graph.onboardingStateHolder.submitAccount() } },
+                onSubmitAccount = {
+                    PynapliPerfMarks.markOnce(PynapliPerfMarks.ACCOUNT_SUBMIT)
+                    scope.launch { graph.onboardingStateHolder.submitAccount() }
+                },
                 onSignupCodeChanged = graph.onboardingStateHolder::updateSignupCode,
                 onVerifySignupCode = { scope.launch { graph.onboardingStateHolder.verifySignupCode() } },
                 onResendSignupCode = { scope.launch { graph.onboardingStateHolder.resendSignupCode() } },
@@ -261,7 +265,10 @@ fun PynapliApp(
                     },
                 onStartCreateAccount =
                     graph.onboardingStateHolder?.let { holder ->
-                        { holder.startCreateAccount() }
+                        {
+                            PynapliPerfMarks.markOnce(PynapliPerfMarks.CREATE_ACCOUNT_TAP)
+                            holder.startCreateAccount()
+                        }
                     },
                 testerDiagnosticLabel = platform.testerDiagnosticLabel,
             )

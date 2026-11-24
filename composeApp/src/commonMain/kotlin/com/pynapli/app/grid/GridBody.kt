@@ -11,6 +11,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -22,6 +23,7 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.SearchOff
 import com.pynapli.app.location.LocationUiState
+import com.pynapli.app.perf.PynapliPerfMarks
 
 private enum class GridPhase { CheckingCache, Loading, LocationRequired, Error, EmptyFiltered, Empty, Content }
 
@@ -134,6 +136,10 @@ internal fun GridBody(
             }
 
             GridPhase.Content -> {
+                // Time-to-first-card marker for the QA scripts (once per process, no member data).
+                if (state.cards.isNotEmpty()) {
+                    SideEffect { PynapliPerfMarks.markOnce(PynapliPerfMarks.FIRST_GRID_CARD) }
+                }
                 ProfileGrid(
                     cards = state.cards,
                     distanceUnit = distanceUnit,
