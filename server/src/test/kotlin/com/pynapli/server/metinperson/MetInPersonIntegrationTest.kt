@@ -370,20 +370,14 @@ class MetInPersonIntegrationTest {
     }
 
     @Test
-    fun linksAndDevicesCountOnlyWhenTheyPredateTheConfirmation() {
+    fun devicesCountOnlyWhenTheyPredateTheConfirmation() {
         runBlocking {
             val subject = fx.member("Sam")
             val stranger = fx.member("Stranger")
             fx.optIn(subject)
-            val vouchers = confirmedBy(subject, 3).map { it.first }
-            // Both happen after the confirmations: they change nothing.
-            fx.shareDevice(vouchers[0], subject, ago = Duration.ofDays(-1))
-            fx.link(vouchers[1], subject)
-            dataSource.connection.use { connection ->
-                connection.prepareStatement("UPDATE user_profile_links SET accepted_at = ?").use {
-                    it.setTimestamp(1, Timestamp.from(clock.instant().plus(Duration.ofDays(2))))
-                    it.executeUpdate()
-                }
+            confirmedBy(subject, 3).map { it.first }.let { vouchers ->
+                // A device both used only after the confirmation changes nothing.
+                fx.shareDevice(vouchers[0], subject, ago = Duration.ofDays(-1))
             }
             settle()
             assertTrue(publicProfile(stranger, subject).metInPerson)
@@ -397,6 +391,57 @@ class MetInPersonIntegrationTest {
             val evaluation = MetInPersonEvaluator(tokens).let { evaluator -> dataSource.connection.use { evaluator.evaluate(it, listOf(subject), clock.instant()) } }
             assertEquals(4, evaluation.getValue(subject).countedVouchers.size)
             assertFalse(sameDevice in evaluation.getValue(subject).countedVouchers)
+        }
+    }
+
+    private fun counted(subject: UUID): SubjectEvaluation =
+        MetInPersonEvaluator(tokens).let { evaluator ->
+            dataSource.connection.use { evaluator.evaluate(it, listOf(subject), clock.instant()).getValue(subject) }
+        }
+
+    @Test
+    fun aLinkTheVoucherSentOrAcceptedExcludesTheirConfirmationButASubjectOnlyInviteDoesNot() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val vouchers = confirmedBy(subject, 4).map { it.first }
+            // After the confirmations: the subject alone invites voucher 0 (never accepted); voucher 1
+            // invites the subject (pending); voucher 2 and the subject link (accepted).
+            fx.inviteToLink(subject, vouchers[0])
+            fx.inviteToLink(vouchers[1], subject)
+            fx.link(vouchers[2], subject)
+
+            assertEquals(setOf(vouchers[0], vouchers[3]), counted(subject).countedVouchers)
+        }
+    }
+
+    @Test
+    fun aReInviteAndDeclineDanceCannotEraseALink() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val vouchers = confirmedBy(subject, 4).map { it.first }
+            val links = JdbcProfileLinkRepository(dataSource)
+
+            suspend fun dance(
+                a: UUID,
+                b: UUID,
+            ) {
+                links.unlinkCurrent(a)
+                // Each re-invite resets its row's accepted_at; each decline leaves it declined.
+                val there = links.createInvitation(a, b) { UUID.randomUUID() }
+                assertTrue(links.declineInvitation(b, there.linkId))
+                val back = links.createInvitation(b, a) { UUID.randomUUID() }
+                assertTrue(links.declineInvitation(a, back.linkId))
+            }
+            // Two vouchers once linked to each other, and a voucher once linked to the subject.
+            fx.link(vouchers[0], vouchers[1])
+            dance(vouchers[0], vouchers[1])
+            fx.link(vouchers[2], subject)
+            dance(vouchers[2], subject)
+            assertEquals(0, fx.count("SELECT count(*) FROM user_profile_links WHERE accepted_at IS NOT NULL"), "the rows forgot")
+
+            val evaluation = counted(subject)
+            assertFalse(vouchers[2] in evaluation.countedVouchers, "a link with the subject stays on record")
+            assertEquals(2, evaluation.independentVouchers, "vouchers 0 and 1 still count once")
         }
     }
 

@@ -199,7 +199,7 @@ The rule: nothing the subject does may change which confirmations count. Every e
 | The voucher blocked the subject | the voucher (a block by the subject is ignored entirely) |
 | The voucher's account inactive, deleted, or not photo-verified | the voucher, or the service (ban, verification revoked) |
 | The voucher quarantined or terminated | the service. A single person's reports are capped below quarantine (`ReportScoringPolicy`), so the subject alone cannot cause it; `friction`, which one report can reach, is deliberately not excluded |
-| A partner link between the two accepted on or before the day given | fixed at that day (a link needs the voucher's own acceptance; a pending invite, which the subject can create alone, never counts; the check reads both direction rows, so a re-invite that resets one row cannot erase it) |
+| A partner link between the two ever accepted, or a link invite the voucher ever sent the subject (before or after the confirmation) | the voucher: an acceptance needs the voucher to have sent or accepted the invite (founder decision 2026-11-24). An invite the subject alone sent and the voucher never accepted never counts, so the subject cannot exclude anyone. Read from `profile_link_history` (V124, trigger-kept, append-only: first invite per direction, first acceptance), so a re-invite that resets `accepted_at`, or a decline, cannot erase it |
 | A device both used on or before the day given | fixed at that day (device rows created later are ignored) |
 | Voided by an admin | the service |
 | Older than 24 months | time |
@@ -212,7 +212,7 @@ terminated subject.
 
 Independence (fakery):
 
-- Vouchers linked to each other (an accepted link, now or before) or that ever shared a device count as
+- Vouchers ever linked to each other (any acceptance on record in `profile_link_history`) or that ever shared a device count as
   one voucher. A voucher who shared a device with the subject before confirming does not count.
 - At least one counted voucher must be "clean": not confirmed by the subject first or on the same day
   (first-given days never move, so the subject confirming someone later cannot change it). A same-day

@@ -53,14 +53,16 @@ internal data class SubjectEvaluation(
  *  - the voucher's account is active and photo-verified, and not quarantined or terminated (service; a
  *    single person's reports are capped below quarantine, so the subject alone cannot cause it);
  *  - the voucher has not blocked the subject (voucher);
- *  - no partner link between the two was active on or before the day given (fixed at that day; a link
- *    accepted later needs the voucher's own acceptance, and a pending invite never counts);
+ *  - no partner link between the two was ever accepted, and the voucher never sent the subject a link
+ *    invite (voucher: an acceptance needs the voucher to have sent or accepted it; an invite the subject
+ *    alone sent, never accepted, never counts). Read from `profile_link_history` (V124), which a
+ *    re-invite or decline cannot erase;
  *  - the two did not share a device on or before the day given (fixed at that day);
  *  - withdrawn (voucher), voided (service), expired after 24 months (time).
  * The subject's own state (active, verified, not quarantined/terminated) turns their whole badge off; it
  * never singles out a voucher.
  *
- * Independence: vouchers linked to each other (now or before) or sharing a device with each other count
+ * Independence: vouchers ever linked to each other (any acceptance on record) or sharing a device count
  * once. At least one counted voucher must not have been confirmed by the subject first (or the same day),
  * so a same-day clique cannot badge itself; [StoredVouch.firstGivenAt] never moves, so a later act of the
  * subject cannot change this either.
@@ -374,17 +376,18 @@ internal class MetInPersonEvaluator(
                       WHERE b.blocker_user_id = t.voucher_id
                         AND b.blocked_user_id = t.subject_id
                   )
-                  -- A partner link between the two that was active on or before the day given.
+                  -- A partner link between the two ever accepted (either direction row), or an invite the
+                  -- voucher ever sent the subject: both are the voucher's own acts, at any time.
                   AND NOT EXISTS (
-                      SELECT 1 FROM user_profile_links l
+                      SELECT 1 FROM profile_link_history h
                       WHERE (
-                              (l.user_id = t.voucher_id AND l.linked_user_id = t.subject_id)
-                              OR (l.user_id = t.subject_id AND l.linked_user_id = t.voucher_id)
+                              h.first_accepted_at IS NOT NULL
+                              AND (
+                                  (h.user_id = t.voucher_id AND h.linked_user_id = t.subject_id)
+                                  OR (h.user_id = t.subject_id AND h.linked_user_id = t.voucher_id)
+                              )
                             )
-                        AND (
-                              (l.accepted_at IS NOT NULL AND l.accepted_at < to_timestamp(t.day_epoch) + interval '1 day')
-                              OR (l.accepted_at IS NULL AND l.status IN ('active', 'unlinked'))
-                            )
+                         OR (h.first_invited_at IS NOT NULL AND h.user_id = t.voucher_id AND h.linked_user_id = t.subject_id)
                   )
                   -- A device both used on or before the day given.
                   AND NOT EXISTS (
@@ -407,16 +410,16 @@ internal class MetInPersonEvaluator(
             }
         }
 
-        /** Voucher pairs that count as one: linked (now or ever accepted) or sharing a device. */
+        /** Voucher pairs that count as one: any link acceptance on record (V124) or a shared device. */
         private fun Connection.voucherEdges(vouchers: Set<UUID>): Set<Pair<UUID, UUID>> {
             if (vouchers.size < 2) return emptySet()
             return prepareStatement(
                 """
-                SELECT l.user_id AS a, l.linked_user_id AS b
-                FROM user_profile_links l
-                WHERE l.user_id = ANY(?)
-                  AND l.linked_user_id = ANY(?)
-                  AND (l.accepted_at IS NOT NULL OR l.status IN ('active', 'unlinked'))
+                SELECT h.user_id AS a, h.linked_user_id AS b
+                FROM profile_link_history h
+                WHERE h.user_id = ANY(?)
+                  AND h.linked_user_id = ANY(?)
+                  AND h.first_accepted_at IS NOT NULL
                 UNION
                 SELECT d1.user_id AS a, d2.user_id AS b
                 FROM account_device_links d1
