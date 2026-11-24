@@ -44,10 +44,14 @@ class AuthStateHolder(
                     current
                 } else {
                     // Straight to the sign-in form (not the welcome landing) so the reason is visible.
+                    // The address is cleared here too: a session can die hours after its owner put the
+                    // device down, and a prefilled address would tell whoever picks it up who it was.
+                    // Retyping it costs the owner one autofill tap.
                     current.copy(
                         mode = AuthMode.SignIn,
                         showWelcome = false,
                         session = null,
+                        email = "",
                         password = "",
                         isSubmitting = false,
                         errorMessage = "Your session ended. Please sign in again.",
@@ -415,8 +419,10 @@ class AuthStateHolder(
     suspend fun logout() {
         runCatchingCancellable { beforeLogout() }
         authRepository.logout()
-        // Back to the welcome landing in sign-in mode, whatever the session was doing before.
-        _state.update { current -> current.clearedForm(mode = AuthMode.SignIn, showWelcome = true).copy(session = null) }
+        // Back to the welcome landing in sign-in mode, whatever the session was doing before. The
+        // address goes too: on a shared device the next person must not see whose account was here
+        // (that alone confirms the address is a member).
+        _state.update { current -> current.clearedForm(mode = AuthMode.SignIn, showWelcome = true).copy(session = null, email = "") }
     }
 
     private companion object {

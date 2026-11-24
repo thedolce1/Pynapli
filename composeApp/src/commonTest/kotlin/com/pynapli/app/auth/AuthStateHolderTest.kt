@@ -250,6 +250,8 @@ class AuthStateHolderTest {
             assertEquals("", state.password)
             assertFalse(state.resetCodeSent)
             assertEquals(null, state.errorMessage)
+            // On a shared device the next person must not see whose account this was.
+            assertEquals("", state.email)
         }
 
     @Test
@@ -296,6 +298,8 @@ class AuthStateHolderTest {
             // The reason ("Your session ended") must be visible, so not behind the landing.
             assertFalse(holder.state.value.showWelcome)
             assertEquals(AuthMode.SignIn, holder.state.value.mode)
+            // Whoever holds the device when the session dies may not be its owner: no address.
+            assertEquals("", holder.state.value.email)
             observer.cancel()
         }
 
