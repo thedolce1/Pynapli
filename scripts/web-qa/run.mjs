@@ -188,7 +188,12 @@ const AUTH_WALK = {
   viewport: 'desktop', // nav rail instead of a bottom bar, so the hub's last row is Log out
   probeStepPx: 8, // vertical scan resolution (fields ~56 px, buttons ~40 px tall)
   probeSettleMs: 30, // wait after a mouse move before reading the cursor
-  wideOffsetPx: 100, // a full-width button is still under the cursor this far either side of centre
+  // A full-width button (form max width 440 dp less 2 x 24 dp padding: ~196 px either side of centre)
+  // still shows the pointer this far out; centred TextButton links (~125 px half-width) do not.
+  wideOffsetPx: 160,
+  // Controls closer together than probeStepPx merge into one region, so clicks aim this far inside
+  // a region's first (or last) edge rather than at its middle.
+  edgeInsetPx: 14,
   stepTimeoutMs: 20000,
   // The seeded area (scripts/seed-dev-data.ps1, the dev viewer's spot). Not the San Francisco fix
   // signedIn() uses: a new member's grid must find the seeded profiles.
@@ -219,7 +224,10 @@ async function scanColumn(browser, x, height) {
     current = { kind, top: y, bottom: y };
   }
   if (current && current.kind !== 'none') regions.push(current);
-  return regions.map(r => ({ ...r, y: Math.round((r.top + r.bottom) / 2) }));
+  return regions.map(r => {
+    const mid = Math.round((r.top + r.bottom) / 2);
+    return { ...r, y: Math.min(r.top + AUTH_WALK.edgeInsetPx, mid), lastY: Math.max(r.bottom - AUTH_WALK.edgeInsetPx, mid) };
+  });
 }
 
 /** Interactive segments along the horizontal line at [y] between [fromX] and [toX], left to right. */
@@ -236,7 +244,10 @@ async function scanRow(browser, y, fromX, toX, stepPx = 8) {
     current = { kind, left: x, right: x };
   }
   if (current && current.kind !== 'none') segments.push(current);
-  return segments.map(s => ({ ...s, x: Math.round((s.left + s.right) / 2) }));
+  return segments.map(s => {
+    const mid = Math.round((s.left + s.right) / 2);
+    return { ...s, x: Math.min(s.left + AUTH_WALK.edgeInsetPx, mid), lastX: Math.max(s.right - AUTH_WALK.edgeInsetPx, mid) };
+  });
 }
 
 async function layoutOf(browser) {
@@ -263,9 +274,11 @@ async function waitForLayout(browser, label, accept, timeoutMs = AUTH_WALK.stepT
   throw new Error(`${label}: the screen never reached the expected layout (last scan: ${layout?.summary || 'nothing interactive'})`);
 }
 
+/** Clicks into [field], clears what it holds (sign-in keeps the email from sign-up), then types. */
 async function fillField(browser, layout, field, text) {
   await browser.click(layout.cx, field.y);
   await sleep(250);
+  await browser.clearFocusedField();
   await browser.typeText(text);
   await sleep(250);
 }
@@ -420,20 +433,20 @@ async function authWalk() {
     const logoutRow = layout.pointers.at(-1);
     if (!logoutRow) throw new Error(`Profile hub: no rows found (${layout.summary})`);
     await authShot(browser, '08-hub-bottom');
-    await browser.click(layout.cx, logoutRow.y);
+    await browser.click(layout.cx, logoutRow.lastY);
     await sleep(1000);
     // The dialog's confirm button is its bottom-right control: find the dialog's button row on a few
     // lines right of centre, then take the rightmost control on that row.
     let buttonRowY = null;
     for (const dx of [40, 100, 160, 220]) {
       const hits = (await scanColumn(browser, Math.round(width / 2) + dx, height)).filter(r => r.kind === 'pointer');
-      for (const hit of hits) if (buttonRowY === null || hit.y > buttonRowY) buttonRowY = hit.y;
+      for (const hit of hits) if (buttonRowY === null || hit.lastY > buttonRowY) buttonRowY = hit.lastY;
     }
     if (buttonRowY === null) throw new Error('Log out dialog: no buttons found');
     const dialogButtons = (await scanRow(browser, buttonRowY, Math.round(width * 0.2), Math.round(width * 0.8))).filter(s => s.kind === 'pointer');
     await authShot(browser, '09-logout-dialog');
     since = browser.requests.length;
-    await browser.click(dialogButtons.at(-1).x, buttonRowY);
+    await browser.click(dialogButtons.at(-1).lastX, buttonRowY);
     const logout = await browser.waitForRequest('POST', '/v1/auth/logout', { since });
     check('auth walk: Log out signs out on the server', logout?.status === 200, `status=${logout?.status}`);
     const backAtLogin = await browser.waitForPath('/login', 10000);

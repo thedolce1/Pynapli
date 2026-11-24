@@ -139,6 +139,17 @@ export async function launch({ width, height, defaultFontPx } = {}) {
         await sleep(perKeyMs);
       }
     },
+    /** Ctrl+A then Backspace in the focused field (Compose text fields handle both on the web). */
+    async clearFocusedField() {
+      const ctrl = 2; // CDP modifier bit for Control
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17, modifiers: ctrl });
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: ctrl });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: ctrl });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17 });
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+      await sleep(100);
+    },
     /** Scrolls whatever sits under (x, y) with the mouse wheel. */
     async wheel(x, y, deltaY) {
       await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY });

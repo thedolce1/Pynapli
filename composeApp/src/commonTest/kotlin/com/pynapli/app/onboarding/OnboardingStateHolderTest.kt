@@ -641,7 +641,8 @@ class OnboardingStateHolderTest {
     // Section 0 repros (onboarding + first grid plan). Each fails today and is ignored so the gates
     // stay green; the Section 1 slice that fixes the bug removes its @Ignore.
 
-    @Ignore("Section 0 repro: B1 auth mode not reset after sign-out — fixed in Section 1")
+    // Section 0 repro: B1 auth mode not reset after sign-out — fixed in Section 1
+    @Ignore
     @Test
     fun signingOutAfterASignUpLeavesTheAuthScreenInSignInMode() =
         runTest {
@@ -655,7 +656,8 @@ class OnboardingStateHolderTest {
             assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
         }
 
-    @Ignore("Section 0 repro: B1 auth mode not reset after cancelling a sign-up — fixed in Section 1")
+    // Section 0 repro: B1 auth mode not reset after cancelling a sign-up — fixed in Section 1
+    @Ignore
     @Test
     fun cancellingASignUpLeavesTheAuthScreenInSignInMode() =
         runTest {
@@ -668,7 +670,8 @@ class OnboardingStateHolderTest {
             assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
         }
 
-    @Ignore("Section 0 repro: B3 grid shows while a sign-up resume waits for /me — fixed in Section 1")
+    // Section 0 repro: B3 grid shows while a sign-up resume waits for /me — fixed in Section 1
+    @Ignore
     @Test
     fun aResumedSignUpHoldsTheStepperWhileTheProfileLoads() =
         runTest {
@@ -694,7 +697,8 @@ class OnboardingStateHolderTest {
             assertEquals(OnboardingStep.Profile, fixture.onboarding.state.value.step)
         }
 
-    @Ignore("Section 0 repro: photo nudge can arm in the sign-up session — fixed in Section 1")
+    // Section 0 repro: photo nudge can arm in the sign-up session — fixed in Section 1
+    @Ignore
     @Test
     fun thePhotoNudgeNeverArmsInTheSignUpSession() =
         runTest {

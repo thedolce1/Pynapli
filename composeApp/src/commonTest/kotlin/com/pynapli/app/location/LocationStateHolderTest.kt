@@ -133,7 +133,8 @@ class LocationStateHolderTest {
 
     // Section 0 repro (onboarding + first grid plan). Fails today; the Section 1 slice that adds a
     // sign-out reset calls it at the marked line and removes the @Ignore.
-    @Ignore("Section 0 repro: B2 LocationStateHolder keeps the previous account's location after sign-out — fixed in Section 1")
+    // Section 0 repro: B2 LocationStateHolder keeps the previous account's location after sign-out — fixed in Section 1
+    @Ignore
     @Test
     fun theNextAccountOnThisDeviceSendsItsOwnLocation() =
         runTest {

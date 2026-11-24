@@ -818,7 +818,8 @@ class GridStateHolderTest {
 
     // Section 0 repro (onboarding + first grid plan). Fails today; the Section 1 slice that fixes it
     // removes the @Ignore.
-    @Ignore("Section 0 repro: B4 the grid load started at the Location step is discarded when GridScreen composes — fixed in Section 1")
+    // Section 0 repro: B4 the grid load started at the Location step is discarded when GridScreen composes — fixed in Section 1
+    @Ignore
     @Test
     fun theGridScreenReusesTheLoadTheLocationStepStarted() =
         runTest {
