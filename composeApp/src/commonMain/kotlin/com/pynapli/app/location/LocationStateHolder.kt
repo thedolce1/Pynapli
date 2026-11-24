@@ -112,7 +112,7 @@ class LocationStateHolder(
         val result = repository.updateCurrentLocation(location.toCell())
         if (startedEpoch != epoch) {
             // Signed out while this was in flight: the answer belongs to the previous account.
-            return LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None, rejected = true)
+            return LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
         }
         return when (result) {
             is AppResult.Success -> {
@@ -139,7 +139,7 @@ class LocationStateHolder(
                         )
                     }
                 }
-                LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None, rejected = true)
+                LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
             }
         }
     }
@@ -182,7 +182,8 @@ suspend fun LocationStateHolder.submitAndRefresh(
  * The resume path (app back in the foreground, browser tab visible again), for a member who already
  * granted location: sends the fix silently and only when its cell changed, then refreshes [grid]
  * quietly so the cards on screen swap in place, never behind a spinner. Shells call this only when
- * signed in and the permission is already granted, so it can never prompt.
+ * [silentLocationRefreshAllowed] says so, which includes the permission already being granted, so it
+ * can never prompt.
  */
 suspend fun LocationStateHolder.refreshInBackground(
     location: DeviceLocation,
@@ -193,29 +194,9 @@ suspend fun LocationStateHolder.refreshInBackground(
     return result
 }
 
-/**
- * The member's own share (the Location step's "Share my location", the Grid's "Use current
- * location"): [submitAndRefresh], then, when the fix was accepted, records that this account shared
- * from inside the app, which is what later allows the silent resume refresh ([LocationSharingGate]).
- */
-suspend fun LocationStateHolder.shareAndRefresh(
-    location: DeviceLocation,
-    grid: GridStateHolder,
-    sharingGate: LocationSharingGate?,
-): LocationUpdateResult {
-    val result = submitAndRefresh(location, grid)
-    if (!result.rejected) sharingGate?.recordSharedInApp()
-    return result
-}
-
 data class LocationUpdateResult(
     val submitted: Boolean,
     val gridRefresh: GridLocationRefresh,
-    /**
-     * The server refused it, or it belonged to an account that signed out meanwhile. False for a fix
-     * that needed no send (under 250 m): that one still counts as the member sharing.
-     */
-    val rejected: Boolean = false,
 )
 
 enum class GridLocationRefresh {

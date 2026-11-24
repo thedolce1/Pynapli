@@ -30,9 +30,24 @@ class TravelLocationStateHolder(
     private val _state = MutableStateFlow(TravelLocationUiState())
     val state: StateFlow<TravelLocationUiState> = _state.asStateFlow()
 
+    /** Bumped by [reset]; a [load] that started before it belongs to the account that signed out. */
+    private var epoch = 0
+
+    /**
+     * Signed out: forget this account's Travel state (current city, search, trips), so the next
+     * account on the device never sees it, nor has its Grid's travel key compared against it.
+     */
+    fun reset() {
+        epoch += 1
+        _state.value = TravelLocationUiState()
+    }
+
     suspend fun load() {
         _state.update { it.copy(isLoading = true, errorCode = null, errorMessage = null) }
-        when (val result = repository.getCurrent()) {
+        val startedEpoch = epoch
+        val result = repository.getCurrent()
+        if (startedEpoch != epoch) return
+        when (result) {
             is AppResult.Success ->
                 _state.update {
                     it.copy(isLoading = false, current = result.value)

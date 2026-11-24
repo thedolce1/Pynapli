@@ -93,8 +93,8 @@ fun PynapliApp(
                 graph.favoritesStateHolder?.clear()
                 // And its location: the next account sends its own first fix (Section 1, B2).
                 graph.locationStateHolder.reset()
-                // And its location-sharing record: the next account's is derived afresh.
-                graph.locationSharingGate?.clearForSignOut()
+                // And its Travel state: the next account must not see (or be ranked from) A's city.
+                graph.travelLocationStateHolder?.reset()
             }
         }
         PynapliAppEffects(
@@ -231,11 +231,6 @@ fun PynapliApp(
                 onStartSignupAgain = { scope.launch { graph.onboardingStateHolder.startSignupAgain() } },
                 onShareLocation = platform.onUseCurrentLocation,
                 onContinueFromLocation = graph.onboardingStateHolder::continueFromLocation,
-                onSkipLocation = {
-                    // Skipped in the app: no silent resume refresh for this account until it shares.
-                    scope.launch { graph.locationSharingGate?.recordSkipped() }
-                    graph.onboardingStateHolder.continueFromLocation()
-                },
                 onDisplayNameChanged = graph.onboardingStateHolder::updateDisplayName,
                 onPickPhoto = { platform.onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
                 onFinishProfile = { scope.launch { graph.onboardingStateHolder.finishProfile() } },

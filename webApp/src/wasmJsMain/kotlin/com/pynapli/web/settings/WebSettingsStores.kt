@@ -3,8 +3,6 @@ package com.pynapli.web.settings
 import com.pynapli.shared.network.PynapliJson
 import com.pynapli.shared.settings.AppSettings
 import com.pynapli.shared.settings.AppSettingsStore
-import com.pynapli.shared.settings.LocationSharingConsent
-import com.pynapli.shared.settings.LocationSharingConsentStore
 import com.pynapli.shared.settings.OnboardingProgress
 import com.pynapli.shared.settings.OnboardingProgressStore
 import com.pynapli.shared.settings.PendingSignup
@@ -94,27 +92,5 @@ class SessionStorageUnderageStopStore : UnderageStopStore {
 
     private companion object {
         private const val UNDERAGE_STOP_KEY = "pynapli.onboarding.underage-stop.v1"
-    }
-}
-
-/** Browser twin of `SqlDelightLocationSharingConsentStore`: one account's opaque id, never a location. */
-class LocalStorageLocationSharingConsentStore(
-    private val json: Json = PynapliJson,
-) : LocationSharingConsentStore {
-    override suspend fun load(): LocationSharingConsent {
-        val value = BrowserLocalStorage.get(CONSENT_KEY) ?: return LocationSharingConsent()
-        return runCatching { json.decodeFromString(LocationSharingConsent.serializer(), value) }
-            .getOrElse { LocationSharingConsent() }
-    }
-
-    override suspend fun save(consent: LocationSharingConsent) {
-        BrowserLocalStorage.set(CONSENT_KEY, json.encodeToString(LocationSharingConsent.serializer(), consent))
-        // v1 kept a list of up to 8 accounts' ids; nothing needs that list any more.
-        BrowserLocalStorage.remove(LEGACY_LIST_KEY)
-    }
-
-    private companion object {
-        private const val CONSENT_KEY = "pynapli.location.sharing-consent.v2"
-        private const val LEGACY_LIST_KEY = "pynapli.location.sharing-consent.v1"
     }
 }

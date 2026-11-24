@@ -10,7 +10,6 @@ import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.grid.NoOpGridSnapshotStore
-import com.pynapli.app.location.LocationSharingGate
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.store.UnavailableStorePurchaseGateway
@@ -24,11 +23,11 @@ import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.webRealtimeStreams
+import com.pynapli.shared.settings.RetiredLocationConsentKeys
 import com.pynapli.web.auth.LocalStorageSessionStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.platform.onOtherTabStorageChange
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
-import com.pynapli.web.settings.LocalStorageLocationSharingConsentStore
 import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
 import com.pynapli.web.settings.SessionStoragePendingSignupStore
 import com.pynapli.web.settings.SessionStorageUnderageStopStore
@@ -149,16 +148,6 @@ class WebAppGraph {
                 realtimeStreams.message,
         )
 
-    /** Which accounts in this browser shared location in the app; gates the tab-visible refresh. */
-    private val locationSharingGate =
-        LocationSharingGate(
-            store = LocalStorageLocationSharingConsentStore(),
-            currentUserId = {
-                authStateHolder.state.value.session
-                    ?.userId
-            },
-        )
-
     /** The object the web entry point hands to `PynapliApp`. */
     val pynapliAppGraph: PynapliAppGraph =
         common.appGraph(
@@ -167,8 +156,12 @@ class WebAppGraph {
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
             psyncStreamClient = realtimeStreams.psync,
-            locationSharingGate = locationSharingGate,
         )
+
+    init {
+        // The retired location-sharing consent record held account ids; nothing reads it now.
+        RetiredLocationConsentKeys.webStorageKeys.forEach(BrowserLocalStorage::remove)
+    }
 
     /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */
     fun startRealtime(scope: CoroutineScope): List<Job> = common.startRealtime(scope)

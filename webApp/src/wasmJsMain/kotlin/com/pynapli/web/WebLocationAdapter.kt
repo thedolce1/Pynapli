@@ -2,10 +2,9 @@ package com.pynapli.web
 
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.location.DeviceLocation
-import com.pynapli.app.location.LocationSharingGate
 import com.pynapli.app.location.LocationStateHolder
 import com.pynapli.app.location.refreshInBackground
-import com.pynapli.app.location.shareAndRefresh
+import com.pynapli.app.location.submitAndRefresh
 import com.pynapli.web.platform.geolocationAvailable
 import com.pynapli.web.platform.requestBrowserGeolocation
 import com.pynapli.web.platform.whenGeolocationAlreadyGranted
@@ -24,12 +23,11 @@ class WebLocationAdapter(
     private val locationStateHolder: LocationStateHolder,
     private val gridStateHolder: GridStateHolder,
     private val scope: CoroutineScope,
-    /** What this account chose in the app; null disables the silent refresh entirely. */
-    private val sharingGate: LocationSharingGate?,
-    /** True while the sign-up stepper is on screen: its Location step asks, nothing answers it silently. */
-    private val onboardingActive: () -> Boolean,
-    /** True while a Travel location is set: a grid answered from there says nothing about a shared current location. */
-    private val travelActive: () -> Boolean = { false },
+    /**
+     * `PynapliAppGraph.silentLocationRefreshAllowed`, given whether the site already holds the
+     * permission. Null disables the silent refresh.
+     */
+    private val silentRefreshAllowed: ((permissionGranted: Boolean) -> Boolean)?,
 ) {
     fun requestCurrentLocation() {
         if (!geolocationAvailable()) {
@@ -40,15 +38,13 @@ class WebLocationAdapter(
         requestBrowserGeolocation(
             onSuccess = { latitude, longitude, accuracyMeters ->
                 scope.launch {
-                    // The member's own share: also what later allows the silent refresh.
-                    locationStateHolder.shareAndRefresh(
+                    locationStateHolder.submitAndRefresh(
                         DeviceLocation(
                             latitude = latitude,
                             longitude = longitude,
                             accuracyMeters = accuracyMeters.toInt(),
                         ),
                         gridStateHolder,
-                        sharingGate,
                     )
                 }
             },
@@ -60,30 +56,22 @@ class WebLocationAdapter(
     }
 
     /**
-     * Tab visible again (or the page just loaded signed in): only for an account that shared its
-     * location in the app on this browser, never while the sign-up stepper is up, and only when the
-     * site already holds the permission. Then a fresh fix is sent silently, only if its cell changed.
-     * Never prompts, never shows progress or errors; a refused or failed fix is simply dropped.
+     * Tab visible again (or the page just loaded signed in): only when the site already holds the
+     * permission and [silentRefreshAllowed] says so (signed in, no sign-up stepper, and the last live
+     * Grid answer showed the server already holds this account's location). Then a fresh fix is sent
+     * silently, only if its cell changed. Never prompts, never shows progress or errors; a refused or
+     * failed fix is simply dropped.
      */
     fun refreshIfAlreadyGranted() {
         if (!geolocationAvailable()) return
-        val gate = sharingGate ?: return
-
-        // Only reached when the site already holds the permission, so it is passed as granted.
-        suspend fun allowed(): Boolean =
-            gate.allowsSilentRefresh(
-                onboardingActive = onboardingActive(),
-                osPermissionGranted = true,
-                serverHasLocation = gridStateHolder.serverHasLocation.value == true && !travelActive(),
-            )
+        val allowed = silentRefreshAllowed ?: return
         whenGeolocationAlreadyGranted {
-            scope.launch {
-                if (!allowed()) return@launch
-                requestBrowserGeolocation(
-                    onSuccess = { latitude, longitude, accuracyMeters ->
+            if (!allowed(true)) return@whenGeolocationAlreadyGranted
+            requestBrowserGeolocation(
+                onSuccess = { latitude, longitude, accuracyMeters ->
+                    // Checked again: the fix can take seconds, and a sign-up or sign-out may have happened.
+                    if (allowed(true)) {
                         scope.launch {
-                            // Checked again: the fix can take seconds, and a sign-up may have started.
-                            if (!allowed()) return@launch
                             locationStateHolder.refreshInBackground(
                                 DeviceLocation(
                                     latitude = latitude,
@@ -93,11 +81,11 @@ class WebLocationAdapter(
                                 gridStateHolder,
                             )
                         }
-                    },
-                    onPermissionDenied = {},
-                    onUnavailable = {},
-                )
-            }
+                    }
+                },
+                onPermissionDenied = {},
+                onUnavailable = {},
+            )
         }
     }
 }

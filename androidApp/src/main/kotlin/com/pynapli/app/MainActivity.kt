@@ -26,10 +26,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.location.LocationSettingsAccess
-import com.pynapli.app.location.LocationSharingGate
 import com.pynapli.app.location.ProvideLocationSettingsAccess
 import com.pynapli.app.location.refreshInBackground
-import com.pynapli.app.location.shareAndRefresh
+import com.pynapli.app.location.silentLocationRefreshAllowed
+import com.pynapli.app.location.submitAndRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaPickTarget
 import com.pynapli.app.media.PickedMediaForUpload
@@ -164,8 +164,8 @@ class MainActivity : ComponentActivity() {
         if (isStarted) startRealtimeStreams(graph)
         // Cold start counts as a return: onStart ran before the graph existed, so once the stored
         // session has settled, send a fresh fix the same silent way (only if it changed cell). Waits
-        // (bounded) for the first live Grid answer, which is what tells a member who shared before
-        // this device kept a record apart from one who never did (LocationSharingGate rule (b)).
+        // (bounded) for the first live Grid answer: it is the only signal that the server already holds
+        // this account's location (silentLocationRefreshAllowed), and null blocks.
         activityScope.launch {
             val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
             if (!settled.authenticated) return@launch
@@ -393,59 +393,30 @@ class MainActivity : ComponentActivity() {
     private fun submitDeviceLocation(currentLocation: Location) {
         val graph = appGraph ?: return
         activityScope.launch {
-            // The member's own share: also what later allows the silent resume refresh.
-            graph.pynapliAppGraph.locationStateHolder.shareAndRefresh(
+            graph.pynapliAppGraph.locationStateHolder.submitAndRefresh(
                 DeviceLocation(
                     latitude = currentLocation.latitude,
                     longitude = currentLocation.longitude,
                     accuracyMeters = currentLocation.accuracyMetersOrNull(),
                 ),
                 graph.pynapliAppGraph.gridStateHolder,
-                graph.pynapliAppGraph.locationSharingGate,
             )
         }
     }
 
     /**
-     * Resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy). Does nothing unless: signed in;
-     * no sign-up stepper on screen (its Location step asks, and nothing answers it silently); this
-     * account shared its location in the app on this device and has not skipped since
-     * ([com.pynapli.app.location.LocationSharingGate]: an OS grant is per install, so it says nothing
-     * about what this account chose); permission already granted; services on; no fix pending.
-     * Never prompts, never shows progress or errors, never logs the fix.
+     * Resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy). Does nothing unless
+     * [silentLocationRefreshAllowed] holds (signed in, no sign-up stepper on screen, permission already
+     * granted, and the last live Grid answer showed the server already holds this account's location),
+     * location services are on and no fix is pending. Never prompts, never shows progress or errors,
+     * never logs the fix.
      */
     private fun refreshLocationOnResume() {
         val graph = appGraph ?: return
         if (!isStarted || pendingLocationSignal != null) return
-        if (!graph.authStateHolder.state.value.authenticated || !hasLocationPermission()) return
-        val gate = graph.pynapliAppGraph.locationSharingGate ?: return
-        activityScope.launch {
-            if (!silentRefreshAllowed(graph, gate)) return@launch
-            takeResumeFix()
-        }
+        if (!graph.pynapliAppGraph.silentLocationRefreshAllowed(hasLocationPermission())) return
+        takeResumeFix()
     }
-
-    private suspend fun silentRefreshAllowed(
-        graph: AndroidAppGraph,
-        gate: LocationSharingGate,
-    ): Boolean =
-        gate.allowsSilentRefresh(
-            onboardingActive = onboardingActive(graph),
-            osPermissionGranted = hasLocationPermission(),
-            // A grid answered from Travel mode says nothing about a shared current location.
-            serverHasLocation =
-                graph.pynapliAppGraph.gridStateHolder.serverHasLocation.value == true &&
-                    graph.pynapliAppGraph.travelLocationStateHolder
-                        ?.state
-                        ?.value
-                        ?.current == null,
-        )
-
-    private fun onboardingActive(graph: AndroidAppGraph): Boolean =
-        graph.pynapliAppGraph.onboardingStateHolder
-            ?.state
-            ?.value
-            ?.active == true
 
     /** A recent last-known fix as is; otherwise one cancellable one-shot request (onStop cancels it). */
     @SuppressLint("MissingPermission")
@@ -481,11 +452,9 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshDeviceLocationSilently(currentLocation: Location) {
         val graph = appGraph ?: return
-        val gate = graph.pynapliAppGraph.locationSharingGate ?: return
+        // Checked again: a one-shot fix can take seconds, and a sign-up or sign-out may have happened.
+        if (!graph.pynapliAppGraph.silentLocationRefreshAllowed(hasLocationPermission())) return
         activityScope.launch {
-            // Checked again: a one-shot fix can take seconds, and a sign-up may have started.
-            if (!graph.authStateHolder.state.value.authenticated) return@launch
-            if (!silentRefreshAllowed(graph, gate)) return@launch
             graph.pynapliAppGraph.locationStateHolder.refreshInBackground(
                 DeviceLocation(
                     latitude = currentLocation.latitude,

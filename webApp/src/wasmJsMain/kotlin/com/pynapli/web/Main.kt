@@ -20,6 +20,7 @@ import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.design.pynapliTextScaleForBrowserFont
 import com.pynapli.app.location.LocationSettingsAccess
 import com.pynapli.app.location.ProvideLocationSettingsAccess
+import com.pynapli.app.location.silentLocationRefreshAllowed
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.web.platform.browserDefaultFontSizePx
@@ -54,14 +55,7 @@ fun main() {
             locationStateHolder = graph.pynapliAppGraph.locationStateHolder,
             gridStateHolder = graph.pynapliAppGraph.gridStateHolder,
             scope = appScope,
-            sharingGate = graph.pynapliAppGraph.locationSharingGate,
-            onboardingActive = { graph.onboardingStateHolder.state.value.active },
-            travelActive = {
-                graph.pynapliAppGraph.travelLocationStateHolder
-                    ?.state
-                    ?.value
-                    ?.current != null
-            },
+            silentRefreshAllowed = { granted -> graph.pynapliAppGraph.silentLocationRefreshAllowed(granted) },
         )
     val mediaPicker =
         WebMediaPicker(
@@ -100,7 +94,7 @@ fun main() {
     appScope.launch {
         val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
         if (!settled.authenticated) return@launch
-        // Bounded wait for the first live Grid answer (LocationSharingGate rule (b) reads it).
+        // Bounded wait for the first live Grid answer: the only signal that the server holds a location.
         withTimeoutOrNull(20_000L) {
             graph.pynapliAppGraph.gridStateHolder.serverHasLocation
                 .first { it != null }

@@ -343,10 +343,13 @@ Location:
   - Coming back from Settings: on the Location step the member taps "Share my location", which
     now needs no prompt. Nothing is sent silently while the stepper is on screen, so the step is
     always answered by the member's own Share or Skip, never by a resume. Outside the stepper the
-    resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy) runs only for an account that
-    consented: it shared in the app on this device, or the server already holds a location for it
-    (a live grid answer that is not `LOCATION_REQUIRED`). "Skip for now" turns it off for that
-    account until it taps Share, whatever the server holds.
+    resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy) runs only when the server already
+    holds a location for the account (its last live grid answer was not `LOCATION_REQUIRED`) and the
+    permission is already granted. Nothing about it is stored on the device. A member who tapped
+    "Skip for now" has no server location, so it never runs for them, even when another account on
+    the device granted location. "Skip" after an accepted Share is not reachable in the stepper: a
+    Share auto-continues from the Location step, back is consumed from Location and Profile, and a
+    resumed sign-up reopens on Profile.
 - A plain first refusal keeps the existing copy and the share button, which can ask again.
 
 Notifications:
