@@ -151,7 +151,10 @@ class WebAppGraph {
     private val locationSharingGate =
         LocationSharingGate(
             store = LocalStorageLocationSharingConsentStore(),
-            currentUserId = { authStateHolder.state.value.session?.userId },
+            currentUserId = {
+                authStateHolder.state.value.session
+                    ?.userId
+            },
         )
 
     /** The object the web entry point hands to `PynapliApp`. */

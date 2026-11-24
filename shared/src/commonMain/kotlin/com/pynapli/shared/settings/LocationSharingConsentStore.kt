@@ -25,8 +25,7 @@ data class LocationSharingConsent(
 ) {
     fun sharedInApp(userId: String): Boolean = userId in sharedInAppUserIds
 
-    fun withShared(userId: String): LocationSharingConsent =
-        copy(sharedInAppUserIds = (sharedInAppUserIds - userId + userId).takeLast(MAX_ACCOUNTS))
+    fun withShared(userId: String): LocationSharingConsent = copy(sharedInAppUserIds = (sharedInAppUserIds - userId + userId).takeLast(MAX_ACCOUNTS))
 
     fun withoutShared(userId: String): LocationSharingConsent = copy(sharedInAppUserIds = sharedInAppUserIds - userId)
 

@@ -778,7 +778,11 @@ class OnboardingStateHolderTest {
             fixture.onboarding.finishProfile()
 
             // Finishing already forgets A's answers...
-            assertEquals(OnboardingUiState(), fixture.onboarding.state.value.copy(photoNudgeEligible = false, sessionSettledFor = null))
+            assertEquals(
+                OnboardingUiState(),
+                fixture.onboarding.state.value
+                    .copy(photoNudgeEligible = false, sessionSettledFor = null),
+            )
 
             fixture.auth.logout()
             fixture.onboarding.resumePendingSignupIfNeeded() // App.kt's signed-out effect

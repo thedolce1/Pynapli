@@ -230,7 +230,10 @@ class AndroidAppGraph(
     private val locationSharingGate =
         LocationSharingGate(
             store = SqlDelightLocationSharingConsentStore(database),
-            currentUserId = { authStateHolder.state.value.session?.userId },
+            currentUserId = {
+                authStateHolder.state.value.session
+                    ?.userId
+            },
         )
 
     /** The object MainActivity hands to `PynapliApp`: every common holder plus this shell's pieces. */
