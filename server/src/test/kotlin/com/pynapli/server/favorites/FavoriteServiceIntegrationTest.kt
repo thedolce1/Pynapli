@@ -88,7 +88,9 @@ class FavoriteServiceIntegrationTest {
                     dataSource,
                     com.pynapli.server.contactblocks.ContactBlockTokens
                         .localDevelopment(),
-                    metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
                 ).deleteAccount(target)
 
             assertEquals(0, dataSource.count("SELECT count(*) FROM favorite_profiles"))

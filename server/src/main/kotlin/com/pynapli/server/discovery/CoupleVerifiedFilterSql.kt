@@ -39,26 +39,26 @@ object CoupleVerifiedFilterSql {
                 owner = "$user.id",
             )
         return """
-        AND (
-            ?::boolean = false
-            OR (
-                $profile.verified_at IS NOT NULL
-                AND EXISTS (
-                    SELECT 1
-                    FROM user_profile_links cv_upl
-                    JOIN users cv_user ON cv_user.id = cv_upl.linked_user_id
-                    JOIN profiles cv_profile ON cv_profile.user_id = cv_user.id
-                    JOIN discovery_settings cv_ds ON cv_ds.user_id = cv_user.id
-                    LEFT JOIN account_risk_states cv_risk ON cv_risk.user_id = cv_user.id
-                    WHERE cv_upl.user_id = $user.id
-                      AND cv_upl.status = 'active'
-                      AND cv_upl.unlinked_at IS NULL
-                      AND cv_profile.verified_at IS NOT NULL
-                      AND $partnerShown
+            AND (
+                ?::boolean = false
+                OR (
+                    $profile.verified_at IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM user_profile_links cv_upl
+                        JOIN users cv_user ON cv_user.id = cv_upl.linked_user_id
+                        JOIN profiles cv_profile ON cv_profile.user_id = cv_user.id
+                        JOIN discovery_settings cv_ds ON cv_ds.user_id = cv_user.id
+                        LEFT JOIN account_risk_states cv_risk ON cv_risk.user_id = cv_user.id
+                        WHERE cv_upl.user_id = $user.id
+                          AND cv_upl.status = 'active'
+                          AND cv_upl.unlinked_at IS NULL
+                          AND cv_profile.verified_at IS NOT NULL
+                          AND $partnerShown
+                    )
                 )
             )
-        )
-        """.trimIndent()
+            """.trimIndent()
     }
 
     /**

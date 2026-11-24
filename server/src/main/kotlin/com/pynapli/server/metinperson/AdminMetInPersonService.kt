@@ -109,7 +109,12 @@ class AdminMetInPersonService(
                 storedBySubjectTokens(listOf(tokens.subject(subjectUserId)))
                     .firstOrNull { it.id == confirmationId }
                     ?: throw ModerationException("MET_IN_PERSON_CONFIRMATION_NOT_FOUND")
-            val voucher = evaluator.evaluate(this, listOf(subjectUserId), now)[subjectUserId]?.rows?.firstOrNull { it.vouch.id == row.id }?.voucherUserId
+            val voucher =
+                evaluator
+                    .evaluate(this, listOf(subjectUserId), now)[subjectUserId]
+                    ?.rows
+                    ?.firstOrNull { it.vouch.id == row.id }
+                    ?.voucherUserId
             val affected = setVoided(listOf(row.pairToken), voided, now)
             insertAdminAuditLog(
                 actorId = actorId,

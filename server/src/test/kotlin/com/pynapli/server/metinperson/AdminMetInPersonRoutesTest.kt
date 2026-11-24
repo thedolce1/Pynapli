@@ -38,7 +38,18 @@ class AdminMetInPersonRoutesTest {
     private val clock = MetInPersonTestClock(Instant.parse("2026-11-18T12:00:00Z"))
     private val tokens = MetInPersonTokens("met-in-person-admin-test-key-0123456789")
     private val fx = MetInPersonFixtures(dataSource, clock)
-    private val service = MetInPersonService(dataSource, tokens, com.pynapli.server.contactblocks.JdbcContactBlockVisibility(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()), clock)
+    private val service =
+        MetInPersonService(
+            dataSource,
+            tokens,
+            com.pynapli.server.contactblocks
+                .JdbcContactBlockVisibility(
+                    dataSource,
+                    com.pynapli.server.contactblocks.ContactBlockTokens
+                        .localDevelopment(),
+                ),
+            clock,
+        )
     private val admin = AdminMetInPersonService(dataSource, tokens, clock)
     private val batch = MetInPersonBadgeBatch(dataSource, tokens, clock, Random(1))
 
@@ -99,8 +110,7 @@ class AdminMetInPersonRoutesTest {
             assertNotNull(JdbcProfileRepository(dataSource).getPublicProfile(stranger, subject)).toDto(null).metInPerson
         }
 
-    private fun firstVouchId(subject: UUID): UUID =
-        UUID.fromString(fx.queryText("SELECT id::text FROM vouches WHERE subject_token = ? ORDER BY id LIMIT 1", tokens.subject(subject)))
+    private fun firstVouchId(subject: UUID): UUID = UUID.fromString(fx.queryText("SELECT id::text FROM vouches WHERE subject_token = ? ORDER BY id LIMIT 1", tokens.subject(subject)))
 
     @Test
     fun theViewNeedsTheAdminToken() =

@@ -45,7 +45,18 @@ class MetInPersonIntegrationTest {
     private val clock = MetInPersonTestClock(Instant.parse("2026-11-18T12:00:00Z"))
     private val tokens = MetInPersonTokens("met-in-person-integration-key-0123456789")
     private val fx = MetInPersonFixtures(dataSource, clock)
-    private val service = MetInPersonService(dataSource, tokens, com.pynapli.server.contactblocks.JdbcContactBlockVisibility(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()), clock)
+    private val service =
+        MetInPersonService(
+            dataSource,
+            tokens,
+            com.pynapli.server.contactblocks
+                .JdbcContactBlockVisibility(
+                    dataSource,
+                    com.pynapli.server.contactblocks.ContactBlockTokens
+                        .localDevelopment(),
+                ),
+            clock,
+        )
     private val batch = MetInPersonBadgeBatch(dataSource, tokens, clock, Random(42), chunkSize = 3)
     private val profiles = JdbcProfileRepository(dataSource)
     private val messaging = MessagingService(JdbcMessagingRepository(dataSource, ContactBlockTokens.localDevelopment()))
@@ -276,7 +287,11 @@ class MetInPersonIntegrationTest {
                 assertFalse(Regex("\"[A-Za-z]*([Vv]ouch|MetInPerson[A-Za-z]*Count|metInPersonCount)[A-Za-z]*\"\\s*:").containsMatchIn(text), text)
             }
             assertFalse(readBefore.contains("metInPerson"), "the read mark carries nothing about it")
-            val keys = Json.parseToJsonElement(publicText).jsonObject.keys.filter { it.startsWith("metInPerson") }
+            val keys =
+                Json
+                    .parseToJsonElement(publicText)
+                    .jsonObject.keys
+                    .filter { it.startsWith("metInPerson") }
             assertEquals(setOf("metInPerson", "metInPersonAsCouple"), keys.toSet())
         }
     }
@@ -411,6 +426,7 @@ class MetInPersonIntegrationTest {
             clique.forEach { fx.optIn(it) }
             val chats = mutableMapOf<Pair<UUID, UUID>, UUID>()
             clique.forEach { a -> clique.forEach { b -> if (a.toString() < b.toString()) chats[a to b] = fx.talked(a, b) } }
+
             fun chat(
                 a: UUID,
                 b: UUID,
@@ -614,8 +630,18 @@ class MetInPersonIntegrationTest {
             listOf("pair_token", "subject_token").forEach { column ->
                 assertTrue(rows[0][column] != rows[1][column], "$column differs between the two rows")
             }
-            val tokensOfFirst = rows[0].filterKeys { it.endsWith("_token") }.values.filterNotNull().toSet()
-            val tokensOfSecond = rows[1].filterKeys { it.endsWith("_token") }.values.filterNotNull().toSet()
+            val tokensOfFirst =
+                rows[0]
+                    .filterKeys { it.endsWith("_token") }
+                    .values
+                    .filterNotNull()
+                    .toSet()
+            val tokensOfSecond =
+                rows[1]
+                    .filterKeys { it.endsWith("_token") }
+                    .values
+                    .filterNotNull()
+                    .toSet()
             assertTrue(tokensOfFirst.intersect(tokensOfSecond).isEmpty(), "no shared token links the two rows")
         }
     }
@@ -628,7 +654,18 @@ class MetInPersonIntegrationTest {
             val chat = fx.talked(voucher, subject)
             confirm(voucher, chat, subject)
             val wrong = MetInPersonTokens("a-different-met-in-person-key-0123456789")
-            val wrongService = MetInPersonService(dataSource, wrong, com.pynapli.server.contactblocks.JdbcContactBlockVisibility(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()), clock)
+            val wrongService =
+                MetInPersonService(
+                    dataSource,
+                    wrong,
+                    com.pynapli.server.contactblocks
+                        .JdbcContactBlockVisibility(
+                            dataSource,
+                            com.pynapli.server.contactblocks.ContactBlockTokens
+                                .localDevelopment(),
+                        ),
+                    clock,
+                )
             assertEquals(
                 MetInPersonService.NOT_AVAILABLE,
                 assertFailsWith<MessagingException> { wrongService.offers(voucher, chat.toString()) }.code,

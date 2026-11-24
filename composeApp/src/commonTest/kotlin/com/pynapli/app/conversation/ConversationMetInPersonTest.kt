@@ -137,7 +137,11 @@ class ConversationMetInPersonTest {
             assertEquals(1, repo.offerCalls)
             assertNotNull(holder.state.value.detail, "the conversation is untouched")
             assertNull(holder.state.value.errorMessage)
-            assertTrue(holder.state.value.metInPersonMenuItems().isEmpty())
+            assertTrue(
+                holder.state.value
+                    .metInPersonMenuItems()
+                    .isEmpty(),
+            )
             assertFalse(holder.state.value.isLoadingMetInPersonOffers)
         }
 
@@ -148,7 +152,12 @@ class ConversationMetInPersonTest {
             val holder = ConversationStateHolder(repo)
             holder.openConversationById("c1", viewerUserId = "viewer")
             holder.loadMetInPersonOffers()
-            assertEquals(1, holder.state.value.metInPersonMenuItems().size)
+            assertEquals(
+                1,
+                holder.state.value
+                    .metInPersonMenuItems()
+                    .size,
+            )
 
             holder.openMetInPerson("target")
             holder.setMetInPersonIncludePartner(true)
@@ -156,7 +165,9 @@ class ConversationMetInPersonTest {
 
             assertEquals(listOf("target" to true), repo.confirmations)
             assertNull(holder.state.value.metInPersonSheet)
-            val offer = holder.state.value.metInPersonOffers?.single()
+            val offer =
+                holder.state.value.metInPersonOffers
+                    ?.single()
             assertTrue(offer?.given == true && offer.canWithdraw)
 
             holder.openMetInPerson("target")

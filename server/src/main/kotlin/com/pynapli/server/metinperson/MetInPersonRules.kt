@@ -102,6 +102,7 @@ object MetInPersonRules {
         val viewerOk = viewerQualifies(viewer, now)
         val capRemaining = MONTHLY_CAP - capUsed
         val byId = subjects.associateBy { it.subjectUserId }
+
         fun confirmable(
             facts: MetInPersonSubjectFacts,
             row: MetInPersonPairRow?,
@@ -121,8 +122,7 @@ object MetInPersonRules {
                             partnerFacts.partnerUserId == subject.subjectUserId &&
                                 partnerFacts.partnerShown &&
                                 confirmable(partnerFacts, rows[partnerFacts.subjectUserId])
-                        }
-                        ?.let { MetInPersonPartnerDto(partnerUserId = it.subjectUserId.toString(), partnerDisplayName = it.displayName) }
+                        }?.let { MetInPersonPartnerDto(partnerUserId = it.subjectUserId.toString(), partnerDisplayName = it.displayName) }
                 }
             MetInPersonOfferDto(
                 subjectUserId = subject.subjectUserId.toString(),

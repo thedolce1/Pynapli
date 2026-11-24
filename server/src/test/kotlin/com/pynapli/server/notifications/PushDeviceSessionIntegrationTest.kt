@@ -82,7 +82,9 @@ class PushDeviceSessionIntegrationTest {
                 dataSource,
                 com.pynapli.server.contactblocks.ContactBlockTokens
                     .localDevelopment(),
-                metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                metInPersonAccountData =
+                    com.pynapli.server.metinperson.MetInPersonAccountData
+                        .localDevelopment(),
             ).deleteAccount(userId)
 
             assertTrue(tokens(userId).isEmpty())

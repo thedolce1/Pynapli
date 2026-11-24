@@ -32,7 +32,9 @@ class AccountLifecycleRepositoryIntegrationTest {
                     dataSource,
                     com.pynapli.server.contactblocks.ContactBlockTokens
                         .localDevelopment(),
-                    metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
                 )
 
             val created = repository.createDataExportRequest(userId)
@@ -53,7 +55,9 @@ class AccountLifecycleRepositoryIntegrationTest {
                     dataSource,
                     com.pynapli.server.contactblocks.ContactBlockTokens
                         .localDevelopment(),
-                    metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
                 )
             val archiver =
                 JdbcAccountDataExportArchiver(
@@ -61,7 +65,9 @@ class AccountLifecycleRepositoryIntegrationTest {
                     contactBlockTokens =
                         com.pynapli.server.contactblocks.ContactBlockTokens
                             .localDevelopment(),
-                    metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
                 )
 
             repository.createDataExportRequest(userId)
@@ -99,7 +105,9 @@ class AccountLifecycleRepositoryIntegrationTest {
                     dataSource,
                     com.pynapli.server.contactblocks.ContactBlockTokens
                         .localDevelopment(),
-                    metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
                 )
             val request = repository.createDataExportRequest(userId)
 
@@ -125,7 +133,9 @@ class AccountLifecycleRepositoryIntegrationTest {
                     dataSource,
                     com.pynapli.server.contactblocks.ContactBlockTokens
                         .localDevelopment(),
-                    metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
                 )
             val request = repository.createDataExportRequest(userId)
 
@@ -159,7 +169,9 @@ class AccountLifecycleRepositoryIntegrationTest {
                     dataSource,
                     com.pynapli.server.contactblocks.ContactBlockTokens
                         .localDevelopment(),
-                    metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
                 )
 
             val result = repository.deleteAccount(userId)
@@ -452,7 +464,9 @@ class AccountLifecycleRepositoryIntegrationTest {
                 dataSource,
                 com.pynapli.server.contactblocks.ContactBlockTokens
                     .localDevelopment(),
-                metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
+                metInPersonAccountData =
+                    com.pynapli.server.metinperson.MetInPersonAccountData
+                        .localDevelopment(),
             ).deleteAccount(userId)
 
             assertEquals("ended", dataSource.stringValue("SELECT status FROM tonight_sessions WHERE id = ?", sessionId))

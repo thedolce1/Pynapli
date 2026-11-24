@@ -122,7 +122,8 @@ class ApiConversationRepository(
     ): AppResult<com.pynapli.shared.network.dto.MetInPersonOfferDto> =
         apiClient.confirmMetInPerson(
             conversationId,
-            com.pynapli.shared.network.dto.ConfirmMetInPersonRequestDto(subjectUserId = subjectUserId, includePartner = includePartner),
+            com.pynapli.shared.network.dto
+                .ConfirmMetInPersonRequestDto(subjectUserId = subjectUserId, includePartner = includePartner),
         )
 
     override suspend fun withdrawMetInPerson(
@@ -131,7 +132,8 @@ class ApiConversationRepository(
     ): AppResult<com.pynapli.shared.network.dto.MetInPersonOfferDto> =
         apiClient.withdrawMetInPerson(
             conversationId,
-            com.pynapli.shared.network.dto.WithdrawMetInPersonRequestDto(subjectUserId = subjectUserId),
+            com.pynapli.shared.network.dto
+                .WithdrawMetInPersonRequestDto(subjectUserId = subjectUserId),
         )
 
     override suspend fun reportMessage(

@@ -62,8 +62,7 @@ internal fun ConversationUiState.metInPersonMenuItems(): List<MetInPersonMenuIte
     }
 }
 
-internal fun ConversationUiState.metInPersonMenuUi(): MetInPersonMenuUi =
-    MetInPersonMenuUi(isLoading = isLoadingMetInPersonOffers, items = metInPersonMenuItems())
+internal fun ConversationUiState.metInPersonMenuUi(): MetInPersonMenuUi = MetInPersonMenuUi(isLoading = isLoadingMetInPersonOffers, items = metInPersonMenuItems())
 
 internal fun ConversationUiState.metInPersonSheetUi(): MetInPersonSheetUi? {
     val sheet = metInPersonSheet ?: return null
@@ -102,7 +101,10 @@ internal class ConversationMetInPersonActions(
 ) {
     /** Asked for when the overflow menu opens. Any failure leaves the menu empty and nothing else. */
     suspend fun load() {
-        val conversationId = state.current.detail?.conversation?.conversationId ?: return
+        val conversationId =
+            state.current.detail
+                ?.conversation
+                ?.conversationId ?: return
         state.update { it.copy(isLoadingMetInPersonOffers = true) }
         val offers =
             when (val result = repository.metInPersonOffers(conversationId)) {
@@ -149,7 +151,10 @@ internal class ConversationMetInPersonActions(
     }
 
     private suspend fun submit(call: suspend (String) -> AppResult<MetInPersonOfferDto>) {
-        val conversationId = state.current.detail?.conversation?.conversationId ?: return
+        val conversationId =
+            state.current.detail
+                ?.conversation
+                ?.conversationId ?: return
         state.update { it.copy(metInPersonSheet = it.metInPersonSheet?.copy(isSubmitting = true, errorMessage = null)) }
         when (val result = call(conversationId)) {
             is AppResult.Success -> {
