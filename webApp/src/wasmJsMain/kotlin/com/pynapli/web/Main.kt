@@ -79,6 +79,9 @@ fun main() {
     // the moment that stops being true.
     graph.startRealtime(appScope)
 
+    // Another tab signing out (or in as someone else) ends this tab's session, never hands it over.
+    graph.followSessionChangesFromOtherTabs(appScope)
+
     // Tab wake: HTTP stays canonical, so returning to a backgrounded tab refetches
     // state the throttled socket may have missed (the stream clients reconnect on
     // their own backoff).

@@ -107,6 +107,22 @@ internal fun requestBrowserGeolocation(
     )
 
 /**
+ * Calls [handler] when ANOTHER tab of this origin changes localStorage [key] (the `storage` event
+ * never fires in the tab that wrote). A null event key means that tab cleared all of storage.
+ */
+internal fun onOtherTabStorageChange(
+    key: String,
+    handler: () -> Unit,
+): Unit =
+    js(
+        """{
+        window.addEventListener('storage', function (event) {
+            if (event.key === key || event.key === null) { handler(); }
+        });
+    }""",
+    )
+
+/**
  * Calls [onGranted] only when the site already holds the geolocation permission, so a caller can
  * refresh a fix without ever showing the browser's prompt (the resume path). Browsers without the
  * Permissions API, or that reject the query, simply never call back.

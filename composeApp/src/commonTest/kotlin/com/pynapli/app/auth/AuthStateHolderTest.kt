@@ -209,6 +209,63 @@ class AuthStateHolderTest {
             observer.cancel()
         }
 
+    // Another browser tab changed the shared stored session (the web shell's `storage` listener).
+
+    @Test
+    fun anotherTabSigningOutEndsThisTabsSession() =
+        runTest {
+            val holder = restoringHolder(FakeProfileApi())
+            holder.restoreSession()
+
+            holder.onStoredSessionChanged(null)
+
+            assertFalse(holder.state.value.authenticated)
+            assertFalse(holder.state.value.showWelcome)
+            assertEquals("Your session ended. Please sign in again.", holder.state.value.errorMessage)
+        }
+
+    @Test
+    fun anotherTabSigningInAsSomeoneElseIsNeverAdopted() =
+        runTest {
+            val holder = restoringHolder(FakeProfileApi())
+            holder.restoreSession()
+
+            holder.onStoredSessionChanged(StoredSession(accessToken = "b-access", refreshToken = "b-refresh", userId = "user-2", userStatus = "active"))
+
+            assertFalse(holder.state.value.authenticated, "this tab shows A's state: it must not carry B's tokens")
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+        }
+
+    @Test
+    fun anotherTabRefreshingTheSameAccountIsCarried() =
+        runTest {
+            val holder = restoringHolder(FakeProfileApi())
+            holder.restoreSession()
+            val rotated = StoredSession(accessToken = "access-2", refreshToken = "refresh-2", userId = "user-1", userStatus = "active")
+
+            holder.onStoredSessionChanged(rotated)
+
+            assertEquals(rotated, holder.state.value.session)
+            assertEquals(null, holder.state.value.errorMessage)
+        }
+
+    @Test
+    fun aSignedOutTabDoesNotPickUpAnotherTabsSignIn() =
+        runTest {
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = FakeAuthApi(), profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+            holder.restoreSession()
+
+            holder.onStoredSessionChanged(StoredSession(accessToken = "b-access", refreshToken = "b-refresh", userId = "user-2", userStatus = "active"))
+
+            assertFalse(holder.state.value.authenticated)
+            assertEquals(null, holder.state.value.errorMessage)
+        }
+
     @Test
     fun invalidationWhileSignedOutIsANoOp() =
         runTest {
