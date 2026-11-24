@@ -208,6 +208,8 @@ class AndroidAppGraph(
             gridOnScreen = common.gridStateHolder.onScreen,
             conversationOpen = common.conversationStateHolder.state.map { it.visible },
             appInForeground = appInForeground,
+            // Reset on sign-out, so the next account's sign-up never inherits a reached moment.
+            signedIn = authStateHolder.state.map { it.authenticated },
         )
 
     /** Keeps the device's push registration in step with the session and settings. */
