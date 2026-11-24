@@ -240,6 +240,9 @@ fun PynapliApp(
                 onPickPhoto = { platform.onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
                 onFinishProfile = { scope.launch { graph.onboardingStateHolder.finishProfile() } },
                 onStepBack = { scope.launch { graph.onboardingStateHolder.stepBack() } },
+                onShowBirthdayWheel = graph.onboardingStateHolder::showBirthdayWheel,
+                onWheelDateChange = graph.onboardingStateHolder::selectWheelDate,
+                onUseTypedBirthday = graph.onboardingStateHolder::useTypedBirthday,
                 testerDiagnosticLabel = platform.testerDiagnosticLabel,
             )
             // Composed after the stepper so the crop step draws above it; the main

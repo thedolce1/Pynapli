@@ -276,10 +276,14 @@ function Complete-SignupToLocationStep {
     $shots.auth = Save-Screen "${Prefix}00_auth"
     Tap-ExactText "Create account"
 
-    # --- DOB step: typed DD/MM/YYYY fields (Grindr-reference flow) ---
+    # --- DOB step: phones show the day/month/year wheel; its "type instead" link opens the typed
+    # --- DD/MM/YYYY fields, which injection can drive reliably (the wheel itself is unit-tested).
     Wait-ForAnyText @("Your birthday") | Out-Null
     $dobXml = Dump-Ui "${Prefix}01_dob" -Keep
     Assert-NoAppErrorText $dobXml "DOB step"
+    $shots.dobWheel = Save-Screen "${Prefix}01_dob_wheel"
+    Tap-ExactText "Type your birthday instead"
+    Wait-ForAnyText @("DD") | Out-Null
     Enter-Text "DD" "01"
     Enter-Text "MM" "06"
     Enter-Text "YYYY" "2000"

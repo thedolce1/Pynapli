@@ -793,6 +793,102 @@ class OnboardingStateHolderTest {
         }
 
     @Test
+    fun monthLengthsAndLeapYearsFollowTheCalendar() {
+        assertEquals(31, OnboardingStateHolder.daysInMonth(2001, 1))
+        assertEquals(28, OnboardingStateHolder.daysInMonth(2001, 2))
+        assertEquals(29, OnboardingStateHolder.daysInMonth(2000, 2), "divisible by 400: leap")
+        assertEquals(28, OnboardingStateHolder.daysInMonth(1900, 2), "divisible by 100, not 400: not leap")
+        assertEquals(29, OnboardingStateHolder.daysInMonth(2004, 2))
+        assertEquals(30, OnboardingStateHolder.daysInMonth(2001, 4))
+        assertEquals(30, OnboardingStateHolder.daysInMonth(2001, 11))
+        assertEquals(31, OnboardingStateHolder.daysInMonth(2001, 12))
+    }
+
+    @Test
+    fun theWheelDayIsClampedToTheMonth() {
+        assertEquals(30, OnboardingStateHolder.clampWheelDay(2001, 4, 31))
+        assertEquals(28, OnboardingStateHolder.clampWheelDay(2001, 2, 30))
+        assertEquals(29, OnboardingStateHolder.clampWheelDay(2000, 2, 31))
+        assertEquals(15, OnboardingStateHolder.clampWheelDay(2001, 2, 15))
+        assertEquals(1, OnboardingStateHolder.clampWheelDay(2001, 2, 0))
+    }
+
+    @Test
+    fun theWheelStartsOnANeutralDateThatIsNotAnAnswer() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+
+            fixture.onboarding.showBirthdayWheel()
+
+            val state = fixture.onboarding.state.value
+            val neutral = OnboardingStateHolder.neutralWheelDate(today)
+            assertEquals(LocalDate(today.year - OnboardingStateHolder.NEUTRAL_WHEEL_AGE_YEARS, 1, 1), neutral)
+            assertFalse(neutral == LocalDate(today.year - OnboardingStateHolder.MINIMUM_AGE_YEARS, today.month, today.day))
+            assertEquals(listOf("01", "01", neutral.year.toString()), listOf(state.dobDay, state.dobMonth, state.dobYear))
+            assertEquals(OnboardingStateHolder.wheelYears(today), state.wheelFirstYear..state.wheelLastYear)
+            assertTrue(today.year in state.wheelFirstYear..state.wheelLastYear, "an underage year is reachable, so the stop screen is too")
+            // Untouched: Next is off and confirming does nothing.
+            assertTrue(state.dobWheelUntouched)
+            assertFalse(state.dobComplete)
+            fixture.onboarding.confirmDob()
+            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun movingAWheelChoosesTheDateAndClampsTheDayWhenTheMonthShrinks() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.onboarding.showBirthdayWheel()
+
+            fixture.onboarding.selectWheelDate(day = 31, month = 1, year = 2000)
+            assertTrue(fixture.onboarding.state.value.dobComplete)
+            // January 31 -> February: 29 in a leap year...
+            fixture.onboarding.selectWheelDate(day = 31, month = 2, year = 2000)
+            assertEquals("29", fixture.onboarding.state.value.dobDay)
+            // ...and 28 once the year is not one.
+            fixture.onboarding.selectWheelDate(day = 29, month = 2, year = 2001)
+            assertEquals("28", fixture.onboarding.state.value.dobDay)
+            assertEquals("02", fixture.onboarding.state.value.dobMonth)
+
+            fixture.onboarding.confirmDob()
+            assertEquals(LocalDate(2001, 2, 28), fixture.onboarding.state.value.dob)
+            assertEquals(OnboardingStep.Policies, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun theWheelKeepsADateAlreadyEntered() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.enterDob(day = "15", month = "08", year = "1990")
+
+            fixture.onboarding.showBirthdayWheel()
+
+            val state = fixture.onboarding.state.value
+            assertEquals(listOf("15", "08", "1990"), listOf(state.dobDay, state.dobMonth, state.dobYear))
+            assertFalse(state.dobWheelUntouched)
+        }
+
+    @Test
+    fun typingInsteadClearsAnUntouchedNeutralDateButKeepsAChosenOne() =
+        runTest {
+            val untouched = Fixture()
+            untouched.onboarding.startCreateAccount()
+            untouched.onboarding.showBirthdayWheel()
+            untouched.onboarding.useTypedBirthday()
+            assertEquals(listOf("", "", ""), untouched.onboarding.state.value.let { listOf(it.dobDay, it.dobMonth, it.dobYear) })
+
+            val chosen = Fixture()
+            chosen.onboarding.startCreateAccount()
+            chosen.onboarding.showBirthdayWheel()
+            chosen.onboarding.selectWheelDate(day = 3, month = 4, year = 1995)
+            chosen.onboarding.useTypedBirthday()
+            assertEquals(listOf("03", "04", "1995"), chosen.onboarding.state.value.let { listOf(it.dobDay, it.dobMonth, it.dobYear) })
+        }
+
+    @Test
     fun backStepsThroughThePreCodeStepsAndFromTheFirstToTheWelcome() =
         runTest {
             val fixture = Fixture()

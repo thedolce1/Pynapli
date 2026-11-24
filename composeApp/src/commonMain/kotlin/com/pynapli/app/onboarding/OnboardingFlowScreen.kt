@@ -52,6 +52,8 @@ import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliPasswordVisibilityToggle
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.PynapliWindowSizeClass
+import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
@@ -61,7 +63,8 @@ import com.pynapli.shared.core.config.LegalLinks
 
 /**
  * The DOB-first signup stepper (ONBOARDING_AUTH_SPEC), aligned to the founder's
- * Grindr reference capture (2026-06-10): typed DD/MM/YYYY birthday fields, a
+ * Grindr reference capture (2026-06-10): a day/month/year scroll wheel on phones
+ * (typed DD/MM/YYYY fields on wider windows, and on request), a
  * dedicated policies step with read links and one Accept, then email+password, the
  * emailed 6-digit code ("Check your email"; the account only exists once it checks out),
  * location, and a single consolidated "Your profile" step (photo + display name).
@@ -97,6 +100,10 @@ fun OnboardingFlowScreen(
     onFinishProfile: () -> Unit,
     // System back: one step back (OnboardingStateHolder.stepBack), never out of the app mid-sign-up.
     onStepBack: () -> Unit = {},
+    // The phone birthday wheel (OnboardingStateHolder.showBirthdayWheel / selectWheelDate / useTypedBirthday).
+    onShowBirthdayWheel: () -> Unit = {},
+    onWheelDateChange: (day: Int, month: Int, year: Int) -> Unit = { _, _, _ -> },
+    onUseTypedBirthday: () -> Unit = {},
     testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -147,6 +154,9 @@ fun OnboardingFlowScreen(
                     onDobDayChanged = onDobDayChanged,
                     onDobMonthChanged = onDobMonthChanged,
                     onDobYearChanged = onDobYearChanged,
+                    onShowBirthdayWheel = onShowBirthdayWheel,
+                    onWheelDateChange = onWheelDateChange,
+                    onUseTypedBirthday = onUseTypedBirthday,
                     onConfirmDob = onConfirmDob,
                     onCancelToSignIn = onCancelToSignIn,
                 )
@@ -207,6 +217,9 @@ private fun DobStep(
     onDobDayChanged: (String) -> Unit,
     onDobMonthChanged: (String) -> Unit,
     onDobYearChanged: (String) -> Unit,
+    onShowBirthdayWheel: () -> Unit,
+    onWheelDateChange: (day: Int, month: Int, year: Int) -> Unit,
+    onUseTypedBirthday: () -> Unit,
     onConfirmDob: () -> Unit,
     onCancelToSignIn: () -> Unit,
 ) {
@@ -215,6 +228,76 @@ private fun DobStep(
         subtitle = "You must be at least 18 years old to use Pynapli. Only your age shows on your profile.",
     )
     Spacer(modifier = Modifier.height(24.dp))
+    // Phones get the scroll wheels (the pattern the big apps use); wider windows (web, desktop,
+    // tablet) keep the typed DD/MM/YYYY fields, which are also the screen-reader-friendly way in.
+    val compact = currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Compact
+    var typed by rememberSaveable { mutableStateOf(false) }
+    if (compact && !typed) {
+        LaunchedEffect(Unit) { onShowBirthdayWheel() }
+        val day = state.dobDay.toIntOrNull()
+        val month = state.dobMonth.toIntOrNull()
+        val year = state.dobYear.toIntOrNull()
+        if (day != null && month != null && year != null && state.wheelFirstYear > 0) {
+            BirthdayWheelPicker(
+                day = day,
+                month = month,
+                year = year,
+                years = state.wheelFirstYear..state.wheelLastYear,
+                onDateChange = onWheelDateChange,
+            )
+        }
+        if (state.dobWheelUntouched) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Scroll to your birthday.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        TextButton(
+            onClick = {
+                typed = true
+                onUseTypedBirthday()
+            },
+            modifier = Modifier.handCursor(),
+        ) {
+            Text(TYPE_BIRTHDAY_INSTEAD)
+        }
+    } else {
+        TypedDobFields(
+            state = state,
+            onDobDayChanged = onDobDayChanged,
+            onDobMonthChanged = onDobMonthChanged,
+            onDobYearChanged = onDobYearChanged,
+        )
+    }
+    StepError(state.errorMessage)
+    Spacer(modifier = Modifier.height(24.dp))
+    Button(
+        onClick = onConfirmDob,
+        enabled = state.dobComplete,
+        modifier = Modifier.fillMaxWidth().handCursor(enabled = state.dobComplete),
+    ) {
+        Text("Next")
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+    TextButton(onClick = onCancelToSignIn, modifier = Modifier.handCursor()) {
+        Text("Already have an account? Sign in")
+    }
+}
+
+/** The label of the wheel's way out to the typed fields (QA scripts tap it by this text). */
+internal const val TYPE_BIRTHDAY_INSTEAD = "Type your birthday instead"
+
+@Composable
+private fun TypedDobFields(
+    state: OnboardingUiState,
+    onDobDayChanged: (String) -> Unit,
+    onDobMonthChanged: (String) -> Unit,
+    onDobYearChanged: (String) -> Unit,
+) {
     val monthFocus = remember { FocusRequester() }
     val yearFocus = remember { FocusRequester() }
     Row(
@@ -251,19 +334,6 @@ private fun DobStep(
                     .weight(1.4f)
                     .focusRequester(yearFocus),
         )
-    }
-    StepError(state.errorMessage)
-    Spacer(modifier = Modifier.height(24.dp))
-    Button(
-        onClick = onConfirmDob,
-        enabled = state.dobComplete,
-        modifier = Modifier.fillMaxWidth().handCursor(enabled = state.dobComplete),
-    ) {
-        Text("Next")
-    }
-    Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onCancelToSignIn, modifier = Modifier.handCursor()) {
-        Text("Already have an account? Sign in")
     }
 }
 

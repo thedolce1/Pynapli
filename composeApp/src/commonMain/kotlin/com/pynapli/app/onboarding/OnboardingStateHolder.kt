@@ -127,20 +127,80 @@ class OnboardingStateHolder(
     }
 
     fun updateDobDay(value: String) {
-        _state.update { it.copy(dobDay = value.digits(2), errorMessage = null) }
+        _state.update { it.copy(dobDay = value.digits(2), dobWheelUntouched = false, errorMessage = null) }
     }
 
     fun updateDobMonth(value: String) {
-        _state.update { it.copy(dobMonth = value.digits(2), errorMessage = null) }
+        _state.update { it.copy(dobMonth = value.digits(2), dobWheelUntouched = false, errorMessage = null) }
     }
 
     fun updateDobYear(value: String) {
-        _state.update { it.copy(dobYear = value.digits(4), errorMessage = null) }
+        _state.update { it.copy(dobYear = value.digits(4), dobWheelUntouched = false, errorMessage = null) }
+    }
+
+    /**
+     * The phone birthday wheel is showing. It needs a date to sit on: the one already entered if it
+     * fits the wheel, else a neutral starting date ([neutralWheelDate], deliberately not "exactly 18
+     * years ago"). A neutral start is not an answer: Next stays off until a wheel is moved
+     * ([OnboardingUiState.dobComplete]), so nobody signs up on the default by accident.
+     */
+    fun showBirthdayWheel() {
+        val today = todayProvider()
+        val years = wheelYears(today)
+        _state.update { current ->
+            val withYears = current.copy(wheelFirstYear = years.first, wheelLastYear = years.last)
+            if (wheelDateOf(current, years) != null) {
+                withYears
+            } else {
+                val neutral = neutralWheelDate(today)
+                withYears.copy(
+                    dobDay = neutral.day.twoDigits(),
+                    dobMonth = neutral.month.number.twoDigits(),
+                    dobYear = neutral.year.toString(),
+                    dobWheelUntouched = true,
+                )
+            }
+        }
+    }
+
+    /**
+     * A wheel moved. The day is clamped to the month (31 -> 30 for April, 29 -> 28 out of a leap
+     * year); the date then goes through the same fields, so [confirmDob] validates it like a typed one.
+     */
+    fun selectWheelDate(
+        day: Int,
+        month: Int,
+        year: Int,
+    ) {
+        val clampedMonth = month.coerceIn(1, 12)
+        val clampedDay = clampWheelDay(year, clampedMonth, day)
+        _state.update {
+            it.copy(
+                dobDay = clampedDay.twoDigits(),
+                dobMonth = clampedMonth.twoDigits(),
+                dobYear = year.toString(),
+                dobWheelUntouched = false,
+                errorMessage = null,
+            )
+        }
+    }
+
+    /** "Type it instead": an untouched neutral date is not the person's, so the fields start empty. */
+    fun useTypedBirthday() {
+        _state.update {
+            if (it.dobWheelUntouched) {
+                it.copy(dobDay = "", dobMonth = "", dobYear = "", dobWheelUntouched = false, errorMessage = null)
+            } else {
+                it
+            }
+        }
     }
 
     /** Validates the typed date, then gates 18+ before any account data is collected. */
     fun confirmDob() {
         val current = _state.value
+        // The wheel's neutral start was never chosen: nothing to confirm yet (Next is off too).
+        if (current.dobWheelUntouched) return
         val dob = parseDob(current.dobDay, current.dobMonth, current.dobYear, todayProvider())
         if (dob == null) {
             _state.update { it.copy(errorMessage = "Enter a valid date of birth.") }
@@ -639,6 +699,35 @@ class OnboardingStateHolder(
         internal fun isLeapYear(year: Int): Boolean = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 
         private const val MAX_AGE_YEARS = 120
+
+        /** How far back the wheel's neutral start sits: an adult age, but not the 18-year boundary. */
+        const val NEUTRAL_WHEEL_AGE_YEARS = 25
+
+        /** The birthday wheel's years: the same window [parseDob] accepts, oldest first. */
+        fun wheelYears(today: LocalDate): IntRange = (today.year - MAX_AGE_YEARS)..today.year
+
+        /** Where the wheel starts: 1 January, [NEUTRAL_WHEEL_AGE_YEARS] years back. */
+        fun neutralWheelDate(today: LocalDate): LocalDate = LocalDate(today.year - NEUTRAL_WHEEL_AGE_YEARS, 1, 1)
+
+        /** Keeps a wheel day inside the month: the last day when the month (or a leap year) is shorter. */
+        fun clampWheelDay(
+            year: Int,
+            month: Int,
+            day: Int,
+        ): Int = day.coerceIn(1, daysInMonth(year, month))
+
+        /** The date the fields hold if the wheel can show it as is, else null. */
+        internal fun wheelDateOf(
+            state: OnboardingUiState,
+            years: IntRange,
+        ): LocalDate? {
+            val year = state.dobYear.takeIf { it.length == 4 }?.toIntOrNull()?.takeIf { it in years } ?: return null
+            val month = state.dobMonth.toIntOrNull()?.takeIf { it in 1..12 } ?: return null
+            val day = state.dobDay.toIntOrNull()?.takeIf { it in 1..daysInMonth(year, month) } ?: return null
+            return LocalDate(year, month, day)
+        }
+
+        private fun Int.twoDigits(): String = toString().padStart(2, '0')
     }
 }
 
@@ -681,6 +770,11 @@ data class OnboardingUiState(
     val dobMonth: String = "",
     val dobYear: String = "",
     val dob: LocalDate? = null,
+    // The phone wheel is sitting on its neutral start and nobody has moved it yet: not an answer.
+    val dobWheelUntouched: Boolean = false,
+    // The wheel's year window, set when it is shown (the holder knows today; the screen doesn't).
+    val wheelFirstYear: Int = 0,
+    val wheelLastYear: Int = 0,
     val email: String = "",
     val password: String = "",
     // On a resumed code step the address is shown masked ([verifyEmailLabel]).
@@ -703,7 +797,7 @@ data class OnboardingUiState(
     val sessionSettledFor: String? = null,
 ) {
     val dobComplete: Boolean
-        get() = dobDay.isNotEmpty() && dobMonth.isNotEmpty() && dobYear.length == 4
+        get() = dobDay.isNotEmpty() && dobMonth.isNotEmpty() && dobYear.length == 4 && !dobWheelUntouched
 
     /** See [OnboardingStateHolder.holdsMainSurfaces]. */
     fun holdsMainSurfaces(sessionUserId: String?): Boolean = sessionUserId != null && !active && sessionSettledFor != sessionUserId
