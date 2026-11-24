@@ -81,7 +81,12 @@ every change must keep.
   export shows the blocker only the dates added. V120 adds `released_at`: removing a bound address
   keeps the row as a tombstone (nothing the blocker did before it ever reaches the person it pointed
   at); uniqueness and the count apply to rows with `released_at` NULL only; `contact_block_job_state`
-  records the resolver's daily full sweep.
+  records the resolver's daily full sweep. At most five tombstones are kept per (blocker, target) pair.
+  V121 adds `conversation_participants.first_written_at` (set by trigger
+  `trg_messages_mark_participant_written` on every visible message, backfilled; durable evidence for
+  the exemption after a retention purge), `conversations.updated_by_user_id` (who caused the last
+  bump, so a hidden person's acts don't reorder a viewer's inbox) and
+  `contact_block_job_state.last_success_at` (a failed sweep is retried within the hour).
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
   the integrity of retained safety/legal records. In the same transaction, GDPR/CCPA erasure nulls
   identity hashes (`email_hash`, `phone_hash`, `firebase_uid`), clears `auth_identities` credentials
