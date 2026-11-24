@@ -20,6 +20,16 @@ class AuthRequestValidatorTest {
     }
 
     @Test
+    fun theServerJudgesLookAlikesAfterNfkcAndRefusesBlankPasswords() {
+        val fullWidth = "Password123".map { (it.code + 0xFEE0).toChar() }.joinToString("")
+        assertEquals("PASSWORD_TOO_COMMON", assertFailsWith<AuthException> { validator.validateNewPassword("a@example.com", fullWidth) }.code)
+        assertEquals("PASSWORD_TOO_SHORT", assertFailsWith<AuthException> { validator.validateNewPassword("a@example.com", "            ") }.code)
+        // Length is counted after NFKC: the ligature U+FB01 becomes "fi", so 9 typed characters
+        // judge as the 10 of "fine-wine!".
+        validator.validateNewPassword("a@example.com", "ﬁne-wine!")
+    }
+
+    @Test
     fun signInNeverAppliesTheDenylist() {
         // An existing member whose password is on the list must still get in.
         validator.validateEmailPassword("member@example.com", "password1234")

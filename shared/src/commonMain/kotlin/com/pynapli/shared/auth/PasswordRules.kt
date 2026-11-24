@@ -8,6 +8,13 @@ package com.pynapli.shared.auth
  *
  * Sign-in deliberately does NOT apply the denylist: an existing member whose password is on it must
  * still get in (and can change it from the profile hub).
+ *
+ * Normalisation: the rule judges the password after Unicode NFKC normalisation (so full-width or
+ * compatibility look-alikes such as "ｐａｓｓｗｏｒｄ１２３" count as "password123"), with surrounding
+ * whitespace trimmed, and measures length in code points. Common Kotlin has no NFKC, so the caller
+ * passes the normaliser: the server passes `java.text.Normalizer` NFKC (authoritative); the client
+ * passes none, so its pre-check can miss a look-alike the server then refuses with the same copy.
+ * Normalisation is for judging only; the password itself is hashed exactly as typed.
  */
 object PasswordRules {
     /** Lowered from 12 (onboarding + first grid plan, Section 1): less friction, plus the denylist below. */
@@ -19,30 +26,77 @@ object PasswordRules {
     const val TOO_SHORT_MESSAGE = "Password must be at least $MIN_LENGTH characters."
     const val TOO_COMMON_MESSAGE = "That password is too easy to guess. Choose a different one."
 
-    /** The error code for a new password that can't be used, or null when it can. */
-    fun problemWith(password: String): String? =
-        when {
-            password.length < MIN_LENGTH -> TOO_SHORT_CODE
-            isCommon(password) -> TOO_COMMON_CODE
+    /**
+     * The error code for a new password that can't be used, or null when it can. Blank (after
+     * trimming) and too short both answer [TOO_SHORT_CODE].
+     */
+    fun problemWith(
+        password: String,
+        normalize: (String) -> String = { it },
+    ): String? {
+        val judged = normalize(password).trim()
+        return when {
+            judged.isEmpty() || judged.codePointLength() < MIN_LENGTH -> TOO_SHORT_CODE
+            judged.lowercase() in commonPasswords -> TOO_COMMON_CODE
             else -> null
         }
+    }
 
     /** The member-facing copy for [problemWith]'s code (null when the password can be used). */
-    fun messageFor(password: String): String? =
-        when (problemWith(password)) {
+    fun messageFor(
+        password: String,
+        normalize: (String) -> String = { it },
+    ): String? =
+        when (problemWith(password, normalize)) {
             TOO_SHORT_CODE -> TOO_SHORT_MESSAGE
             TOO_COMMON_CODE -> TOO_COMMON_MESSAGE
             else -> null
         }
 
     /** Case-insensitive, after trimming surrounding whitespace (which a person can't see). */
-    fun isCommon(password: String): Boolean = password.trim().lowercase() in commonPasswords
+    fun isCommon(
+        password: String,
+        normalize: (String) -> String = { it },
+    ): Boolean = normalize(password).trim().lowercase() in commonPasswords
+
+    // A surrogate pair is one character to a person: count it once.
+    private fun String.codePointLength(): Int = count { !it.isLowSurrogate() }
 
     /**
-     * About a hundred of the most common passwords in public breach corpora that are at least
-     * [MIN_LENGTH] long (shorter ones are already refused by length). Lowercase; compared lowercased.
+     * Common breach-corpus words that people pad to a length rule with a year, a run of digits or a
+     * "!" (the dominant shape of 10+ character passwords in public breach lists). Combined with
+     * [commonSuffixes] below; only combinations of [MIN_LENGTH] or more are kept.
      */
-    internal val commonPasswords: Set<String> =
+    private val commonWords =
+        listOf(
+            "password", "passw0rd", "p@ssword", "p@ssw0rd", "qwerty", "qwertyuiop", "iloveyou",
+            "sunshine", "princess", "football", "baseball", "welcome", "dragon", "monkey", "master",
+            "shadow", "letmein", "superman", "batman", "trustno1", "michael", "jessica", "charlie",
+            "jordan", "hunter", "freedom", "whatever", "starwars", "pokemon", "computer", "internet",
+            "samsung", "liverpool", "chelsea", "arsenal", "soccer", "summer", "flower", "secret",
+            "admin", "hello", "lovely", "changeme", "abcdef", "abc123", "pynapli", "swinger",
+            "lifestyle",
+        )
+
+    private val commonSuffixes =
+        listOf(
+            "", "1", "12", "123", "1234", "12345", "!", "1!", "123!", "12345!", "2024", "2025",
+        )
+
+    /**
+     * About four hundred of the most common passwords in public breach corpora that are at least
+     * [MIN_LENGTH] long (shorter ones are already refused by length): the keyboard, number and
+     * phrase list below plus [commonWords] x [commonSuffixes]. Lowercase; compared lowercased.
+     */
+    internal val commonPasswords: Set<String> by lazy {
+        (
+            explicitCommonPasswords +
+                commonWords.flatMap { word -> commonSuffixes.map { suffix -> word + suffix } }
+        ).filter { it.length >= MIN_LENGTH }
+            .toSet()
+    }
+
+    private val explicitCommonPasswords: Set<String> =
         setOf(
             "1234567890",
             "12345678910",

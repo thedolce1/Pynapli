@@ -2,6 +2,7 @@ package com.pynapli.server.auth
 
 import com.pynapli.server.auth.security.normalizeEmail
 import com.pynapli.shared.auth.PasswordRules
+import java.text.Normalizer
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -36,8 +37,13 @@ internal class AuthRequestValidator(
     }
 
     fun validateNewPassword(password: String) {
-        PasswordRules.problemWith(password)?.let { code -> throw AuthException(code) }
+        // NFKC here, where the JDK has it (common Kotlin doesn't): look-alike forms of a listed
+        // password are judged as the password they look like. Only for judging; the hash is of the
+        // password as typed.
+        PasswordRules.problemWith(password, ::nfkc)?.let { code -> throw AuthException(code) }
     }
+
+    private fun nfkc(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
 
     fun validateSignupAgeGate(
         birthdate: String?,
