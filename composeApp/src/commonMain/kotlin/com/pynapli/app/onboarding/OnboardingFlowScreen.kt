@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -36,17 +37,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.pynapli.app.auth.autofillContentType
+import com.pynapli.app.auth.backspaceMovesTo
+import com.pynapli.app.auth.rememberAutoFocusRequester
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliMotion
@@ -59,7 +66,9 @@ import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.media.MediaAlbumsUiState
+import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.shared.core.config.LegalLinks
+import kotlinx.coroutines.delay
 
 /**
  * The DOB-first signup stepper (ONBOARDING_AUTH_SPEC), aligned to the founder's
@@ -104,6 +113,8 @@ fun OnboardingFlowScreen(
     onShowBirthdayWheel: () -> Unit = {},
     onWheelDateChange: (day: Int, month: Int, year: Int) -> Unit = { _, _, _ -> },
     onUseTypedBirthday: () -> Unit = {},
+    // Seconds until "Send a new code" is offered again (OnboardingStateHolder.resendCooldownSecondsLeft).
+    resendCooldownSecondsLeft: () -> Int = { 0 },
     testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -190,6 +201,8 @@ fun OnboardingFlowScreen(
                     onResendSignupCode = onResendSignupCode,
                     onUseDifferentEmail = onUseDifferentEmail,
                     onStartSignupAgain = onStartSignupAgain,
+                    onSignIn = onCancelToSignIn,
+                    resendCooldownSecondsLeft = resendCooldownSecondsLeft,
                 )
 
             OnboardingStep.Location ->
@@ -271,6 +284,7 @@ private fun DobStep(
             onDobDayChanged = onDobDayChanged,
             onDobMonthChanged = onDobMonthChanged,
             onDobYearChanged = onDobYearChanged,
+            onConfirmDob = onConfirmDob,
         )
     }
     StepError(state.errorMessage)
@@ -297,7 +311,9 @@ private fun TypedDobFields(
     onDobDayChanged: (String) -> Unit,
     onDobMonthChanged: (String) -> Unit,
     onDobYearChanged: (String) -> Unit,
+    onConfirmDob: () -> Unit,
 ) {
+    val dayFocus = rememberAutoFocusRequester()
     val monthFocus = remember { FocusRequester() }
     val yearFocus = remember { FocusRequester() }
     Row(
@@ -311,7 +327,13 @@ private fun TypedDobFields(
                 onDobDayChanged(value)
                 if (value.count { it.isDigit() } >= 2) monthFocus.requestFocus()
             },
-            modifier = Modifier.weight(1f),
+            imeAction = ImeAction.Next,
+            onImeAction = { monthFocus.requestFocus() },
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .focusRequester(dayFocus)
+                    .autofillContentType(ContentType.BirthDateDay),
         )
         DobField(
             value = state.dobMonth,
@@ -320,19 +342,28 @@ private fun TypedDobFields(
                 onDobMonthChanged(value)
                 if (value.count { it.isDigit() } >= 2) yearFocus.requestFocus()
             },
+            imeAction = ImeAction.Next,
+            onImeAction = { yearFocus.requestFocus() },
             modifier =
                 Modifier
                     .weight(1f)
-                    .focusRequester(monthFocus),
+                    .focusRequester(monthFocus)
+                    .backspaceMovesTo(dayFocus) { state.dobMonth.isEmpty() }
+                    .autofillContentType(ContentType.BirthDateMonth),
         )
         DobField(
             value = state.dobYear,
             label = "YYYY",
             onValueChange = onDobYearChanged,
+            imeAction = ImeAction.Done,
+            // Enter / Done on the last field is Next, once the date is complete.
+            onImeAction = { if (state.dobComplete) onConfirmDob() },
             modifier =
                 Modifier
                     .weight(1.4f)
-                    .focusRequester(yearFocus),
+                    .focusRequester(yearFocus)
+                    .backspaceMovesTo(monthFocus) { state.dobYear.isEmpty() }
+                    .autofillContentType(ContentType.BirthDateYear),
         )
     }
 }
@@ -342,6 +373,8 @@ private fun DobField(
     value: String,
     label: String,
     onValueChange: (String) -> Unit,
+    imeAction: ImeAction,
+    onImeAction: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
@@ -349,7 +382,8 @@ private fun DobField(
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = imeAction),
+        keyboardActions = KeyboardActions(onNext = { onImeAction() }, onDone = { onImeAction() }),
         colors = onboardingTextFieldColors(),
         modifier = modifier,
     )
@@ -384,7 +418,9 @@ private fun PoliciesStep(
     onAcceptPolicies: () -> Unit,
     onBackToDob: () -> Unit,
 ) {
-    val uriHandler = LocalUriHandler.current
+    // A tab over the app where the platform has one (Android Custom Tab, a new browser tab on the
+    // web), so reading a policy never drops the sign-up.
+    val openPolicy = rememberPolicyLinkOpener()
     StepTitle(
         title = "Review our policies",
         subtitle = "To continue, you'll need to accept our Terms of Service and Privacy Policy.",
@@ -392,12 +428,12 @@ private fun PoliciesStep(
     Spacer(modifier = Modifier.height(28.dp))
     PolicyReadRow(
         label = "Terms of Service",
-        onRead = { uriHandler.openUri(LegalLinks.TERMS_OF_SERVICE) },
+        onRead = { openPolicy(LegalLinks.TERMS_OF_SERVICE) },
     )
     Spacer(modifier = Modifier.height(12.dp))
     PolicyReadRow(
         label = "Privacy Policy",
-        onRead = { uriHandler.openUri(LegalLinks.PRIVACY_POLICY) },
+        onRead = { openPolicy(LegalLinks.PRIVACY_POLICY) },
     )
     Spacer(modifier = Modifier.height(28.dp))
     Text(
@@ -455,15 +491,23 @@ private fun AccountStep(
         subtitle = "Just an email and a strong password — everything else can wait.",
     )
     Spacer(modifier = Modifier.height(20.dp))
+    val emailFocus = rememberAutoFocusRequester()
+    val passwordFocus = remember { FocusRequester() }
     OutlinedTextField(
         value = state.email,
         onValueChange = onEmailChanged,
         label = { Text("Email") },
         singleLine = true,
         enabled = !state.isSubmitting,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+        keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
         colors = onboardingTextFieldColors(),
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .focusRequester(emailFocus)
+                // A new account: password managers offer to save the address and generate a password.
+                .autofillContentType(ContentType.NewUsername + ContentType.EmailAddress),
     )
     Spacer(modifier = Modifier.height(12.dp))
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
@@ -478,9 +522,14 @@ private fun AccountStep(
         trailingIcon = {
             PynapliPasswordVisibilityToggle(visible = passwordVisible) { passwordVisible = !passwordVisible }
         },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { if (!state.isSubmitting) onSubmitAccount() }),
         colors = onboardingTextFieldColors(),
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .focusRequester(passwordFocus)
+                .autofillContentType(ContentType.NewPassword),
     )
     state.accountNotice?.let { notice ->
         Spacer(modifier = Modifier.height(12.dp))
@@ -519,6 +568,8 @@ private fun VerifyEmailStep(
     onResendSignupCode: () -> Unit,
     onUseDifferentEmail: () -> Unit,
     onStartSignupAgain: () -> Unit,
+    onSignIn: () -> Unit,
+    resendCooldownSecondsLeft: () -> Int,
 ) {
     StepTitle(
         title = "Check your email",
@@ -527,15 +578,23 @@ private fun VerifyEmailStep(
                 "It works for 30 minutes. If that address already has an account, the email says how to sign in instead.",
     )
     Spacer(modifier = Modifier.height(20.dp))
+    val codeFocus = rememberAutoFocusRequester()
+    // The holder submits the code on its own at six digits (OnboardingStateHolder.updateSignupCode);
+    // Done / Enter submits a shorter one so its "6-digit code" error shows.
     OutlinedTextField(
         value = state.signupCode,
         onValueChange = onSignupCodeChanged,
         label = { Text("6-digit code") },
         singleLine = true,
         enabled = !state.isSubmitting && !state.signupAttemptsSpent,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { if (!state.isSubmitting) onVerifySignupCode() }),
         colors = onboardingTextFieldColors(),
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .focusRequester(codeFocus)
+                .autofillContentType(ContentType.SmsOtpCode),
     )
     state.signupNotice?.let { notice ->
         Spacer(modifier = Modifier.height(12.dp))
@@ -564,8 +623,18 @@ private fun VerifyEmailStep(
             onClick = onVerifySignupCode,
         )
         Spacer(modifier = Modifier.height(10.dp))
-        TextButton(onClick = onResendSignupCode, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
-            Text("Send a new code")
+        // Ticks once a second while the wait lasts; the same wait for every address.
+        var secondsLeft by remember { mutableStateOf(resendCooldownSecondsLeft()) }
+        LaunchedEffect(state.resendAvailableAtEpochMs) {
+            secondsLeft = resendCooldownSecondsLeft()
+            while (secondsLeft > 0) {
+                delay(1_000)
+                secondsLeft = resendCooldownSecondsLeft()
+            }
+        }
+        val canResend = !state.isSubmitting && secondsLeft == 0
+        TextButton(onClick = onResendSignupCode, enabled = canResend, modifier = Modifier.handCursor(enabled = canResend)) {
+            Text(if (secondsLeft > 0) "Send a new code in ${formatCountdown(secondsLeft)}" else "Send a new code")
         }
         // Always there: if no email ever arrives, a new code can't help either; a new sign-up can.
         TextButton(onClick = onStartSignupAgain, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
@@ -575,7 +644,14 @@ private fun VerifyEmailStep(
     TextButton(onClick = onUseDifferentEmail, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
         Text("Use a different email")
     }
+    // Shown to everyone, whatever the address: the email itself tells an existing member to sign in.
+    TextButton(onClick = onSignIn, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
+        Text("Already have an account? Sign in")
+    }
 }
+
+/** 0:27 style. */
+private fun formatCountdown(seconds: Int): String = "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 
 @Composable
 private fun LocationStep(
@@ -618,7 +694,11 @@ private fun ProfileStep(
     onPickPhoto: () -> Unit,
     onFinishProfile: () -> Unit,
 ) {
+    // Everything here is optional (Grindr parity): a blank name and no photo still finish, and the
+    // grid shows either way (OnboardingStateHolder.finishProfile).
     val hasPhoto = mediaState.profileItems.isNotEmpty()
+    // The owner's own copy of the chosen photo (visible to them while it is in review).
+    val photoUrl = mediaState.primaryOwnerProfilePhotoUrl()
     StepTitle(
         title = "Your profile",
         subtitle = "Add a photo and a display name — or skip and do it later.",
@@ -638,6 +718,15 @@ private fun ProfileStep(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(64.dp),
         )
+        if (photoUrl != null) {
+            // Drawn over the placeholder, which stays visible while the image loads.
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = "Your profile photo",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
     }
     Spacer(modifier = Modifier.height(12.dp))
     if (hasPhoto) {
@@ -679,13 +768,17 @@ private fun ProfileStep(
         },
         singleLine = true,
         enabled = !state.isSubmitting,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions =
+            KeyboardActions(onDone = { if (!state.isSubmitting && !mediaState.isUploadingProfile) onFinishProfile() }),
         colors = onboardingTextFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
     StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(20.dp))
+    // The stepper's last button: it finishes, so it says so.
     SubmittingButton(
-        text = "Next",
+        text = "Done",
         isSubmitting = state.isSubmitting || mediaState.isUploadingProfile,
         onClick = onFinishProfile,
     )

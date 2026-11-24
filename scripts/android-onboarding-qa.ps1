@@ -313,10 +313,11 @@ function Complete-SignupToLocationStep {
     Assert-NoAppErrorText $codeXml "Check-your-email step"
     $signupCode = Get-SignupCode $Email
     Write-Host "[ok] Sign-up code received from the local dev mailer"
-    Enter-Text "6-digit code" $signupCode
-    Hide-Keyboard
+    # The sixth digit submits on its own and the step moves on, so the typed code can't be read
+    # back (and there is no Verify to tap afterwards).
+    Enter-Text "6-digit code" $signupCode -SkipVerify
     $shots.checkEmail = Save-Screen "${Prefix}03b_check_email"
-    Tap-ExactText "Verify"
+    Hide-Keyboard
 
     # The session (and with it the OS notification prompt) only exists after the code is verified.
     Dismiss-NotificationPromptIfPresent
@@ -355,7 +356,7 @@ function Invoke-DeniedLocationPath {
     # --- photo). The typed-name save path is unit-tested; post-relaunch text
     # --- injection is unreliable on emulators, so QA exercises the skip flow.
     $shots.profile = Save-Screen "08_profile"
-    Tap-ExactText "Next"
+    Tap-ExactText "Done"
 
     # --- First grid (location denied -> useful empty state, no error text) ---
     Wait-ForAnyText @("Use current location", "Filters", "Grid") 45 | Out-Null
@@ -474,7 +475,7 @@ function Invoke-AllowedLocationPath {
     $profileXml = Dump-Ui "a07_profile" -Keep
     Assert-NoAppErrorText $profileXml "Profile step (location allowed)"
     $shots.profile = Save-Screen "a07_profile"
-    Tap-ExactText "Next"
+    Tap-ExactText "Done"
 
     # --- First grid: real faces, not the location empty state ---
     $grid = Wait-ForSeededGrid 45

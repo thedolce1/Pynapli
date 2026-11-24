@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -19,15 +20,21 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -120,15 +127,33 @@ fun AuthScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        val emailFocus = rememberAutoFocusRequester()
+        val codeFocus = remember { FocusRequester() }
+        val passwordFocus = remember { FocusRequester() }
+        // Email -> (code) -> password -> submit; asking for a reset code submits from the email.
+        val emailLeadsToSubmit = resetting && !state.resetCodeSent
         OutlinedTextField(
             value = state.email,
             onValueChange = onEmailChanged,
             label = { Text("Email") },
             singleLine = true,
             enabled = !state.isSubmitting && !(resetting && state.resetCodeSent),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = if (emailLeadsToSubmit) ImeAction.Done else ImeAction.Next,
+                ),
+            keyboardActions =
+                KeyboardActions(
+                    onNext = { runCatching { passwordFocus.requestFocus() } },
+                    onDone = { if (!state.isSubmitting) onSubmit() },
+                ),
             colors = authTextFieldColors(),
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(emailFocus)
+                    .autofillContentType(ContentType.Username + ContentType.EmailAddress),
         )
 
         if (resetting) {
@@ -142,15 +167,22 @@ fun AuthScreen(
         }
         if (resetting && state.resetCodeSent) {
             Spacer(modifier = Modifier.height(12.dp))
+            // Shown in the clear, like the sign-up code: a 6-digit code is read off another screen.
+            LaunchedEffect(Unit) { runCatching { codeFocus.requestFocus() } }
             OutlinedTextField(
                 value = state.resetCode,
                 onValueChange = onResetCodeChanged,
                 label = { Text("6-digit code") },
                 singleLine = true,
                 enabled = !state.isSubmitting,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { runCatching { passwordFocus.requestFocus() } }),
                 colors = authTextFieldColors(),
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .focusRequester(codeFocus)
+                        .autofillContentType(ContentType.SmsOtpCode),
             )
         }
 
@@ -168,9 +200,14 @@ fun AuthScreen(
                 trailingIcon = {
                     PynapliPasswordVisibilityToggle(visible = passwordVisible) { passwordVisible = !passwordVisible }
                 },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (!state.isSubmitting) onSubmit() }),
                 colors = authTextFieldColors(),
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .focusRequester(passwordFocus)
+                        .autofillContentType(if (resetting) ContentType.NewPassword else ContentType.Password),
             )
         }
 

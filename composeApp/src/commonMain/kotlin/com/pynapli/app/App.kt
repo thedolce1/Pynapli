@@ -229,7 +229,12 @@ fun PynapliApp(
                     PynapliPerfMarks.markOnce(PynapliPerfMarks.ACCOUNT_SUBMIT)
                     scope.launch { graph.onboardingStateHolder.submitAccount() }
                 },
-                onSignupCodeChanged = graph.onboardingStateHolder::updateSignupCode,
+                onSignupCodeChanged = { code ->
+                    // The sixth digit submits on its own, once per entry (the holder decides when).
+                    if (graph.onboardingStateHolder.updateSignupCode(code)) {
+                        scope.launch { graph.onboardingStateHolder.verifySignupCode() }
+                    }
+                },
                 onVerifySignupCode = { scope.launch { graph.onboardingStateHolder.verifySignupCode() } },
                 onResendSignupCode = { scope.launch { graph.onboardingStateHolder.resendSignupCode() } },
                 onUseDifferentEmail = { scope.launch { graph.onboardingStateHolder.useDifferentEmail() } },
@@ -243,6 +248,7 @@ fun PynapliApp(
                 onShowBirthdayWheel = graph.onboardingStateHolder::showBirthdayWheel,
                 onWheelDateChange = graph.onboardingStateHolder::selectWheelDate,
                 onUseTypedBirthday = graph.onboardingStateHolder::useTypedBirthday,
+                resendCooldownSecondsLeft = graph.onboardingStateHolder::resendCooldownSecondsLeft,
                 testerDiagnosticLabel = platform.testerDiagnosticLabel,
             )
             // Composed after the stepper so the crop step draws above it; the main

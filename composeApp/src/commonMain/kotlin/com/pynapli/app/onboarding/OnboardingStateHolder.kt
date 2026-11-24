@@ -330,6 +330,7 @@ class OnboardingStateHolder(
                     signupNotice = null,
                     accountNotice = null,
                     signupAttemptsSpent = false,
+                    resendAvailableAtEpochMs = nowEpochMillis() + RESEND_COOLDOWN_MILLIS,
                     step = OnboardingStep.VerifyEmail,
                 )
             }
@@ -343,8 +344,26 @@ class OnboardingStateHolder(
         }
     }
 
-    fun updateSignupCode(value: String) {
-        _state.update { it.copy(signupCode = value.digits(SIGNUP_CODE_LENGTH), errorMessage = null) }
+    /**
+     * Takes the typed (or pasted, or autofilled) code. Returns true exactly when this change completed
+     * the code (it just reached [SIGNUP_CODE_LENGTH] digits) and a verify may go out, so the screen
+     * submits it on its own once per entry: never again for the same digits, never while a verify is
+     * in flight (and [verifySignupCode] guards that too), never once the guesses are spent.
+     */
+    fun updateSignupCode(value: String): Boolean {
+        val before = _state.value
+        val code = value.digits(SIGNUP_CODE_LENGTH)
+        _state.update { it.copy(signupCode = code, errorMessage = null) }
+        return code.length == SIGNUP_CODE_LENGTH &&
+            before.signupCode.length < SIGNUP_CODE_LENGTH &&
+            !before.isSubmitting &&
+            !before.signupAttemptsSpent
+    }
+
+    /** Whole seconds until "Send a new code" is offered again (0 when it is). The same for every address. */
+    fun resendCooldownSecondsLeft(): Int {
+        val left = _state.value.resendAvailableAtEpochMs - nowEpochMillis()
+        return if (left <= 0) 0 else ((left + 999) / 1_000).toInt()
     }
 
     /** Checks the emailed code; on success the account and session exist and the skippable steps start. */
@@ -407,6 +426,8 @@ class OnboardingStateHolder(
     suspend fun resendSignupCode() {
         val current = _state.value
         if (current.isSubmitting || current.signupAttemptsSpent) return
+        // Client-side pacing only (the server has its own silent caps); identical for every address.
+        if (resendCooldownSecondsLeft() > 0) return
         val token = pendingSignupToken
         if (token == null) {
             restartSignup(SIGNUP_EXPIRED_MESSAGE)
@@ -416,7 +437,12 @@ class OnboardingStateHolder(
         val sent = authStateHolder.resendSignupCode(email = current.email, signupToken = token)
         _state.update {
             if (sent) {
-                it.copy(isSubmitting = false, signupCode = "", signupNotice = RESENT_NOTICE)
+                it.copy(
+                    isSubmitting = false,
+                    signupCode = "",
+                    signupNotice = RESENT_NOTICE,
+                    resendAvailableAtEpochMs = nowEpochMillis() + RESEND_COOLDOWN_MILLIS,
+                )
             } else {
                 it.copy(isSubmitting = false, errorMessage = authStateHolder.state.value.errorMessage)
             }
@@ -454,6 +480,7 @@ class OnboardingStateHolder(
                 password = "",
                 signupCode = "",
                 signupNotice = null,
+                resendAvailableAtEpochMs = pending.startedAtEpochMs + RESEND_COOLDOWN_MILLIS,
                 errorMessage = null,
             )
         }
@@ -658,6 +685,9 @@ class OnboardingStateHolder(
         /** The server keeps a started sign-up this long (EmailSignupService.PENDING_LIFETIME). */
         const val PENDING_SIGNUP_LIFETIME_MILLIS = 24L * 60 * 60 * 1_000
         const val RESENT_NOTICE = "If this address can be used, a new code is on its way. Use the newest one."
+
+        /** How long "Send a new code" waits after a code went out. Client pacing, the same for every address. */
+        const val RESEND_COOLDOWN_MILLIS = 30_000L
         const val SIGNUP_EXPIRED_MESSAGE = "That sign-up has expired. Enter your email again to get a new code."
 
         /** The server's guess budget per sign-up (EmailSignupService.MAX_ATTEMPTS). */
@@ -784,6 +814,8 @@ data class OnboardingUiState(
     val signupNotice: String? = null,
     // The code step's guesses for this sign-up are used up: offer "Start again" instead of Verify.
     val signupAttemptsSpent: Boolean = false,
+    // When "Send a new code" is offered again (epoch ms); see OnboardingStateHolder.resendCooldownSecondsLeft.
+    val resendAvailableAtEpochMs: Long = 0L,
     // A neutral line on the Account step after "Start again".
     val accountNotice: String? = null,
     val acceptedTerms: Boolean = false,

@@ -391,13 +391,13 @@ async function authWalk() {
     try { sent = JSON.parse((signup && (await browser.requestBody(signup))) ?? '{}'); } catch {}
     check('auth walk: sign-up sent with the typed email and birthday', signup?.status === 202 && sent.email === email && sent.birthdate === '2000-06-01', `status=${signup?.status} birthdate=${sent.birthdate} emailMatches=${sent.email === email}`);
 
-    // Code: one field, Verify (wide).
+    // Code: one field, Verify (wide). The sixth digit submits on its own (Section 1), so no click:
+    // a click after it would land on the Location step's button.
     layout = await waitForLayout(browser, 'Code step', l => l.fields.length === 1 && l.wide.length >= 1);
     const code = await latestSignupCode(email);
+    since = browser.requests.length;
     await fillField(browser, layout, layout.fields[0], code);
     await authShot(browser, '04-code');
-    since = browser.requests.length;
-    await browser.click(layout.cx, layout.wide.find(w => w.top > layout.fields[0].bottom).y);
     const verify = await browser.waitForRequest('POST', '/v1/auth/email/signup/verify', { since });
     check('auth walk: the emailed code creates the account', verify?.status === 200, `status=${verify?.status}`);
     const stored = await browser.evaluate("!!localStorage.getItem('pynapli.auth.session.v1')");
@@ -413,7 +413,7 @@ async function authWalk() {
     const located = await browser.waitForRequest('POST', '/v1/location/current', { since });
     check('auth walk: the granted location reaches the server', located?.status === 200, `status=${located?.status}`);
 
-    // Profile: Add photo (wide), Display name, Next (wide, below the field). Skipped: blank name.
+    // Profile: Add photo (wide), Display name, Done (wide, below the field). Skipped: blank name.
     layout = await waitForLayout(browser, 'Profile step', l => l.fields.length === 1 && l.wide.some(w => w.top > l.fields[0].bottom));
     await authShot(browser, '06-profile');
     await browser.click(layout.cx, layout.wide.find(w => w.top > layout.fields[0].bottom).y);

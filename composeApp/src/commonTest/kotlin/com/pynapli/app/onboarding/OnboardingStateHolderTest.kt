@@ -245,6 +245,7 @@ class OnboardingStateHolderTest {
             assertNull(fixture.auth.state.value.session)
             assertEquals("signup-token", fixture.pendingStore.load()?.signupToken)
 
+            fixture.clockMillis += OnboardingStateHolder.RESEND_COOLDOWN_MILLIS
             fixture.onboarding.resendSignupCode()
 
             assertEquals(EmailSignupResendRequestDto("new@pynapli.local", "signup-token", null), fixture.authApi.resendRequests.single())
@@ -546,6 +547,7 @@ class OnboardingStateHolderTest {
             val fixture = Fixture()
             fixture.startSignup()
             // The email work may have been dropped: a new code can't help, a new sign-up can.
+            fixture.clockMillis += OnboardingStateHolder.RESEND_COOLDOWN_MILLIS
             fixture.onboarding.resendSignupCode()
             assertEquals(OnboardingStateHolder.RESENT_NOTICE, fixture.onboarding.state.value.signupNotice)
 
@@ -989,6 +991,85 @@ class OnboardingStateHolderTest {
         }
 
     @Test
+    fun theCodeAsksToSubmitOnceWhenItReachesSixDigits() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            assertFalse(fixture.onboarding.updateSignupCode("12345"))
+            assertTrue(fixture.onboarding.updateSignupCode("123456"), "the sixth digit completes the code")
+            // The same six digits again (a recomposition, an autofill echo) never submit twice.
+            assertFalse(fixture.onboarding.updateSignupCode("123456"))
+            assertFalse(fixture.onboarding.updateSignupCode("1234567"))
+        }
+
+    @Test
+    fun aPastedCodeCompletesInOneGoAndAWrongOneCanBeRetyped() =
+        runTest {
+            val fixture =
+                Fixture(
+                    authApi = FakeAuthApi(verifyResult = { AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right.")) }),
+                )
+            fixture.startSignup()
+
+            assertTrue(fixture.onboarding.updateSignupCode("12 34 56"))
+            fixture.onboarding.verifySignupCode()
+            // The failure clears the field, so the next complete entry submits again.
+            assertEquals("", fixture.onboarding.state.value.signupCode)
+            assertTrue(fixture.onboarding.updateSignupCode("654321"))
+        }
+
+    @Test
+    fun theCodeNeverAsksToSubmitWhileAVerifyIsInFlightOrTheGuessesAreSpent() =
+        runTest {
+            val fixture =
+                Fixture(
+                    authApi = FakeAuthApi(verifyResult = { AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right.")) }),
+                )
+            fixture.startSignup()
+            repeat(OnboardingStateHolder.CODE_ATTEMPTS_PER_SIGNUP) {
+                fixture.onboarding.updateSignupCode("000000")
+                fixture.onboarding.verifySignupCode()
+            }
+            assertTrue(fixture.onboarding.state.value.signupAttemptsSpent)
+
+            assertFalse(fixture.onboarding.updateSignupCode("123456"))
+        }
+
+    @Test
+    fun aNewCodeWaitsOutTheCooldownTheSameForEveryAddress() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            assertEquals(30, fixture.onboarding.resendCooldownSecondsLeft())
+
+            fixture.onboarding.resendSignupCode()
+            assertTrue(fixture.authApi.resendRequests.isEmpty(), "nothing goes out during the cooldown")
+
+            fixture.clockMillis += 12_500
+            assertEquals(18, fixture.onboarding.resendCooldownSecondsLeft())
+            fixture.clockMillis += 17_500
+            assertEquals(0, fixture.onboarding.resendCooldownSecondsLeft())
+            fixture.onboarding.resendSignupCode()
+            assertEquals(1, fixture.authApi.resendRequests.size)
+            // Each new code starts the wait again.
+            assertEquals(30, fixture.onboarding.resendCooldownSecondsLeft())
+        }
+
+    @Test
+    fun aResumedCodeStepCountsTheCooldownFromWhenTheSignUpStarted() =
+        runTest {
+            val fixture =
+                Fixture(
+                    pendingStore = InMemoryPendingSignupStore(PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS - 10_000)),
+                )
+
+            fixture.onboarding.resumePendingSignupIfNeeded()
+
+            assertEquals(20, fixture.onboarding.resendCooldownSecondsLeft())
+        }
+
+    @Test
     fun aFailingProgressStoreNeverHoldsTheMainSurfacesForever() =
         runTest {
             val fixture = Fixture(progressStore = InMemoryProgressStore().apply { failLoads = true })
@@ -1027,6 +1108,9 @@ class OnboardingStateHolderTest {
         val profileRepository: FakeOnboardingProfileRepository = FakeOnboardingProfileRepository(),
         val sessionStore: InMemorySessionStore = InMemorySessionStore(),
     ) {
+        /** The holder's clock; starts at [nowMillis] and tests move it forward (resend cooldown). */
+        var clockMillis: Long = nowMillis
+
         val auth =
             AuthStateHolder(
                 authRepository =
@@ -1044,7 +1128,7 @@ class OnboardingStateHolderTest {
                 profileRepository = profileRepository,
                 progressStore = progressStore,
                 todayProvider = { today },
-                nowEpochMillis = { nowMillis },
+                nowEpochMillis = { clockMillis },
                 pendingSignupStore = pendingStore,
             )
 
