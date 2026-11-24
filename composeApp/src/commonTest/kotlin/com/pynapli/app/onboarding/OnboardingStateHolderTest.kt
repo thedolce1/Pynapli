@@ -3,6 +3,7 @@ package com.pynapli.app.onboarding
 import com.pynapli.app.auth.AuthMode
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.PasswordRules
 import com.pynapli.shared.auth.SessionStore
 import com.pynapli.shared.auth.StoredSession
 import com.pynapli.shared.core.result.AppError
@@ -987,6 +988,23 @@ class OnboardingStateHolderTest {
 
             gate.complete(Unit)
             submitting.join()
+            assertEquals(OnboardingStep.VerifyEmail, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun tenCharactersIsEnoughButACommonPasswordIsRefusedBeforeTheServer() =
+        runTest {
+            val fixture = Fixture()
+            fixture.advanceToAccount()
+            fixture.onboarding.updateEmail("new@pynapli.local")
+
+            fixture.onboarding.updatePassword("QWERTY12345")
+            fixture.onboarding.submitAccount()
+            assertEquals(PasswordRules.TOO_COMMON_MESSAGE, fixture.onboarding.state.value.errorMessage)
+            assertNull(fixture.authApi.lastSignupRequest)
+
+            fixture.onboarding.updatePassword("ten-chars!")
+            fixture.onboarding.submitAccount()
             assertEquals(OnboardingStep.VerifyEmail, fixture.onboarding.state.value.step)
         }
 

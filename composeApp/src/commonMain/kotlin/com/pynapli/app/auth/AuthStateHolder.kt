@@ -1,6 +1,7 @@
 package com.pynapli.app.auth
 
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.PasswordRules
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.APPEAL_REASON_MAX_LENGTH
@@ -138,8 +139,9 @@ class AuthStateHolder(
             _state.update { it.copy(errorMessage = "Enter the 6-digit code from the email.") }
             return
         }
-        if (current.password.length < 12) {
-            _state.update { it.copy(errorMessage = "Password must be at least 12 characters.") }
+        // A new password: the shared rule (length + common-password list), as the server checks it.
+        PasswordRules.messageFor(current.password)?.let { message ->
+            _state.update { it.copy(errorMessage = message) }
             return
         }
         _state.update { it.copy(isSubmitting = true, errorMessage = null) }
@@ -348,8 +350,9 @@ class AuthStateHolder(
             _state.update { it.copy(errorMessage = "Enter a valid email address.") }
             return
         }
-        if (password.length < 12) {
-            _state.update { it.copy(errorMessage = "Password must be at least 12 characters.") }
+        // Sign-in checks the length only: a member whose password is on the common list still gets in.
+        if (password.length < PasswordRules.MIN_LENGTH) {
+            _state.update { it.copy(errorMessage = PasswordRules.TOO_SHORT_MESSAGE) }
             return
         }
         _state.update {

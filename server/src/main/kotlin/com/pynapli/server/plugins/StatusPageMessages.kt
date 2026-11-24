@@ -1,5 +1,7 @@
 package com.pynapli.server.plugins
 
+import com.pynapli.shared.auth.PasswordRules
+
 internal fun userSafeMessage(code: String): String =
     when (code) {
         "EMAIL_ALREADY_EXISTS" -> "An account already exists for this email."
@@ -34,7 +36,8 @@ internal fun userSafeMessage(code: String): String =
         "ACCOUNT_NOT_ACTIVE" -> "This account is suspended. If you think that's a mistake, you can appeal."
         "ACCOUNT_NOT_RESTRICTED" -> "This account isn't suspended. Try signing in."
         "INVALID_EMAIL" -> "Enter a valid email address."
-        "PASSWORD_TOO_SHORT" -> "Password must be at least 12 characters."
+        "PASSWORD_TOO_SHORT" -> PasswordRules.TOO_SHORT_MESSAGE
+        "PASSWORD_TOO_COMMON" -> PasswordRules.TOO_COMMON_MESSAGE
         "PROFILE_NOT_FOUND" -> "Profile was not found."
         "INVALID_DISPLAY_NAME" -> "Display name must be 2 to 32 characters."
         "INVALID_BIRTHDATE" -> "Enter a valid birthdate."

@@ -65,7 +65,9 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   EmailSignupStartedDto`** `{verificationRequired: true, signupToken, codeLength: 6,
   codeExpiresInSeconds: 1800}` for every syntactically valid request, whether or not the address has
   an account. **No session.** Request errors are unchanged (`INVALID_EMAIL`, now also for anything but
-  one strict address, `PASSWORD_TOO_SHORT`, the age-gate and acceptance codes, `RATE_LIMITED`);
+  one strict address, `PASSWORD_TOO_SHORT` (under 10 characters), `PASSWORD_TOO_COMMON` (on the
+  shared common-password list, `PasswordRules` in `:shared`, checked case-insensitively; also on
+  password reset and change, never on sign-in), the age-gate and acceptance codes, `RATE_LIMITED`);
   `EMAIL_ALREADY_EXISTS` is never returned here any more. `503 SIGNUP_UNAVAILABLE` when no email provider is configured (for everyone).
 - `POST /v1/auth/email/signup/verify` (`EmailSignupVerifyRequestDto` `{email, code, signupToken,
   deviceId?, platform?, appVersion?}`) answers `200 AuthSessionDto` (the session sign-up used to

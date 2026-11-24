@@ -82,7 +82,7 @@ class EmailSignupService(
         // The visible limit is per address AND client address, so someone elsewhere can't use it to
         // stop the owner signing up; the per-device one stops one install spraying addresses.
         rateLimitGuard.enforce(RateLimitedAction.AUTH_SIGNUP, addressAndClient(account, clientIp), deviceId)
-        validator.validateEmailPassword(email, password)
+        validator.validateNewPassword(email, password)
         if (!EmailAddressRules.isStrict(account)) throw AuthException("INVALID_EMAIL")
         val ageGate =
             validator.validateSignupAgeGate(
@@ -192,7 +192,7 @@ class EmailSignupService(
         appVersion: String?,
     ): AuthSessionDto {
         rateLimitGuard.enforce(RateLimitedAction.AUTH_DEV_SIGNUP, DEV_SIGNUP_SUBJECT)
-        validator.validateEmailPassword(email, password)
+        validator.validateNewPassword(email, password)
         val account = normalizeEmail(email)
         if (!EmailAddressRules.isStrict(account)) throw AuthException("INVALID_EMAIL")
         val ageGate =

@@ -1,6 +1,7 @@
 package com.pynapli.app.auth
 
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.PasswordRules
 import com.pynapli.shared.auth.SessionStore
 import com.pynapli.shared.auth.StoredSession
 import com.pynapli.shared.core.result.AppError
@@ -98,7 +99,12 @@ class AuthStateHolderTest {
             holder.updateResetCode("12-34 56x")
             holder.updatePassword("short")
             holder.submit()
-            assertEquals("Password must be at least 12 characters.", holder.state.value.errorMessage)
+            assertEquals("Password must be at least 10 characters.", holder.state.value.errorMessage)
+
+            holder.updatePassword("Password1234")
+            holder.submit()
+            assertEquals(PasswordRules.TOO_COMMON_MESSAGE, holder.state.value.errorMessage)
+            assertTrue(api.resets.isEmpty(), "a common new password never reaches the server")
 
             holder.updatePassword("a-new-password-123")
             holder.submit()

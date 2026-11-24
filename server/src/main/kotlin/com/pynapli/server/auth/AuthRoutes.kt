@@ -122,6 +122,7 @@ fun authStatusFor(code: String): HttpStatusCode =
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_EMAIL",
         "PASSWORD_TOO_SHORT",
+        "PASSWORD_TOO_COMMON",
         "INVALID_BIRTHDATE",
         "BIRTHDATE_REQUIRED",
         "AGE_RESTRICTED",

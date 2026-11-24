@@ -106,7 +106,8 @@ half of "Membership Privacy (no account oracles)" above.
    `@`, no whitespace, control characters, commas, semicolons, angle brackets, double quotes or
    backticks (an apostrophe is fine in the local part: `o'brien@example.com`), local part
    at most 64 and whole address at most 254 characters, a dotted domain of letters/digits/hyphens;
-   12+ character password; the age gate; 18+/Terms/Privacy acceptances; those errors are about the
+   10+ character password that is not on the common-password list (`PasswordRules`, shared by client
+   and server, checked case-insensitively before any address lookup); the age gate; 18+/Terms/Privacy acceptances; those errors are about the
    request, not the address) and then answers **202 with the same `EmailSignupStartedDto`** for every
    valid request: `{verificationRequired, signupToken, codeLength, codeExpiresInSeconds}`. The token is
    random for everyone. On the request the server does the same work for any address: rate limits,

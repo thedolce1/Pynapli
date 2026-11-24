@@ -171,6 +171,34 @@ class AuthServiceTest {
         }
 
     @Test
+    fun tenCharactersIsEnoughAndNineIsNot() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+
+            val nine = assertFailsWith<AuthException> { signup(service, repository, email = "nine@example.com", password = "nine-char") }
+            assertEquals("PASSWORD_TOO_SHORT", nine.code)
+
+            val session = signup(service, repository, email = "ten@example.com", password = "ten-chars!")
+            assertTrue(session.accessToken.isNotBlank())
+        }
+
+    @Test
+    fun aCommonPasswordIsRefusedTheSameForAMemberAndAStranger() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            signup(service, repository, email = "member@example.com")
+
+            // Checked before any address lookup, case-insensitively: identical for both addresses.
+            val member = assertFailsWith<AuthException> { signup(service, repository, email = "member@example.com", password = "Password123") }
+            val stranger = assertFailsWith<AuthException> { signup(service, repository, email = "stranger@example.com", password = "PASSWORD123") }
+
+            assertEquals("PASSWORD_TOO_COMMON", member.code)
+            assertEquals(member.code, stranger.code)
+        }
+
+    @Test
     fun signupStoresBirthdateAndAcceptanceState() =
         runBlocking {
             val repository = InMemoryAuthRepository()

@@ -2,6 +2,7 @@ package com.pynapli.app.onboarding
 
 import androidx.compose.runtime.Immutable
 import com.pynapli.app.auth.AuthStateHolder
+import com.pynapli.shared.auth.PasswordRules
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
@@ -295,8 +296,10 @@ class OnboardingStateHolder(
             _state.update { it.copy(errorMessage = "Enter a valid email address.") }
             return
         }
-        if (current.password.length < MIN_PASSWORD_LENGTH) {
-            _state.update { it.copy(errorMessage = "Password must be at least $MIN_PASSWORD_LENGTH characters.") }
+        // The shared new-password rule (length + common-password list); the server checks the same
+        // before it looks at the address, so the copy never differs between addresses.
+        PasswordRules.messageFor(current.password)?.let { message ->
+            _state.update { it.copy(errorMessage = message) }
             return
         }
         if (!current.acceptedTerms || !current.acceptedPrivacy) {
@@ -677,7 +680,7 @@ class OnboardingStateHolder(
 
     companion object {
         const val MINIMUM_AGE_YEARS = 18
-        const val MIN_PASSWORD_LENGTH = 12
+        const val MIN_PASSWORD_LENGTH = PasswordRules.MIN_LENGTH
         const val MAX_PHOTO_NUDGE_SESSIONS = 3
         const val DISPLAY_NAME_MAX_LENGTH = 15
         const val SIGNUP_CODE_LENGTH = 6
