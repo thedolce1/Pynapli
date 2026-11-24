@@ -122,6 +122,7 @@ class ContactBlockEdgesIntegrationTest :
                 graph.messaging.acceptPartnerInvite(A, conversationId)
                 graph.messaging.acceptPartnerInvite(X, conversationId)
                 graph.messaging.sendMessage(X, conversationId, SendMessageRequestDto(body = "Hello all"))
+
                 suspend fun xSort() =
                     graph.messaging
                         .listConversations(X, null)
@@ -132,7 +133,11 @@ class ContactBlockEdgesIntegrationTest :
 
                 // C reads; A (hiding from X) never does: X's message shows read.
                 graph.messaging.markConversationRead(C, conversationId)
-                val mine = graph.messaging.getConversationDetail(X, conversationId).messages.single { it.body == "Hello all" }
+                val mine =
+                    graph.messaging
+                        .getConversationDetail(X, conversationId)
+                        .messages
+                        .single { it.body == "Hello all" }
                 assertEquals("read", mine.deliveryStatus)
 
                 // A writes and deletes, changes the timer, then leaves.
@@ -141,7 +146,11 @@ class ContactBlockEdgesIntegrationTest :
                 assertEquals(before, xSort(), "A's deletion didn't move it")
                 graph.messaging.setConversationExpiry(A, conversationId, 3_600)
                 assertEquals(before, xSort(), "A's timer change didn't move it")
-                val notices = graph.messaging.getConversationDetail(X, conversationId).messages.filter { it.messageType == "system" }
+                val notices =
+                    graph.messaging
+                        .getConversationDetail(X, conversationId)
+                        .messages
+                        .filter { it.messageType == "system" }
                 assertTrue(notices.isNotEmpty(), "the timer change is explained")
                 assertTrue(notices.all { it.senderUserId == NOBODY }, "a notice by A is attributed to nobody")
                 graph.messaging.leaveConversation(A, conversationId)
@@ -156,7 +165,11 @@ class ContactBlockEdgesIntegrationTest :
                 // After A removes the address, the notice A wrote while hidden still names nobody.
                 graph.execute("UPDATE messages SET created_at = created_at - interval '1 minute' WHERE sender_user_id = ?", A)
                 graph.contactBlocks.remove(A, X_ADDRESS)
-                val afterRelease = graph.messaging.getConversationDetail(X, conversationId).messages.filter { it.messageType == "system" }
+                val afterRelease =
+                    graph.messaging
+                        .getConversationDetail(X, conversationId)
+                        .messages
+                        .filter { it.messageType == "system" }
                 assertTrue(afterRelease.isNotEmpty() && afterRelease.all { it.senderUserId == NOBODY }, "the tombstone keeps it unattributed")
             }
         }

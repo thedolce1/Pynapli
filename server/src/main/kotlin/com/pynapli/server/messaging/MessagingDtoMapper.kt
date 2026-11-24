@@ -61,8 +61,7 @@ internal class MessagingDtoMapper(
      * attributed to nobody; the same for one they wrote before a release (a tombstone). Every other
      * message from such a person never reaches this point (SQL).
      */
-    private fun MessageRecord.withoutHiddenSender(rules: com.pynapli.server.contactblocks.ContactBlockViewerRules): MessageRecord =
-        if (rules.hidesAct(senderUserId, createdAt)) copy(senderUserId = SYSTEM_SENDER) else this
+    private fun MessageRecord.withoutHiddenSender(rules: com.pynapli.server.contactblocks.ContactBlockViewerRules): MessageRecord = if (rules.hidesAct(senderUserId, createdAt)) copy(senderUserId = SYSTEM_SENDER) else this
 
     private suspend fun toVisibleDto(
         record: ConversationRecord,

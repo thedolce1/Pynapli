@@ -106,7 +106,13 @@ class PineappleLikeNoteIntegrationTest :
         "the recipient sees the note on the Pineapple Like in Activity" {
             runBlocking {
                 val service = swipeService()
-                val activity = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
+                val activity =
+                    JdbcActivityRepository(
+                        dataSource,
+                        contactBlockTokens =
+                            com.pynapli.server.contactblocks.ContactBlockTokens
+                                .localDevelopment(),
+                    )
                 val (a, b) = seedPair()
                 dataSource.grantInventory(a, "pineapple_like", 1)
                 service.submitAction(
