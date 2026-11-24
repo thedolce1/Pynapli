@@ -93,6 +93,8 @@ fun PynapliApp(
                 graph.favoritesStateHolder?.clear()
                 // And its location: the next account sends its own first fix (Section 1, B2).
                 graph.locationStateHolder.reset()
+                // And its location-sharing record: the next account's is derived afresh.
+                graph.locationSharingGate?.clearForSignOut()
             }
         }
         PynapliAppEffects(

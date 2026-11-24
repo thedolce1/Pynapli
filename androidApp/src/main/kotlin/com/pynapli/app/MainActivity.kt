@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.location.LocationSettingsAccess
+import com.pynapli.app.location.LocationSharingGate
 import com.pynapli.app.location.ProvideLocationSettingsAccess
 import com.pynapli.app.location.refreshInBackground
 import com.pynapli.app.location.shareAndRefresh
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : ComponentActivity() {
     // The DI graph (SQLDelight open + 5 Ktor clients + ~25 state holders) is built off the main
@@ -161,9 +163,16 @@ class MainActivity : ComponentActivity() {
         pendingDeepLinkIntent = null
         if (isStarted) startRealtimeStreams(graph)
         // Cold start counts as a return: onStart ran before the graph existed, so once the stored
-        // session has settled, send a fresh fix the same silent way (only if it changed cell).
+        // session has settled, send a fresh fix the same silent way (only if it changed cell). Waits
+        // (bounded) for the first live Grid answer, which is what tells a member who shared before
+        // this device kept a record apart from one who never did (LocationSharingGate rule (b)).
         activityScope.launch {
-            graph.authStateHolder.state.first { !it.isCheckingSession }
+            val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
+            if (!settled.authenticated) return@launch
+            withTimeoutOrNull(COLD_START_GRID_ANSWER_WAIT_MILLIS) {
+                graph.pynapliAppGraph.gridStateHolder.serverHasLocation
+                    .first { it != null }
+            }
             refreshLocationOnResume()
         }
         // Swap the boot splash for the real app last, once the graph's collaborators are wired.
@@ -411,10 +420,20 @@ class MainActivity : ComponentActivity() {
         if (!graph.authStateHolder.state.value.authenticated || !hasLocationPermission()) return
         val gate = graph.pynapliAppGraph.locationSharingGate ?: return
         activityScope.launch {
-            if (!gate.allowsSilentRefresh(onboardingActive(graph))) return@launch
+            if (!silentRefreshAllowed(graph, gate)) return@launch
             takeResumeFix()
         }
     }
+
+    private suspend fun silentRefreshAllowed(
+        graph: AndroidAppGraph,
+        gate: LocationSharingGate,
+    ): Boolean =
+        gate.allowsSilentRefresh(
+            onboardingActive = onboardingActive(graph),
+            osPermissionGranted = hasLocationPermission(),
+            serverHasLocation = graph.pynapliAppGraph.gridStateHolder.serverHasLocation.value == true,
+        )
 
     private fun onboardingActive(graph: AndroidAppGraph): Boolean =
         graph.pynapliAppGraph.onboardingStateHolder
@@ -460,7 +479,7 @@ class MainActivity : ComponentActivity() {
         activityScope.launch {
             // Checked again: a one-shot fix can take seconds, and a sign-up may have started.
             if (!graph.authStateHolder.state.value.authenticated) return@launch
-            if (!gate.allowsSilentRefresh(onboardingActive(graph))) return@launch
+            if (!silentRefreshAllowed(graph, gate)) return@launch
             graph.pynapliAppGraph.locationStateHolder.refreshInBackground(
                 DeviceLocation(
                     latitude = currentLocation.latitude,
@@ -511,3 +530,6 @@ private const val TAG = "MainActivity"
 
 // A last-known fix younger than this is fresh enough for the resume refresh (no new GPS work).
 private const val RESUME_FIX_MAX_AGE_NANOS = 2L * 60 * 1_000_000_000
+
+// How long a cold start waits for the first live Grid answer before deciding on the resume refresh.
+private const val COLD_START_GRID_ANSWER_WAIT_MILLIS = 20_000L

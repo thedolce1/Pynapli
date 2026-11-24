@@ -919,6 +919,31 @@ class GridInstantLoadTest {
     private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km", tone = GridCardTone.Warm)
 
     @Test
+    fun serverHasLocationFollowsLiveAnswersOnlyAndResetsOnSignOut() =
+        runTest {
+            val repository =
+                ScriptedGridFeedRepository(
+                    listOf(
+                        GridFeedOutcome.Failure(GridFeedException(code = "LOCATION_REQUIRED", message = "Share your location.")),
+                        GridFeedOutcome.Success(GridFeedUi(cards = listOf(card("a")))),
+                        GridFeedOutcome.Failure(GridFeedException(code = "NETWORK_ERROR", message = "No connection.")),
+                    ),
+                )
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore(initial = listOf(card("cached"))))
+            assertNull(stateHolder.serverHasLocation.value, "cached cards say nothing about the server")
+
+            stateHolder.load()
+            assertEquals(false, stateHolder.serverHasLocation.value)
+            stateHolder.load()
+            assertEquals(true, stateHolder.serverHasLocation.value)
+            stateHolder.load()
+            assertEquals(true, stateHolder.serverHasLocation.value, "a network error changes nothing")
+
+            stateHolder.clearForSignOut()
+            assertNull(stateHolder.serverHasLocation.value)
+        }
+
+    @Test
     fun returningToTheGridTabKeepsFreshCardsWithoutARefetch() =
         runTest {
             val repository = FakeGridFeedRepository(GridFeedUi(cards = listOf(card("a"), card("b"))))
