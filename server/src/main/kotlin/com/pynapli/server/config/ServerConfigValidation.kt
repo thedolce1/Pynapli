@@ -331,7 +331,7 @@ private fun MutableList<ServerConfigIssue>.requireNonBlank(
     require(!value.isNullOrBlank(), code, message)
 }
 
-private fun ServerConfig.isProductionLikeEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_LIKE_ENVIRONMENTS
+internal fun ServerConfig.isProductionLikeEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_LIKE_ENVIRONMENTS
 
 private fun ServerConfig.isProductionEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_ENVIRONMENTS
 

@@ -2,11 +2,14 @@ package com.pynapli.server.metinperson
 
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartners
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartnersVisibleTo
+import com.pynapli.server.metinperson.JdbcMetInPersonSql.keyMatches
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.slf4j.LoggerFactory
 import java.sql.Connection
+import java.time.Instant
 import java.util.UUID
 
 /**
@@ -15,11 +18,18 @@ import java.util.UUID
  * conversation with (participant rows are never deleted), what they received by their subject token.
  * Deletion anonymises the user row instead of deleting it, so these statements run inside the deletion
  * transaction.
+ *
+ * Both refuse loudly when the configured key does not match the stored check value: with the wrong key
+ * the recomputed tokens match nothing, so a deletion would silently leave the person's confirmations
+ * behind and an export would silently omit them. The exception rolls the deletion back (the person can
+ * retry once the key is fixed) and the error log is the alert.
  */
 class MetInPersonAccountData(
     private val tokens: MetInPersonTokens,
 ) {
     companion object {
+        private val logger = LoggerFactory.getLogger(MetInPersonAccountData::class.java)
+
         /** With the local development key (tests and local runs). */
         fun localDevelopment(): MetInPersonAccountData = MetInPersonAccountData(MetInPersonTokens.localDevelopment())
     }
@@ -28,6 +38,7 @@ class MetInPersonAccountData(
         connection: Connection,
         userId: UUID,
     ) {
+        connection.requireKey("account deletion")
         val given = connection.conversationPartners(userId).map { tokens.pair(userId, it) }
         if (given.isNotEmpty()) {
             connection.prepareStatement("DELETE FROM vouches WHERE pair_token = ANY(?)").use { statement ->
@@ -79,6 +90,7 @@ class MetInPersonAccountData(
         userId: UUID,
         viewerContactToken: String,
     ): JsonObject {
+        connection.requireKey("data export")
         val partners = connection.conversationPartnersVisibleTo(userId, viewerContactToken).toList()
         val subjectByToken = partners.associateBy { tokens.pair(userId, it) }
         val given =
@@ -143,6 +155,12 @@ class MetInPersonAccountData(
             put("confirmationsYouGave", given)
             put("yourBadge", badge)
         }
+    }
+
+    private fun Connection.requireKey(operation: String) {
+        if (keyMatches(tokens, Instant.now())) return
+        logger.error("Met in person key check failed during {}; refusing instead of leaving confirmations behind", operation)
+        throw IllegalStateException("MET_IN_PERSON_KEY_MISMATCH")
     }
 
     private fun Connection.displayNames(userIds: Set<UUID>): Map<UUID, String> {

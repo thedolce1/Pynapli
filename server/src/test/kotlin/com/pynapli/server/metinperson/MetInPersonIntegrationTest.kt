@@ -11,6 +11,7 @@ import com.pynapli.server.profile.toDto
 import com.pynapli.server.profilelink.JdbcProfileLinkRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.server.testsupport.raceTogether
+import com.pynapli.server.testsupport.testServerConfig
 import com.pynapli.shared.network.dto.ConfirmMetInPersonRequestDto
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.MeDto
@@ -43,7 +44,7 @@ import kotlin.test.assertTrue
 class MetInPersonIntegrationTest {
     private val dataSource = PynapliTestDatabase.dataSource
     private val clock = MetInPersonTestClock(Instant.parse("2026-11-18T12:00:00Z"))
-    private val tokens = MetInPersonTokens("met-in-person-integration-key-0123456789")
+    private val tokens = MetInPersonTokens(INTEGRATION_KEY)
     private val fx = MetInPersonFixtures(dataSource, clock)
     private val service =
         MetInPersonService(
@@ -717,7 +718,53 @@ class MetInPersonIntegrationTest {
             )
             assertEquals(0, MetInPersonBadgeBatch(dataSource, wrong, clock, Random(1)).runPassNow())
             assertEquals(1, fx.vouchRows())
+
+            // Deletion and export refuse loudly instead of silently leaving or omitting confirmations.
+            val wrongData = MetInPersonAccountData(wrong)
+            assertFailsWith<IllegalStateException> {
+                JdbcAccountLifecycleRepository(dataSource, ContactBlockTokens.localDevelopment(), wrongData).deleteAccount(voucher)
+            }
+            assertEquals(1, fx.vouchRows(), "the deletion rolled back")
+            assertEquals(0, fx.count("SELECT count(*) FROM users WHERE id = ? AND deleted_at IS NOT NULL", voucher))
+            assertFailsWith<IllegalStateException> {
+                JdbcAccountDataExportArchiver(dataSource, clock, ContactBlockTokens.localDevelopment(), wrongData).buildArchive(voucher)
+            }
         }
+    }
+
+    @Test
+    fun startupRefusesAnotherKeyInStagingAndProduction() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            val voucher = fx.member("Alex")
+            confirm(voucher, fx.talked(voucher, subject), subject)
+            val matching = testServerConfig().copy(environment = "staging", metInPersonTokenSecret = INTEGRATION_KEY)
+            val other = "another-met-in-person-key-0123456789"
+
+            com.pynapli.server.dependencies.verifyMetInPersonKeyAtStartup(matching, dataSource)
+            com.pynapli.server.dependencies.verifyMetInPersonKeyAtStartup(
+                matching.copy(environment = "local", metInPersonTokenSecret = other),
+                dataSource,
+            )
+            listOf("staging", "production").forEach { environment ->
+                assertFailsWith<IllegalStateException> {
+                    com.pynapli.server.dependencies.verifyMetInPersonKeyAtStartup(
+                        matching.copy(environment = environment, metInPersonTokenSecret = other),
+                        dataSource,
+                    )
+                }
+            }
+            assertEquals(1, fx.count("SELECT count(*) FROM met_in_person_key"), "read only: nothing stored or replaced")
+        }
+    }
+
+    @Test
+    fun startupPassesBeforeTheFeatureWasEverUsed() {
+        com.pynapli.server.dependencies.verifyMetInPersonKeyAtStartup(
+            testServerConfig().copy(environment = "production", metInPersonTokenSecret = "never-used-met-in-person-key-0123456789"),
+            dataSource,
+        )
+        assertEquals(0, fx.count("SELECT count(*) FROM met_in_person_key"))
     }
 
     @Test
@@ -900,5 +947,9 @@ class MetInPersonIntegrationTest {
             val at = batch.randomTimeInWeekOf(clock.instant())
             assertTrue(!at.isBefore(start) && at.isBefore(start.plus(MetInPersonBadgeBatch.WEEK)))
         }
+    }
+
+    private companion object {
+        const val INTEGRATION_KEY = "met-in-person-integration-key-0123456789"
     }
 }

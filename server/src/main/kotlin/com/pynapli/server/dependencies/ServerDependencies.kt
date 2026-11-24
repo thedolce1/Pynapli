@@ -444,6 +444,7 @@ class ServerDependencies(
                 } else {
                     null
                 }
+            verifyMetInPersonKeyAtStartup(config, database.dataSource)
             val metInPerson = buildMetInPersonDependencies(config, database.dataSource, core.contactBlockVisibility)
             val messaging =
                 buildMessagingDependencies(

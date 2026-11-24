@@ -46,6 +46,15 @@ internal object JdbcMetInPersonSql {
         return matches
     }
 
+    /**
+     * Startup: the stored check value, read only (never stored here), so a server configured with a
+     * different K3 is caught before it serves anything. Null before the feature was first used.
+     */
+    fun Connection.storedKeyCheckValue(): String? =
+        prepareStatement("SELECT check_value FROM met_in_person_key WHERE id = 1").use { statement ->
+            statement.executeQuery().use { rs -> if (rs.next()) rs.getString(1) else null }
+        }
+
     fun Connection.viewerFacts(
         viewerUserId: UUID,
         conversationId: UUID,
