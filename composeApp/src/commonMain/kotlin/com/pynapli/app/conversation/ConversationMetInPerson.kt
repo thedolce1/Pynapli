@@ -161,7 +161,16 @@ internal class ConversationMetInPersonActions(
                 val updated = result.value
                 state.update { existing ->
                     existing.copy(
-                        metInPersonOffers = existing.metInPersonOffers?.map { if (it.subjectUserId == updated.subjectUserId) updated else it },
+                        // A take-back answer carries no name (the server never says whether one is
+                        // visible): keep the one already shown.
+                        metInPersonOffers =
+                            existing.metInPersonOffers?.map {
+                                if (it.subjectUserId == updated.subjectUserId) {
+                                    updated.copy(subjectDisplayName = updated.subjectDisplayName.ifEmpty { it.subjectDisplayName })
+                                } else {
+                                    it
+                                }
+                            },
                         metInPersonSheet = null,
                     )
                 }

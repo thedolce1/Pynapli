@@ -184,16 +184,20 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   `POST /v1/messages/threads/{id}/read` (opening the thread) clears a match on a thread with history
   for the opener; any message that becomes visible in the thread clears it for both, for good. Rules:
   [MESSAGING_SPEC.md](MESSAGING_SPEC.md) "New-matches rail".
-- "Met in person" (added 2026-11-19): `GET /v1/messages/threads/{id}/met-in-person` returns
+- "Met in person" (added 2026-11-19; routes moved 2026-11-24 so no id is in a path): `POST
+  /v1/met-in-person/offers` (`{ threadId }`) returns
   `MetInPersonOffersDto { offers }`, the viewer's own actions, one `MetInPersonOfferDto` per other
   participant they can confirm (`canConfirm`, with `partner` when they may tick that person's partner) or
   take back (`canWithdraw`, within 30 days). Clients ask for it when the conversation menu opens, never on
   open or refresh; it is not on the read mark, so it can never break opening a conversation. It depends
-  only on facts the viewer already knows (not their risk tier). `POST .../met-in-person`
-  (`{ subjectUserId, includePartner }`) and `.../met-in-person/withdraw` (`{ subjectUserId }`) answer with
-  the caller's own state for that person, never a count or anyone else's confirmation; every refusal is
-  `MET_IN_PERSON_NOT_AVAILABLE` (403); a repeat changes nothing; withdraw is silent; giving again after a
-  withdrawal waits 180 days. Nothing is notified. `PublicProfileDto.metInPerson` and
+  only on facts the viewer already knows (not their risk tier). `POST /v1/met-in-person/confirmations`
+  (`{ threadId, subjectUserId, includePartner, action: "confirm" | "withdraw" }`) answers with the
+  caller's own state for that person, never a count or anyone else's confirmation; a take-back answer
+  carries no name (`subjectDisplayName` is empty: clients keep the one they showed). Every refusal,
+  including a malformed body, an unknown action and nothing to take back, is `MET_IN_PERSON_NOT_AVAILABLE`
+  (403); a repeat confirm changes nothing; giving again after a withdrawal waits 180 days. The
+  conversation, the person and the action are never in the path, because request logs record paths.
+  Both routes share the per-user `met_in_person` rate limit (240 an hour). Nothing is notified. `PublicProfileDto.metInPerson` and
   `metInPersonAsCouple` are batch-computed booleans shown only with the person's opt-in
   (`DiscoverySettingsDto.showMetInPersonBadge`, default false). Rules:
   [TRUST_AND_SAFETY_SPEC.md](TRUST_AND_SAFETY_SPEC.md) "Met in person".

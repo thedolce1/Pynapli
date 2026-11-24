@@ -6,6 +6,7 @@ import com.pynapli.server.db.lockForTransaction
 import com.pynapli.server.db.withConnection
 import com.pynapli.server.messaging.MessagingException
 import com.pynapli.server.messaging.isConversationHiddenFor
+import com.pynapli.server.metinperson.JdbcMetInPersonSql.bothParticipated
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartners
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.countGivenSince
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.keyMatches
@@ -114,7 +115,13 @@ class MetInPersonService(
         }
     }
 
-    /** Works for 30 days after giving, even after the viewer left the conversation. */
+    /**
+     * Works for 30 days after giving, even after the viewer left the conversation, and by pair token
+     * alone: no contact-block filter, so someone now hiding from the viewer cannot keep a confirmation
+     * the viewer wants back. Both people must have been in the conversation. The answer never carries a
+     * name (a present or missing name would tell the viewer whether the person hides from them): the
+     * client keeps the name it already had. Nothing to take back is the same refusal as everything else.
+     */
     suspend fun withdraw(
         viewerUserId: UUID,
         conversationIdText: String,
@@ -122,36 +129,35 @@ class MetInPersonService(
     ): MetInPersonOfferDto {
         val conversationId = conversationIdText.toUuidOrRefuse()
         val subjectUserId = request.subjectUserId.toUuidOrRefuse()
-        val hidden = contactBlockVisibility.hiddenFrom(viewerUserId)
         return dataSource.withConnection { connection ->
             connection.inTransaction {
                 val now = clock.instant()
                 if (!keyMatches(tokens, now)) refuse()
                 lockForTransaction(LOCK_NAMESPACE, tokens.auditVoucher(viewerUserId))
-                val snapshot = snapshot(viewerUserId, conversationId, now, hidden) ?: refuse()
-                snapshot.stateFor(subjectUserId) ?: refuse()
-                val row = snapshot.rows[subjectUserId]
-                if (row != null && MetInPersonRules.canWithdraw(row, now)) {
-                    val day = MetInPersonRules.day(now)
-                    withdrawVouch(
-                        pairToken = row.pairToken,
-                        day = day,
-                        withdrawWindowStart = day.minus(MetInPersonRules.WITHDRAW_WINDOW),
-                    )
-                    // A couple confirmation is taken back as a whole.
-                    row.partnerToken?.let { partnerToken ->
-                        snapshot.partners
-                            .firstOrNull { tokens.partner(it) == partnerToken }
-                            ?.let { partnerUserId ->
-                                withdrawPartnerVouch(
-                                    partnerPairToken = tokens.pair(viewerUserId, partnerUserId),
-                                    partnerTokenOfSubject = tokens.partner(subjectUserId),
-                                    day = day,
-                                )
-                            }
-                    }
+                if (viewerUserId == subjectUserId || !bothParticipated(conversationId, viewerUserId, subjectUserId)) refuse()
+                val pairToken = tokens.pair(viewerUserId, subjectUserId)
+                val row = pairRows(listOf(pairToken))[pairToken]
+                if (row == null || !MetInPersonRules.canWithdraw(row, now)) refuse()
+                val day = MetInPersonRules.day(now)
+                withdrawVouch(
+                    pairToken = row.pairToken,
+                    day = day,
+                    withdrawWindowStart = day.minus(MetInPersonRules.WITHDRAW_WINDOW),
+                )
+                // A couple confirmation is taken back as a whole.
+                row.partnerToken?.let { partnerToken ->
+                    conversationPartners(viewerUserId)
+                        .firstOrNull { tokens.partner(it) == partnerToken }
+                        ?.let { partnerUserId ->
+                            withdrawPartnerVouch(
+                                partnerPairToken = tokens.pair(viewerUserId, partnerUserId),
+                                partnerTokenOfSubject = tokens.partner(subjectUserId),
+                                day = day,
+                            )
+                        }
                 }
-                snapshot(viewerUserId, conversationId, now, hidden)?.stateFor(subjectUserId) ?: refuse()
+                // Taken back: not given, and not givable again for 180 days.
+                MetInPersonOfferDto(subjectUserId = subjectUserId.toString(), subjectDisplayName = "")
             }
         }
     }

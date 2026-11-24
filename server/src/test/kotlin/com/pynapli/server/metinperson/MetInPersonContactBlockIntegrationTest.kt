@@ -92,11 +92,34 @@ class MetInPersonContactBlockIntegrationTest {
                 unknownConfirm,
                 refusalCode { service.confirm(viewer, chat.toString(), ConfirmMetInPersonRequestDto(hider.toString(), false)) },
             )
+            // Nothing given: taking back is the same refusal as an unknown conversation.
             assertEquals(
                 unknownConfirm,
                 refusalCode { service.withdraw(viewer, chat.toString(), WithdrawMetInPersonRequestDto(hider.toString())) },
             )
             assertEquals(0, fx.vouchRows(), "nothing was written")
+        }
+    }
+
+    @Test
+    fun aConfirmationOfSomeoneNowHidingCanStillBeTakenBackWithoutEchoingTheirName() {
+        runBlocking {
+            val viewer = fx.member("Xan")
+            val hider = fx.member("Zephyrine Hidewell")
+            val chat = fx.talked(viewer, hider)
+            assertTrue(service.confirm(viewer, chat.toString(), ConfirmMetInPersonRequestDto(hider.toString(), false)).given)
+
+            hide(hider, viewer)
+
+            val takenBack = service.withdraw(viewer, chat.toString(), WithdrawMetInPersonRequestDto(hider.toString()))
+            assertFalse(takenBack.given)
+            assertEquals("", takenBack.subjectDisplayName, "no name, hidden or not")
+            assertEquals(1, fx.count("SELECT count(*) FROM vouches WHERE withdrawn_at IS NOT NULL"))
+            assertEquals(
+                MetInPersonService.NOT_AVAILABLE,
+                refusalCode { service.withdraw(viewer, chat.toString(), WithdrawMetInPersonRequestDto(hider.toString())) },
+                "nothing left to take back",
+            )
         }
     }
 

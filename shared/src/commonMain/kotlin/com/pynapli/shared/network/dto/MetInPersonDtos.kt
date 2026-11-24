@@ -21,7 +21,7 @@ data class MetInPersonOfferDto(
     val partner: MetInPersonPartnerDto? = null,
 )
 
-/** `GET /v1/messages/threads/{id}/met-in-person`: the viewer's own actions, asked for when the menu opens. */
+/** `POST /v1/met-in-person/offers`: the viewer's own actions, asked for when the menu opens. */
 @Serializable
 data class MetInPersonOffersDto(
     val offers: List<MetInPersonOfferDto> = emptyList(),
@@ -43,3 +43,26 @@ data class ConfirmMetInPersonRequestDto(
 data class WithdrawMetInPersonRequestDto(
     val subjectUserId: String,
 )
+
+/**
+ * `POST /v1/met-in-person/offers`. The conversation travels in the body, never the path: request logs
+ * record paths, and a path per conversation would pin who looked at whom.
+ */
+@Serializable
+data class MetInPersonOffersRequestDto(
+    val threadId: String,
+)
+
+/** `POST /v1/met-in-person/confirmations`: confirm or take back, everything in the body (see above). */
+@Serializable
+data class MetInPersonConfirmationRequestDto(
+    val threadId: String,
+    val subjectUserId: String,
+    val includePartner: Boolean = false,
+    val action: String = ACTION_CONFIRM,
+) {
+    companion object {
+        const val ACTION_CONFIRM = "confirm"
+        const val ACTION_WITHDRAW = "withdraw"
+    }
+}

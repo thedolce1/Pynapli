@@ -167,11 +167,14 @@ voucher (whatever they toggle), not someone holding a copy of the database witho
 - At most 10 given per voucher per rolling 30 days, counting withdrawn and voided ones: taking one back
   never refunds its slot. A couple confirmation uses two. One voucher's writes are serialised by an
   advisory lock (keyed by a token), so concurrent confirms cannot pass the cap.
-- Taking back: silent, within 30 days of giving, also after leaving the conversation. After taking it
+- Taking back: silent, within 30 days of giving, also after leaving the conversation, and also when the
+  person now hides from the voucher ("Hide from people you know"): it works by pair token, without that
+  filter, and its answer never carries a name. Nothing to take back is the uniform refusal. After taking it
   back, the same pair cannot give it again for 180 days (the same uniform refusal); after that, or after
   the 24-month expiry, it is the same row restored with a new date (the first-given day never moves).
 - Only from the conversation overflow menu, at the voucher's initiative; the menu asks the server for
-  the viewer's own options when it opens (`GET .../met-in-person`), never on open or refresh. The subject
+  the viewer's own options when it opens (`POST /v1/met-in-person/offers`, the conversation in the body:
+  no id is ever in a Met in person path, since request logs record paths), never on open or refresh. The subject
   cannot request one and is never told, in any channel. Every refusal is `MET_IN_PERSON_NOT_AVAILABLE`.
 
 ### Couples
