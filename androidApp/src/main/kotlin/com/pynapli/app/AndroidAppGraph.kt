@@ -15,6 +15,7 @@ import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.debug.DebugQaFlags
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
+import com.pynapli.app.location.LocationSharingGate
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
 import com.pynapli.app.notifications.AndroidPushRegistrationStore
@@ -31,12 +32,14 @@ import com.pynapli.app.swipe.DebugFaultInjectingSwipeRepository
 import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.androidRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
+import com.pynapli.shared.settings.SqlDelightLocationSharingConsentStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.settings.SqlDelightPendingSignupStore
 import com.pynapli.shared.settings.SqlDelightUnderageStopStore
@@ -64,6 +67,10 @@ class AndroidAppGraph(
     // Terminal mid-session invalidation (revoked session / suspended account) flows from the
     // refresher to the auth state holder through this bus, dropping the app back to sign-in.
     private val sessionInvalidationBus = SessionInvalidationBus()
+
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -76,12 +83,14 @@ class AndroidAppGraph(
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                 )
         }
     private val authRepository =
         AuthRepository(
             apiClient = apiClient,
             sessionStore = sessionStore,
+            sessionLock = sessionLock,
         )
     private val playBillingPurchaseGateway =
         AndroidPlayBillingPurchaseGateway(
@@ -204,6 +213,8 @@ class AndroidAppGraph(
             gridOnScreen = common.gridStateHolder.onScreen,
             conversationOpen = common.conversationStateHolder.state.map { it.visible },
             appInForeground = appInForeground,
+            // Reset on sign-out, so the next account's sign-up never inherits a reached moment.
+            signedIn = authStateHolder.state.map { it.authenticated },
         )
 
     /** Keeps the device's push registration in step with the session and settings. */
@@ -215,6 +226,13 @@ class AndroidAppGraph(
             askMomentReached = notificationAskTiming.ready,
         )
 
+    /** Which accounts on this device shared location in the app; gates MainActivity's resume refresh. */
+    private val locationSharingGate =
+        LocationSharingGate(
+            store = SqlDelightLocationSharingConsentStore(database),
+            currentUserId = { authStateHolder.state.value.session?.userId },
+        )
+
     /** The object MainActivity hands to `PynapliApp`: every common holder plus this shell's pieces. */
     val pynapliAppGraph: PynapliAppGraph =
         common.appGraph(
@@ -223,6 +241,7 @@ class AndroidAppGraph(
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
             psyncStreamClient = psyncStreamClient,
+            locationSharingGate = locationSharingGate,
         )
 
     /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */

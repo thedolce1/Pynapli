@@ -21,14 +21,48 @@ class NotificationAskTimingTest {
         val grid = MutableStateFlow(false)
         val conversation = MutableStateFlow(false)
         val foreground = MutableStateFlow(true)
+        val signedIn = MutableStateFlow(true)
         val timing =
             NotificationAskTiming(
                 gridOnScreen = grid,
                 conversationOpen = conversation,
                 appInForeground = foreground,
+                signedIn = signedIn,
                 timeSource = scope.testScheduler.timeSource,
             )
     }
+
+    @Test
+    fun signingOutResetsItSoTheNextAccountsSignUpNeverPrompts() =
+        runTest {
+            val fixture = Fixture(this)
+            backgroundScope.launch { fixture.timing.run() }
+            fixture.grid.value = true
+            advanceTimeBy(15.seconds)
+            fixture.conversation.value = true
+            runCurrent()
+            assertTrue(fixture.timing.ready.value)
+
+            // Account A signs out; account B signs up and sits on the Location step for a while.
+            fixture.grid.value = false
+            fixture.conversation.value = false
+            fixture.signedIn.value = false
+            runCurrent()
+            assertFalse(fixture.timing.ready.value)
+            fixture.signedIn.value = true
+            advanceTimeBy(60.seconds)
+            runCurrent()
+            assertFalse(fixture.timing.ready.value, "B's sign-up must not inherit A's moment")
+
+            // A's 15 s of Grid did not carry over either: B needs the full dwell.
+            fixture.grid.value = true
+            advanceTimeBy(19.seconds)
+            runCurrent()
+            assertFalse(fixture.timing.ready.value)
+            advanceTimeBy(2.seconds)
+            runCurrent()
+            assertTrue(fixture.timing.ready.value)
+        }
 
     @Test
     fun signUpStepsNeverReachTheMomentAndTwentySecondsOfGridDo() =

@@ -18,14 +18,17 @@ import kotlin.time.TimeSource
 /**
  * When it is worth asking for notification permission (ONBOARDING_AUTH_SPEC, Permissions): after the
  * member has had the first Grid in front of them, not during sign-up. [ready] turns true, once per
- * process, after [dwell] of Grid on screen while the app is in the foreground (time adds up across
- * tab switches; a backgrounded app does not count), or as soon as a conversation opens, whichever
- * comes first. The shell still decides whether its OS needs a prompt at all, and asks only once.
+ * signed-in session, after [dwell] of Grid on screen while the app is in the foreground (time adds
+ * up across tab switches; a backgrounded app does not count), or as soon as a conversation opens,
+ * whichever comes first. Signing out resets it, so the next account's sign-up on this device never
+ * inherits a reached moment. The shell still decides whether its OS needs a prompt at all, and asks
+ * only once.
  */
 class NotificationAskTiming(
     private val gridOnScreen: Flow<Boolean>,
     private val conversationOpen: Flow<Boolean>,
     private val appInForeground: Flow<Boolean>,
+    private val signedIn: Flow<Boolean>,
     private val dwell: Duration = DEFAULT_GRID_DWELL,
     private val timeSource: TimeSource = TimeSource.Monotonic,
 ) {
@@ -35,8 +38,21 @@ class NotificationAskTiming(
     /** Grid time already seen in earlier stretches (before a tab switch or a trip to the background). */
     private var counted: Duration = Duration.ZERO
 
-    /** Runs until [ready] turns true, then returns. Launch once from the shell; cancellable. */
+    /** Runs until cancelled. Launch once from the shell. */
     suspend fun run() {
+        signedIn.distinctUntilChanged().collectLatest { isSignedIn ->
+            if (isSignedIn) {
+                awaitMoment()
+            } else {
+                // Signed out: the next account starts from nothing.
+                _ready.value = false
+                counted = Duration.ZERO
+            }
+        }
+    }
+
+    /** Returns once [ready] is true (at once if it already is). */
+    private suspend fun awaitMoment() {
         if (_ready.value) return
         coroutineScope {
             val dwellJob =

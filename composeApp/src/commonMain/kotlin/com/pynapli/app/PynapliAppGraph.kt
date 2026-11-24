@@ -73,6 +73,11 @@ class PynapliAppGraph(
     val matchCelebrationStateHolder: MatchCelebrationStateHolder? = null,
     /** "Hide from people you know" (Profile > Privacy); absent, the entry is hidden. */
     val contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
+    /**
+     * What each account chose about sharing location in the app; gates the silent resume refresh.
+     * Absent where the shell has no silent refresh (desktop, iOS for now).
+     */
+    val locationSharingGate: com.pynapli.app.location.LocationSharingGate? = null,
 )
 
 /**

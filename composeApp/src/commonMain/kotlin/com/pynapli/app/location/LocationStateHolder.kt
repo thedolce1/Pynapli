@@ -112,7 +112,7 @@ class LocationStateHolder(
         val result = repository.updateCurrentLocation(location.toCell())
         if (startedEpoch != epoch) {
             // Signed out while this was in flight: the answer belongs to the previous account.
-            return LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
+            return LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None, rejected = true)
         }
         return when (result) {
             is AppResult.Success -> {
@@ -139,7 +139,7 @@ class LocationStateHolder(
                         )
                     }
                 }
-                LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
+                LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None, rejected = true)
             }
         }
     }
@@ -193,9 +193,29 @@ suspend fun LocationStateHolder.refreshInBackground(
     return result
 }
 
+/**
+ * The member's own share (the Location step's "Share my location", the Grid's "Use current
+ * location"): [submitAndRefresh], then, when the fix was accepted, records that this account shared
+ * from inside the app, which is what later allows the silent resume refresh ([LocationSharingGate]).
+ */
+suspend fun LocationStateHolder.shareAndRefresh(
+    location: DeviceLocation,
+    grid: GridStateHolder,
+    sharingGate: LocationSharingGate?,
+): LocationUpdateResult {
+    val result = submitAndRefresh(location, grid)
+    if (!result.rejected) sharingGate?.recordSharedInApp()
+    return result
+}
+
 data class LocationUpdateResult(
     val submitted: Boolean,
     val gridRefresh: GridLocationRefresh,
+    /**
+     * The server refused it, or it belonged to an account that signed out meanwhile. False for a fix
+     * that needed no send (under 250 m): that one still counts as the member sharing.
+     */
+    val rejected: Boolean = false,
 )
 
 enum class GridLocationRefresh {

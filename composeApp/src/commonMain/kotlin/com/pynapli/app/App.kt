@@ -229,6 +229,11 @@ fun PynapliApp(
                 onStartSignupAgain = { scope.launch { graph.onboardingStateHolder.startSignupAgain() } },
                 onShareLocation = platform.onUseCurrentLocation,
                 onContinueFromLocation = graph.onboardingStateHolder::continueFromLocation,
+                onSkipLocation = {
+                    // Skipped in the app: no silent resume refresh for this account until it shares.
+                    scope.launch { graph.locationSharingGate?.recordSkipped() }
+                    graph.onboardingStateHolder.continueFromLocation()
+                },
                 onDisplayNameChanged = graph.onboardingStateHolder::updateDisplayName,
                 onPickPhoto = { platform.onPickMediaForAlbum(MediaAlbumKindUi.Profile) },
                 onFinishProfile = { scope.launch { graph.onboardingStateHolder.finishProfile() } },

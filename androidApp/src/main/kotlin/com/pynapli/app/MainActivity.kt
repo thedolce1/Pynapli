@@ -28,7 +28,7 @@ import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.location.LocationSettingsAccess
 import com.pynapli.app.location.ProvideLocationSettingsAccess
 import com.pynapli.app.location.refreshInBackground
-import com.pynapli.app.location.submitAndRefresh
+import com.pynapli.app.location.shareAndRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaPickTarget
 import com.pynapli.app.media.PickedMediaForUpload
@@ -384,28 +384,48 @@ class MainActivity : ComponentActivity() {
     private fun submitDeviceLocation(currentLocation: Location) {
         val graph = appGraph ?: return
         activityScope.launch {
-            graph.pynapliAppGraph.locationStateHolder.submitAndRefresh(
+            // The member's own share: also what later allows the silent resume refresh.
+            graph.pynapliAppGraph.locationStateHolder.shareAndRefresh(
                 DeviceLocation(
                     latitude = currentLocation.latitude,
                     longitude = currentLocation.longitude,
                     accuracyMeters = currentLocation.accuracyMetersOrNull(),
                 ),
                 graph.pynapliAppGraph.gridStateHolder,
+                graph.pynapliAppGraph.locationSharingGate,
             )
         }
     }
 
     /**
-     * Resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy): signed in, permission already
-     * granted, location services on, and no fix already pending, or it does nothing. Never prompts,
-     * never shows progress or errors, never logs the fix. A recent last-known fix is used as is;
-     * otherwise one cancellable one-shot request (onStop cancels it, like the foreground one).
+     * Resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy). Does nothing unless: signed in;
+     * no sign-up stepper on screen (its Location step asks, and nothing answers it silently); this
+     * account shared its location in the app on this device and has not skipped since
+     * ([com.pynapli.app.location.LocationSharingGate]: an OS grant is per install, so it says nothing
+     * about what this account chose); permission already granted; services on; no fix pending.
+     * Never prompts, never shows progress or errors, never logs the fix.
      */
-    @SuppressLint("MissingPermission")
     private fun refreshLocationOnResume() {
         val graph = appGraph ?: return
         if (!isStarted || pendingLocationSignal != null) return
         if (!graph.authStateHolder.state.value.authenticated || !hasLocationPermission()) return
+        val gate = graph.pynapliAppGraph.locationSharingGate ?: return
+        activityScope.launch {
+            if (!gate.allowsSilentRefresh(onboardingActive(graph))) return@launch
+            takeResumeFix()
+        }
+    }
+
+    private fun onboardingActive(graph: AndroidAppGraph): Boolean =
+        graph.pynapliAppGraph.onboardingStateHolder
+            ?.state
+            ?.value
+            ?.active == true
+
+    /** A recent last-known fix as is; otherwise one cancellable one-shot request (onStop cancels it). */
+    @SuppressLint("MissingPermission")
+    private fun takeResumeFix() {
+        if (!isStarted || pendingLocationSignal != null || !hasLocationPermission()) return
         val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val providers = locationManager.enabledLocationProviders()
         if (providers.isEmpty()) return
@@ -436,7 +456,11 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshDeviceLocationSilently(currentLocation: Location) {
         val graph = appGraph ?: return
+        val gate = graph.pynapliAppGraph.locationSharingGate ?: return
         activityScope.launch {
+            // Checked again: a one-shot fix can take seconds, and a sign-up may have started.
+            if (!graph.authStateHolder.state.value.authenticated) return@launch
+            if (!gate.allowsSilentRefresh(onboardingActive(graph))) return@launch
             graph.pynapliAppGraph.locationStateHolder.refreshInBackground(
                 DeviceLocation(
                     latitude = currentLocation.latitude,

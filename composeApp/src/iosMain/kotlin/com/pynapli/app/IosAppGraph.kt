@@ -14,6 +14,7 @@ import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.KeychainSessionTokenCipher
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.auth.createPlatformSessionTokenCipher
@@ -88,6 +89,10 @@ class IosAppGraph(
     private val sessionRefresher = SessionRefresherHolder()
     private val sessionInvalidationBus = SessionInvalidationBus()
 
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
+
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -102,10 +107,11 @@ class IosAppGraph(
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                 )
         }
 
-    private val authRepository = AuthRepository(apiClient = apiClient, sessionStore = sessionStore)
+    private val authRepository = AuthRepository(apiClient = apiClient, sessionStore = sessionStore, sessionLock = sessionLock)
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
 

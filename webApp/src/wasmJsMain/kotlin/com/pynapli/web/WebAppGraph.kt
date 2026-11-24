@@ -10,12 +10,14 @@ import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.grid.NoOpGridSnapshotStore
+import com.pynapli.app.location.LocationSharingGate
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.store.UnavailableStorePurchaseGateway
 import com.pynapli.app.swipe.NoOpSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorPynapliApiClient
@@ -25,6 +27,7 @@ import com.pynapli.shared.network.webRealtimeStreams
 import com.pynapli.web.auth.LocalStorageSessionStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
+import com.pynapli.web.settings.LocalStorageLocationSharingConsentStore
 import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
 import com.pynapli.web.settings.SessionStoragePendingSignupStore
 import com.pynapli.web.settings.SessionStorageUnderageStopStore
@@ -53,6 +56,10 @@ class WebAppGraph {
 
     // Terminal mid-session invalidation (revoked session / suspended account) routes back to sign-in.
     private val sessionInvalidationBus = SessionInvalidationBus()
+
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -65,6 +72,7 @@ class WebAppGraph {
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                     // Tabs share the localStorage session but not the refresh mutex: give a tab that
                     // lost a refresh race time to see the winning tab's saved session.
                     settleAttempts = 5,
@@ -75,6 +83,7 @@ class WebAppGraph {
         AuthRepository(
             apiClient = apiClient,
             sessionStore = sessionStore,
+            sessionLock = sessionLock,
         )
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
@@ -138,6 +147,13 @@ class WebAppGraph {
                 realtimeStreams.message,
         )
 
+    /** Which accounts in this browser shared location in the app; gates the tab-visible refresh. */
+    private val locationSharingGate =
+        LocationSharingGate(
+            store = LocalStorageLocationSharingConsentStore(),
+            currentUserId = { authStateHolder.state.value.session?.userId },
+        )
+
     /** The object the web entry point hands to `PynapliApp`. */
     val pynapliAppGraph: PynapliAppGraph =
         common.appGraph(
@@ -146,6 +162,7 @@ class WebAppGraph {
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
             psyncStreamClient = realtimeStreams.psync,
+            locationSharingGate = locationSharingGate,
         )
 
     /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */

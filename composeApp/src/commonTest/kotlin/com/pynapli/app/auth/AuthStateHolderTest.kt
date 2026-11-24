@@ -389,8 +389,43 @@ class AuthStateHolderTest {
             assertEquals(0, profileApi.meCalls)
         }
 
-    private suspend fun restoringHolder(profileApi: FakeProfileApi): AuthStateHolder {
-        val store = InMemoryStore()
+    @Test
+    fun anotherAccountSignedInMeanwhileEndsThisSessionInsteadOfAdoptingIt() =
+        runTest {
+            // Tab 1 restores account A; meanwhile tab 2 signs out and signs in as B (shared store).
+            val meGate = CompletableDeferred<Unit>()
+            val store = InMemoryStore()
+            val holder = restoringHolder(FakeProfileApi(meResult = AppResult.Failure(AppError("HTTP_401", "Unauthorized")), meGate = meGate), store)
+
+            val restoring = launch { holder.restoreSession() }
+            runCurrent()
+            store.save(AuthSessionDto(accessToken = "b-access", refreshToken = "b-refresh", user = AuthUserDto(userId = "user-2", status = "active")))
+            meGate.complete(Unit)
+            restoring.join()
+
+            val state = holder.state.value
+            assertFalse(state.authenticated, "tab 1 shows A's cached state: it must never carry B's tokens")
+            assertEquals(AuthMode.SignIn, state.mode)
+            assertFalse(state.showWelcome)
+            assertEquals("Your session ended. Please sign in again.", state.errorMessage)
+        }
+
+    @Test
+    fun aTerminalBackgroundCheckLandsOnTheSignInFormWithTheReason() =
+        runTest {
+            val holder = restoringHolder(FakeProfileApi(meResult = AppResult.Failure(AppError("ACCOUNT_NOT_ACTIVE", "Account not active."))))
+            holder.showWelcome()
+
+            holder.restoreSession()
+
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+            assertFalse(holder.state.value.showWelcome, "the welcome landing would hide 'Your session ended'")
+        }
+
+    private suspend fun restoringHolder(
+        profileApi: FakeProfileApi,
+        store: InMemoryStore = InMemoryStore(),
+    ): AuthStateHolder {
         store.save(session())
         return AuthStateHolder(
             authRepository = AuthRepository(authApi = FakeAuthApi(), profileApi = profileApi, sessionStore = store),
