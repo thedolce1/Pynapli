@@ -130,13 +130,57 @@ class MetInPersonAccountData(
         val badge =
             connection
                 .prepareStatement(
+                    // The public profile's display rules (JdbcProfileSql.PUBLIC_PROFILE_QUERY), so the export
+                    // says exactly what anyone sees: the person's opt-in, verification and risk tier; for the
+                    // couple badge also the active link row, the partner's own published couple badge on the
+                    // same link and opt-in, and both published after the link's last change.
                     """
-                    SELECT COALESCE(vb.person_badge AND vb.frozen_at IS NULL, false) AS person_badge,
-                           COALESCE(vb.couple_badge AND vb.frozen_at IS NULL, false) AS couple_badge,
+                    SELECT COALESCE(
+                               vb.person_badge
+                               AND vb.frozen_at IS NULL
+                               AND ds.show_met_in_person_badge
+                               AND p.verified_at IS NOT NULL
+                               AND COALESCE(r.tier, 'clean') NOT IN ('quarantine', 'terminate'),
+                               false
+                           ) AS person_badge,
+                           COALESCE(
+                               vb.couple_badge
+                               AND vb.frozen_at IS NULL
+                               AND ds.show_met_in_person_badge
+                               AND COALESCE(r.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                               AND vb.couple_since IS NOT NULL
+                               AND EXISTS (
+                                   SELECT 1
+                                   FROM vouch_badges pvb
+                                   JOIN discovery_settings pds ON pds.user_id = pvb.subject_user_id
+                                   JOIN user_profile_links cl ON cl.id = vb.couple_link_id
+                                   WHERE pvb.subject_user_id <> u.id
+                                     AND pvb.couple_badge
+                                     AND pvb.frozen_at IS NULL
+                                     AND pvb.couple_link_id = vb.couple_link_id
+                                     AND pvb.couple_since IS NOT NULL
+                                     AND pds.show_met_in_person_badge
+                                     AND cl.status = 'active'
+                                     AND cl.unlinked_at IS NULL
+                                     AND (
+                                         (cl.user_id = u.id AND cl.linked_user_id = pvb.subject_user_id)
+                                         OR (cl.user_id = pvb.subject_user_id AND cl.linked_user_id = u.id)
+                                     )
+                                     AND LEAST(vb.couple_since, pvb.couple_since) >= (
+                                         SELECT max(lu.updated_at)
+                                         FROM user_profile_links lu
+                                         WHERE (lu.user_id = u.id AND lu.linked_user_id = pvb.subject_user_id)
+                                            OR (lu.user_id = pvb.subject_user_id AND lu.linked_user_id = u.id)
+                                     )
+                               ),
+                               false
+                           ) AS couple_badge,
                            COALESCE(ds.show_met_in_person_badge, false) AS show_badge
                     FROM users u
+                    JOIN profiles p ON p.user_id = u.id
                     LEFT JOIN vouch_badges vb ON vb.subject_user_id = u.id
                     LEFT JOIN discovery_settings ds ON ds.user_id = u.id
+                    LEFT JOIN account_risk_states r ON r.user_id = u.id
                     WHERE u.id = ?
                     """.trimIndent(),
                 ).use { statement ->

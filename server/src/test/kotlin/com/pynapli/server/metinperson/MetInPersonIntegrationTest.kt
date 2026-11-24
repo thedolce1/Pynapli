@@ -582,6 +582,44 @@ class MetInPersonIntegrationTest {
     }
 
     @Test
+    fun theExportShowsTheBadgesByThePublicProfilesRules() {
+        runBlocking {
+            val sam = fx.member("Sam")
+            val riley = fx.member("Riley")
+            val stranger = fx.member("Stranger")
+            fx.link(sam, riley)
+            fx.optIn(sam)
+            fx.optIn(riley)
+            coupleConfirmedBy(sam, riley, 3)
+            settle()
+            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, ContactBlockTokens.localDevelopment(), MetInPersonAccountData(tokens))
+
+            suspend fun exported(userId: UUID): Pair<Boolean, Boolean> {
+                val badge =
+                    Json
+                        .parseToJsonElement(archiver.buildArchive(userId).bytes.decodeToString())
+                        .jsonObject
+                        .getValue("metInPerson")
+                        .jsonObject
+                        .getValue("yourBadge")
+                        .jsonObject
+                return badge.getValue("metInPersonBadge").toString().toBoolean() to
+                    badge.getValue("metInPersonAsCoupleBadge").toString().toBoolean()
+            }
+            assertEquals(true to true, exported(sam))
+            assertTrue(publicProfile(stranger, sam).metInPersonAsCouple)
+
+            fx.optIn(riley, on = false)
+            assertFalse(publicProfile(stranger, sam).metInPersonAsCouple)
+            assertEquals(true to false, exported(sam), "the partner's opt-in, as on the profile")
+
+            fx.optIn(riley)
+            fx.optIn(sam, on = false)
+            assertEquals(false to false, exported(sam), "the person's own opt-in, as on the profile")
+        }
+    }
+
+    @Test
     fun aCoupleBadgeNeedsThreeIndependentVouchersWhoMetBothAndBothOptIns() {
         runBlocking {
             val sam = fx.member("Sam")
