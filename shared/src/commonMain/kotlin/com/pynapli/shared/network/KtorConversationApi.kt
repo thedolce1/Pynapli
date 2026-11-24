@@ -53,8 +53,7 @@ internal class KtorConversationApi(
     override suspend fun markConversationRead(conversationId: String): AppResult<ConversationDto> = support.authPost("/v1/messages/threads/$conversationId/read")
 
     // "Met in person": nothing identifying in the path (request logs record paths); all of it in the body.
-    override suspend fun getMetInPersonOffers(conversationId: String): AppResult<MetInPersonOffersDto> =
-        support.authSend(HttpMethod.Post, "/v1/met-in-person/offers", MetInPersonOffersRequestDto(threadId = conversationId))
+    override suspend fun getMetInPersonOffers(conversationId: String): AppResult<MetInPersonOffersDto> = support.authSend(HttpMethod.Post, "/v1/met-in-person/offers", MetInPersonOffersRequestDto(threadId = conversationId))
 
     override suspend fun confirmMetInPerson(
         conversationId: String,

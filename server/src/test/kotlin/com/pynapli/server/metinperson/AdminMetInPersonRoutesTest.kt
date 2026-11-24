@@ -303,8 +303,7 @@ class AdminMetInPersonRoutesTest {
             assertEquals(1, admin.setVoucherVoided("senior-1", voucher, voided = true, reason = "farm").affected)
             assertEquals(1, admin.setVoucherVoided("senior-1", voucher, voided = false, reason = "cleared").affected)
 
-            fun voided(subject: UUID): Int =
-                fx.count("SELECT count(*) FROM vouches WHERE subject_token = ? AND voided_at IS NOT NULL", tokens.subject(subject))
+            fun voided(subject: UUID): Int = fx.count("SELECT count(*) FROM vouches WHERE subject_token = ? AND voided_at IS NOT NULL", tokens.subject(subject))
             assertEquals(1, voided(first), "voided on its own: stays voided")
             assertEquals(0, voided(second))
             admin.setVoucherVoided("senior-1", voucher, voided = true, reason = "again")

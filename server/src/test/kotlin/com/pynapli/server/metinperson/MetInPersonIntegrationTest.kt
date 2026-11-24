@@ -779,7 +779,8 @@ class MetInPersonIntegrationTest {
             val matching = testServerConfig().copy(environment = "staging", metInPersonTokenSecret = INTEGRATION_KEY)
             val other = "another-met-in-person-key-0123456789"
 
-            com.pynapli.server.dependencies.verifyMetInPersonKeyAtStartup(matching, dataSource)
+            com.pynapli.server.dependencies
+                .verifyMetInPersonKeyAtStartup(matching, dataSource)
             com.pynapli.server.dependencies.verifyMetInPersonKeyAtStartup(
                 matching.copy(environment = "local", metInPersonTokenSecret = other),
                 dataSource,
