@@ -254,7 +254,16 @@ class OnboardingStateHolder(
     /** True while this device's last 18+ stop is less than [UNDERAGE_STOP_MILLIS] old. */
     private fun underageStopActive(): Boolean {
         val stoppedAt = underageStoppedAtMs ?: return false
-        return nowEpochMillis() - stoppedAt < UNDERAGE_STOP_MILLIS
+        if (isUnderageStopLive(stoppedAt)) return true
+        underageStoppedAtMs = null
+        return false
+    }
+
+    // Live only for 0 <= elapsed < 24 h. A clock set back before the stop (negative elapsed) counts
+    // as expired: otherwise the stop would last until real time caught up, possibly for days.
+    private fun isUnderageStopLive(stoppedAt: Long): Boolean {
+        val elapsed = nowEpochMillis() - stoppedAt
+        return elapsed in 0 until UNDERAGE_STOP_MILLIS
     }
 
     /**
@@ -264,7 +273,7 @@ class OnboardingStateHolder(
      */
     suspend fun loadUnderageStop() {
         val stored = runCatchingCancellable { underageStopStore.load() }.getOrNull()
-        if (stored != null && nowEpochMillis() - stored >= UNDERAGE_STOP_MILLIS) {
+        if (stored != null && !isUnderageStopLive(stored)) {
             runCatchingCancellable { underageStopStore.clear() }
             underageStoppedAtMs = null
             return

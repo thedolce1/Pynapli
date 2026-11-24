@@ -123,6 +123,26 @@ class OnboardingStateHolderTest {
         }
 
     @Test
+    fun aClockSetBackBeforeTheStopCountsAsExpired() =
+        runTest {
+            // Stored "in the future" relative to the device clock (the clock went backwards).
+            val stored = Fixture(underageStore = InMemoryUnderageStopStore(NOW_MILLIS + 3 * OnboardingStateHolder.UNDERAGE_STOP_MILLIS))
+            stored.onboarding.resumePendingSignupIfNeeded()
+            stored.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, stored.onboarding.state.value.step)
+            assertNull(stored.underageStore.load(), "the stale stop is cleared")
+
+            // The same in memory: a stop made, then the clock moved back before it.
+            val live = Fixture()
+            live.onboarding.startCreateAccount()
+            live.enterDob(day = "01", month = "01", year = "2015")
+            live.onboarding.confirmDob()
+            live.clockMillis -= 60_000
+            live.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, live.onboarding.state.value.step)
+        }
+
+    @Test
     fun theUnderageStopSurvivesARestartUntilItExpires() =
         runTest {
             // A new process on the same device: the stored stop is read at the signed-out settle.
