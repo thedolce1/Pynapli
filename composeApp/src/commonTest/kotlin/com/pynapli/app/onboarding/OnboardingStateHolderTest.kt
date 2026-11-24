@@ -709,6 +709,48 @@ class OnboardingStateHolderTest {
         }
 
     @Test
+    fun theNextPersonsSignUpStartsEmptyAfterTheLastOneFinishedAndSignedOut() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            fixture.onboarding.updateSignupCode("123456")
+            fixture.onboarding.verifySignupCode()
+            fixture.onboarding.continueFromLocation()
+            fixture.onboarding.updateDisplayName("Alex")
+            fixture.onboarding.finishProfile()
+
+            // Finishing already forgets A's answers...
+            assertEquals(OnboardingUiState(), fixture.onboarding.state.value.copy(photoNudgeEligible = false, sessionSettledFor = null))
+
+            fixture.auth.logout()
+            fixture.onboarding.resumePendingSignupIfNeeded() // App.kt's signed-out effect
+            fixture.onboarding.startCreateAccount()
+
+            // ...and B's Create account starts on an empty birthday, with nothing of A's anywhere.
+            val state = fixture.onboarding.state.value
+            assertEquals(OnboardingUiState(active = true, step = OnboardingStep.Dob), state)
+            assertEquals("", fixture.auth.state.value.email)
+        }
+
+    @Test
+    fun aNewSignUpNeverReusesAnAbandonedOnesAnswers() =
+        runTest {
+            val fixture = Fixture()
+            fixture.advanceToAccount(day = "15", month = "08", year = "1990")
+            fixture.onboarding.updateEmail("someone@pynapli.local")
+            fixture.onboarding.cancelToWelcome()
+
+            fixture.onboarding.startCreateAccount()
+
+            val state = fixture.onboarding.state.value
+            assertEquals(listOf("", "", ""), listOf(state.dobDay, state.dobMonth, state.dobYear))
+            assertNull(state.dob)
+            assertEquals("", state.email)
+            assertFalse(state.acceptedTerms)
+            assertFalse(state.acceptedPrivacy)
+        }
+
+    @Test
     fun cancellingFromTheFirstStepReturnsToTheWelcomeLanding() =
         runTest {
             val fixture = Fixture()

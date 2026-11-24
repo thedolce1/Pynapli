@@ -76,15 +76,31 @@ class OnboardingStateHolder(
     // step stops offering Verify and offers "Start again" instead.
     private var failedCodeSubmissions = 0
 
+    /** A new sign-up always starts empty: nothing a previous person typed on this device carries over. */
     fun startCreateAccount() {
-        _state.update {
-            it.copy(
-                active = true,
-                step = OnboardingStep.Dob,
-                errorMessage = null,
-            )
-        }
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
+        _state.update { freshState(it).copy(active = true, step = OnboardingStep.Dob) }
     }
+
+    /**
+     * Signed out (App.kt's signed-out effect, through [resumePendingSignupIfNeeded]): forget the
+     * last sign-up's answers so the next person on this device never sees them.
+     */
+    fun resetForSignOut() {
+        if (_state.value.active) return
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
+        _state.update { freshState(it).copy(photoNudgeEligible = false, sessionSettledFor = null) }
+    }
+
+    // A blank stepper. Keeps only what belongs to this device session rather than to a person: this
+    // session's add-a-photo nudge decision and which session the shell already decided.
+    private fun freshState(current: OnboardingUiState): OnboardingUiState =
+        OnboardingUiState(
+            photoNudgeEligible = current.photoNudgeEligible,
+            sessionSettledFor = current.sessionSettledFor,
+        )
 
     /**
      * The stepper's "Sign in" links: straight to the sign-in form. A sign-up still waiting for its
@@ -462,8 +478,10 @@ class OnboardingStateHolder(
      * that address. A sign-up older than the server keeps it restarts cleanly (nothing to do).
      */
     suspend fun resumePendingSignupIfNeeded() {
-        // Signed out: the next session (even the same account's) is decided afresh.
+        // Signed out: the next session (even the same account's) is decided afresh, and nothing the
+        // last person entered stays in memory.
         _state.update { it.copy(sessionSettledFor = null) }
+        resetForSignOut()
         if (_state.value.active) return
         if (authStateHolder.state.value.session != null) return
         val pending = runCatchingCancellable { pendingSignupStore.load() }.getOrNull() ?: return
@@ -525,7 +543,8 @@ class OnboardingStateHolder(
     /** Releases the user to the grid and marks onboarding complete. */
     suspend fun finish() {
         markOnboardingCompleted()
-        _state.update { it.copy(active = false, errorMessage = null) }
+        // Done with this person's answers (birthday, address, name, acceptances): drop them all.
+        _state.update { freshState(it) }
     }
 
     /**
