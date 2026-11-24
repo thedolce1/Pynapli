@@ -24,6 +24,7 @@ import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -219,6 +220,96 @@ class AuthStateHolderTest {
             )
         }
 
+    // Returning members (plan G1): the stored session goes straight to the shell; /me checks it after.
+
+    @Test
+    fun aStoredSessionReachesTheShellWithoutWaitingOnMe() =
+        runTest {
+            val meGate = CompletableDeferred<Unit>()
+            val profileApi = FakeProfileApi(meGate = meGate)
+            val holder = restoringHolder(profileApi)
+
+            val restoring = launch { holder.restoreSession() }
+            runCurrent()
+
+            assertTrue(profileApi.meCalls == 1 && !meGate.isCompleted, "/me must still be on the wire")
+            assertFalse(holder.state.value.isCheckingSession, "the splash must not wait on /me")
+            assertTrue(holder.state.value.authenticated)
+
+            meGate.complete(Unit)
+            restoring.join()
+            assertTrue(holder.state.value.authenticated)
+        }
+
+    @Test
+    fun aTerminalAnswerFromTheBackgroundCheckSignsOut() =
+        runTest {
+            val profileApi = FakeProfileApi(meResult = AppResult.Failure(AppError("ACCOUNT_NOT_ACTIVE", "Account not active.")))
+            val holder = restoringHolder(profileApi)
+
+            holder.restoreSession()
+
+            assertFalse(holder.state.value.isCheckingSession)
+            assertFalse(holder.state.value.authenticated, "a revoked or inactive session returns to welcome")
+            assertEquals("Your session ended. Please sign in again.", holder.state.value.errorMessage)
+        }
+
+    @Test
+    fun aNetworkErrorFromTheBackgroundCheckKeepsTheMemberIn() =
+        runTest {
+            val profileApi = FakeProfileApi(meResult = AppResult.Failure(AppError("NETWORK_ERROR", "No connection.")))
+            val holder = restoringHolder(profileApi)
+
+            holder.restoreSession()
+
+            assertTrue(holder.state.value.authenticated, "offline is not signed out: the cached grid stays")
+            assertEquals(null, holder.state.value.errorMessage)
+        }
+
+    @Test
+    fun aSignOutDuringTheBackgroundCheckIsNotUndone() =
+        runTest {
+            val meGate = CompletableDeferred<Unit>()
+            val holder = restoringHolder(FakeProfileApi(meGate = meGate))
+
+            val restoring = launch { holder.restoreSession() }
+            runCurrent()
+            holder.logout()
+            meGate.complete(Unit)
+            restoring.join()
+
+            assertFalse(holder.state.value.authenticated)
+            assertEquals(null, holder.state.value.errorMessage, "a deliberate sign-out shows no 'session ended' notice")
+        }
+
+    @Test
+    fun noStoredSessionSettlesSignedOutWithoutCallingMe() =
+        runTest {
+            val profileApi = FakeProfileApi()
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = FakeAuthApi(), profileApi = profileApi, sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+
+            holder.restoreSession()
+
+            assertFalse(holder.state.value.isCheckingSession)
+            assertFalse(holder.state.value.authenticated)
+            assertEquals(0, profileApi.meCalls)
+        }
+
+    private suspend fun restoringHolder(profileApi: FakeProfileApi): AuthStateHolder {
+        val store = InMemoryStore()
+        store.save(session())
+        return AuthStateHolder(
+            authRepository = AuthRepository(authApi = FakeAuthApi(), profileApi = profileApi, sessionStore = store),
+            platform = "test",
+            appVersion = "0.0.0",
+        )
+    }
+
     private fun session(): AuthSessionDto =
         AuthSessionDto(
             accessToken = "access",
@@ -291,8 +382,19 @@ private class FakeAuthApi(
     private fun <T> fail(): AppResult<T> = AppResult.Failure(AppError("UNIMPLEMENTED", "no"))
 }
 
-private class FakeProfileApi : ProfileApi {
-    override suspend fun getMe(): AppResult<MeDto> = fail()
+private class FakeProfileApi(
+    // Non-terminal by default, so a session restored in a test that ignores /me stays signed in.
+    private val meResult: AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "no")),
+    private val meGate: CompletableDeferred<Unit>? = null,
+) : ProfileApi {
+    var meCalls = 0
+        private set
+
+    override suspend fun getMe(): AppResult<MeDto> {
+        meCalls += 1
+        meGate?.await()
+        return meResult
+    }
 
     override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> = fail()
 

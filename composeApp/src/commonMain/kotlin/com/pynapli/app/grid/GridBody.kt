@@ -2,7 +2,6 @@ package com.pynapli.app.grid
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,11 +24,13 @@ import com.pynapli.app.design.icons.filled.SearchOff
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.perf.PynapliPerfMarks
 
-private enum class GridPhase { CheckingCache, Loading, LocationRequired, Error, EmptyFiltered, Empty, Content }
+private enum class GridPhase { Loading, LocationRequired, Error, EmptyFiltered, Empty, Content }
 
 private fun gridPhase(state: GridUiState): GridPhase =
     when {
-        !state.cacheChecked && state.cards.isEmpty() -> GridPhase.CheckingCache
+        // Still reading the cold-start cache: the same skeleton as a first network load, as one
+        // phase so the crossfade never runs skeleton-to-skeleton.
+        !state.cacheChecked && state.cards.isEmpty() -> GridPhase.Loading
         state.isRefreshing && state.cards.isEmpty() -> GridPhase.Loading
         state.errorCode == "LOCATION_REQUIRED" && state.cards.isEmpty() -> GridPhase.LocationRequired
         state.errorMessage != null && state.cards.isEmpty() -> GridPhase.Error
@@ -62,10 +63,9 @@ internal fun GridBody(
         modifier = modifier,
     ) { phase ->
         when (phase) {
-            // A frame or two while the cold-start cache is read: nothing, so cached cards (the
-            // usual case) appear without a skeleton flashing first.
-            GridPhase.CheckingCache -> Box(modifier = Modifier.fillMaxSize())
-
+            // Also covers the cold-start cache read: the shell is already up then (a returning
+            // member skips the /me wait), so a skeleton rather than a blank pane; cached cards
+            // crossfade in over it like the live feed does.
             GridPhase.Loading -> {
                 GridLoadingSkeleton(modifier = Modifier.fillMaxSize())
             }

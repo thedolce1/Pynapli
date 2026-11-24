@@ -53,13 +53,36 @@ class AuthStateHolder(
         }
     }
 
+    /**
+     * Cold start. A stored session goes straight in (the shell paints the cached Grid at once) and
+     * `GET /v1/me` checks it in the background (plan G1). Only a terminal answer (revoked, refresh
+     * rejected, account no longer active) signs out afterwards; a network error keeps the member in
+     * with what is cached, and the next request retries. A stored session with no access token
+     * cannot be sent anywhere, so it is checked before anything shows, as before.
+     */
     suspend fun restoreSession() {
-        val session = authRepository.currentSessionValidated()
+        val stored = authRepository.currentSession()
+        if (stored == null || stored.accessToken.isBlank()) {
+            val session = if (stored == null) null else authRepository.currentSessionValidated()
+            _state.update { current -> current.copy(isCheckingSession = false, session = session) }
+            return
+        }
+        _state.update { current -> current.copy(isCheckingSession = false, session = stored) }
+
+        val validated = authRepository.currentSessionValidated()
         _state.update { current ->
-            current.copy(
-                isCheckingSession = false,
-                session = session,
-            )
+            when {
+                // Signed out, or signed in as someone else, while /me was on the wire: not ours to change.
+                current.session != stored -> current
+                validated == null ->
+                    current.copy(
+                        session = null,
+                        password = "",
+                        errorMessage = "Your session ended. Please sign in again.",
+                    )
+                // Another tab rotated the stored session meanwhile: carry the live one.
+                else -> current.copy(session = validated)
+            }
         }
     }
 
