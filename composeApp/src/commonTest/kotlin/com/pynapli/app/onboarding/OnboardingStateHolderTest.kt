@@ -27,6 +27,7 @@ import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import com.pynapli.shared.settings.InMemoryPendingSignupStore
+import com.pynapli.shared.settings.InMemoryUnderageStopStore
 import com.pynapli.shared.settings.OnboardingProgress
 import com.pynapli.shared.settings.OnboardingProgressStore
 import com.pynapli.shared.settings.PendingSignup
@@ -80,12 +81,69 @@ class OnboardingStateHolderTest {
             fixture.enterDob(day = "11", month = "06", year = "2008")
             fixture.onboarding.confirmDob()
             assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+            // The typed birthday is not kept on the stop screen.
+            assertEquals("", fixture.onboarding.state.value.dobYear)
 
-            // Exactly 18 today passes.
-            fixture.onboarding.backToDob()
-            fixture.enterDob(day = "10", month = "06", year = "2008")
+            // Exactly 18 today passes (a separate device: the stop above is sticky).
+            val adult = Fixture()
+            adult.onboarding.startCreateAccount()
+            adult.enterDob(day = "10", month = "06", year = "2008")
+            adult.onboarding.confirmDob()
+            assertEquals(OnboardingStep.Policies, adult.onboarding.state.value.step)
+        }
+
+    @Test
+    fun theUnderageStopIsStickyForADayButSignInStaysOpen() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.enterDob(day = "01", month = "01", year = "2015")
             fixture.onboarding.confirmDob()
-            assertEquals(OnboardingStep.Policies, fixture.onboarding.state.value.step)
+            assertEquals(NOW_MILLIS, fixture.underageStore.load())
+
+            // "Go back" / system back leaves the stepper; it never reopens the birthday.
+            fixture.onboarding.backToDob()
+            assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+            assertTrue(fixture.onboarding.stepBack())
+            assertFalse(fixture.onboarding.state.value.active)
+
+            // Create account goes straight back to the stop.
+            fixture.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+
+            // Sign in stays available.
+            fixture.onboarding.cancelToSignIn()
+            assertFalse(fixture.onboarding.state.value.active)
+            assertFalse(fixture.auth.state.value.showWelcome)
+
+            // A day later the birthday step is back.
+            fixture.clockMillis += OnboardingStateHolder.UNDERAGE_STOP_MILLIS
+            fixture.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun theUnderageStopSurvivesARestartUntilItExpires() =
+        runTest {
+            // A new process on the same device: the stored stop is read at the signed-out settle.
+            val fixture = Fixture(underageStore = InMemoryUnderageStopStore(NOW_MILLIS - 60 * 60 * 1_000))
+            fixture.onboarding.resumePendingSignupIfNeeded()
+            fixture.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+
+            // Create account tapped (or a /signup link opened) before the read finished: moved on read.
+            val early = Fixture(underageStore = InMemoryUnderageStopStore(NOW_MILLIS - 1_000))
+            early.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, early.onboarding.state.value.step)
+            early.onboarding.loadUnderageStop()
+            assertEquals(OnboardingStep.UnderageStop, early.onboarding.state.value.step)
+
+            // An expired stop is cleared and ignored.
+            val expired = Fixture(underageStore = InMemoryUnderageStopStore(NOW_MILLIS - OnboardingStateHolder.UNDERAGE_STOP_MILLIS))
+            expired.onboarding.resumePendingSignupIfNeeded()
+            expired.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, expired.onboarding.state.value.step)
+            assertNull(expired.underageStore.load())
         }
 
     @Test
@@ -959,7 +1017,7 @@ class OnboardingStateHolderTest {
         }
 
     @Test
-    fun backFromTheUnderageStopReturnsToTheBirthday() =
+    fun backFromTheUnderageStopLeavesForTheWelcomeNotTheBirthday() =
         runTest {
             val fixture = Fixture()
             fixture.onboarding.startCreateAccount()
@@ -969,7 +1027,8 @@ class OnboardingStateHolderTest {
 
             assertTrue(fixture.onboarding.stepBack())
 
-            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+            assertFalse(fixture.onboarding.state.value.active)
+            assertTrue(fixture.auth.state.value.showWelcome)
         }
 
     @Test
@@ -1175,6 +1234,7 @@ class OnboardingStateHolderTest {
         val authApi: FakeAuthApi = FakeAuthApi(),
         val profileRepository: FakeOnboardingProfileRepository = FakeOnboardingProfileRepository(),
         val sessionStore: InMemorySessionStore = InMemorySessionStore(),
+        val underageStore: InMemoryUnderageStopStore = InMemoryUnderageStopStore(),
     ) {
         /** The holder's clock; starts at [nowMillis] and tests move it forward (resend cooldown). */
         var clockMillis: Long = nowMillis
@@ -1198,6 +1258,7 @@ class OnboardingStateHolderTest {
                 todayProvider = { today },
                 nowEpochMillis = { clockMillis },
                 pendingSignupStore = pendingStore,
+                underageStopStore = underageStore,
             )
 
         fun enterDob(
@@ -1211,7 +1272,7 @@ class OnboardingStateHolderTest {
         }
 
         /** Drives the pre-auth steps to the Account form. */
-        fun advanceToAccount(
+        suspend fun advanceToAccount(
             day: String = "01",
             month: String = "06",
             year: String = "2000",

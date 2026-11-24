@@ -39,6 +39,7 @@ import com.pynapli.shared.network.androidRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.settings.SqlDelightPendingSignupStore
+import com.pynapli.shared.settings.SqlDelightUnderageStopStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -146,6 +147,8 @@ class AndroidAppGraph(
             progressStore = SqlDelightOnboardingProgressStore(database),
             // A sign-up waiting for its code: encrypted with the session tokens' Keystore cipher.
             pendingSignupStore = SqlDelightPendingSignupStore(database),
+            // The 18+ stop sticks for a day on this device (a time only, nothing personal).
+            underageStopStore = SqlDelightUnderageStopStore(database),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */

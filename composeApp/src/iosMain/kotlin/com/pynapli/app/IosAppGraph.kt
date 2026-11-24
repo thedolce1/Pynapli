@@ -25,6 +25,7 @@ import com.pynapli.shared.network.iosRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.settings.SqlDelightPendingSignupStore
+import com.pynapli.shared.settings.SqlDelightUnderageStopStore
 import com.pynapli.shared.storage.IosPynapliDatabaseFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -138,6 +139,8 @@ class IosAppGraph(
             // The platform default cipher (pass-through on iOS until the Keychain phase, like the
             // session default); never the shell's Keychain cipher, whose single slot is the session's.
             pendingSignupStore = SqlDelightPendingSignupStore(database),
+            // The 18+ stop sticks for a day on this device (a time only, nothing personal).
+            underageStopStore = SqlDelightUnderageStopStore(database),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */

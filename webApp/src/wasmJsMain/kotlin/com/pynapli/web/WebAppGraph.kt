@@ -27,6 +27,7 @@ import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
 import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
 import com.pynapli.web.settings.SessionStoragePendingSignupStore
+import com.pynapli.web.settings.SessionStorageUnderageStopStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.datetime.TimeZone
@@ -108,6 +109,8 @@ class WebAppGraph {
             progressStore = LocalStorageOnboardingProgressStore(),
             // sessionStorage: gone when the tab closes, so a shared computer never reopens it.
             pendingSignupStore = SessionStoragePendingSignupStore(),
+            // The 18+ stop sticks for the tab's session (sessionStorage, like the pending sign-up).
+            underageStopStore = SessionStorageUnderageStopStore(),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */

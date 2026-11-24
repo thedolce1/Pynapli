@@ -176,7 +176,8 @@ fun OnboardingFlowScreen(
 
             OnboardingStep.UnderageStop ->
                 UnderageStopStep(
-                    onBackToDob = onBackToDob,
+                    // The stop is sticky (OnboardingStateHolder.confirmDob): "Go back" leaves the stepper.
+                    onGoBack = onStepBack,
                     onCancelToSignIn = onCancelToSignIn,
                 )
 
@@ -393,7 +394,7 @@ private fun DobField(
 
 @Composable
 private fun UnderageStopStep(
-    onBackToDob: () -> Unit,
+    onGoBack: () -> Unit,
     onCancelToSignIn: () -> Unit,
 ) {
     StepTitle(
@@ -404,7 +405,7 @@ private fun UnderageStopStep(
     )
     Spacer(modifier = Modifier.height(28.dp))
     Button(
-        onClick = onBackToDob,
+        onClick = onGoBack,
         modifier = Modifier.fillMaxWidth().handCursor(),
     ) {
         Text("Go back")

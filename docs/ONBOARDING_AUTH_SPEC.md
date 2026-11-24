@@ -84,7 +84,11 @@ data is collected):
    launch), and the wheel offers "Type your birthday instead" (also the screen-reader-friendly
    path; each wheel is one adjustable semantics node). Both write the same fields, so validation
    is calendar-strict either way; underage stop screen on failure. The age check stays
-   server-side (`validateSignupAgeGate`).
+   server-side (`validateSignupAgeGate`). The stop is sticky (founder decision 2026-11-24): the
+   typed birthday is dropped, back and "Go back" leave for the welcome landing instead of
+   reopening the birthday, and for 24 hours Create account goes straight back to the stop
+   (`UnderageStopStore`: only the stop's time, in app storage on phones and `sessionStorage` on
+   the web, memory in the dev desktop shell). Sign in stays available; the copy is unchanged.
 2. Policies: dedicated "Review our policies" step — Terms of Service and Privacy
    Policy rows each with a Read link to the canonical URLs (an Android Custom Tab over the app, a
    new browser tab on the web; iOS still opens Safari), one Accept button recording both

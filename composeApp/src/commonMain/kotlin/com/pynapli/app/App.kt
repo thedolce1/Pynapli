@@ -206,7 +206,7 @@ fun PynapliApp(
                 onDobDayChanged = graph.onboardingStateHolder::updateDobDay,
                 onDobMonthChanged = graph.onboardingStateHolder::updateDobMonth,
                 onDobYearChanged = graph.onboardingStateHolder::updateDobYear,
-                onConfirmDob = graph.onboardingStateHolder::confirmDob,
+                onConfirmDob = { scope.launch { graph.onboardingStateHolder.confirmDob() } },
                 onBackToDob = graph.onboardingStateHolder::backToDob,
                 onCancelToSignIn = { scope.launch { graph.onboardingStateHolder.cancelToSignIn() } },
                 onAcceptPolicies = graph.onboardingStateHolder::acceptPolicies,

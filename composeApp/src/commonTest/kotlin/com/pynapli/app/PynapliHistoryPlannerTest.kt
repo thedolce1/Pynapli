@@ -66,6 +66,22 @@ class PynapliHistoryPlannerTest {
     }
 
     @Test
+    fun backFromTheStickyUnderageStopLeavesTheStepperForTheLanding() {
+        val age = PynapliRoutes.signupPath(OnboardingStep.UnderageStop)
+        // The stop closes the stepper on back (it never reopens the birthday).
+        val stepper = FakeStepper(listOf(age))
+        val browser = FakeBrowser(initial = "/", stepper = stepper)
+        browser.report(PynapliRoutes.LOGIN)
+        listOf(dob, age).forEach(browser::report)
+
+        browser.back()
+
+        assertEquals(PynapliRoutes.LOGIN, browser.path)
+        assertEquals(listOf(PynapliRoutes.LOGIN), browser.entries)
+        assertEquals(null, stepper.route)
+    }
+
+    @Test
     fun anInAppBackLinkRewindsInsteadOfStackingDuplicates() {
         val browser = FakeBrowser(initial = "/")
         browser.report(PynapliRoutes.LOGIN)

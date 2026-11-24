@@ -137,6 +137,15 @@ class PynapliHistoryPlanner {
                     if (!PynapliRoutes.isSignupPath(after)) signupEntries.clear()
                     return PopStateResult()
                 }
+                if (!PynapliRoutes.isSignupPath(after)) {
+                    // The stepper closed from a later step (the sticky 18+ stop): rewind to the
+                    // entry it started from rather than leaving step entries behind.
+                    val delta = -(signupEntries.size - 1)
+                    signupEntries.clear()
+                    if (delta == 0) return PopStateResult(ops = listOf(HistoryOp.Replace(after)))
+                    rewindTarget = after
+                    return PopStateResult(ops = listOf(HistoryOp.Go(delta)))
+                }
                 // Back was refused (or landed elsewhere): put the screen's entry back on top.
                 signupEntries += after
                 return PopStateResult(ops = listOf(HistoryOp.Push(after)))

@@ -8,9 +8,11 @@ import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import com.pynapli.shared.settings.InMemoryUnderageStopStore
 import com.pynapli.shared.settings.OnboardingProgressStore
 import com.pynapli.shared.settings.PendingSignup
 import com.pynapli.shared.settings.PendingSignupStore
+import com.pynapli.shared.settings.UnderageStopStore
 import com.pynapli.shared.settings.maskEmailAddress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,8 +56,14 @@ class OnboardingStateHolder(
     private val pendingSignupStore: PendingSignupStore,
     private val todayProvider: () -> LocalDate = ::systemToday,
     private val nowEpochMillis: () -> Long = ::systemNowEpochMillis,
+    // When this device last stopped a sign-up at the 18+ screen (sticky for UNDERAGE_STOP_MILLIS).
+    private val underageStopStore: UnderageStopStore = InMemoryUnderageStopStore(),
 ) {
     private val _state = MutableStateFlow(OnboardingUiState())
+
+    // The last 18+ stop on this device, mirrored from [underageStopStore] so the non-suspending
+    // [startCreateAccount] can honour it ([loadUnderageStop] fills it at the signed-out settle).
+    private var underageStoppedAtMs: Long? = null
     val state: StateFlow<OnboardingUiState> = _state.asStateFlow()
 
     // Per-process guard so a nudge impression counts one settings session, not one
@@ -80,7 +88,9 @@ class OnboardingStateHolder(
     fun startCreateAccount() {
         pendingSignupToken = null
         failedCodeSubmissions = 0
-        _state.update { freshState(it).copy(active = true, step = OnboardingStep.Dob) }
+        // A sticky 18+ stop on this device sends Create account straight back to it.
+        val firstStep = if (underageStopActive()) OnboardingStep.UnderageStop else OnboardingStep.Dob
+        _state.update { freshState(it).copy(active = true, step = firstStep) }
     }
 
     /**
@@ -214,7 +224,7 @@ class OnboardingStateHolder(
     }
 
     /** Validates the typed date, then gates 18+ before any account data is collected. */
-    fun confirmDob() {
+    suspend fun confirmDob() {
         val current = _state.value
         // The wheel's neutral start was never chosen: nothing to confirm yet (Next is off too).
         if (current.dobWheelUntouched) return
@@ -223,17 +233,48 @@ class OnboardingStateHolder(
             _state.update { it.copy(errorMessage = "Enter a valid date of birth.") }
             return
         }
-        val nextStep =
-            if (dob.isAtLeastYearsOld(MINIMUM_AGE_YEARS, todayProvider())) {
-                OnboardingStep.Policies
-            } else {
-                OnboardingStep.UnderageStop
-            }
-        _state.update { it.copy(dob = dob, step = nextStep, errorMessage = null) }
+        if (dob.isAtLeastYearsOld(MINIMUM_AGE_YEARS, todayProvider())) {
+            _state.update { it.copy(dob = dob, step = OnboardingStep.Policies, errorMessage = null) }
+            return
+        }
+        // Underage: the stop sticks on this device for a day, so the birthday can't just be retyped
+        // older (Sign in stays available). State first, then the store.
+        val stoppedAt = nowEpochMillis()
+        underageStoppedAtMs = stoppedAt
+        _state.update { freshState(it).copy(active = true, step = OnboardingStep.UnderageStop) }
+        runCatchingCancellable { underageStopStore.save(stoppedAt) }
     }
 
+    /** Back to the birthday (the Policies step's Back). Never out of a sticky 18+ stop. */
     fun backToDob() {
+        if (_state.value.step == OnboardingStep.UnderageStop) return
         _state.update { it.copy(step = OnboardingStep.Dob, errorMessage = null) }
+    }
+
+    /** True while this device's last 18+ stop is less than [UNDERAGE_STOP_MILLIS] old. */
+    private fun underageStopActive(): Boolean {
+        val stoppedAt = underageStoppedAtMs ?: return false
+        return nowEpochMillis() - stoppedAt < UNDERAGE_STOP_MILLIS
+    }
+
+    /**
+     * Reads this device's last 18+ stop (an expired one is cleared). Run at the signed-out settle;
+     * if Create account was tapped (or a /signup link opened) before it finished, the stepper moves
+     * to the stop now.
+     */
+    suspend fun loadUnderageStop() {
+        val stored = runCatchingCancellable { underageStopStore.load() }.getOrNull()
+        if (stored != null && nowEpochMillis() - stored >= UNDERAGE_STOP_MILLIS) {
+            runCatchingCancellable { underageStopStore.clear() }
+            underageStoppedAtMs = null
+            return
+        }
+        if (stored != null) underageStoppedAtMs = stored
+        if (underageStopActive()) {
+            _state.update {
+                if (it.active && it.step == OnboardingStep.Dob) freshState(it).copy(active = true, step = OnboardingStep.UnderageStop) else it
+            }
+        }
     }
 
     fun backToPolicies() {
@@ -258,8 +299,9 @@ class OnboardingStateHolder(
         val current = _state.value
         if (!current.active || current.isSubmitting) return false
         when (current.step) {
-            OnboardingStep.Dob -> cancelToWelcome()
-            OnboardingStep.UnderageStop, OnboardingStep.Policies -> backToDob()
+            // The 18+ stop is sticky: back leaves the stepper instead of reopening the birthday.
+            OnboardingStep.Dob, OnboardingStep.UnderageStop -> cancelToWelcome()
+            OnboardingStep.Policies -> backToDob()
             OnboardingStep.Account -> backToPolicies()
             OnboardingStep.VerifyEmail -> useDifferentEmail()
             OnboardingStep.Location, OnboardingStep.Profile -> return false
@@ -482,6 +524,7 @@ class OnboardingStateHolder(
         // last person entered stays in memory.
         _state.update { it.copy(sessionSettledFor = null) }
         resetForSignOut()
+        loadUnderageStop()
         if (_state.value.active) return
         if (authStateHolder.state.value.session != null) return
         val pending = runCatchingCancellable { pendingSignupStore.load() }.getOrNull() ?: return
@@ -721,6 +764,9 @@ class OnboardingStateHolder(
 
         /** How long "Send a new code" waits after a code went out. Client pacing, the same for every address. */
         const val RESEND_COOLDOWN_MILLIS = 30_000L
+
+        /** How long an 18+ stop sticks on this device (Create account goes straight back to it). */
+        const val UNDERAGE_STOP_MILLIS = 24L * 60 * 60 * 1_000
         const val SIGNUP_EXPIRED_MESSAGE = "That sign-up has expired. Enter your email again to get a new code."
 
         /** The server's guess budget per sign-up (EmailSignupService.MAX_ATTEMPTS). */
