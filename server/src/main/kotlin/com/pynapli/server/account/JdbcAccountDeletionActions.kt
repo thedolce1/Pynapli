@@ -10,7 +10,7 @@ import javax.sql.DataSource
 
 internal class JdbcAccountDeletionActions(
     private val dataSource: DataSource,
-    private val contactBlockTokens: ContactBlockTokens = ContactBlockTokens.localDevelopment(),
+    private val contactBlockTokens: ContactBlockTokens,
 ) {
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult? =
         dataSource.withConnection { connection ->
@@ -292,8 +292,10 @@ internal class JdbcAccountDeletionActions(
     /**
      * "Hide from people you know" (TRUST_AND_SAFETY_SPEC, "Contact blocks"): the addresses this person
      * added go with the account; rows other people added that point at this person (hidden or exempt)
-     * go back to pending, so they bind again only if the address re-registers and is verified; and the
-     * account's own contact token is cleared (users is anonymised, not deleted, so each is explicit).
+     * go back to pending, so they bind again only if the address re-registers and is verified, and
+     * tombstones pointing at this person are deleted (there is nobody left to hide anything from); and
+     * the account's own contact token is cleared (users is anonymised, not deleted, so each is explicit).
+     * The blocker's own rows, tombstones included, are deleted.
      */
     private fun releaseContactBlocks(
         connection: Connection,
@@ -303,6 +305,13 @@ internal class JdbcAccountDeletionActions(
             statement.setObject(1, userId)
             statement.executeUpdate()
         }
+        connection
+            .prepareStatement("DELETE FROM contact_blocks WHERE target_token IN (?, ?) AND released_at IS NOT NULL")
+            .use { statement ->
+                statement.setString(1, contactBlockTokens.targetToken(userId))
+                statement.setString(2, contactBlockTokens.exemptToken(userId))
+                statement.executeUpdate()
+            }
         connection
             .prepareStatement("UPDATE contact_blocks SET target_token = NULL WHERE target_token IN (?, ?)")
             .use { statement ->

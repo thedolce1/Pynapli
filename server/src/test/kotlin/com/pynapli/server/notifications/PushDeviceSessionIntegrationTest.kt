@@ -78,7 +78,7 @@ class PushDeviceSessionIntegrationTest {
             register(userId, "legacy-token-000000000", sessionId = null)
             assertEquals(setOf("legacy-token-000000000"), tokens(userId))
 
-            JdbcAccountLifecycleRepository(dataSource).deleteAccount(userId)
+            JdbcAccountLifecycleRepository(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()).deleteAccount(userId)
 
             assertTrue(tokens(userId).isEmpty())
         }

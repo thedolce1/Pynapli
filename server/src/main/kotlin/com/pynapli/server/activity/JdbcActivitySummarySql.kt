@@ -43,7 +43,7 @@ internal object JdbcActivitySummarySql {
               AND ae.deleted_at IS NULL
               AND COALESCE(actor_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
               -- "Hide from people you know": counts and the badge leave out anyone hiding from them.
-              AND ${ContactBlockSql.notHiddenFromViewer("ae.actor_user_id")}
+              AND ${ContactBlockSql.actNotHiddenFromViewer("ae.actor_user_id", "ae.first_occurred_at")}
               AND NOT EXISTS (
                   SELECT 1
                   FROM user_blocks block

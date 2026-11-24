@@ -66,6 +66,8 @@ internal class MessagingConversationActions(
                 targetUserId = targetUserId,
                 origin = origin,
             ) ?: throw MessagingException("MESSAGING_NOT_ALLOWED")
+        // Opening a conversation is an act the target can see (exempts a pair whose bind raced it).
+        conversationGuard.noteActToward(viewerUserId, targetUserId)
 
         val detail =
             repository.getConversationDetail(

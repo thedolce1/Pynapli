@@ -84,7 +84,7 @@ class FavoriteServiceIntegrationTest {
             service.add(target, viewer.toString())
 
             com.pynapli.server.account
-                .JdbcAccountDeletionActions(dataSource)
+                .JdbcAccountDeletionActions(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
                 .deleteAccount(target)
 
             assertEquals(0, dataSource.count("SELECT count(*) FROM favorite_profiles"))

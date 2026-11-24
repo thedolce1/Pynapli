@@ -83,9 +83,13 @@ internal class PsyncDeckCoordinator(
             } else {
                 blockedOrHiddenTargets(session.initiatorUserId, partnerId)
             }
-        val cards = repository.listDeckCards(session.id).filterNot { it.targetUserId in invalidated }
-        // A partner mini of someone hiding from this viewer comes off the card (with the couple badge).
+        // "Hide from people you know", per person: a card of someone hiding from THIS viewer is left out
+        // of this viewer's view of the shared deck only (their partner still sees and answers it, so the
+        // hidden person's world is the same whether or not the address was theirs), and a partner mini
+        // of such a person comes off the card (with the couple badge).
         val hiddenFromViewer = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        val allCards = repository.listDeckCards(session.id).filterNot { it.targetUserId in invalidated }
+        val cards = allCards.filterNot { it.targetUserId in hiddenFromViewer }
         val myActions = repository.listActionsForActor(session.id, viewerUserId).associate { it.targetUserId to it.action }
         val online = onlineFor(cards.map { it.targetUserId })
         val items =
@@ -114,19 +118,27 @@ internal class PsyncDeckCoordinator(
                     viewerAction = myActions[card.targetUserId],
                 )
             }
-        return PsyncDeckResponseDto(sessionId = session.id.toString(), deckSize = session.deckSize, cards = items)
+        val deckSize = (session.deckSize - (allCards.size - cards.size)).coerceAtLeast(0)
+        return PsyncDeckResponseDto(sessionId = session.id.toString(), deckSize = deckSize, cards = items)
     }
 
     /**
-     * "Hide from people you know": [targetUserId] hides from either partner of [session]. A card dealt
-     * before the block was bound can't then be acted on (the deck response already leaves it out).
+     * "Hide from people you know": [targetUserId] hides from [userId], so [userId] can't act on that
+     * card (the deck response already leaves it out for them; their partner still can).
      */
-    suspend fun targetHidesFromSession(
-        session: PsyncSession,
+    suspend fun targetHidesFrom(
+        userId: UUID,
         targetUserId: UUID,
-    ): Boolean {
-        val visibility = contactBlockVisibility ?: return false
-        return session.participants.any { participant -> visibility.isHiddenFrom(participant.userId, targetUserId) }
+    ): Boolean = contactBlockVisibility?.isHiddenFrom(userId, targetUserId) == true
+
+    /** How many cards of the session's deck [userId] never gets (people hiding from them). */
+    suspend fun hiddenCardCount(
+        sessionId: UUID,
+        userId: UUID,
+    ): Int {
+        val hidden = contactBlockVisibility?.hiddenFrom(userId).orEmpty()
+        if (hidden.isEmpty()) return 0
+        return repository.listDeckCards(sessionId).count { it.targetUserId in hidden }
     }
 
     /** Targets blocked (either direction) or hidden by EITHER partner — invalid for the deck. */
@@ -143,11 +155,7 @@ internal class PsyncDeckCoordinator(
                 addAll(it.listHiddenProfileIds(partnerA))
                 addAll(it.listHiddenProfileIds(partnerB))
             }
-            // "Hide from people you know": one-way, from either partner's side (the deck is shared).
-            contactBlockVisibility?.let {
-                addAll(it.hiddenFrom(partnerA))
-                addAll(it.hiddenFrom(partnerB))
-            }
+            // "Hide from people you know" is applied per person, not here (see buildDeckResponse).
         }
 
     fun issueCardToken(

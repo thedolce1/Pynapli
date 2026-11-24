@@ -28,9 +28,10 @@ class ProfileLinkService(
     /** The member's own view of their links. */
     suspend fun getSummary(viewerUserId: UUID): ProfileLinksSummaryDto {
         val summary = repository.getSummary(viewerUserId)
-        val hidden = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
-        if (hidden.isEmpty()) return summary.toDto()
-        return summary.copy(incomingInvites = summary.incomingInvites.filterNot { it.otherUserId in hidden }).toDto()
+        // Invites from someone hiding from the viewer, and any they sent before removing the address.
+        val rules = contactBlockVisibility?.rulesFor(viewerUserId) ?: return summary.toDto()
+        if (rules.isEmpty) return summary.toDto()
+        return summary.copy(incomingInvites = summary.incomingInvites.filterNot { rules.hidesAct(it.otherUserId, it.createdAt) }).toDto()
     }
 
     /** Support and moderation tooling: everything, unfiltered (contact blocks never hide from staff). */

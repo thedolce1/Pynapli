@@ -14,10 +14,13 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * The blocker's own requests can't depend on membership: they never read `users`, never resolve, and
- * do the same calls for any valid address. Plus the keyed tokens, and a scan that production wiring
- * hands the rule to every surface (the integration tests build their own graph, so they can't see a
- * builder that forgot it).
+ * Unit half of the request-path rules (the statements actually executed are recorded against the
+ * database in ContactBlockRequestPathIntegrationTest): the service makes the same calls for any valid
+ * address and only nudges the resolver. Plus the keyed tokens, and the production wiring.
+ *
+ * The wiring check reads the DI files: the codebase has no test that builds the real
+ * ServerDependencies graph (it needs Redis, Firebase and the full config), so a builder that forgot to
+ * pass the rule is caught here, formatting-proof, rather than by constructing the graph.
  */
 class ContactBlockRequestPathTest {
     private class RecordingRepository : ContactBlockRepository {
@@ -37,11 +40,15 @@ class ContactBlockRequestPathTest {
         override suspend fun remove(
             blockerUserId: UUID,
             emailToken: String,
+            releasedAt: Instant,
         ) {
             calls += "remove"
         }
 
-        override suspend fun removeAll(blockerUserId: UUID) {
+        override suspend fun removeAll(
+            blockerUserId: UUID,
+            releasedAt: Instant,
+        ) {
             calls += "removeAll"
         }
 
@@ -97,13 +104,6 @@ class ContactBlockRequestPathTest {
         }
 
     @Test
-    fun theRequestPathSqlNeverTouchesUsers() {
-        JdbcContactBlockRepository.REQUEST_PATH_SQL.forEach { sql ->
-            assertTrue(!Regex("""\busers\b""").containsMatchIn(sql), "request-path SQL reads users: $sql")
-        }
-    }
-
-    @Test
     fun tokensAreKeyedNormalisedAndUnlinkable() {
         val other = ContactBlockTokens("another-email-key-for-this-test-only", "another-target-key-for-this-test-only")
         val address = "boss@example.com"
@@ -126,7 +126,7 @@ class ContactBlockRequestPathTest {
         listOf(
             "JdbcActivityRepository(database.dataSource, contactBlockTokens = core.contactBlockTokens)",
             "contactBlockTokens = core.contactBlockTokens,",
-            "onAccountVerified = core.contactBlockResolver::bindNewlyVerifiedAccount",
+            "onAccountVerified = core.contactBlockSettling::atVerify",
             "contactBlockVisibility = core.contactBlockVisibility,",
         ).forEach { wiring -> assertTrue(wiring.compact() in server, "ServerDependencies must pass: $wiring") }
         // Activity, favorites, profile, profile links, media, grid, tonight, messaging, swipe, the field.
@@ -135,7 +135,7 @@ class ContactBlockRequestPathTest {
             "every service builder in ServerDependencies must get the viewer-side rule",
         )
         listOf(
-            "onEmailSignIn = contactBlockResolver::recordAddressAtSignIn",
+            "onEmailSignIn = contactBlockSettling::atSignIn",
             "NotificationService(notificationRepository, contactBlockVisibility = contactBlockVisibility)",
             "JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)",
             "JdbcAccountDataExportArchiver(database.dataSource, contactBlockTokens = contactBlockTokens)",
@@ -144,6 +144,11 @@ class ContactBlockRequestPathTest {
             assertTrue("contactBlockVisibility=contactBlockVisibility" in root.resolve(file).readText().compact(), "$file must forward the rule")
         }
         assertTrue("JdbcMessagingRepository(dataSource,contactBlockTokens=contactBlockTokens)" in root.resolve("MessagingDependencies.kt").readText().compact())
+        // Swipe forwards it to the match moment too.
+        assertTrue(
+            Regex("""contactBlockVisibility=contactBlockVisibility""").findAll(root.resolve("SwipeDependencies.kt").readText().compact()).count() >= 3,
+            "SwipeDependencies must forward the rule to Swipe, Psync and the match moment",
+        )
     }
 
     /** Formatting-proof comparison: no whitespace, no trailing comma before a closing parenthesis. */

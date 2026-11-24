@@ -17,24 +17,26 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.random.Random
 
 /**
- * Binds contact blocks to the members they point at (TRUST_AND_SAFETY_SPEC, "Contact blocks").
+ * Binds contact blocks to the members they point at (TRUST_AND_SAFETY_SPEC, "Contact Blocks").
  * Never on the blocker's request path: the blocker's add only nudges [ContactBlockResolverWorker],
  * which runs a batch after a random delay, so nothing about it lines up with the blocker's requests.
  *
  * Who binds when:
  *  - a member who proves their address (sign-up verify) or signs in with it gets their contact token
- *    and every pending row of the address is settled right there, before the session is returned;
+ *    and every pending row of the address is settled right there, before the session is returned
+ *    ([ContactBlockSettling] makes a failure there harmless and retried);
  *  - a row added for an address whose member already has a token is settled by [resolveRecent]
  *    (every tick looks at rows from the last [RECENT_WINDOW], so a row racing a verify is still seen);
- *  - [resolveAllPending] is the slow safety net (rows missed while the server was down).
+ *  - [resolveAllPending] is the slow safety net, at most once a day across all replicas.
  *
- * Settling a row for member X: when the pair has a recorded interaction ([ContactBlockInteractionSql])
- * the row gets X's exempt token (decided once and kept, so the pair is never bound later and nothing
- * either of them sees changes); otherwise X's target token, after which X never sees the blocker. A
- * blocker who adds their own address gets the exempt token too.
+ * Settling a row for member X ([ContactBlockResolverRepository.settle], one transaction under the
+ * Swipe pair lock): exempt when X did something the blocker could already see
+ * ([ContactBlockInteractionSql]); otherwise bound, after which X never sees the blocker. A blocker
+ * who adds their own address gets the exempt token.
  */
 class ContactBlockResolver(
     private val repository: ContactBlockResolverRepository,
@@ -47,6 +49,10 @@ class ContactBlockResolver(
     /** Every pending row, in batches. Returns how many it settled. */
     suspend fun resolveAllPending(): Int = resolveSince(Instant.EPOCH)
 
+    /** The daily full sweep, when no replica has run it in the last [FULL_SWEEP_EVERY]; else the recent pass. */
+    suspend fun resolveScheduled(): Int =
+        if (repository.claimFullSweep(clock.instant(), FULL_SWEEP_EVERY)) resolveAllPending() else resolveRecent()
+
     private suspend fun resolveSince(createdSince: Instant): Int {
         var settled = 0
         var after: PendingContactBlockRow? = null
@@ -58,7 +64,7 @@ class ContactBlockResolver(
             for (row in rows) {
                 val memberToken = memberTokens.getValue(row)
                 val memberId = members[memberToken] ?: continue
-                if (settle(row, memberId, memberToken)) settled++
+                if (settle(row, memberId, memberToken) != ContactBlockSettleOutcome.UNCHANGED) settled++
             }
             if (rows.size < BATCH_SIZE) break
             after = rows.last()
@@ -81,8 +87,7 @@ class ContactBlockResolver(
     /**
      * After every successful sign-in with the typed (so the owner's) address: an account verified
      * before contact tokens existed gets its token now, and pending rows of the address are settled
-     * before the sign-in answers (again each time, so a verify whose settling failed is caught up the
-     * next time the member signs in). Unverified accounts are never given a token and never bound.
+     * before the sign-in answers. Unverified accounts are never given a token and never bound.
      */
     suspend fun recordAddressAtSignIn(
         userId: UUID,
@@ -91,7 +96,8 @@ class ContactBlockResolver(
         settleAddress(userId, tokens.emailToken(normalisedEmail))
     }
 
-    private suspend fun settleAddress(
+    /** The same settling for an address known only by its email token (the worker's retries). */
+    suspend fun settleAddress(
         userId: UUID,
         emailToken: String,
     ) {
@@ -100,25 +106,29 @@ class ContactBlockResolver(
         repository.listPendingForAddress(emailToken).forEach { row -> settle(row, userId, memberToken) }
     }
 
+    fun emailTokenOf(normalisedEmail: String): String = tokens.emailToken(normalisedEmail)
+
     private suspend fun settle(
         row: PendingContactBlockRow,
         targetUserId: UUID,
         memberToken: String,
-    ): Boolean {
-        val exempt =
-            row.blockerUserId == targetUserId ||
-                repository.hadInteraction(row.blockerUserId, targetUserId, row.createdAt)
-        val token = if (exempt) tokens.exemptToken(targetUserId) else tokens.targetToken(targetUserId)
-        // Refused (nothing changes) unless targetUserId still holds memberToken: an unverified or
-        // deleted account is never bound.
-        return repository.bind(row.rowId, targetUserId, memberToken, token)
-    }
+    ): ContactBlockSettleOutcome =
+        repository.settle(
+            row = row,
+            targetUserId = targetUserId,
+            memberToken = memberToken,
+            targetToken = tokens.targetToken(targetUserId),
+            exemptToken = tokens.exemptToken(targetUserId),
+        )
 
     companion object {
         const val BATCH_SIZE = 500
 
         /** Rows younger than this are looked at on every tick. */
         val RECENT_WINDOW: Duration = Duration.ofMinutes(30)
+
+        /** At most one full pass over every pending row this often, across all replicas. */
+        val FULL_SWEEP_EVERY: Duration = Duration.ofDays(1)
     }
 }
 
@@ -128,17 +138,62 @@ fun interface ContactBlockResolutionTrigger {
 }
 
 /**
- * Runs [ContactBlockResolver.resolveRecent] every [intervalMillis] and soon after a nudge, always after
- * a random [minJitterMillis]..[maxJitterMillis] delay, on its own background scope; and
- * [ContactBlockResolver.resolveAllPending] every [fullSweepEvery] ticks. Nudges arriving while one is
- * pending are merged. One replica per tick ([jobLock]).
+ * The verify-time and sign-in-time settling, made harmless to fail. A lock wait or an SQL error there
+ * can only happen when someone added the member's address, so it must never fail the member's sign-in
+ * (a signal and a lockout) or their verify (the account already exists and the code is spent). On
+ * failure it logs the exception class only, queues the address on the worker for its next tick (a
+ * few seconds), and returns normally.
+ *
+ * The window when it fails: until that tick (5 to 30 seconds), the member's reads don't yet hide the
+ * rows of that address that weren't settled. A worker restart in that window loses the retry; the
+ * member's next sign-in settles again.
+ */
+class ContactBlockSettling(
+    private val resolver: ContactBlockResolver,
+    private val worker: ContactBlockResolverWorker?,
+) {
+    suspend fun atVerify(
+        userId: UUID,
+        normalisedEmail: String,
+    ) = guarded(userId, normalisedEmail) { resolver.bindNewlyVerifiedAccount(userId, normalisedEmail) }
+
+    suspend fun atSignIn(
+        userId: UUID,
+        normalisedEmail: String,
+    ) = guarded(userId, normalisedEmail) { resolver.recordAddressAtSignIn(userId, normalisedEmail) }
+
+    private suspend fun guarded(
+        userId: UUID,
+        normalisedEmail: String,
+        block: suspend () -> Unit,
+    ) {
+        try {
+            block()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            logger.warn("Contact block settling deferred ({})", error.javaClass.simpleName)
+            worker?.retrySettle(userId, resolver.emailTokenOf(normalisedEmail))
+        }
+    }
+
+    private companion object {
+        private val logger = LoggerFactory.getLogger(ContactBlockSettling::class.java)
+    }
+}
+
+/**
+ * Runs [ContactBlockResolver.resolveScheduled] (the recent pass, and the daily full sweep when it is
+ * due) every [intervalMillis] and soon after a nudge, always after a random
+ * [minJitterMillis]..[maxJitterMillis] delay, on its own background scope; and retries addresses
+ * whose verify/sign-in settling failed. Nudges arriving while one is pending are merged. One replica
+ * per tick ([jobLock]).
  */
 class ContactBlockResolverWorker(
     private val resolver: ContactBlockResolver,
     private val intervalMillis: Long = DEFAULT_INTERVAL_MILLIS,
     private val minJitterMillis: Long = DEFAULT_MIN_JITTER_MILLIS,
     private val maxJitterMillis: Long = DEFAULT_MAX_JITTER_MILLIS,
-    private val fullSweepEvery: Int = DEFAULT_FULL_SWEEP_EVERY,
     private val jobLock: JobLock = UnlockedJobs,
     private val random: Random = Random.Default,
 ) : ContactBlockResolutionTrigger,
@@ -146,27 +201,42 @@ class ContactBlockResolverWorker(
     private val logger = LoggerFactory.getLogger(ContactBlockResolverWorker::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val nudges = Channel<Unit>(Channel.CONFLATED)
+    private val retries = ConcurrentLinkedQueue<Pair<UUID, String>>()
     private var job: kotlinx.coroutines.Job? = null
 
     override fun requestResolution() {
         nudges.trySend(Unit)
     }
 
+    /** Queues one address (by email token) of [userId] to settle on the next tick. */
+    fun retrySettle(
+        userId: UUID,
+        emailToken: String,
+    ) {
+        if (retries.size < MAX_QUEUED_RETRIES) retries.add(userId to emailToken)
+        nudges.trySend(Unit)
+    }
+
+    /** One tick's work, without the wait (tests call this directly). */
+    suspend fun runOnce() {
+        jobLock.runExclusive(JOB_NAME) {
+            while (true) {
+                val (userId, emailToken) = retries.poll() ?: break
+                resolver.settleAddress(userId, emailToken)
+            }
+            resolver.resolveScheduled()
+        }
+    }
+
     fun start() {
         if (job != null) return
         job =
             scope.launch {
-                var tick = 0
                 while (isActive) {
                     withTimeoutOrNull(intervalMillis) { nudges.receive() }
                     delay(minJitterMillis + random.nextLong(0, (maxJitterMillis - minJitterMillis).coerceAtLeast(1)))
-                    tick++
                     try {
-                        jobLock.runExclusive(JOB_NAME) {
-                            // The first tick of every instance sweeps everything: with scale-to-zero an
-                            // instance may never live long enough to reach the periodic full sweep.
-                            if (tick == 1 || tick % fullSweepEvery == 0) resolver.resolveAllPending() else resolver.resolveRecent()
-                        }
+                        runOnce()
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
@@ -186,8 +256,6 @@ class ContactBlockResolverWorker(
         const val DEFAULT_INTERVAL_MILLIS = 60_000L
         const val DEFAULT_MIN_JITTER_MILLIS = 5_000L
         const val DEFAULT_MAX_JITTER_MILLIS = 30_000L
-
-        /** About every 6 hours at the default interval. */
-        const val DEFAULT_FULL_SWEEP_EVERY = 360
+        private const val MAX_QUEUED_RETRIES = 10_000
     }
 }

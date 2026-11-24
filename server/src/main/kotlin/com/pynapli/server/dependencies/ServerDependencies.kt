@@ -228,7 +228,7 @@ class ServerDependencies(
                     authService = core.authService,
                     rateLimitService = core.rateLimitService,
                     backgroundScope = profileActivityScope,
-                    onAccountVerified = core.contactBlockResolver::bindNewlyVerifiedAccount,
+                    onAccountVerified = core.contactBlockSettling::atVerify,
                 )
             val media =
                 buildMediaDependencies(

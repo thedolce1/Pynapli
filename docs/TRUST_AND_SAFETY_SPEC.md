@@ -594,8 +594,9 @@ cannot show one (it keeps only a keyed code), so the count includes non-members 
 
 ### Storage and keys
 
-`contact_blocks(id, blocker_user_id, email_token, target_token NULL, created_at)`, unique on
-(blocker, email_token). `email_token = HMAC-SHA256(K1, normalised address)`. `target_token` is NULL
+`contact_blocks(id, blocker_user_id, email_token, target_token NULL, created_at, released_at NULL)`
+(V119, V120), unique on (blocker, email_token) among rows with `released_at` NULL (A's addresses;
+tombstones, below, sit beside them). `email_token = HMAC-SHA256(K1, normalised address)`. `target_token` is NULL
 while the address belongs to no verified member ("pending"), `HMAC(K2, "target:" + X)` once bound, or
 `HMAC(K2, "exempt:" + X)` when the pair was exempt (decided once, kept). `users.contact_token =
 HMAC(K2, "member:" + email_token)` for a verified member, written only when the server holds the
@@ -617,80 +618,99 @@ stored code (all rows go inert); no rotation path exists.
   every settled row can be linked to its member by computing target/exempt tokens per user id: the full
   "A hides from X" graph, without the addresses.
 - *With both*: everything above plus testing addresses. K1 and K2 must be stored separately from the
-  database (Secret Manager) and from each other's access paths where possible.
+  database credentials (Secret Manager), and K2 especially: with K2 a database copy shows who hides
+  from whom.
+- Tombstones add, per row, when the address was removed.
 
-### Interaction (the exemption)
+### Interaction (the exemption; founder decision 2026-11-23)
 
-Pairs with prior interaction are left completely alone (`ContactBlockInteractionSql`). That stops "they
-stopped viewing me" from confirming the block, and stops anyone using this to vanish from a person they
-are harassing (the ordinary block is for that). Exempt when, at resolution, there is (1) any of these
-rows between A and X in either direction from **before** the address was added, or (2) any of them
-**initiated by X at any time** (what A can already see from X):
+A pair is exempt, and left completely alone, **only when X did something A could already observe**
+(`ContactBlockInteractionSql`), at any time up to resolution:
 
-- `activity_events`, any type: profile views (recorded only when visible to the recipient), flirts
-  (including Playing Tonight flirts), likes, Pineapple Likes, matches, album requests and grants,
-  partner chat invites, Psync and Tonight rows.
-- `swipe_actions` likes and Pineapple Likes (a pass produces no visible signal and does not count).
-- `matches` (always: a match needs X's like).
-- A shared conversation (`conversation_participants` of both), counted when it was created before the
-  add, or created by X, or X wrote in it.
-- `favorite_profiles`, `user_profile_links` (any status, invites included), `user_blocks`,
-  `media_album_access_requests`, `media_album_access_grants`, `psync_session_actions`.
+- an Activity row X caused for A (a profile view A can see, a flirt, a like, a Pineapple Like, an album
+  request or grant, a partner chat invite, a Psync or Playing Tonight row);
+- a like or Pineapple Like by X on A (a pass produces no visible signal);
+- a match between them;
+- a conversation with both of them that X created or wrote in;
+- a partner link invite from X, a private album request from X, an album grant by X;
+- a Psync like by X on A.
 
-Rows A creates toward X after adding the address never exempt the pair: they are exactly what the
-feature hides.
+Nothing A did toward X, before or after the add, ever exempts the pair: if X never did anything A could
+see, binding changes nothing A observes, so there is nothing to protect. The common case therefore
+works: A spots a coworker on the Grid, opens the profile to be sure (a view), then adds the address; the
+pair binds, and the view, like everything else from A, disappears from X's views (filters apply to all
+of A's rows, whatever their date). X's favourite of A is private to X and doesn't count; an ordinary
+block by either is handled by the block itself.
+
+**Reciprocal races.** The exemption is checked inside the binding transaction under the same pair lock
+every Swipe and Psync like takes (`SWIPE_PAIR_LOCK_NAMESPACE`), so a like by X committed first makes the
+pair exempt. A like, like-back, flirt, album request or new conversation by X recorded after the bind
+(its own visibility check ran just before) calls `ContactBlockVisibility.noteActToward`, which flips the
+row to exempt: from then on X sees A, so nothing X did can lead to a match or a reply from someone
+invisible. The same single statement runs for every act, whoever acts.
 
 ### Resolution (off A's request path)
 
 - **A adds an address whose member already has a token:** the worker (`ContactBlockResolverWorker`, its
   own background scope, one replica per tick via `PostgresJobLock`) runs after a nudge or every minute,
-  always after a random 5–30 s delay, in batches of 500: it looks at every pending row from the last 30
-  minutes (so a row that raced a verify is seen again), computes `HMAC(K2, "member:" + email_token)` per
-  row and looks members up by it. About every 6 hours it pages through all pending rows (rows missed
-  while the server was down).
-- **X proves the address at sign-up verify:** the token is stored and every pending row of the address
-  is settled after the account is created and **before the session is returned**
-  (`EmailSignupService.onAccountVerified`), so no discovery request of X's can come first. A brand-new
-  account has no interactions, so these bind.
-- **Every successful email sign-in** stores the token if missing (accounts verified before V119, i.e.
-  created between V118 and V119) and settles the address's pending rows **before the session is
-  returned**; doing it every time also catches up a verify whose settling failed. Accounts created
-  before V118 (`email_verified_at` NULL) are never given a token and **never bound**: a
-  verify-on-next-sign-in step for them is still not built (ONBOARDING_AUTH_SPEC).
-- **Unverified accounts are never bound** (otherwise someone registers the boss's address and compares
-  views). Binding re-checks, under a `FOR SHARE` lock on X's user row, that X is live, verified and
-  still holds the token.
+  always after a random 5–30 s delay, in batches of 500, over pending rows from the last 30 minutes. At
+  most once a day across replicas (recorded in `contact_block_job_state`) it pages through every pending
+  row instead (rows missed while the server was down). Acts A makes toward X in those 5–30 s reach X and
+  then vanish when the row binds; this window is accepted, since binding on A's request would put a
+  membership-dependent lookup on A's request path.
+- **X proves the address at sign-up verify** (and the local dev sign-up route, which does exactly what
+  verify does, so seeded and demo accounts are verified and tokened): the token is stored and every
+  pending row of the address is settled after the account is created and before the session is
+  returned. **Every successful email sign-in** does the same (accounts verified between V118 and V119).
+- **Settling there can never fail the request** (`ContactBlockSettling`): it can only fail when someone
+  added the address, so a failure would be a signal and, at verify, a lockout (the code is already
+  spent). It logs the exception class only, queues the address on the worker, and returns the session.
+  The window when it fails: until the worker's next tick (5 to 30 seconds), that address's rows are not
+  yet applied to X's reads. A restart in the window loses the retry; X's next sign-in settles again.
+- **Unverified accounts are never bound.** There are no real users yet; any account created without a
+  confirmed email (before V118) needs the verify-on-next-sign-in step (ONBOARDING_AUTH_SPEC, not built)
+  before launch, or it is never covered.
+
+### Removing an address (tombstones)
+
+Removing a bound row (or remove-all) does not delete it: it gets `released_at`. A appears for X again
+from then on, but nothing A did before `released_at` ever reaches X (Activity rows by their first
+occurrence, messages by time, conversations A started before, link invites, album grants and requests,
+matches, export rows), so a removal can't dump a backlog on X whose timing would line up with it. A
+pending row is deleted. The remove is one statement either way, and A's count drops by one either way.
+An exempt row's tombstone matches no viewer lookup and changes nothing. A re-added address gets a new
+row beside its tombstone and binds again under the same rule. Deleting A's account deletes tombstones
+too; deleting X's deletes tombstones pointing at X.
 
 ### Where X could come across A, and how it's suppressed
 
-The rule (`ContactBlockVisibility.hiddenFrom(X)`: one HMAC, one indexed lookup) is applied after the
-shared rank caches, which stay free of per-viewer exclusions.
+The rule (`ContactBlockVisibility`: one HMAC, one indexed lookup) is applied after the shared rank
+caches, which stay free of per-viewer exclusions.
 
 | Surface | Code | Suppression | Test |
 | --- | --- | --- | --- |
-| Grid (incl. Visiting soon, travel) | `GridService` | dropped with hides; partner mini and couple badge stripped; out of "Verified couples only" | two-worlds, partner, rank cache |
-| Swipe deck, rewind, like-back, swipe submit | `SwipeDeckQueryAction`, `SwipeRewindAction`, `SwipeService.likeBack`, `SwipeSubmitAction` | excluded before ranking (after the cache); stripped minis; rewind refuses; like-back `LIKE_BACK_NOT_AVAILABLE`; a stale card `INVALID_SWIPE_TARGET` | two-worlds, partner |
-| Psync decks and submits | `PsyncDeckCoordinator`, `PsyncActiveSessionActions` | out of the shared deck if hidden from either partner; minis stripped; stale card `PSYNC_INVALID_CARD` | not integration-tested |
-| Playing Tonight feed and map zones | `TonightFeedService` | dropped like a blocked owner (zones come from feed rows; no server counts exist) | binding (Tonight) |
+| Grid (incl. Visiting soon, travel) | `GridService` | dropped with hides; partner mini and couple badge stripped; out of "Verified couples only" | two-worlds, binding (partner, rank cache) |
+| Swipe deck, rewind, like-back, submit | `SwipeDeckQueryAction`, `SwipeRewindAction`, `SwipeService.likeBack`, `SwipeSubmitAction` | excluded before ranking (after the cache); minis stripped; rewind refuses; like-back `LIKE_BACK_NOT_AVAILABLE`; stale card `INVALID_SWIPE_TARGET`; a raced like flips the row to exempt | two-worlds, binding |
+| Psync decks and submits | `PsyncDeckCoordinator`, `PsyncActiveSessionActions`, `SwipeService.queryDeckForPsync` | **per person**: the shared deck still holds A (so X's partner Q sees and answers A, and A's world is the same either way); X's view leaves A's card out, `deckSize` drops by one, X's submit on it is `PSYNC_INVALID_CARD`, and each partner finishes at their own count | Psync |
+| Psync together matches | `PsyncMatchResolution` (rows kept), `MatchCelebrationService`, `MessagingService.openMatchConversation`, inbox listing, export | A–X match rows stay; no moment for X (the hidden half of a pair moment drops, P's own moment stays); no hint (subjects of the change); the A–X conversation is never listed; X's export leaves the match out | Psync |
+| Playing Tonight feed and map zones | `TonightFeedService` | dropped like a blocked owner; map zones come from the feed rows; there are no server-side aggregate counts | binding (Tonight) |
 | Favorites | `FavoriteService` | can't be starred (`PROFILE_NOT_FOUND`), dropped from the list, minis stripped | two-worlds |
-| Profile fetch by id, partner on a profile | `ProfileService.getPublicProfile` | `PROFILE_NOT_FOUND` (no view recorded); partner removed | two-worlds, partner |
-| Activity feed, counts, badge | `JdbcActivityFeedSql`, `JdbcActivitySummarySql`, `ActivityFeedActions` | actor filtered in SQL; pair names stripped | two-worlds |
-| Activity actions toward A | `ActivitySignalActions` | X's flirt/album request `*_NOT_ALLOWED`; realtime hint caused by A suppressed | two-worlds |
-| Pushes and the notifications list | `NotificationEnqueueActions` | outbox write skipped when the actor hides from the recipient (the gate read still runs) | two-worlds (outbox) |
-| Messages inbox, thread, preview, unread | `JdbcMessagingConversationLookupSql`, `JdbcMessagingMessageReadSql`, `MessagingConversationGuard`, `MessagingDtoMapper` | a conversation A started is never listed and every call on it is `CONVERSATION_NOT_FOUND` (detail, send, read mark, timer, leave); in a group A later joined, A is stripped from participants and invites and A's messages from pages, preview and unread | two-worlds (direct); group: not integration-tested |
-| Message realtime (deltas, typing) | `MessagingRealtimePublisher` | no hint to a participant the actor (or an invited partner) hides from | two-worlds |
-| Partner chat invites, bring-your-partner note | `MessagingDtoMapper`, `JdbcMessagingPartnerOfferSql` | invites naming A stripped; A never named or considered in the offer | not integration-tested |
-| Partner link invites | `ProfileLinkService` | not in X's summary; accept/decline `PROFILE_LINK_INVITE_NOT_FOUND`; X→A `PROFILE_LINK_TARGET_NOT_FOUND`; admin view unfiltered | two-worlds |
+| Profile fetch by id, partner on a profile | `ProfileService.getPublicProfile` | `PROFILE_NOT_FOUND` (no view recorded); partner removed | two-worlds, binding |
+| Activity feed, counts, badge | `JdbcActivityFeedSql`, `JdbcActivitySummarySql`, `ActivityFeedActions` | all of A's rows filtered in SQL (tombstones: rows first seen before the release); pair names stripped | two-worlds, binding (coworker, tombstone) |
+| Activity acts toward A | `ActivitySignalActions` | X's flirt/album request `*_NOT_ALLOWED`; A's realtime hints suppressed; a raced act flips to exempt | two-worlds |
+| Pushes and the notifications list | `NotificationEnqueueActions` | outbox write skipped when the actor hides from the recipient (the gate read still runs) | two-worlds, Psync |
+| Messages inbox, thread, preview, unread | `listConversationIds`, `JdbcMessagingMessageReadSql`, `MessagingConversationGuard`, `MessagingDtoMapper` | listed by the same rule as opening: a conversation where every other participant hides from X is not X's (any call `CONVERSATION_NOT_FOUND`); a group with any visible participant is listed with A stripped from participants and invites; A's messages are left out of pages, preview and unread, never make the thread visible, and never move it up (X's sort time falls back to their last visible message) | two-worlds, conversations |
+| Quoting or replying to A's message | — | no quote or reply-to feature exists | — |
+| Message realtime (deltas, typing) | `MessagingRealtimePublisher` | no hint to anyone the actor, an invited partner, or a subject of the change hides from | two-worlds, Psync |
+| Partner chat invites, bring-your-partner note | `MessagingDtoMapper`, `JdbcMessagingPartnerOfferSql` | invites naming A stripped; A never named or considered in the offer | conversations |
+| Partner link invites | `ProfileLinkService` | not in X's summary (tombstones: invites sent before the release); accept/decline `PROFILE_LINK_INVITE_NOT_FOUND`; X→A `PROFILE_LINK_TARGET_NOT_FOUND`; admin view unfiltered | two-worlds |
 | Private albums | `MediaPrivateAlbumAccessActions` | open/request `MEDIA_ALBUM_NOT_FOUND`/`INVALID_ALBUM_REQUEST_TARGET` | not integration-tested |
 | Presence stream | `PresenceStreamRoutes` | no presence of A | not integration-tested |
-| Match celebrations, new-matches rail | (none) | impossible: a match needs X to like A, which is prior interaction or refused | — |
-| X's data export | `AccountDataExportArchiver` | Activity, album grants/requests received, conversations A started, link invites from A left out | two-worlds |
+| X's data export | `AccountDataExportArchiver` | Activity, album grants/requests received, conversations A started, link invites, matches with A left out (tombstones: those dated before the release) | two-worlds, Psync |
 | Search | — | no people search exists | — |
 
-Not affected, on purpose: reports and ordinary blocks (X can still report or block A by id),
-moderation and admin tooling (repositories without the rule; partner-link admin lookup unfiltered),
-risk and safety signals, account deletion. A cannot hide from moderators or from someone they are in a
-dispute with (any interaction exempts the pair).
+Not affected, on purpose: reports and ordinary blocks, moderation and admin tooling, risk and safety
+signals, account deletion. A cannot hide from moderators or from someone who has reached out to them.
 
 ### Linked couples
 
@@ -699,34 +719,31 @@ for X: the partner mini and couple badge come off, as for a partner whose visibi
 
 ### Deletion and export
 
-Blocker deleted: their rows are deleted. Target deleted: rows pointing at them (bound or exempt) go back
-to pending and their contact token is cleared, so they bind again only if the address re-registers and
-is verified. A's export shows only `created_at` per address (`hideFromPeopleYouKnow`). X's export
-leaves out what A caused.
+Blocker deleted: all their rows, tombstones included, are deleted. Target deleted: active rows pointing
+at them go back to pending (they bind again only if the address re-registers and is verified),
+tombstones pointing at them are deleted, and their contact token is cleared. A's export shows only
+`created_at` per address (`hideFromPeopleYouKnow`). X's export leaves out what A caused. The token
+parameter of the deletion and export classes is required, so neither can be built without the keys.
 
 ### What it cannot do, and what stays inferable
 
-- It does not hide A from anyone A already matched, chatted with, liked or was viewed by, or from a
-  different address or a second account of the same person; it does not hide A's partner, does not
-  hide X from A, and never applies to accounts whose address isn't verified (including every account
-  created before verified sign-up, until a verify-on-sign-in step exists).
-- **Remove, then re-add:** removing an address surfaces everything A did toward X while hidden (likes,
-  views, messages). Re-adding then finds those rows dated before the new add, so the pair is exempt for
-  good. The app's remove-all confirmation says so.
+- It can't undo what X has already seen (X may remember a view). It does not hide A from anyone who has
+  already reached out to A (liked, messaged, matched, viewed, requested), from a different address or a
+  second account; it does not hide A's partner or X from A; it never applies to accounts without a
+  confirmed email.
 - **A throwaway comparison:** a contact who compares a real account with a throwaway can learn that A
-  knows their address (A appears for one and not the other). It never tells anyone whether A is hidden
-  from a specific member by A's own observation.
-- **Unread is ambiguous, not proof:** A's message to X stays `sent`, exactly like a message nobody
-  opened; a like that never becomes a match, a partner invite never answered, are the same.
-- **X-side signals (not A's):** X's first sign-in or verify after someone added X's address does a few
-  more indexed writes (timing). In a group conversation with a hidden A, X's own message can stay
-  "sent" while every visible participant has read it (the read state still counts A). When A's partner
-  P invites A into a chat with X, X never sees the invite and only X could approve it in a two-person
-  chat, so it stays pending for P and A, like an invite X ignores.
-- **A-side timing residuals:** for a push or realtime hint A causes, the skipped write/emit for X is a
-  difference of one insert or one in-memory emit on A's request, the same as for a recipient with no
-  device or the kind turned off. The binding race: X's like submitted in the same instant the row binds
-  can still be recorded (milliseconds).
+  knows their address. Unread is ambiguous, not proof: A's message stays `sent`, like one nobody
+  opened; a like that never matches and an invite never answered look the same.
+- **Removal:** X starts seeing A again from the removal; nothing older surfaces, so the moment of removal
+  lines up with nothing X can see except A's reappearance in discovery.
+- **X-side signals:** X's verify or sign-in does a few more indexed writes when someone added X's
+  address (timing). In a group with a hidden A, X's own message can stay "sent" while every visible
+  participant has read it (the read state still counts A), and X's sort time falls back to their last
+  visible message, losing earlier non-message bumps. In a Psync session X's deck is one card short of
+  the requested size.
+- **A-side residuals:** for a push or realtime hint A causes, the skipped write or emit for X is one
+  insert or one in-memory emit, the same as for a recipient with no device or the kind turned off. A's
+  acts in the 5–30 s before a bind reach X and then vanish.
 - **Contacts picker:** not built (needs platform code per shell). Typing is the only way in.
 
 ## Transparency Policy

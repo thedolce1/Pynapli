@@ -34,7 +34,7 @@ class JdbcAccountDataExportArchiver(
     private val dataSource: DataSource,
     private val clock: Clock = Clock.systemUTC(),
     // The server's contact block keys (ServerDependencies passes the configured ones).
-    private val contactBlockTokens: ContactBlockTokens = ContactBlockTokens.localDevelopment(),
+    private val contactBlockTokens: ContactBlockTokens,
 ) : AccountDataExportArchiver {
     override suspend fun buildArchive(userId: UUID): ExportArchive =
         dataSource.withConnection { connection ->
@@ -122,8 +122,6 @@ class JdbcAccountDataExportArchiver(
                     "SELECT id, owner_user_id, status, requested_at, decided_at FROM media_album_access_requests WHERE requester_user_id = ? ORDER BY requested_at",
                 "likesAndPasses" to
                     "SELECT id, target_user_id, action, note_text, created_at, rewound_at, psync_session_id FROM swipe_actions WHERE actor_user_id = ? ORDER BY created_at",
-                "matches" to
-                    "SELECT id, CASE WHEN user_a = ? THEN user_b ELSE user_a END AS other_user_id, created_at FROM matches WHERE user_a = ? OR user_b = ? ORDER BY created_at",
                 "blocks" to
                     "SELECT blocked_user_id, reason, created_at FROM user_blocks WHERE blocker_user_id = ? ORDER BY created_at",
                 "hiddenProfiles" to
@@ -173,7 +171,7 @@ class JdbcAccountDataExportArchiver(
                     WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
                     SELECT ae.* FROM activity_events ae, me
                     WHERE ae.recipient_user_id = me.id
-                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = ae.actor_user_id)
+                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = ae.actor_user_id AND (cb.released_at IS NULL OR ae.first_occurred_at < cb.released_at))
                     ORDER BY ae.occurred_at
                     """.trimIndent(),
                 "albumAccessYouHave" to
@@ -181,7 +179,7 @@ class JdbcAccountDataExportArchiver(
                     WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
                     SELECT g.album_id, g.owner_user_id, g.granted_at, g.revoked_at FROM media_album_access_grants g, me
                     WHERE g.grantee_user_id = me.id
-                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = g.owner_user_id)
+                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = g.owner_user_id AND (cb.released_at IS NULL OR g.granted_at < cb.released_at))
                     ORDER BY g.granted_at
                     """.trimIndent(),
                 "albumRequestsYouReceived" to
@@ -189,7 +187,7 @@ class JdbcAccountDataExportArchiver(
                     WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
                     SELECT r.id, r.requester_user_id, r.status, r.requested_at, r.decided_at FROM media_album_access_requests r, me
                     WHERE r.owner_user_id = me.id
-                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = r.requester_user_id)
+                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = r.requester_user_id AND (cb.released_at IS NULL OR r.requested_at < cb.released_at))
                     ORDER BY r.requested_at
                     """.trimIndent(),
                 "conversations" to
@@ -199,7 +197,7 @@ class JdbcAccountDataExportArchiver(
                     FROM conversation_participants cp
                     JOIN conversations c ON c.id = cp.conversation_id, me
                     WHERE cp.user_id = me.id
-                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = c.created_by_user_id)
+                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = c.created_by_user_id AND (cb.released_at IS NULL OR c.created_at < cb.released_at))
                     """.trimIndent(),
                 "partnerLinks" to
                     """
@@ -212,8 +210,24 @@ class JdbcAccountDataExportArchiver(
                           SELECT 1 FROM contact_blocks cb
                           WHERE cb.target_token = me.hidden_token
                             AND cb.blocker_user_id = CASE WHEN l.user_id = me.id THEN l.linked_user_id ELSE l.user_id END
+                            AND (cb.released_at IS NULL OR l.created_at < cb.released_at)
                       )
                     ORDER BY l.created_at
+                    """.trimIndent(),
+                // A Psync together match can pair this person with someone hiding from them.
+                "matches" to
+                    """
+                    WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
+                    SELECT m.id, CASE WHEN m.user_a = me.id THEN m.user_b ELSE m.user_a END AS other_user_id, m.created_at
+                    FROM matches m, me
+                    WHERE (m.user_a = me.id OR m.user_b = me.id)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM contact_blocks cb
+                          WHERE cb.target_token = me.hidden_token
+                            AND cb.blocker_user_id = CASE WHEN m.user_a = me.id THEN m.user_b ELSE m.user_a END
+                            AND (cb.released_at IS NULL OR m.created_at < cb.released_at)
+                      )
+                    ORDER BY m.created_at
                     """.trimIndent(),
             )
     }

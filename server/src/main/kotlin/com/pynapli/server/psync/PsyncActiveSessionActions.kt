@@ -89,7 +89,7 @@ internal class PsyncActiveSessionActions(
         val card =
             repository.findCardByTokenHash(sessionId, deckTokenCodec.tokenHash(request.cardToken))
                 ?: throw PsyncException("PSYNC_INVALID_CARD")
-        if (deckCoordinator.targetHidesFromSession(session, card.targetUserId)) throw PsyncException("PSYNC_INVALID_CARD")
+        if (deckCoordinator.targetHidesFrom(userId, card.targetUserId)) throw PsyncException("PSYNC_INVALID_CARD")
         val spentInventoryId = spendPineappleLikeIfNew(sessionId, userId, card.targetUserId, request.action)
         // Non-cancellable: a request cancelled mid-write still commits the row, which then owns the
         // spend. Cancellation surfaces after the refund decision, never in place of the outcome.
@@ -117,9 +117,12 @@ internal class PsyncActiveSessionActions(
             }
         if (!outcome.sessionActive) throw PsyncException("PSYNC_INVALID_STATE")
 
-        val deckCount = repository.countDeckCards(sessionId)
+        // Each person's deck leaves out the cards of people hiding from them, so each finishes at
+        // their own count.
+        val totalCards = repository.countDeckCards(sessionId)
+        val deckCount = totalCards - deckCoordinator.hiddenCardCount(sessionId, userId)
         val completed =
-            if (outcome.actedCount >= deckCount && bothPartnersFinished(session, userId, deckCount)) {
+            if (outcome.actedCount >= deckCount && bothPartnersFinished(session, userId, totalCards)) {
                 val finish = repository.complete(sessionId, userId, clock.instant())
                 if (finish is PsyncSessionRepository.CompleteOutcome.Completed &&
                     finish.session.status == PSYNC_STATUS_COMPLETED
@@ -279,7 +282,8 @@ internal class PsyncActiveSessionActions(
     ): Boolean {
         if (deckCount == 0) return false
         val partnerId = session.participants.firstOrNull { it.userId != actorUserId }?.userId ?: return false
-        return repository.countActionsForActor(session.id, partnerId) >= deckCount
+        val partnerDeckCount = deckCount - deckCoordinator.hiddenCardCount(session.id, partnerId)
+        return repository.countActionsForActor(session.id, partnerId) >= partnerDeckCount
     }
 
     private suspend fun requireActiveParticipant(

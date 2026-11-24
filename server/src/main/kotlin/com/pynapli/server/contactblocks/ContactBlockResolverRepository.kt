@@ -1,20 +1,30 @@
 package com.pynapli.server.contactblocks
 
 import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.lockPairForTransaction
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.swipe.SWIPE_PAIR_LOCK_NAMESPACE
 import java.sql.Connection
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
-/** A row still pointing at nobody (target_token IS NULL). */
+/** A row still pointing at nobody (target_token IS NULL, not released). */
 data class PendingContactBlockRow(
     val rowId: UUID,
     val blockerUserId: UUID,
     val emailToken: String,
     val createdAt: Instant,
 )
+
+enum class ContactBlockSettleOutcome {
+    BOUND,
+    EXEMPT,
+
+    /** Nothing changed: the row isn't pending any more, or the member no longer holds the token. */
+    UNCHANGED,
+}
 
 /**
  * Off-request storage for the resolver: pending rows, verified members by their contact token, the
@@ -43,24 +53,29 @@ interface ContactBlockResolverRepository {
         memberToken: String,
     )
 
-    /** Any recorded interaction that exempts the pair ([ContactBlockInteractionSql]). */
-    suspend fun hadInteraction(
-        blockerUserId: UUID,
-        targetUserId: UUID,
-        blockCreatedAt: Instant,
-    ): Boolean
-
     /**
-     * Sets the row's target token while it is still pending and [targetUserId] is still the live,
-     * verified member holding [memberToken]. The member's user row is locked first (FOR SHARE), so a
-     * concurrent account deletion (which updates that row first) either runs before, and this binds
-     * nothing, or after, and clears what this set.
+     * In ONE transaction: locks the member's user row (FOR SHARE: a concurrent account deletion either
+     * runs first and nothing binds, or after and clears what this set), takes the pair lock every Swipe
+     * and Psync like takes ([SWIPE_PAIR_LOCK_NAMESPACE]), checks [ContactBlockInteractionSql] under it,
+     * and writes [exemptToken] or [targetToken]. So a like by the member landing in the same instant is
+     * either seen here (exempt) or recorded after the bind (and then flips the row to exempt through
+     * [ContactBlockVisibility.noteActToward]).
      */
-    suspend fun bind(
-        rowId: UUID,
+    suspend fun settle(
+        row: PendingContactBlockRow,
         targetUserId: UUID,
         memberToken: String,
         targetToken: String,
+        exemptToken: String,
+    ): ContactBlockSettleOutcome
+
+    /**
+     * Claims today's full sweep: true (and records [now]) when the last one was before [now] minus
+     * [every], false otherwise. One statement, so two replicas can't both claim it.
+     */
+    suspend fun claimFullSweep(
+        now: Instant,
+        every: java.time.Duration,
     ): Boolean
 }
 
@@ -120,49 +135,68 @@ class JdbcContactBlockResolverRepository(
         }
     }
 
-    override suspend fun hadInteraction(
-        blockerUserId: UUID,
-        targetUserId: UUID,
-        blockCreatedAt: Instant,
-    ): Boolean =
-        dataSource.withConnection { connection ->
-            connection.prepareStatement(ContactBlockInteractionSql.HAD_INTERACTION_SQL).use { statement ->
-                statement.setObject(1, blockerUserId)
-                statement.setObject(2, targetUserId)
-                statement.setTimestamp(3, Timestamp.from(blockCreatedAt))
-                statement.executeQuery().use { rs -> rs.next() && rs.getBoolean(1) }
-            }
-        }
-
-    override suspend fun bind(
-        rowId: UUID,
+    override suspend fun settle(
+        row: PendingContactBlockRow,
         targetUserId: UUID,
         memberToken: String,
         targetToken: String,
-    ): Boolean =
+        exemptToken: String,
+    ): ContactBlockSettleOutcome =
         dataSource.withConnection { connection ->
-            connection.inTransaction { bindLocked(rowId, targetUserId, memberToken, targetToken) }
+            connection.inTransaction { settleLocked(row, targetUserId, memberToken, targetToken, exemptToken) }
         }
 
-    private fun Connection.bindLocked(
-        rowId: UUID,
+    private fun Connection.settleLocked(
+        row: PendingContactBlockRow,
         targetUserId: UUID,
         memberToken: String,
         targetToken: String,
-    ): Boolean {
+        exemptToken: String,
+    ): ContactBlockSettleOutcome {
         val stillOwner =
             prepareStatement(LOCK_TARGET_SQL).use { statement ->
                 statement.setObject(1, targetUserId)
                 statement.setString(2, memberToken)
                 statement.executeQuery().use { rs -> rs.next() }
             }
-        if (!stillOwner) return false
-        return prepareStatement(BIND_SQL).use { statement ->
-            statement.setString(1, targetToken)
-            statement.setObject(2, rowId)
-            statement.executeUpdate() > 0
+        if (!stillOwner) return ContactBlockSettleOutcome.UNCHANGED
+        val exempt =
+            if (row.blockerUserId == targetUserId) {
+                true
+            } else {
+                lockPairForTransaction(SWIPE_PAIR_LOCK_NAMESPACE, row.blockerUserId, targetUserId)
+                prepareStatement(ContactBlockInteractionSql.HAD_INTERACTION_SQL).use { statement ->
+                    statement.setObject(1, row.blockerUserId)
+                    statement.setObject(2, targetUserId)
+                    statement.setTimestamp(3, Timestamp.from(row.createdAt))
+                    statement.executeQuery().use { rs -> rs.next() && rs.getBoolean(1) }
+                }
+            }
+        val written =
+            prepareStatement(BIND_SQL).use { statement ->
+                statement.setString(1, if (exempt) exemptToken else targetToken)
+                statement.setObject(2, row.rowId)
+                statement.executeUpdate() > 0
+            }
+        return when {
+            !written -> ContactBlockSettleOutcome.UNCHANGED
+            exempt -> ContactBlockSettleOutcome.EXEMPT
+            else -> ContactBlockSettleOutcome.BOUND
         }
     }
+
+    override suspend fun claimFullSweep(
+        now: Instant,
+        every: java.time.Duration,
+    ): Boolean =
+        dataSource.withConnection { connection ->
+            connection.prepareStatement(CLAIM_FULL_SWEEP_SQL).use { statement ->
+                statement.setString(1, FULL_SWEEP_JOB)
+                statement.setTimestamp(2, Timestamp.from(now))
+                statement.setTimestamp(3, Timestamp.from(now.minus(every)))
+                statement.executeQuery().use { rs -> rs.next() }
+            }
+        }
 
     private fun java.sql.ResultSet.pendingRows(): List<PendingContactBlockRow> =
         buildList {
@@ -179,11 +213,14 @@ class JdbcContactBlockResolverRepository(
         }
 
     private companion object {
+        const val FULL_SWEEP_JOB = "contact-block-full-sweep"
+
         val LIST_PENDING_SQL =
             """
             SELECT id, blocker_user_id, email_token, created_at
             FROM contact_blocks
             WHERE target_token IS NULL
+              AND released_at IS NULL
               AND created_at >= ?::timestamptz
               AND (?::timestamptz IS NULL OR (created_at, id) > (?::timestamptz, ?::uuid))
             ORDER BY created_at ASC, id ASC
@@ -196,6 +233,7 @@ class JdbcContactBlockResolverRepository(
             FROM contact_blocks
             WHERE email_token = ?
               AND target_token IS NULL
+              AND released_at IS NULL
             ORDER BY created_at ASC, id ASC
             """.trimIndent()
 
@@ -237,28 +275,40 @@ class JdbcContactBlockResolverRepository(
             SET target_token = ?
             WHERE id = ?
               AND target_token IS NULL
+              AND released_at IS NULL
+            """.trimIndent()
+
+        val CLAIM_FULL_SWEEP_SQL =
+            """
+            INSERT INTO contact_block_job_state AS s (job_name, last_full_sweep_at)
+            VALUES (?, ?::timestamptz)
+            ON CONFLICT (job_name) DO UPDATE
+            SET last_full_sweep_at = EXCLUDED.last_full_sweep_at
+            WHERE s.last_full_sweep_at < ?::timestamptz
+            RETURNING 1
             """.trimIndent()
     }
 }
 
 /**
  * "Interaction" between a blocker A and the member X who owns the address (TRUST_AND_SAFETY_SPEC,
- * "Contact blocks", Interaction). The pair is exempt, and left completely alone, when:
+ * "Contact Blocks", Interaction). The pair is exempt, and left completely alone, only when X did
+ * something A could already observe, at any time up to resolution:
  *
- *  1. any of these rows exists between them, in either direction, from BEFORE the block was added
- *     (`contact_blocks.created_at`): a profile view or any other Activity row (flirt, like, Pineapple
- *     Like, match, album request or grant, partner chat invite, Psync and Playing Tonight rows: all
- *     live in activity_events), a like or Pineapple Like (a pass produces no visible signal and is
- *     ignored), a shared conversation, a favourite, a partner link or link invite, an ordinary block,
- *     a private album request or grant, a Psync choice; or
- *  2. at ANY time up to resolution, X did something A can see: the same rows initiated by X (or a
- *     match, or a conversation X started or wrote in). Otherwise binding would stop something A was
- *     already seeing from X ("they stopped viewing me"), which would confirm the block.
+ *  - an Activity row X caused for A (a profile view A can see, a flirt, a like, a Pineapple Like, an
+ *    album request or grant, a partner chat invite, a Psync or Playing Tonight row);
+ *  - a like or Pineapple Like by X on A (a pass produces no visible signal);
+ *  - a match between them;
+ *  - a conversation with both of them that X created or wrote in;
+ *  - a partner link invite from X, a private album request from X, an album grant by X;
+ *  - a Psync like by X on A.
  *
- * Rows A created toward X after adding the address don't exempt the pair: A's own actions after the
- * add are exactly what the feature hides.
+ * Nothing A did toward X, before or after adding the address, ever exempts the pair: if X never did
+ * anything A could see, binding changes nothing A observes, so there is nothing to protect. What A
+ * did that X already saw disappears from X's views once bound, like everything else from A.
+ * Favourites are private to the person who stars, so X's favourite of A doesn't count.
  *
- * Parameters: blocker id, target id, block created_at.
+ * Parameters: blocker id, target id, block created_at (kept in the signature; the rule doesn't use it).
  */
 internal object ContactBlockInteractionSql {
     val HAD_INTERACTION_SQL =
@@ -267,16 +317,11 @@ internal object ContactBlockInteractionSql {
         SELECT (
             EXISTS (
                 SELECT 1 FROM activity_events ae
-                WHERE (ae.actor_user_id = p.a AND ae.recipient_user_id = p.x AND ae.first_occurred_at < p.t)
-                   OR (ae.actor_user_id = p.x AND ae.recipient_user_id = p.a)
+                WHERE ae.actor_user_id = p.x AND ae.recipient_user_id = p.a
             )
             OR EXISTS (
                 SELECT 1 FROM swipe_actions sa
-                WHERE sa.action <> 'pass'
-                  AND (
-                      (sa.actor_user_id = p.a AND sa.target_user_id = p.x AND sa.created_at < p.t)
-                      OR (sa.actor_user_id = p.x AND sa.target_user_id = p.a)
-                  )
+                WHERE sa.actor_user_id = p.x AND sa.target_user_id = p.a AND sa.action <> 'pass'
             )
             OR EXISTS (
                 SELECT 1 FROM matches m
@@ -291,8 +336,7 @@ internal object ContactBlockInteractionSql {
                 JOIN conversations c ON c.id = cpa.conversation_id
                 WHERE cpa.user_id = p.a
                   AND (
-                      c.created_at < p.t
-                      OR c.created_by_user_id = p.x
+                      c.created_by_user_id = p.x
                       OR EXISTS (
                           SELECT 1 FROM messages msg
                           WHERE msg.conversation_id = c.id
@@ -301,34 +345,20 @@ internal object ContactBlockInteractionSql {
                   )
             )
             OR EXISTS (
-                SELECT 1 FROM favorite_profiles f
-                WHERE (f.user_id = p.a AND f.favorite_user_id = p.x AND f.created_at < p.t)
-                   OR (f.user_id = p.x AND f.favorite_user_id = p.a)
-            )
-            OR EXISTS (
                 SELECT 1 FROM user_profile_links l
-                WHERE (l.user_id = p.a AND l.linked_user_id = p.x AND l.created_at < p.t)
-                   OR (l.user_id = p.x AND l.linked_user_id = p.a)
-            )
-            OR EXISTS (
-                SELECT 1 FROM user_blocks b
-                WHERE (b.blocker_user_id = p.a AND b.blocked_user_id = p.x AND b.created_at < p.t)
-                   OR (b.blocker_user_id = p.x AND b.blocked_user_id = p.a)
+                WHERE l.user_id = p.x AND l.linked_user_id = p.a
             )
             OR EXISTS (
                 SELECT 1 FROM media_album_access_requests r
-                WHERE (r.requester_user_id = p.a AND r.owner_user_id = p.x AND r.requested_at < p.t)
-                   OR (r.requester_user_id = p.x AND r.owner_user_id = p.a)
+                WHERE r.requester_user_id = p.x AND r.owner_user_id = p.a
             )
             OR EXISTS (
                 SELECT 1 FROM media_album_access_grants g
-                WHERE (g.owner_user_id = p.a AND g.grantee_user_id = p.x AND g.granted_at < p.t)
-                   OR (g.owner_user_id = p.x AND g.grantee_user_id = p.a)
+                WHERE g.owner_user_id = p.x AND g.grantee_user_id = p.a
             )
             OR EXISTS (
                 SELECT 1 FROM psync_session_actions pa
-                WHERE (pa.actor_user_id = p.a AND pa.target_user_id = p.x AND pa.created_at < p.t)
-                   OR (pa.actor_user_id = p.x AND pa.target_user_id = p.a)
+                WHERE pa.actor_user_id = p.x AND pa.target_user_id = p.a AND pa.action <> 'pass'
             )
         ) AS interacted
         FROM p

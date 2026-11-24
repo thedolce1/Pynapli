@@ -102,6 +102,9 @@ class MessagingService(
             conversationId = conversation.conversationId,
             participants = conversation.participants,
             statuses = MessagingParticipantStatuses.visible,
+            // Nobody made this change: no hint to either person if the other hides from them (a Psync
+            // together match can pair someone with a person hiding from them).
+            subjectUserIds = listOf(userA, userB),
         )
     }
 

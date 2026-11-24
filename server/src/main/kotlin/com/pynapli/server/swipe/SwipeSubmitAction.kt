@@ -133,6 +133,8 @@ internal class SwipeSubmitAction(
         if (result.inventoryUnavailable) {
             throw SwipeException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
         }
+        // A like the target can see: if the target hides from the viewer (a bind that raced this like), the pair is now exempt.
+        if (action != SwipeAction.PASS) contactBlockVisibility?.noteActToward(viewerUserId, targetUserId)
         sideEffects.deliver(result, actorUserId = viewerUserId, targetUserId = targetUserId, action = action)
         val match = result.match
 

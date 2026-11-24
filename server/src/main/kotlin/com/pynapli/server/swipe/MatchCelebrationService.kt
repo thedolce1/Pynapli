@@ -18,10 +18,18 @@ class MatchCelebrationService(
     private val repository: MatchCelebrationRepository,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver? = null,
     private val clock: Clock = Clock.systemUTC(),
+    // "Hide from people you know": a match with someone hiding from the viewer (a Psync together
+    // match made by the hidden person's partner and themselves) is never celebrated for the viewer,
+    // and the hidden half of a pair moment drops, leaving the visible partner's own moment.
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun listUncelebrated(viewerUserId: UUID): MatchCelebrationsResponseDto {
         val since = clock.instant().minus(CELEBRATION_WINDOW)
-        val records = repository.listUncelebrated(viewerUserId, since, MAX_UNCELEBRATED)
+        val rules = contactBlockVisibility?.rulesFor(viewerUserId)
+        val records =
+            repository
+                .listUncelebrated(viewerUserId, since, MAX_UNCELEBRATED)
+                .filterNot { rules?.hidesAct(it.otherUserId, it.createdAt) == true }
         val viewerPhotoUrl = repository.firstProfilePhoto(viewerUserId)?.let { mediaAssetUrlResolver?.publicContentUrl(it) }
         if (records.isEmpty()) return MatchCelebrationsResponseDto(viewerPhotoUrl = viewerPhotoUrl)
         val byOther = records.associateBy { it.otherUserId }

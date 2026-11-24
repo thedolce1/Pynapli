@@ -273,16 +273,18 @@ Built 2026-11-20. Privacy has a "People you know" section with **Hide from peopl
 opens a sheet (`HideFromPeopleYouKnowSheet`, `ContactBlocksStateHolder`): an email field and **Add**
 (typing is the only way in; the OS contacts picker is a follow-up, it needs platform code per shell),
 the count ("N addresses added"), **Remove an address** (type it again) and **Remove all** (with a
-confirmation saying A shows up again and what A sent meanwhile can reach them). The client only calls
-the API and shows the count; confirmations are the same for every address. Sheet copy:
+confirmation saying A shows up again from now on and what A did before stays hidden). The client only
+calls the API and shows the count; confirmations are the same for every address. Sheet copy
+(revised 2026-11-23 with the narrower exemption):
 
-> Add email addresses of people who should never come across you here. If one of them has an account,
-> or joins later, you won't show up for them in Grid, Swipe, Playing Tonight, Psync or Activity, and
-> your likes, views and messages won't reach them. We will never tell you whether an address belongs to
-> a member, and nothing you see changes.
+> Add email addresses of people who should never come across you here. If one of them has an account
+> with a confirmed email, or joins later, you won't show up for them in Grid, Swipe, Playing Tonight,
+> Psync or Activity, and your likes, views and messages won't reach them. We will never tell you
+> whether an address belongs to a member, and nothing you see changes.
 >
-> This does not hide you from someone you've already matched, chatted with, liked or been viewed by
-> (block them from their profile), or from someone using a different email or a second account.
+> This can't undo what someone has already seen. It also does not hide you from someone who has already
+> liked, messaged, matched or otherwise reached out to you (block them from their profile), or from
+> someone using a different email or a second account.
 >
 > It does not hide your partner (they can add the address too). It does not hide them from you, and it
 > doesn't affect reports or blocks.

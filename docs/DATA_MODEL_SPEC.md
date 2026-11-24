@@ -78,7 +78,10 @@ every change must keep.
   plain `email_hash`. `users.contact_token = HMAC(K2, "member:" + email_token)` for verified members
   (written at verify and sign-in), so the tables can't be joined without K2. Deletion deletes the
   blocker's rows, sends rows pointing at the deleted member back to pending, and clears their token;
-  export shows the blocker only the dates added.
+  export shows the blocker only the dates added. V120 adds `released_at`: removing a bound address
+  keeps the row as a tombstone (nothing the blocker did before it ever reaches the person it pointed
+  at); uniqueness and the count apply to rows with `released_at` NULL only; `contact_block_job_state`
+  records the resolver's daily full sweep.
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
   the integrity of retained safety/legal records. In the same transaction, GDPR/CCPA erasure nulls
   identity hashes (`email_hash`, `phone_hash`, `firebase_uid`), clears `auth_identities` credentials

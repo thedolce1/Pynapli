@@ -53,33 +53,23 @@ class ContactBlockBindingIntegrationTest :
             graph.resolver.resolveRecent()
         }
 
-        // Interaction rows from before the block (an hour ago), or initiated by X at any time: exempt.
+        // Something X did that A could already observe: exempt (at any time before resolution).
         val exemptCases =
             mapOf(
-                "a profile view by A before the block" to
-                    "INSERT INTO activity_events (id, recipient_user_id, actor_user_id, event_type, target_user_id, first_occurred_at, occurred_at) VALUES (gen_random_uuid(), '$TARGET', '$BLOCKER', 'profile_view', '$TARGET', now() - interval '1 hour', now() - interval '1 hour')",
-                "a profile view by X, at any time" to
+                "a profile view by X" to
                     "INSERT INTO activity_events (id, recipient_user_id, actor_user_id, event_type, target_user_id) VALUES (gen_random_uuid(), '$BLOCKER', '$TARGET', 'profile_view', '$BLOCKER')",
-                "a flirt by A before the block" to
-                    "INSERT INTO activity_events (id, recipient_user_id, actor_user_id, event_type, target_user_id, first_occurred_at, occurred_at) VALUES (gen_random_uuid(), '$TARGET', '$BLOCKER', 'flirt', '$TARGET', now() - interval '1 hour', now() - interval '1 hour')",
-                "a like by A before the block" to
-                    "INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, created_at) VALUES (gen_random_uuid(), '$BLOCKER', '$TARGET', 'like', now() - interval '1 hour')",
-                "a like by X, at any time" to
+                "a flirt by X" to
+                    "INSERT INTO activity_events (id, recipient_user_id, actor_user_id, event_type, target_user_id) VALUES (gen_random_uuid(), '$BLOCKER', '$TARGET', 'flirt', '$BLOCKER')",
+                "a like by X" to
                     "INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action) VALUES (gen_random_uuid(), '$TARGET', '$BLOCKER', 'like')",
                 "a match" to
                     "INSERT INTO matches (id, user_a, user_b) VALUES (gen_random_uuid(), LEAST('$BLOCKER'::uuid, '$TARGET'::uuid), GREATEST('$BLOCKER'::uuid, '$TARGET'::uuid))",
-                "a favourite by X" to
-                    "INSERT INTO favorite_profiles (user_id, favorite_user_id) VALUES ('$TARGET', '$BLOCKER')",
                 "a partner link invite by X" to
                     "INSERT INTO user_profile_links (id, user_id, linked_user_id, status) VALUES (gen_random_uuid(), '$TARGET', '$BLOCKER', 'pending')",
-                "an ordinary block by X" to
-                    "INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id) VALUES (gen_random_uuid(), '$TARGET', '$BLOCKER')",
-                "an ordinary block by A before the block" to
-                    "INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id, created_at) VALUES (gen_random_uuid(), '$BLOCKER', '$TARGET', now() - interval '1 hour')",
             )
 
         exemptCases.forEach { (name, sql) ->
-            "pairs with prior interaction are exempt: $name" {
+            "pairs where X already reached out are exempt: $name" {
                 runBlocking<Unit> {
                     val graph = ContactBlockTestGraph(dataSource)
                     seedPair(graph)
@@ -94,27 +84,48 @@ class ContactBlockBindingIntegrationTest :
             }
         }
 
-        "a pass by A, or anything A does after adding the address, doesn't exempt the pair" {
+        // Only A acted (before or after the add), or X did something A can't see: bound.
+        val boundCases =
+            mapOf(
+                "a profile view by A before the add" to
+                    "INSERT INTO activity_events (id, recipient_user_id, actor_user_id, event_type, target_user_id, first_occurred_at, occurred_at) VALUES (gen_random_uuid(), '$TARGET', '$BLOCKER', 'profile_view', '$TARGET', now() - interval '1 hour', now() - interval '1 hour')",
+                "a like by A before the add" to
+                    "INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, created_at) VALUES (gen_random_uuid(), '$BLOCKER', '$TARGET', 'like', now() - interval '1 hour')",
+                "a pass by X" to
+                    "INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action) VALUES (gen_random_uuid(), '$TARGET', '$BLOCKER', 'pass')",
+                "a favourite by X (private to X)" to
+                    "INSERT INTO favorite_profiles (user_id, favorite_user_id) VALUES ('$TARGET', '$BLOCKER')",
+                "a partner link invite by A" to
+                    "INSERT INTO user_profile_links (id, user_id, linked_user_id, status) VALUES (gen_random_uuid(), '$BLOCKER', '$TARGET', 'pending')",
+            )
+
+        boundCases.forEach { (name, sql) ->
+            "pairs where X never reached out are bound: $name" {
+                runBlocking<Unit> {
+                    val graph = ContactBlockTestGraph(dataSource)
+                    seedPair(graph)
+                    graph.verifyAddress(TARGET, TARGET_ADDRESS)
+                    graph.execute(sql)
+                    addAndResolve(graph)
+
+                    assertEquals(setOf(BLOCKER), graph.visibility.hiddenFrom(TARGET), "pair must be bound ($name)")
+                }
+            }
+        }
+
+        "the coworker case: A views X, then adds X's address; X stops seeing A and the old view disappears" {
             runBlocking<Unit> {
                 val graph = ContactBlockTestGraph(dataSource)
                 seedPair(graph)
                 graph.verifyAddress(TARGET, TARGET_ADDRESS)
-                graph.execute(
-                    "INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action, created_at) VALUES (gen_random_uuid(), ?, ?, 'pass', now() - interval '1 hour')",
-                    BLOCKER,
-                    TARGET,
-                )
-                graph.contactBlocks.add(BLOCKER, TARGET_ADDRESS)
-                // A views X between the add and the (delayed) resolution.
-                graph.execute(
-                    "INSERT INTO activity_events (id, recipient_user_id, actor_user_id, event_type, target_user_id, first_occurred_at) VALUES (gen_random_uuid(), ?, ?, 'profile_view', ?, now() + interval '1 minute')",
-                    TARGET,
-                    BLOCKER,
-                    TARGET,
-                )
-                graph.resolver.resolveRecent()
+                graph.profiles.getPublicProfile(BLOCKER, TARGET)
+                assertTrue(graph.activity.listActivity(TARGET).items.any { it.actorUserId == BLOCKER.toString() }, "the view is shown first")
+
+                addAndResolve(graph)
 
                 assertEquals(setOf(BLOCKER), graph.visibility.hiddenFrom(TARGET))
+                assertTrue(graph.activity.listActivity(TARGET).items.none { it.actorUserId == BLOCKER.toString() })
+                assertEquals(0, graph.activity.getActivitySummary(TARGET).profileViewCount)
             }
         }
 
@@ -345,27 +356,112 @@ class ContactBlockBindingIntegrationTest :
             }
         }
 
-        "removing an address and adding it again leaves the pair exempt (A's hidden actions surfaced in between)" {
+        "removing a bound address leaves a tombstone: the backlog never reaches X, only what A does afterwards" {
             runBlocking<Unit> {
                 val graph = ContactBlockTestGraph(dataSource)
                 seedPair(graph)
                 graph.verifyAddress(TARGET, TARGET_ADDRESS)
                 addAndResolve(graph)
                 graph.activity.sendFlirt(BLOCKER, TARGET)
-                assertEquals(setOf(BLOCKER), graph.visibility.hiddenFrom(TARGET))
+                val conversationId =
+                    graph.messaging
+                        .createDirectConversation(BLOCKER, com.pynapli.shared.network.dto.CreateDirectConversationRequestDto(targetUserId = TARGET.toString()))
+                        .conversation.conversationId
+                graph.messaging.sendMessage(BLOCKER, conversationId, com.pynapli.shared.network.dto.SendMessageRequestDto(body = "Sent while hidden"))
+                // Everything A did is dated before the release.
+                graph.execute("UPDATE activity_events SET first_occurred_at = now() - interval '1 minute', occurred_at = now() - interval '1 minute' WHERE actor_user_id = ?", BLOCKER)
+                graph.execute("UPDATE messages SET created_at = now() - interval '1 minute' WHERE sender_user_id = ?", BLOCKER)
 
                 graph.contactBlocks.remove(BLOCKER, TARGET_ADDRESS)
-                // The flirt sent while hidden now shows for X.
-                assertTrue(
-                    graph.activity
-                        .listActivity(TARGET)
-                        .items
-                        .any { it.actorUserId == BLOCKER.toString() },
-                )
-                graph.execute("UPDATE activity_events SET first_occurred_at = now() - interval '1 minute' WHERE actor_user_id = ?", BLOCKER)
+
+                assertEquals(0, graph.contactBlocks.summary(BLOCKER).count, "the count drops exactly as for a pending row")
+                assertEquals(1, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE released_at IS NOT NULL"))
+                assertTrue(graph.visibility.hiddenFrom(TARGET).isEmpty(), "A shows up again for X")
+                assertTrue(graph.activity.listActivity(TARGET).items.none { it.actorUserId == BLOCKER.toString() }, "no backlog in Activity")
+                assertEquals(0, graph.activity.getActivitySummary(TARGET).flirtCount)
+                assertTrue(graph.messaging.listConversations(TARGET, null).items.isEmpty(), "no backlog in Messages")
+
+                // What A does after the release reaches X.
+                graph.messaging.sendMessage(BLOCKER, conversationId, com.pynapli.shared.network.dto.SendMessageRequestDto(body = "After the release"))
+                val thread = graph.messaging.getConversationDetail(TARGET, conversationId)
+                assertEquals(listOf("After the release"), thread.messages.map { it.body })
+            }
+        }
+
+        "a re-added address binds again beside its tombstone; removing a pending one just deletes it" {
+            runBlocking<Unit> {
+                val graph = ContactBlockTestGraph(dataSource)
+                seedPair(graph)
+                graph.verifyAddress(TARGET, TARGET_ADDRESS)
+                addAndResolve(graph)
+                graph.contactBlocks.remove(BLOCKER, TARGET_ADDRESS)
                 addAndResolve(graph)
 
-                assertTrue(graph.visibility.hiddenFrom(TARGET).isEmpty(), "documented: a re-add after a remove finds the surfaced rows")
+                assertEquals(setOf(BLOCKER), graph.visibility.hiddenFrom(TARGET))
+                assertEquals(1, graph.contactBlocks.summary(BLOCKER).count)
+                assertEquals(2, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE blocker_user_id = ?", BLOCKER))
+
+                graph.contactBlocks.add(BLOCKER, "nobody.here@example.com")
+                graph.contactBlocks.remove(BLOCKER, "nobody.here@example.com")
+                assertEquals(1, graph.contactBlocks.summary(BLOCKER).count)
+                assertEquals(2, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE blocker_user_id = ?", BLOCKER), "a pending row leaves no tombstone")
+
+                // Deleting the blocker's account removes the tombstones too.
+                JdbcAccountLifecycleRepository(dataSource, graph.tokens).deleteAccount(BLOCKER)
+                assertEquals(0, graph.count("SELECT COUNT(*) FROM contact_blocks"))
+            }
+        }
+
+        "a like by X that lands as the row binds leaves the pair exempt (no match with someone invisible)" {
+            runBlocking<Unit> {
+                val graph = ContactBlockTestGraph(dataSource)
+                seedPair(graph)
+                graph.verifyAddress(TARGET, TARGET_ADDRESS)
+                addAndResolve(graph)
+                assertEquals(setOf(BLOCKER), graph.visibility.hiddenFrom(TARGET))
+                // The like that raced the bind (recorded after it; the submit check ran before it).
+                graph.execute("INSERT INTO swipe_actions (id, actor_user_id, target_user_id, action) VALUES (gen_random_uuid(), ?, ?, 'like')", TARGET, BLOCKER)
+                graph.visibility.noteActToward(actorUserId = TARGET, targetUserId = BLOCKER)
+
+                assertTrue(graph.visibility.hiddenFrom(TARGET).isEmpty(), "the pair is exempt from now on")
+                // A's own act toward X never changes anything.
+                graph.visibility.noteActToward(actorUserId = BLOCKER, targetUserId = TARGET)
+                assertEquals(1, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE target_token IS NOT NULL"))
+            }
+        }
+
+        "settling at sign-in never fails the sign-in: a failure is logged, retried on the worker, and the session proceeds" {
+            runBlocking<Unit> {
+                val graph = ContactBlockTestGraph(dataSource)
+                seedPair(graph)
+                graph.execute("UPDATE users SET email_verified_at = now() WHERE id = ?", TARGET)
+                graph.contactBlocks.add(BLOCKER, TARGET_ADDRESS)
+                val failing =
+                    ContactBlockResolver(
+                        object : ContactBlockResolverRepository by JdbcContactBlockResolverRepository(dataSource) {
+                            override suspend fun listPendingForAddress(emailToken: String): List<PendingContactBlockRow> = throw java.sql.SQLException("lock timeout")
+                        },
+                        graph.tokens,
+                    )
+                val worker = ContactBlockResolverWorker(graph.resolver)
+                val settling = ContactBlockSettling(failing, worker)
+
+                settling.atSignIn(TARGET, TARGET_ADDRESS)
+                assertTrue(graph.visibility.hiddenFrom(TARGET).isEmpty(), "not yet: the settle failed")
+
+                worker.runOnce()
+                assertEquals(setOf(BLOCKER), graph.visibility.hiddenFrom(TARGET), "the worker's retry settled it")
+                worker.close()
+            }
+        }
+
+        "the full sweep runs at most once a day across replicas" {
+            runBlocking<Unit> {
+                val repository = JdbcContactBlockResolverRepository(dataSource)
+                val now = java.time.Instant.now()
+                assertTrue(repository.claimFullSweep(now, java.time.Duration.ofDays(1)))
+                assertTrue(!repository.claimFullSweep(now.plusSeconds(3_600), java.time.Duration.ofDays(1)))
+                assertTrue(repository.claimFullSweep(now.plus(java.time.Duration.ofDays(1)).plusSeconds(1), java.time.Duration.ofDays(1)))
             }
         }
 

@@ -106,6 +106,7 @@ internal fun buildSwipeDependencies(
                     com.pynapli.server.swipe
                         .JdbcMatchCelebrationRepository(dataSource),
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
+                contactBlockVisibility = contactBlockVisibility,
             ),
         // Delivers match side effects (Activity rows, match conversation, match push) whose request
         // died between its commit and its fast-path delivery. One replica per tick.

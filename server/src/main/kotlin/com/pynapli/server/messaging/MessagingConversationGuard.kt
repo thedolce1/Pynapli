@@ -94,6 +94,13 @@ internal class MessagingConversationGuard(
     }
 
     suspend fun hiddenFrom(viewerUserId: UUID): Set<UUID> = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+
+    suspend fun noteActToward(
+        actorUserId: UUID,
+        targetUserId: UUID,
+    ) {
+        contactBlockVisibility?.noteActToward(actorUserId, targetUserId)
+    }
 }
 
 /**

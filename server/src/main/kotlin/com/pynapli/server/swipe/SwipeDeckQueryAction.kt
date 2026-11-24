@@ -24,6 +24,8 @@ internal class SwipeDeckQueryAction(
     suspend fun queryDeck(
         viewerUserId: UUID,
         request: SwipeDeckRequestDto,
+        // False only for a Psync deck: that deck is shared by two partners and filtered per person when shown.
+        applyContactBlocks: Boolean = true,
     ): SwipeDeckResponseDto {
         val deckRequest =
             SwipeDeckRequestParser.parse(
@@ -101,7 +103,7 @@ internal class SwipeDeckQueryAction(
         // the shared ranked window, which stays free of per-viewer exclusions).
         val hiddenFromViewerIds =
             profile("swipe.deck.contactBlocks") {
-                contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+                if (applyContactBlocks) contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty() else emptySet()
             }
         // Blocked people are excluded before ranking, not only from the finished page: a Boost lifts
         // candidates onto the page, and a blocked one must never take a slot.

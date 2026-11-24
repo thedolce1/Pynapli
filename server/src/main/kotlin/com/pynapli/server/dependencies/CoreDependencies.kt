@@ -100,6 +100,7 @@ internal class CoreDependencies(
     val contactBlockResolver: ContactBlockResolver,
     val contactBlockResolverWorker: ContactBlockResolverWorker,
     val contactBlockService: ContactBlockService,
+    val contactBlockSettling: com.pynapli.server.contactblocks.ContactBlockSettling,
 )
 
 internal fun buildCoreDependencies(
@@ -119,6 +120,8 @@ internal fun buildCoreDependencies(
             resolver = contactBlockResolver,
             jobLock = PostgresJobLock(database.dataSource),
         )
+    // Verify- and sign-in-time settling that can never fail the member's request (it retries on the worker).
+    val contactBlockSettling = com.pynapli.server.contactblocks.ContactBlockSettling(contactBlockResolver, contactBlockResolverWorker)
     val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)
     val accountExportStorage = buildAccountExportStorage(config)
     val accountLifecycleService =
@@ -192,7 +195,7 @@ internal fun buildCoreDependencies(
             deviceRiskSignalPublisher = riskService,
             productMetrics = productMetrics,
             revocationRelay = redisCache.realtimeRelay,
-            onEmailSignIn = contactBlockResolver::recordAddressAtSignIn,
+            onEmailSignIn = contactBlockSettling::atSignIn,
         )
     val contactBlockService =
         ContactBlockService(
@@ -294,6 +297,7 @@ internal fun buildCoreDependencies(
         contactBlockResolver = contactBlockResolver,
         contactBlockResolverWorker = contactBlockResolverWorker,
         contactBlockService = contactBlockService,
+        contactBlockSettling = contactBlockSettling,
     )
 }
 

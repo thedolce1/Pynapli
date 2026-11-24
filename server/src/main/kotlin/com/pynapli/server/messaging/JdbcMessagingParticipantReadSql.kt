@@ -77,7 +77,7 @@ internal fun Connection.loadUnreadCount(
           AND m.deleted_at IS NULL
           AND m.moderation_status = 'visible'
           AND m.created_at > cp.last_read_at
-          AND ${ContactBlockSql.notHiddenFromViewer("m.sender_user_id")}
+          AND ${ContactBlockSql.actNotHiddenFromViewer("m.sender_user_id", "m.created_at")}
         """.trimIndent(),
     ).use { statement ->
         statement.setObject(1, userId)

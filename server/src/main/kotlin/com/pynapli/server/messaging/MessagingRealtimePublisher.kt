@@ -20,13 +20,18 @@ internal class MessagingRealtimePublisher(
         messageId: UUID? = null,
         statuses: Set<String>,
         actorUserId: UUID? = null,
+        // People the change is about, besides the actor: no hint to a recipient any of them hides from.
+        subjectUserIds: Collection<UUID> = emptyList(),
     ) {
         val activeBroadcaster = broadcaster ?: return
+        val causes = (listOfNotNull(actorUserId) + subjectUserIds).distinct()
         val recipients =
             participants
                 .filter { participant -> participant.status in statuses }
                 .distinctBy { participant -> participant.userId }
-                .filterNot { participant -> actorUserId != null && actorHidesFrom(actorUserId, participant.userId) }
+                .filterNot { participant ->
+                    causes.any { cause -> cause != participant.userId && actorHidesFrom(cause, participant.userId) }
+                }
         recipients
             .forEach { participant ->
                 activeBroadcaster.emit(

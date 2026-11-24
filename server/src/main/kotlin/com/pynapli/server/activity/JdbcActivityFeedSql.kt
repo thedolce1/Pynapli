@@ -129,7 +129,7 @@ internal object JdbcActivityFeedSql {
           )
           AND COALESCE(actor_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
           -- "Hide from people you know": nothing from someone hiding from the recipient.
-          AND ${ContactBlockSql.notHiddenFromViewer("ae.actor_user_id")}
+          AND ${ContactBlockSql.actNotHiddenFromViewer("ae.actor_user_id", "ae.first_occurred_at")}
           AND NOT EXISTS (
               SELECT 1
               FROM user_blocks block

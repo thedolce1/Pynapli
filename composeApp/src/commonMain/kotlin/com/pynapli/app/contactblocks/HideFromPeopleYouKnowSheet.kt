@@ -32,8 +32,8 @@ import kotlinx.coroutines.launch
 /** The explanation shown on the sheet (PROFILE_SETTINGS_SPEC, "Hide from people you know"). */
 internal val HideFromPeopleYouKnowCopy =
     listOf(
-        "Add email addresses of people who should never come across you here. If one of them has an account, or joins later, you won't show up for them in Grid, Swipe, Playing Tonight, Psync or Activity, and your likes, views and messages won't reach them. We will never tell you whether an address belongs to a member, and nothing you see changes.",
-        "This does not hide you from someone you've already matched, chatted with, liked or been viewed by (block them from their profile), or from someone using a different email or a second account.",
+        "Add email addresses of people who should never come across you here. If one of them has an account with a confirmed email, or joins later, you won't show up for them in Grid, Swipe, Playing Tonight, Psync or Activity, and your likes, views and messages won't reach them. We will never tell you whether an address belongs to a member, and nothing you see changes.",
+        "This can't undo what someone has already seen. It also does not hide you from someone who has already liked, messaged, matched or otherwise reached out to you (block them from their profile), or from someone using a different email or a second account.",
         "It does not hide your partner (they can add the address too). It does not hide them from you, and it doesn't affect reports or blocks.",
         "We store a scrambled code, not the address, so we can't show you the list. To remove one, type it again, or remove them all.",
     )
@@ -142,7 +142,7 @@ fun HideFromPeopleYouKnowSheet(
             }
             if (confirmRemoveAll) {
                 Text(
-                    text = "Remove every address you've added? You'll show up again for anyone they belonged to, and what you sent them meanwhile can reach them.",
+                    text = "Remove every address you've added? You'll show up again for anyone they belonged to from now on. What you did before stays hidden from them.",
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.bodyMedium,
                 )

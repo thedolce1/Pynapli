@@ -84,6 +84,16 @@ class SwipeService(
         request: SwipeDeckRequestDto,
     ): SwipeDeckResponseDto = deckQuery.queryDeck(viewerUserId, request)
 
+    /**
+     * The ranked deck a Psync session is dealt from. Unlike [queryDeck] it does not leave out people
+     * hiding from [viewerUserId] ("Hide from people you know"): the deck is shared with the partner, and
+     * each partner's view of it leaves out the people hiding from them (PsyncDeckCoordinator).
+     */
+    internal suspend fun queryDeckForPsync(
+        viewerUserId: UUID,
+        request: SwipeDeckRequestDto,
+    ): SwipeDeckResponseDto = deckQuery.queryDeck(viewerUserId, request, applyContactBlocks = false)
+
     suspend fun submitAction(
         viewerUserId: UUID,
         request: SwipeActionRequestDto,
@@ -121,6 +131,7 @@ class SwipeService(
         val result =
             repository.likeBack(UUID.randomUUID(), viewerUserId, targetUserId, travelLocationId)
                 ?: throw SwipeException("LIKE_BACK_NOT_AVAILABLE")
+        contactBlockVisibility?.noteActToward(viewerUserId, targetUserId)
         sideEffects.deliver(result, actorUserId = viewerUserId, targetUserId = targetUserId, action = com.pynapli.shared.network.dto.SwipeAction.LIKE)
         val match = result.match
         if (match != null && result.newlyRecorded) productMetrics?.record(com.pynapli.server.metrics.ProductMetrics.MATCH_CREATED)

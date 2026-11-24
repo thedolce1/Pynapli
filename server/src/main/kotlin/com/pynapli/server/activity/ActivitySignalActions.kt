@@ -93,6 +93,7 @@ internal class ActivitySignalActions(
         if (!repository.recordFlirt(senderUserId, targetUserId, normalizedSource)) {
             throw ActivityException("FLIRT_NOT_ALLOWED")
         }
+        contactBlockVisibility?.noteActToward(senderUserId, targetUserId)
         publishDelta(recipientUserId = targetUserId, actorUserId = senderUserId, eventType = "flirt")
         notificationPublisher?.enqueue(
             NotificationEventDraft(
@@ -140,6 +141,7 @@ internal class ActivitySignalActions(
                 throw error
             }
         if (!mediaRequested) throw ActivityException("ALBUM_REQUEST_NOT_ALLOWED")
+        contactBlockVisibility?.noteActToward(requesterUserId, targetUserId)
         publishDelta(recipientUserId = targetUserId, actorUserId = requesterUserId, eventType = "album_request")
         notificationPublisher?.enqueue(
             NotificationEventDraft(

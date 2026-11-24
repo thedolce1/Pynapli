@@ -58,11 +58,11 @@ class ContactBlockService(
         blockerUserId: UUID,
         email: String,
     ) {
-        repository.remove(blockerUserId, tokenFor(email))
+        repository.remove(blockerUserId, tokenFor(email), releasedAt = clock.instant())
     }
 
     suspend fun removeAll(blockerUserId: UUID) {
-        repository.removeAll(blockerUserId)
+        repository.removeAll(blockerUserId, releasedAt = clock.instant())
     }
 
     private fun tokenFor(email: String): String {

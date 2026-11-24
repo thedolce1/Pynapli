@@ -71,6 +71,8 @@ class PynapliAppGraph(
     val favoritesStateHolder: com.pynapli.app.grid.FavoritesStateHolder? = null,
     /** The app-wide "It's a match" moment; absent, the Swipe screen shows its own matches. */
     val matchCelebrationStateHolder: MatchCelebrationStateHolder? = null,
+    /** "Hide from people you know" (Profile > Privacy); absent, the entry is hidden. */
+    val contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
 )
 
 /**

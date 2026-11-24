@@ -258,6 +258,7 @@ class PynapliCommonGraph(
             photoVerificationStateHolder = photoVerificationStateHolder,
             favoritesStateHolder = favoritesStateHolder,
             matchCelebrationStateHolder = matchCelebrationStateHolder,
+            contactBlocksStateHolder = contactBlocksStateHolder,
         )
 
     /**

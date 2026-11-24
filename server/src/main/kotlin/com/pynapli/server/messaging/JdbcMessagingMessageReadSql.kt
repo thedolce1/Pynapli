@@ -57,7 +57,7 @@ internal fun Connection.loadLastMessage(
               )
           )
           AND $MESSAGE_EXPIRY_FILTER
-          AND ${ContactBlockSql.notHiddenFromViewer("messages.sender_user_id")}
+          AND ${ContactBlockSql.actNotHiddenFromViewer("messages.sender_user_id", "messages.created_at")}
         ORDER BY created_at DESC, id DESC
         LIMIT 1
         """.trimIndent(),
@@ -216,7 +216,7 @@ private fun buildMessagePageQuery(before: MessagePageCursor?): String =
                   )
               )
               AND $MESSAGE_EXPIRY_FILTER
-              AND ${ContactBlockSql.notHiddenFromViewer("messages.sender_user_id")}
+              AND ${ContactBlockSql.actNotHiddenFromViewer("messages.sender_user_id", "messages.created_at")}
             """.trimIndent(),
         )
         append('\n')

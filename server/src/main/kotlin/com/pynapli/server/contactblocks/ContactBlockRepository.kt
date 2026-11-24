@@ -10,7 +10,12 @@ import javax.sql.DataSource
 /**
  * The blocker's own rows. Every statement here touches `contact_blocks` only, keyed by the blocker:
  * nothing on the add/remove/count path reads `users` or anyone else's rows, so none of it can depend
- * on whether an address belongs to a member (ContactBlockRequestPathTest pins the SQL).
+ * on whether an address belongs to a member (ContactBlockRequestPathTest records the statements).
+ *
+ * Only rows with `released_at` NULL are the blocker's addresses (V120). Removing one runs ONE
+ * statement whatever it is: a pending row is deleted, a settled one (bound or exempt) becomes a
+ * tombstone (`released_at`), so nothing the blocker did before the removal ever reaches the person it
+ * pointed at (an exempt tombstone points at nobody's lookup and changes nothing).
  */
 interface ContactBlockRepository {
     /** One statement: inserts unless the blocker already has the address or [maxRows] addresses. */
@@ -22,14 +27,19 @@ interface ContactBlockRepository {
         maxRows: Int,
     ): ContactBlockAddOutcome
 
-    /** One DELETE whether or not the row exists. */
+    /** One statement whether or not the address was ever added, pending or settled. */
     suspend fun remove(
         blockerUserId: UUID,
         emailToken: String,
+        releasedAt: Instant,
     )
 
-    suspend fun removeAll(blockerUserId: UUID)
+    suspend fun removeAll(
+        blockerUserId: UUID,
+        releasedAt: Instant,
+    )
 
+    /** The blocker's addresses (tombstones never count). */
     suspend fun count(blockerUserId: UUID): Int
 }
 
@@ -79,21 +89,30 @@ class JdbcContactBlockRepository(
     override suspend fun remove(
         blockerUserId: UUID,
         emailToken: String,
+        releasedAt: Instant,
     ) {
         dataSource.withConnection { connection ->
             connection.prepareStatement(REMOVE_SQL).use { statement ->
-                statement.setObject(1, blockerUserId)
-                statement.setString(2, emailToken)
-                statement.executeUpdate()
+                statement.setTimestamp(1, Timestamp.from(releasedAt))
+                statement.setObject(2, blockerUserId)
+                statement.setString(3, emailToken)
+                statement.setObject(4, blockerUserId)
+                statement.setString(5, emailToken)
+                statement.executeQuery().close()
             }
         }
     }
 
-    override suspend fun removeAll(blockerUserId: UUID) {
+    override suspend fun removeAll(
+        blockerUserId: UUID,
+        releasedAt: Instant,
+    ) {
         dataSource.withConnection { connection ->
             connection.prepareStatement(REMOVE_ALL_SQL).use { statement ->
-                statement.setObject(1, blockerUserId)
-                statement.executeUpdate()
+                statement.setTimestamp(1, Timestamp.from(releasedAt))
+                statement.setObject(2, blockerUserId)
+                statement.setObject(3, blockerUserId)
+                statement.executeQuery().close()
             }
         }
     }
@@ -119,6 +138,7 @@ class JdbcContactBlockRepository(
                        COALESCE(BOOL_OR(email_token = ?::text), false) AS present
                 FROM contact_blocks
                 WHERE blocker_user_id = ?
+                  AND released_at IS NULL
             ),
             inserted AS (
                 INSERT INTO contact_blocks (id, blocker_user_id, email_token, created_at)
@@ -126,7 +146,7 @@ class JdbcContactBlockRepository(
                 FROM existing
                 WHERE NOT existing.present
                   AND existing.total < ?
-                ON CONFLICT (blocker_user_id, email_token) DO NOTHING
+                ON CONFLICT (blocker_user_id, email_token) WHERE released_at IS NULL DO NOTHING
                 RETURNING 1
             )
             SELECT (SELECT COUNT(*) FROM inserted) AS inserted,
@@ -134,13 +154,48 @@ class JdbcContactBlockRepository(
             FROM existing
             """.trimIndent()
 
-        val REMOVE_SQL = "DELETE FROM contact_blocks WHERE blocker_user_id = ? AND email_token = ?"
+        val REMOVE_SQL =
+            """
+            WITH released AS (
+                UPDATE contact_blocks
+                SET released_at = ?::timestamptz
+                WHERE blocker_user_id = ?
+                  AND email_token = ?
+                  AND released_at IS NULL
+                  AND target_token IS NOT NULL
+                RETURNING 1
+            ),
+            deleted AS (
+                DELETE FROM contact_blocks
+                WHERE blocker_user_id = ?
+                  AND email_token = ?
+                  AND released_at IS NULL
+                  AND target_token IS NULL
+                RETURNING 1
+            )
+            SELECT (SELECT COUNT(*) FROM released) + (SELECT COUNT(*) FROM deleted) AS removed
+            """.trimIndent()
 
-        val REMOVE_ALL_SQL = "DELETE FROM contact_blocks WHERE blocker_user_id = ?"
+        val REMOVE_ALL_SQL =
+            """
+            WITH released AS (
+                UPDATE contact_blocks
+                SET released_at = ?::timestamptz
+                WHERE blocker_user_id = ?
+                  AND released_at IS NULL
+                  AND target_token IS NOT NULL
+                RETURNING 1
+            ),
+            deleted AS (
+                DELETE FROM contact_blocks
+                WHERE blocker_user_id = ?
+                  AND released_at IS NULL
+                  AND target_token IS NULL
+                RETURNING 1
+            )
+            SELECT (SELECT COUNT(*) FROM released) + (SELECT COUNT(*) FROM deleted) AS removed
+            """.trimIndent()
 
-        val COUNT_SQL = "SELECT COUNT(*) FROM contact_blocks WHERE blocker_user_id = ?"
-
-        /** Every statement the blocker's own requests run (pinned by a test: none reads `users`). */
-        val REQUEST_PATH_SQL: List<String> = listOf(LOCK_BLOCKER_SQL, ADD_SQL, REMOVE_SQL, REMOVE_ALL_SQL, COUNT_SQL)
+        val COUNT_SQL = "SELECT COUNT(*) FROM contact_blocks WHERE blocker_user_id = ? AND released_at IS NULL"
     }
 }
