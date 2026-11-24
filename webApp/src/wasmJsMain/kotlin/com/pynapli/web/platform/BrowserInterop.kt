@@ -104,6 +104,21 @@ internal fun requestBrowserGeolocation(
     }""",
     )
 
+/**
+ * Calls [onGranted] only when the site already holds the geolocation permission, so a caller can
+ * refresh a fix without ever showing the browser's prompt (the resume path). Browsers without the
+ * Permissions API, or that reject the query, simply never call back.
+ */
+internal fun whenGeolocationAlreadyGranted(onGranted: () -> Unit): Unit =
+    js(
+        """{
+        if (!navigator.permissions || !navigator.permissions.query) { return; }
+        navigator.permissions.query({ name: 'geolocation' }).then(function (status) {
+            if (status.state === 'granted') { onGranted(); }
+        }).catch(function () {});
+    }""",
+    )
+
 internal fun showInstallPrompt(): Unit =
     js(
         """{

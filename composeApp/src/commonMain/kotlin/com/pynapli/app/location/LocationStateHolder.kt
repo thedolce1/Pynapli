@@ -78,15 +78,29 @@ class LocationStateHolder(
         }
     }
 
-    suspend fun submitLocation(location: DeviceLocation): LocationUpdateResult {
-        _state.update { current ->
-            current.copy(isUpdating = true, errorMessage = null, blockedReason = null)
+    /**
+     * Sends [location] when it moved far enough (see [gridRefreshFor]). [silent] is the resume path
+     * (the member did not ask): nothing on screen shows progress or an error, and a fix still in the
+     * last sent cell is not sent at all, since the server would see the same cell.
+     */
+    suspend fun submitLocation(
+        location: DeviceLocation,
+        silent: Boolean = false,
+    ): LocationUpdateResult {
+        if (!silent) {
+            _state.update { current ->
+                current.copy(isUpdating = true, errorMessage = null, blockedReason = null)
+            }
         }
 
-        val gridRefresh = gridRefreshFor(location)
+        val previous = lastSubmittedDeviceLocation
+        val sameCell = previous != null && previous.toCell() == location.toCell()
+        val gridRefresh = if (silent && sameCell) GridLocationRefresh.None else gridRefreshFor(location)
         if (gridRefresh == GridLocationRefresh.None) {
-            _state.update { current ->
-                current.copy(isUpdating = false, errorMessage = null)
+            if (!silent) {
+                _state.update { current ->
+                    current.copy(isUpdating = false, errorMessage = null)
+                }
             }
             return LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
         }
@@ -105,20 +119,25 @@ class LocationStateHolder(
                 lastSubmittedDeviceLocation = location
                 _state.update { current ->
                     current.copy(
-                        isUpdating = false,
+                        // A silent send never ends a share the member started meanwhile.
+                        isUpdating = if (silent) current.isUpdating else false,
                         currentLocation = result.value,
+                        // Location works now (back from Settings, say): drop any stale denial copy.
                         errorMessage = null,
+                        blockedReason = null,
                     )
                 }
                 LocationUpdateResult(submitted = true, gridRefresh = gridRefresh)
             }
 
             is AppResult.Failure -> {
-                _state.update { current ->
-                    current.copy(
-                        isUpdating = false,
-                        errorMessage = result.error.message,
-                    )
+                if (!silent) {
+                    _state.update { current ->
+                        current.copy(
+                            isUpdating = false,
+                            errorMessage = result.error.message,
+                        )
+                    }
                 }
                 LocationUpdateResult(submitted = false, gridRefresh = GridLocationRefresh.None)
             }
@@ -156,6 +175,21 @@ suspend fun LocationStateHolder.submitAndRefresh(
         GridLocationRefresh.QuietRefresh -> grid.load(quiet = true)
         GridLocationRefresh.Refresh -> grid.load()
     }
+    return result
+}
+
+/**
+ * The resume path (app back in the foreground, browser tab visible again), for a member who already
+ * granted location: sends the fix silently and only when its cell changed, then refreshes [grid]
+ * quietly so the cards on screen swap in place, never behind a spinner. Shells call this only when
+ * signed in and the permission is already granted, so it can never prompt.
+ */
+suspend fun LocationStateHolder.refreshInBackground(
+    location: DeviceLocation,
+    grid: GridStateHolder,
+): LocationUpdateResult {
+    val result = submitLocation(location, silent = true)
+    if (result.gridRefresh != GridLocationRefresh.None) grid.load(quiet = true)
     return result
 }
 

@@ -1,11 +1,16 @@
 package com.pynapli.app.location
 
+import com.pynapli.app.grid.GridFeedRepository
+import com.pynapli.app.grid.GridFeedUi
+import com.pynapli.app.grid.GridFilters
+import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.location.LocationCell
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -159,6 +164,65 @@ class LocationStateHolderTest {
             assertEquals(2, repository.locations.size)
         }
 
+    // Resume refresh: a member who already granted location, coming back to the app.
+
+    @Test
+    fun aResumeFixInTheSameCellIsNotSentAndShowsNothing() =
+        runTest {
+            val repository = FakeLocationUpdateRepository()
+            val stateHolder = LocationStateHolder(repository)
+            val grid = CountingGrid()
+            stateHolder.submitLocation(DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20))
+            val states = mutableListOf<LocationUiState>()
+            val watcher = launch { stateHolder.state.collect { states += it } }
+            runCurrent()
+
+            // About 345 m north, still inside cell 45.50: over the 250 m line, but the same cell.
+            val result = stateHolder.refreshInBackground(DeviceLocation(latitude = 45.5048, longitude = -73.5673, accuracyMeters = 20), grid.holder)
+            runCurrent()
+            watcher.cancel()
+
+            assertFalse(result.submitted)
+            assertEquals(1, repository.locations.size)
+            assertEquals(0, grid.loads)
+            assertTrue(states.none { it.isUpdating }, "a silent refresh never shows progress: $states")
+        }
+
+    @Test
+    fun aResumeFixInANewCellIsSentAndRefreshesTheGridQuietly() =
+        runTest {
+            val repository = FakeLocationUpdateRepository()
+            val stateHolder = LocationStateHolder(repository)
+            val grid = CountingGrid()
+            stateHolder.submitLocation(DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20))
+
+            // Over 1 km away, a different cell: sent, and the grid refreshes in place.
+            val result = stateHolder.refreshInBackground(DeviceLocation(latitude = 45.5200, longitude = -73.5673, accuracyMeters = 20), grid.holder)
+
+            assertTrue(result.submitted)
+            assertEquals(2, repository.locations.size)
+            assertEquals(LocationCell.snapCoordinate(45.5200), repository.locations.last().latitude)
+            assertNull(repository.locations.last().accuracyMeters)
+            assertEquals(1, grid.loads)
+        }
+
+    @Test
+    fun aFailedResumeSendSurfacesNoError() =
+        runTest {
+            val repository = FakeLocationUpdateRepository()
+            repository.nextResult = AppResult.Failure(AppError(code = "NETWORK_ERROR", message = "No connection."))
+            val stateHolder = LocationStateHolder(repository)
+
+            val result = stateHolder.refreshInBackground(DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20), CountingGrid().holder)
+
+            assertFalse(result.submitted)
+            assertNull(stateHolder.state.value.errorMessage)
+            assertFalse(stateHolder.state.value.isUpdating)
+            // Not anchored: the next resume tries again.
+            repository.nextResult = AppResult.Success(testCurrentLocation())
+            assertTrue(stateHolder.refreshInBackground(DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20), CountingGrid().holder).submitted)
+        }
+
     @Test
     fun aBlockedPermissionOrServicesOffSaysSoUntilTheNextAttempt() =
         runTest {
@@ -203,6 +267,24 @@ class LocationStateHolderTest {
             // ... nor become B's movement anchor: B's own fix from the same spot is still sent.
             assertTrue(stateHolder.submitLocation(here).submitted)
         }
+}
+
+/** A real GridStateHolder over a repository that only counts first-page loads. */
+private class CountingGrid {
+    var loads = 0
+        private set
+    val holder =
+        GridStateHolder(
+            object : GridFeedRepository {
+                override suspend fun loadGrid(
+                    filters: GridFilters,
+                    cursor: String?,
+                ): GridFeedUi {
+                    loads += 1
+                    return GridFeedUi(cards = emptyList())
+                }
+            },
+        )
 }
 
 private class FakeLocationUpdateRepository(

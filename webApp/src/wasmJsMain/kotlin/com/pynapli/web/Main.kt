@@ -66,6 +66,13 @@ fun main() {
     // their own backoff).
     onDocumentVisible {
         appScope.launch { graph.onAppForegrounded() }
+        // Moved while the tab was hidden? Silent, granted-only, sent only on a new cell.
+        if (graph.authStateHolder.state.value.authenticated) locationAdapter.refreshIfAlreadyGranted()
+    }
+    // A page load signed in counts as a return too (the same silent, granted-only refresh).
+    appScope.launch {
+        val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
+        if (settled.authenticated) locationAdapter.refreshIfAlreadyGranted()
     }
 
     // A direct /signup link starts the create-account stepper — but only once the
