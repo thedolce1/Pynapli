@@ -93,7 +93,7 @@ class MetInPersonIntegrationTest {
 
     /** Enough batches for any crossing to take effect (on: 1 + up to 4; off: 2 + up to 4). */
     private suspend fun settle() {
-        repeat(8) { batch.recomputeNow() }
+        repeat(8) { batch.runPassNow() }
     }
 
     private suspend fun assertRefused(
@@ -217,7 +217,7 @@ class MetInPersonIntegrationTest {
             val third = fx.member("Third")
             confirm(third, fx.talked(third, subject), subject)
             assertFalse(publicProfile(stranger, subject).metInPerson, "a confirmation never changes the badge by itself")
-            batch.recomputeNow()
+            batch.runPassNow()
             assertFalse(publicProfile(stranger, subject).metInPerson, "the batch that first sees the crossing never shows it")
             settle()
             assertTrue(publicProfile(stranger, subject).metInPerson)
@@ -247,7 +247,7 @@ class MetInPersonIntegrationTest {
             val completingAnswer = confirm(completing, fx.talked(completing, subject), subject)
             assertEquals(notCompletingAnswer.copy(subjectUserId = "", subjectDisplayName = ""), completingAnswer.copy(subjectUserId = "", subjectDisplayName = ""))
 
-            batch.recomputeNow()
+            batch.runPassNow()
             assertEquals(publicBefore, json.encodeToString(PublicProfileDto.serializer(), publicProfile(stranger, subject)))
             assertEquals(meBefore, json.encodeToString(MeDto.serializer(), assertNotNull(profiles.getMe(subject)).toDto()))
             assertEquals(exportBefore, json.metInPersonPart(archiver.buildArchive(subject).bytes.decodeToString()))
@@ -499,7 +499,7 @@ class MetInPersonIntegrationTest {
 
             val (toggler, chat) = vouchers[0]
             assertFalse(withdraw(toggler, chat, subject).given)
-            batch.recomputeNow()
+            batch.runPassNow()
             assertTrue(publicProfile(stranger, subject).metInPerson, "one batch below does not turn it off")
             assertRefused(toggler, chat, subject)
             clock.advance(Duration.ofDays(7))
@@ -635,7 +635,7 @@ class MetInPersonIntegrationTest {
             settle()
             assertTrue(publicProfile(stranger, sam).metInPersonAsCouple)
 
-            val (_, unlinked) = raceTogether({ batch.recomputeNow() }, { JdbcProfileLinkRepository(dataSource).unlinkCurrent(sam) })
+            val (_, unlinked) = raceTogether({ batch.runPassNow() }, { JdbcProfileLinkRepository(dataSource).unlinkCurrent(sam) })
             assertTrue(unlinked.getOrThrow())
             assertFalse(publicProfile(stranger, sam).metInPersonAsCouple)
             assertTrue(publicProfile(stranger, sam).metInPerson)
@@ -715,7 +715,7 @@ class MetInPersonIntegrationTest {
                 MetInPersonService.NOT_AVAILABLE,
                 assertFailsWith<MessagingException> { wrongService.offers(voucher, chat.toString()) }.code,
             )
-            assertEquals(0, MetInPersonBadgeBatch(dataSource, wrong, clock, Random(1)).recomputeNow())
+            assertEquals(0, MetInPersonBadgeBatch(dataSource, wrong, clock, Random(1)).runPassNow())
             assertEquals(1, fx.vouchRows())
         }
     }
@@ -817,6 +817,79 @@ class MetInPersonIntegrationTest {
                 }
             val nextWeek = MetInPersonBadgeBatch.weekStart(clock.instant()).plus(MetInPersonBadgeBatch.WEEK)
             assertTrue(!next.isBefore(nextWeek) && next.isBefore(nextWeek.plus(MetInPersonBadgeBatch.WEEK)), "random time inside next week: $next")
+        }
+    }
+
+    private fun setPassInProgress(
+        cursor: String,
+        nextRunAt: Instant,
+    ) {
+        dataSource.connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    INSERT INTO vouch_batch_schedule (id, next_run_at, pass_id, pass_now, pass_cursor)
+                    VALUES (1, ?, gen_random_uuid(), ?, ?::uuid)
+                    ON CONFLICT (id) DO UPDATE
+                    SET next_run_at = EXCLUDED.next_run_at, pass_id = EXCLUDED.pass_id,
+                        pass_now = EXCLUDED.pass_now, pass_cursor = EXCLUDED.pass_cursor
+                    """.trimIndent(),
+                ).use {
+                    it.setTimestamp(1, Timestamp.from(nextRunAt))
+                    it.setTimestamp(2, Timestamp.from(clock.instant()))
+                    it.setString(3, cursor)
+                    it.executeUpdate()
+                }
+        }
+    }
+
+    private fun batchRowsFor(subject: UUID): String =
+        fx.queryText(
+            """
+            SELECT coalesce((SELECT row_to_json(b)::text FROM vouch_badges b WHERE b.subject_user_id = ?), '-') || ' ' ||
+                   coalesce((SELECT row_to_json(s)::text FROM vouch_badge_states s WHERE s.subject_token = ?), '-')
+            """.trimIndent(),
+            subject,
+            tokens.subject(subject),
+        )
+
+    @Test
+    fun anInterruptedPassResumesFromItsCursorInsteadOfSkippingAWeek() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            confirmedBy(subject, 3)
+            val nextRunAt = clock.instant().plus(Duration.ofDays(3))
+
+            // A pass stopped after a chunk that ended past every member: resuming steps nobody.
+            setPassInProgress(cursor = "ffffffff-ffff-ffff-ffff-ffffffffffff", nextRunAt = nextRunAt)
+            assertFalse(batch.runIfDue(), "a resume is not a new week's pass")
+            assertEquals("- -", batchRowsFor(subject), "members before the cursor were already done")
+            assertEquals(0, fx.count("SELECT count(*) FROM vouch_batch_schedule WHERE pass_id IS NOT NULL"), "the pass finished")
+
+            // A pass stopped before its first chunk: resuming steps everyone once, at the next tick.
+            setPassInProgress(cursor = "00000000-0000-0000-0000-000000000000", nextRunAt = nextRunAt)
+            assertFalse(batch.runIfDue())
+            val afterResume = batchRowsFor(subject)
+            assertTrue(afterResume != "- -", "the interrupted pass reached the subject: $afterResume")
+            assertEquals(0, fx.count("SELECT count(*) FROM vouch_batch_schedule WHERE pass_id IS NOT NULL"))
+            assertEquals(
+                1,
+                fx.count("SELECT count(*) FROM vouch_batch_schedule WHERE next_run_at = ?", Timestamp.from(nextRunAt)),
+                "the schedule is untouched: no week skipped, none added",
+            )
+            assertFalse(batch.runIfDue(), "nothing due and nothing in progress")
+            assertEquals(afterResume, batchRowsFor(subject), "stepped once")
+        }
+    }
+
+    @Test
+    fun anOperatorRecomputeNeverStepsTheHysteresis() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            fx.optIn(subject)
+            confirmedBy(subject, 3)
+            repeat(10) { assertEquals(1, batch.recomputeNow(), "Sam qualifies but nothing is published") }
+            assertEquals("- -", batchRowsFor(subject), "nothing written, no delay counted down")
         }
     }
 

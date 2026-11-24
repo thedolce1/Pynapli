@@ -214,7 +214,7 @@ class MetInPersonContactBlockIntegrationTest {
                     ConfirmMetInPersonRequestDto(sam.toString(), includePartner = true),
                 )
             }
-            repeat(8) { batch.recomputeNow() }
+            repeat(8) { batch.runPassNow() }
             val profiles = ContactBlockTestGraph(dataSource).profiles
             assertTrue(profiles.getPublicProfile(stranger, sam).metInPersonAsCouple, "the couple badge is published")
             assertTrue(profiles.getPublicProfile(viewer, sam).metInPersonAsCouple)

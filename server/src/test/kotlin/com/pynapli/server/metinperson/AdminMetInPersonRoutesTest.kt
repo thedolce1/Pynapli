@@ -87,7 +87,7 @@ class AdminMetInPersonRoutesTest {
 
     private fun settle() =
         runBlocking {
-            repeat(8) { batch.recomputeNow() }
+            repeat(8) { batch.runPassNow() }
         }
 
     /** Sam confirmed by three members; returns (subject, vouchers). */

@@ -34,7 +34,10 @@ import kotlin.random.asKotlinRandom
  *
  * - The run is claimed in its own short transaction (`vouch_batch_schedule`, row lock): the due check and
  *   the move to next week's random time happen together, so concurrent replicas or ticks run it once,
- *   and a deploy does not re-roll the time.
+ *   and a deploy does not re-roll the time. The pass in progress and its cursor live there too (V125): an
+ *   interrupted pass resumes at the next tick with its own evaluation time, and each chunk moves the
+ *   cursor under the row lock, so nobody is stepped twice in one pass.
+ * - [recomputeNow] (an operator's look) writes nothing and never steps the hysteresis.
  * - Each chunk of members is its own short transaction; nothing loads every confirmation.
  * - A couple badge is written only if its link is still active at write time, and is stamped with the
  *   chunk's database time, so a concurrent unlink (which stamps `vouch_link_ends`) always wins and a
@@ -50,33 +53,65 @@ class MetInPersonBadgeBatch(
 ) {
     private val evaluator = MetInPersonEvaluator(tokens)
 
-    /** Runs this week's pass if its random time has passed and it has not run. True when it ran. */
+    /**
+     * Runs this week's pass if its random time has passed and it has not run, or resumes a pass a crash
+     * or deploy interrupted (with that pass's own evaluation time, from where it stopped). True when this
+     * call claimed a new week's pass; a resume helps finish the pass in progress and returns false.
+     */
     suspend fun runIfDue(): Boolean {
         val now = clock.instant()
-        val claimed =
+        val claim =
             dataSource.withConnection { connection ->
                 connection.inTransaction {
-                    if (!keyMatches(tokens, now)) return@inTransaction false
+                    if (!keyMatches(tokens, now)) return@inTransaction null
                     ensureSchedule(randomTimeInWeekOf(now))
-                    if (lockedNextRunAt().isAfter(now)) return@inTransaction false
-                    advanceSchedule(now, randomTimeInWeekOf(weekStart(now).plus(WEEK)))
-                    true
+                    val schedule = lockedSchedule()
+                    when {
+                        schedule.passId != null -> {
+                            PassClaim(schedule.passId, fresh = false)
+                        }
+
+                        schedule.nextRunAt.isAfter(now) -> {
+                            null
+                        }
+
+                        else -> {
+                            val passId = UUID.randomUUID()
+                            startPass(passId, now, randomTimeInWeekOf(weekStart(now).plus(WEEK)))
+                            PassClaim(passId, fresh = true)
+                        }
+                    }
                 }
-            }
-        if (claimed) runPass(now)
-        return claimed
+            } ?: return false
+        runScheduledPass(claim.passId)
+        return claim.fresh
     }
 
-    /** One pass now, outside the schedule (tests; an operator's one-off). Returns members written. */
+    /**
+     * An operator's look, outside the schedule: evaluates every member as a pass would and returns how
+     * many would move toward a different published state. Writes nothing, so it never steps the
+     * hysteresis (only the weekly pass may; repeated calls would otherwise shorten the random delay).
+     */
     suspend fun recomputeNow(): Int {
         val now = clock.instant()
         val keyOk = dataSource.withConnection { connection -> connection.keyMatches(tokens, now) }
-        return if (keyOk) runPass(now) else 0
+        if (!keyOk) return 0
+        var after: UUID? = null
+        var differing = 0
+        while (true) {
+            val chunk = dataSource.withConnection { connection -> connection.userChunk(after, chunkSize) }
+            if (chunk.isEmpty()) break
+            differing += dataSource.withConnection { connection -> connection.countDiffering(chunk, now) }
+            after = chunk.last()
+        }
+        return differing
     }
 
-    internal fun randomTimeInWeekOf(instant: Instant): Instant = weekStart(instant).plusSeconds(random.nextLong(WEEK.seconds))
-
-    private suspend fun runPass(now: Instant): Int {
+    /** One full stepping pass now, outside the schedule. Tests only: it steps the hysteresis like a weekly pass. */
+    internal suspend fun runPassNow(): Int {
+        val now = clock.instant()
+        val keyOk = dataSource.withConnection { connection -> connection.keyMatches(tokens, now) }
+        if (!keyOk) return 0
         var after: UUID? = null
         var written = 0
         while (true) {
@@ -86,6 +121,65 @@ class MetInPersonBadgeBatch(
             after = chunk.last()
         }
         return written
+    }
+
+    internal fun randomTimeInWeekOf(instant: Instant): Instant = weekStart(instant).plusSeconds(random.nextLong(WEEK.seconds))
+
+    private class PassClaim(
+        val passId: UUID,
+        val fresh: Boolean,
+    )
+
+    private class Schedule(
+        val nextRunAt: Instant,
+        val passId: UUID?,
+        val passNow: Instant?,
+        val passCursor: UUID?,
+    )
+
+    /**
+     * Works through the pass [passId] chunk by chunk. Each chunk is chosen, stepped, and the cursor moved
+     * in one transaction holding the schedule row's lock, so a second runner (a resume racing the first)
+     * takes the next chunk instead of the same one, and a crash loses at most the chunk in flight.
+     */
+    private suspend fun runScheduledPass(passId: UUID) {
+        while (true) {
+            val more =
+                dataSource.withConnection { connection ->
+                    connection.inTransaction {
+                        val schedule = lockedSchedule()
+                        val passNow = schedule.passNow
+                        if (schedule.passId != passId || passNow == null) return@inTransaction false
+                        val chunk = userChunk(schedule.passCursor, chunkSize)
+                        if (chunk.isEmpty()) {
+                            finishPass()
+                            return@inTransaction false
+                        }
+                        processChunk(this, chunk, passNow)
+                        moveCursor(chunk.last())
+                        true
+                    }
+                }
+            if (!more) return
+        }
+    }
+
+    /** Members of [userIds] whose evaluation now differs from what is published (frozen ones excluded). */
+    private fun Connection.countDiffering(
+        userIds: List<UUID>,
+        now: Instant,
+    ): Int {
+        val evaluations = evaluator.evaluate(this, userIds, now)
+        val published = publishedBadges(userIds)
+        return userIds.count { userId ->
+            val evaluation = evaluations[userId]
+            val badge = published[userId]
+            badge?.frozen != true &&
+                (
+                    (evaluation?.personQualifies == true) != (badge?.person == true) ||
+                        (evaluation?.coupleLinkToken != null) != (badge?.couple == true)
+                )
+        }
     }
 
     private fun processChunk(
@@ -337,21 +431,47 @@ class MetInPersonBadgeBatch(
         }
     }
 
-    private fun Connection.lockedNextRunAt(): Instant =
-        prepareStatement("SELECT next_run_at FROM vouch_batch_schedule WHERE id = 1 FOR UPDATE").use { statement ->
+    private fun Connection.lockedSchedule(): Schedule =
+        prepareStatement(
+            "SELECT next_run_at, pass_id, pass_now, pass_cursor FROM vouch_batch_schedule WHERE id = 1 FOR UPDATE",
+        ).use { statement ->
             statement.executeQuery().use { rs ->
                 check(rs.next()) { "vouch_batch_schedule row missing" }
-                rs.getTimestamp("next_run_at").toInstant()
+                Schedule(
+                    nextRunAt = rs.getTimestamp("next_run_at").toInstant(),
+                    passId = rs.getObject("pass_id", UUID::class.java),
+                    passNow = rs.getTimestamp("pass_now")?.toInstant(),
+                    passCursor = rs.getObject("pass_cursor", UUID::class.java),
+                )
             }
         }
 
-    private fun Connection.advanceSchedule(
+    /** Claims this week's pass and moves the schedule to next week's random time, in one transaction. */
+    private fun Connection.startPass(
+        passId: UUID,
         now: Instant,
         nextRunAt: Instant,
     ) {
-        prepareStatement("UPDATE vouch_batch_schedule SET last_run_at = ?, next_run_at = ? WHERE id = 1").use { statement ->
+        prepareStatement(
+            "UPDATE vouch_batch_schedule SET last_run_at = ?, next_run_at = ?, pass_id = ?, pass_now = ?, pass_cursor = NULL WHERE id = 1",
+        ).use { statement ->
             statement.setTimestamp(1, Timestamp.from(now))
             statement.setTimestamp(2, Timestamp.from(nextRunAt))
+            statement.setObject(3, passId)
+            statement.setTimestamp(4, Timestamp.from(now))
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.moveCursor(cursor: UUID) {
+        prepareStatement("UPDATE vouch_batch_schedule SET pass_cursor = ? WHERE id = 1").use { statement ->
+            statement.setObject(1, cursor)
+            statement.executeUpdate()
+        }
+    }
+
+    private fun Connection.finishPass() {
+        prepareStatement("UPDATE vouch_batch_schedule SET pass_id = NULL, pass_now = NULL, pass_cursor = NULL WHERE id = 1").use { statement ->
             statement.executeUpdate()
         }
     }
