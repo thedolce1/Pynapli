@@ -254,7 +254,11 @@ class MetInPersonContactBlockIntegrationTest {
                     .jsonObject
                     .getValue("partnerLinkHistory")
                     .jsonArray
-                    .map { it.jsonObject.getValue("partner_user_id").jsonPrimitive.content }
+                    .map {
+                        it.jsonObject
+                            .getValue("partner_user_id")
+                            .jsonPrimitive.content
+                    }
 
             assertEquals(setOf(hider.toString(), other.toString()), historyPartners().toSet())
             hide(hider, viewer)

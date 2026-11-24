@@ -163,7 +163,7 @@ class MetInPersonBadgeBatch(
                     // The chunk rolled back. Count the failure; after a few, take that chunk member by member.
                     val failures = dataSource.withConnection { connection -> connection.recordChunkFailure(passId) }
                     if (failures < MAX_CHUNK_FAILURES) throw error
-                    logger.error("Met in person badge pass: a chunk failed {} times; taking it member by member", failures, error)
+                    logger.error("Met in person badge pass: a chunk failed {} times ({}); taking it member by member", failures, error::class.simpleName)
                     dataSource.withConnection { connection ->
                         connection.inTransaction { nextChunk(passId, memberByMember = true) }
                     }
@@ -573,7 +573,7 @@ class MetInPersonBadgeWorker(
                             if (batch.runIfDue()) logger.info("Met in person weekly badge pass ran")
                         }
                     }.onFailure { error ->
-                        logger.warn("Met in person badge pass failed", error)
+                        logger.warn("Met in person badge pass failed ({})", error::class.simpleName)
                     }
                     delay(intervalMillis)
                 }
