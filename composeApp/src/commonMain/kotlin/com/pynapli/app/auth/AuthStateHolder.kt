@@ -40,7 +40,10 @@ class AuthStateHolder(
     suspend fun observeSessionInvalidations() {
         sessionInvalidations.collect {
             _state.update { current ->
-                if (current.session == null) {
+                // A logout in progress revokes the session on the server first, so a request racing
+                // it can end in a terminal refresh rejection. That is the member's own sign-out, not
+                // a session that "ended": logout's welcome landing shows, not the notice.
+                if (current.session == null || logoutInProgress) {
                     current
                 } else {
                     // Straight to the sign-in form (not the welcome landing) so the reason is visible.
@@ -421,13 +424,21 @@ class AuthStateHolder(
     }
 
     suspend fun logout() {
-        runCatchingCancellable { beforeLogout() }
-        authRepository.logout()
-        // Back to the welcome landing in sign-in mode, whatever the session was doing before. The
-        // address goes too: on a shared device the next person must not see whose account was here
-        // (that alone confirms the address is a member).
-        _state.update { current -> current.clearedForm(mode = AuthMode.SignIn, showWelcome = true).copy(session = null, email = "") }
+        logoutInProgress = true
+        try {
+            runCatchingCancellable { beforeLogout() }
+            authRepository.logout()
+            // Back to the welcome landing in sign-in mode, whatever the session was doing before. The
+            // address goes too: on a shared device the next person must not see whose account was here
+            // (that alone confirms the address is a member).
+            _state.update { current -> current.clearedForm(mode = AuthMode.SignIn, showWelcome = true).copy(session = null, email = "") }
+        } finally {
+            logoutInProgress = false
+        }
     }
+
+    /** True from the start of [logout] until its state lands; see [observeSessionInvalidations]. */
+    private var logoutInProgress = false
 
     private companion object {
         private const val RESET_CODE_LENGTH = 6

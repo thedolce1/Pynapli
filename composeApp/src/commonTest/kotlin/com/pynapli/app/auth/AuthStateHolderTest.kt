@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -168,6 +169,43 @@ class AuthStateHolderTest {
 
             assertFalse(holder.state.value.authenticated, "a terminal invalidation must return to sign-in")
             assertEquals("Your session ended. Please sign in again.", holder.state.value.errorMessage)
+            observer.cancel()
+        }
+
+    @Test
+    fun anInvalidationDuringTheMembersOwnLogoutShowsTheWelcomeNotTheNotice() =
+        runTest {
+            val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            var observedDuringLogout = false
+            lateinit var holder: AuthStateHolder
+            val api =
+                FakeAuthApi(
+                    loginResult = AppResult.Success(session()),
+                    onLogout = {
+                        // The server revoked the session; a request racing the logout hit a terminal
+                        // refresh rejection, and the observer handles it before the logout finishes.
+                        invalidations.emit(Unit)
+                        yield()
+                        observedDuringLogout = holder.state.value.errorMessage != null
+                    },
+                )
+            holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                    sessionInvalidations = invalidations,
+                )
+            val observer = launch(start = CoroutineStart.UNDISPATCHED) { holder.observeSessionInvalidations() }
+            holder.submitDevLogin(DevLoginCredentials("dev@pynapli.local", "PynapliDevPass123!"))
+
+            holder.logout()
+            runCurrent()
+
+            assertFalse(observedDuringLogout, "no 'session ended' flash while logging out")
+            assertEquals(null, holder.state.value.errorMessage)
+            assertTrue(holder.state.value.showWelcome, "logout's welcome landing is what shows")
+            assertFalse(holder.state.value.authenticated)
             observer.cancel()
         }
 
@@ -465,6 +503,7 @@ private class InMemoryStore : SessionStore {
 private class FakeAuthApi(
     private val loginResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "no")),
     private val resetResult: AppResult<PasswordChangedDto> = AppResult.Success(PasswordChangedDto(changed = true)),
+    private val onLogout: suspend () -> Unit = {},
 ) : AuthApi {
     val logins = mutableListOf<EmailLoginRequestDto>()
     val resetRequests = mutableListOf<String>()
@@ -501,7 +540,10 @@ private class FakeAuthApi(
 
     override suspend fun refreshSession(request: RefreshSessionRequestDto): AppResult<AuthSessionDto> = fail()
 
-    override suspend fun logout(): AppResult<LogoutResponseDto> = AppResult.Success(LogoutResponseDto(loggedOut = true))
+    override suspend fun logout(): AppResult<LogoutResponseDto> {
+        onLogout()
+        return AppResult.Success(LogoutResponseDto(loggedOut = true))
+    }
 
     private fun <T> fail(): AppResult<T> = AppResult.Failure(AppError("UNIMPLEMENTED", "no"))
 }
