@@ -440,6 +440,35 @@ class EmailSignupIntegrationTest {
         }
 
     @Test
+    fun theDevRouteOnAnExistingUnverifiedAccountVerifiesItWithTheRightPasswordOnly() =
+        runBlocking<Unit> {
+            val verifiedFor = Collections.synchronizedList(mutableListOf<UUID>())
+            val service =
+                EmailSignupService(
+                    repository = repository,
+                    mailer = mailer,
+                    authService = authService,
+                    passwordHasher = hasher,
+                    launchSignupWork = work::launch,
+                    onAccountVerified = { userId, _ -> verifiedFor += userId },
+                )
+            service.createVerifiedAccountForLocalDev(NEWCOMER, PASSWORD, "1990-01-01", true, true, true, null, null, null)
+            // A seed account left unverified on an existing database (made before the route verified).
+            dataSource.connection.use { it.createStatement().execute("UPDATE users SET email_verified_at = NULL") }
+            verifiedFor.clear()
+
+            val wrong = assertFailsWith<AuthException> { service.createVerifiedAccountForLocalDev(NEWCOMER, "not-the-password-1", "1990-01-01", true, true, true, null, null, null) }
+            assertEquals("EMAIL_ALREADY_EXISTS", wrong.code)
+            assertEquals(0, count("SELECT count(*) FROM users WHERE email_verified_at IS NOT NULL"), "a wrong password changes nothing")
+            assertTrue(verifiedFor.isEmpty())
+
+            val again = assertFailsWith<AuthException> { service.createVerifiedAccountForLocalDev(NEWCOMER, PASSWORD, "1990-01-01", true, true, true, null, null, null) }
+            assertEquals("EMAIL_ALREADY_EXISTS", again.code, "still 409, so the seeds then sign in")
+            assertEquals(1, count("SELECT count(*) FROM users WHERE email_verified_at IS NOT NULL"))
+            assertEquals(1, verifiedFor.size, "the contact token work ran, as at a first verify")
+        }
+
+    @Test
     fun aPendingSignUpCannotSignIn() =
         runBlocking<Unit> {
             signup().start(NEWCOMER)
@@ -935,5 +964,13 @@ private class CountingSignupRepository(
     ): UserRecord? {
         calls += "createVerifiedAccount"
         return inner.createVerifiedAccount(userId, identityId, emailHash, passwordHash, birthdate, displayAge, acceptedAt, termsVersion, privacyVersion, verifiedAt)
+    }
+
+    override suspend fun markVerifiedForLocalDev(
+        userId: UUID,
+        verifiedAt: Instant,
+    ) {
+        calls += "markVerifiedForLocalDev"
+        inner.markVerifiedForLocalDev(userId, verifiedAt)
     }
 }

@@ -40,7 +40,7 @@ class MatchInboxRailIntegrationTest {
 
     private fun service(): MessagingService =
         MessagingService(
-            JdbcMessagingRepository(dataSource),
+            JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()),
             blockRepository = JdbcBlockRepository(dataSource),
         )
 
@@ -245,7 +245,7 @@ class MatchInboxRailIntegrationTest {
     fun aChatPhotoEndsTheMatchForBoth() =
         runBlocking {
             val service = service()
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             dataSource.insertMatch(avery, blake)
             service.openMatchConversation(avery, blake)
             val conversationId = service.inbox(avery).single().conversationId
@@ -278,7 +278,7 @@ class MatchInboxRailIntegrationTest {
     fun aHeldMessageClearsOnlyItsSenderUntilReleasedThenBothForGood() =
         runBlocking {
             val service = service()
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             dataSource.insertMatch(avery, blake)
             service.openMatchConversation(avery, blake)
             val conversationId = service.inbox(avery).single().conversationId

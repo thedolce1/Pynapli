@@ -1,6 +1,9 @@
 package com.pynapli.server.contactblocks
 
+import com.pynapli.server.db.inTransaction
+import com.pynapli.server.db.lockPairForTransaction
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.swipe.SWIPE_PAIR_LOCK_NAMESPACE
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -35,8 +38,11 @@ interface ContactBlockVisibility {
     /**
      * [actorUserId] just did something [targetUserId] can see (a like, a flirt, a request, opening a
      * conversation). If the target hides from the actor (a bind that raced the act), the pair becomes
-     * exempt from now on, as any act by the person they hide from would have made it at resolution.
-     * The same single statement runs whatever the rows are.
+     * exempt from now on, as any act by the person they hide from would have made it at resolution:
+     * the bound row becomes a tombstone (what the target did while hidden stays hidden from the actor)
+     * and an exempt row replaces it. Runs in its own transaction under the pair advisory lock the bind
+     * holds, AFTER the act committed, so either the bind's check saw the act or this sees the bind.
+     * Call it on every path where the actor does something the target sees.
      */
     suspend fun noteActToward(
         actorUserId: UUID,
@@ -124,11 +130,18 @@ class JdbcContactBlockVisibility(
     ) {
         if (actorUserId == targetUserId) return
         dataSource.withConnection { connection ->
-            connection.prepareStatement(EXEMPT_IF_BOUND_SQL).use { statement ->
-                statement.setString(1, tokens.exemptToken(actorUserId))
-                statement.setString(2, tokens.targetToken(actorUserId))
-                statement.setObject(3, targetUserId)
-                statement.executeUpdate()
+            connection.inTransaction {
+                // The same pair lock the bind holds from its interaction check to its commit: if the
+                // bind is in flight this waits and then finds the bound row; if it isn't, the bind's
+                // check (which runs after this act committed) sees the act and settles exempt.
+                lockPairForTransaction(SWIPE_PAIR_LOCK_NAMESPACE, actorUserId, targetUserId)
+                prepareStatement(FLIP_TO_EXEMPT_SQL).use { statement ->
+                    statement.setTimestamp(1, java.sql.Timestamp.from(Instant.now()))
+                    statement.setString(2, tokens.targetToken(actorUserId))
+                    statement.setObject(3, targetUserId)
+                    statement.setString(4, tokens.exemptToken(actorUserId))
+                    statement.executeQuery().close()
+                }
             }
         }
     }
@@ -162,17 +175,53 @@ class JdbcContactBlockVisibility(
             WHERE target_token = ?
             """.trimIndent()
 
-        // The row the TARGET added that hides them from the ACTOR (target_token = the actor's).
-        val EXEMPT_IF_BOUND_SQL =
+        // The row the TARGET added that hides them from the ACTOR (target_token = the actor's) becomes a
+        // tombstone at the flip, so everything the target did while hidden stays hidden, and an exempt
+        // row takes its place (same address, so the blocker's count doesn't move). Older tombstones of
+        // the same pair beyond the newest few go ([TOMBSTONES_KEPT_BEFORE_NEW]).
+        val FLIP_TO_EXEMPT_SQL =
             """
-            UPDATE contact_blocks
-            SET target_token = ?
-            WHERE target_token = ?
-              AND blocker_user_id = ?
-              AND released_at IS NULL
+            WITH flipped AS (
+                UPDATE contact_blocks
+                SET released_at = ?::timestamptz
+                WHERE target_token = ?
+                  AND blocker_user_id = ?
+                  AND released_at IS NULL
+                RETURNING id, blocker_user_id, email_token, target_token
+            ),
+            pruned AS (
+                DELETE FROM contact_blocks old
+                USING flipped
+                WHERE old.blocker_user_id = flipped.blocker_user_id
+                  AND old.target_token = flipped.target_token
+                  AND old.released_at IS NOT NULL
+                  AND old.id <> flipped.id
+                  -- Keep the newest few: their windows still tell 'a match X was never shown' apart (Interaction).
+                  AND old.id NOT IN (
+                      SELECT keep.id FROM contact_blocks keep
+                      WHERE keep.blocker_user_id = old.blocker_user_id AND keep.target_token = old.target_token AND keep.released_at IS NOT NULL
+                      ORDER BY keep.released_at DESC
+                      LIMIT $TOMBSTONES_KEPT_BEFORE_NEW
+                  )
+                RETURNING 1
+            )
+            INSERT INTO contact_blocks (id, blocker_user_id, email_token, target_token, created_at)
+            SELECT gen_random_uuid(), flipped.blocker_user_id, flipped.email_token, ?, now()
+            FROM flipped
+            RETURNING 1
             """.trimIndent()
     }
 }
+
+/**
+ * Tombstone growth: every release (remove, remove all, race flip) of a (blocker, target) pair keeps
+ * this many older tombstones of the pair plus the new one and deletes the rest. For hiding acts the
+ * newest tombstone subsumes the older ones (it hides everything dated before a later time); the few
+ * kept only preserve recent hidden windows for the interaction check (a match X was never shown).
+ * So add/remove cycling one address leaves at most five rows for the pair however many cycles run;
+ * more rows need distinct members, which the add caps bound.
+ */
+internal const val TOMBSTONES_KEPT_BEFORE_NEW = 4
 
 /** SQL fragments for reads that must apply the viewer-side rule inside the query (paging, counts). */
 object ContactBlockSql {
@@ -197,6 +246,29 @@ object ContactBlockSql {
         "NOT EXISTS (SELECT 1 FROM contact_blocks hidden_cb WHERE hidden_cb.target_token = ? AND hidden_cb.blocker_user_id = $userColumn " +
             "AND (hidden_cb.released_at IS NULL OR $atColumn < hidden_cb.released_at))"
 }
+
+/**
+ * The hot-path early-out: the viewer's token when any row (active or released) targets them, else
+ * [ContactBlockSql.NO_VIEWER_TOKEN], with which every per-row check is skipped or matches nothing. One
+ * indexed lookup (idx_contact_blocks_target) per request.
+ */
+fun java.sql.Connection.viewerTokenIfTargeted(
+    tokens: ContactBlockTokens,
+    viewerUserId: UUID,
+): String {
+    val token = tokens.targetToken(viewerUserId)
+    val targeted =
+        prepareStatement("SELECT EXISTS (SELECT 1 FROM contact_blocks WHERE target_token = ?)").use { statement ->
+            statement.setString(1, token)
+            statement.executeQuery().use { rs -> rs.next() && rs.getBoolean(1) }
+        }
+    return if (targeted) token else ContactBlockSql.NO_VIEWER_TOKEN
+}
+
+suspend fun DataSource.viewerTokenIfTargeted(
+    tokens: ContactBlockTokens,
+    viewerUserId: UUID,
+): String = withConnection { connection -> connection.viewerTokenIfTargeted(tokens, viewerUserId) }
 
 /** The viewer's token, or the no-op token when the feature isn't wired (unit tests). */
 fun ContactBlockVisibility?.viewerTokenOrNone(viewerUserId: UUID): String = this?.viewerToken(viewerUserId) ?: ContactBlockSql.NO_VIEWER_TOKEN

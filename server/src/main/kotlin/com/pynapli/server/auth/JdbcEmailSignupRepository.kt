@@ -205,6 +205,21 @@ class JdbcEmailSignupRepository(
             }
         }
 
+    override suspend fun markVerifiedForLocalDev(
+        userId: UUID,
+        verifiedAt: Instant,
+    ) {
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement("UPDATE users SET email_verified_at = ? WHERE id = ? AND email_verified_at IS NULL AND deleted_at IS NULL")
+                .use { statement ->
+                    statement.setTimestamp(1, Timestamp.from(verifiedAt))
+                    statement.setObject(2, userId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
     override suspend fun createVerifiedAccount(
         userId: UUID,
         identityId: UUID,

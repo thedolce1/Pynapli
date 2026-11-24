@@ -1,7 +1,7 @@
 package com.pynapli.server.messaging
 
 import com.pynapli.server.contactblocks.ContactBlockTokens
-import com.pynapli.server.contactblocks.viewerTokenOrNone
+import com.pynapli.server.contactblocks.viewerTokenIfTargeted
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -9,10 +9,10 @@ import javax.sql.DataSource
 class JdbcMessagingRepository(
     private val dataSource: DataSource,
     // "Hide from people you know": the viewer's reads (inbox, thread, read mark, offers) leave out
-    // anyone hiding from the viewer. Null (tests) filters nothing; ServerDependencies passes the keys.
-    private val contactBlockTokens: ContactBlockTokens? = null,
+    // anyone hiding from the viewer. Required, so a dropped wiring fails the build instead of filtering nothing.
+    private val contactBlockTokens: ContactBlockTokens,
 ) : MessagingRepository {
-    private fun tokenFor(viewerUserId: UUID): String = contactBlockTokens.viewerTokenOrNone(viewerUserId)
+    private suspend fun tokenFor(viewerUserId: UUID): String = dataSource.viewerTokenIfTargeted(contactBlockTokens, viewerUserId)
 
     override suspend fun listConversations(
         userId: UUID,

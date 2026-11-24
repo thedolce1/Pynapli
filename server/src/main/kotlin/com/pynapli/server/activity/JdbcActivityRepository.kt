@@ -1,7 +1,7 @@
 package com.pynapli.server.activity
 
 import com.pynapli.server.contactblocks.ContactBlockTokens
-import com.pynapli.server.contactblocks.viewerTokenOrNone
+import com.pynapli.server.contactblocks.viewerTokenIfTargeted
 import com.pynapli.server.db.withConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,8 +16,8 @@ class JdbcActivityRepository(
     private val flirtCooldown: Duration = Duration.ofMinutes(15),
     private val albumRequestCooldown: Duration = Duration.ofHours(24),
     // "Hide from people you know": the recipient's feed and counts leave out anyone hiding from them.
-    // Null (tests) filters nothing; ServerDependencies passes the configured keys.
-    private val contactBlockTokens: ContactBlockTokens? = null,
+    // Required: dropping it would silently disable the rule. ServerDependencies passes the configured keys.
+    private val contactBlockTokens: ContactBlockTokens,
 ) : ActivityRepository {
     override suspend fun recordProfileView(
         viewerUserId: UUID,
@@ -234,7 +234,7 @@ class JdbcActivityRepository(
                 statement.setTimestamp(6, query.cursor?.occurredAt?.let { Timestamp.from(it) })
                 statement.setTimestamp(7, query.cursor?.occurredAt?.let { Timestamp.from(it) })
                 statement.setObject(8, query.cursor?.eventId)
-                statement.setString(9, contactBlockTokens.viewerTokenOrNone(query.recipientUserId)) // hidden-from rule
+                statement.setString(9, connection.viewerTokenIfTargeted(contactBlockTokens, query.recipientUserId)) // hidden-from rule
                 statement.setInt(10, query.limit)
                 statement.executeQuery().use { rs ->
                     buildList {
@@ -250,7 +250,7 @@ class JdbcActivityRepository(
         dataSource.withConnection { connection ->
             connection.prepareStatement(JdbcActivitySql.ACTIVITY_SUMMARY_QUERY).use { statement ->
                 statement.setObject(1, recipientUserId)
-                statement.setString(2, contactBlockTokens.viewerTokenOrNone(recipientUserId)) // hidden-from rule
+                statement.setString(2, connection.viewerTokenIfTargeted(contactBlockTokens, recipientUserId)) // hidden-from rule
                 statement.executeQuery().use { rs ->
                     rs.next()
                     JdbcActivityRowMappers.summary(rs)

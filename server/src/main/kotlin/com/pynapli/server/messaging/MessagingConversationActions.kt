@@ -66,8 +66,9 @@ internal class MessagingConversationActions(
                 targetUserId = targetUserId,
                 origin = origin,
             ) ?: throw MessagingException("MESSAGING_NOT_ALLOWED")
-        // Opening a conversation is an act the target can see (exempts a pair whose bind raced it).
-        conversationGuard.noteActToward(viewerUserId, targetUserId)
+        // No noteActToward here: an empty conversation is invisible to the target until the opener
+        // writes (the inbox lists it only for its creator), so opening is neither an interaction at
+        // resolution nor a flip. The first message is (MessagingMessageActions).
 
         val detail =
             repository.getConversationDetail(

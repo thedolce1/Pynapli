@@ -54,7 +54,7 @@ internal suspend fun DataSource.inviteLinkedMessagingPartner(
                     partnerUserId = partnerUserId,
                     inviterUserId = inviterUserId,
                 )
-                connection.markConversationGroup(conversationId)
+                connection.markConversationGroup(conversationId, causedByUserId = partnerUserId)
                 val conversation =
                     connection.loadConversation(inviterUserId, conversationId)
                         ?: run {
@@ -141,7 +141,7 @@ internal suspend fun DataSource.leaveMessagingConversation(
                 val wasActive = connection.participantStatus(conversationId, userId) == ParticipantStatus.Active
                 val updated = connection.leaveConversationParticipant(userId, conversationId)
                 if (updated > 0) {
-                    connection.touchConversation(conversationId)
+                    connection.touchConversation(conversationId, causedByUserId = userId)
                     // The people a waiting invitee agreed to join changed: they must say yes again.
                     if (wasActive) connection.resetWaitingPartnerAcceptances(conversationId)
                 }

@@ -71,7 +71,7 @@ internal suspend fun DataSource.sendMessagingTextMessage(
                 // A visible message ends a match's new-matches rail item for both people, in this
                 // transaction; a held one waits for release (JdbcMessageModerationRepository).
                 if (moderationStatus == MessageModerationStatus.VISIBLE) connection.consumeMatchInInbox(conversationId)
-                connection.touchConversationAt(conversationId, message.createdAt)
+                connection.touchConversationAt(conversationId, message.createdAt, causedByUserId = userId)
                 connection.markSenderReadAt(userId, conversationId, message.createdAt)
 
                 connection.commit()
@@ -100,7 +100,7 @@ internal suspend fun DataSource.deleteOwnMessagingMessage(
                     return@withContext null
                 }
 
-                connection.touchConversation(message.conversationId)
+                connection.touchConversation(message.conversationId, causedByUserId = userId)
                 connection.commit()
                 message
             } catch (error: Throwable) {
@@ -144,7 +144,7 @@ internal suspend fun DataSource.sendMessagingMediaMessage(
                     )
                 // Ends a match's new-matches rail item for both people, with the message.
                 consumeMatchInInbox(conversationId)
-                touchConversationAt(conversationId, message.createdAt)
+                touchConversationAt(conversationId, message.createdAt, causedByUserId = userId)
                 message
             }
         }
@@ -181,7 +181,7 @@ internal suspend fun DataSource.setMessagingConversationExpiry(
                 val systemMessage = connection.insertSystemMessage(messageIdFactory(), userId, conversationId, systemMessageBody)
                 // A system notice is a visible message too: it ends a match's rail item for both.
                 connection.consumeMatchInInbox(conversationId)
-                connection.touchConversation(conversationId)
+                connection.touchConversation(conversationId, causedByUserId = userId)
                 val conversation =
                     connection.loadConversation(userId, conversationId) ?: run {
                         connection.rollback()

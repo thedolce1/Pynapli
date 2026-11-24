@@ -214,9 +214,28 @@ class EmailSignupService(
                 termsVersion = AUTH_TERMS_VERSION,
                 privacyVersion = AUTH_PRIVACY_VERSION,
                 verifiedAt = clock.instant(),
-            ) ?: throw AuthException("EMAIL_ALREADY_EXISTS")
+            ) ?: run {
+                ensureExistingVerifiedForLocalDev(account, password)
+                throw AuthException("EMAIL_ALREADY_EXISTS")
+            }
         onAccountVerified?.invoke(user.id, account)
         return authService.startFirstSession(user, deviceId, platform, appVersion)
+    }
+
+    /**
+     * The dev route on an address that already has an account (re-running the seeds on an existing
+     * database): with the right password, the account ends up verified and its contact token written
+     * (the same [onAccountVerified] work as a first verify), so seeded members can be hidden from. The
+     * answer stays EMAIL_ALREADY_EXISTS; the seeds then sign in. A wrong password changes nothing.
+     */
+    private suspend fun ensureExistingVerifiedForLocalDev(
+        account: String,
+        password: String,
+    ) {
+        val identity = repository.findEmailIdentity(Sha256.hash(account)) ?: return
+        if (identity.userStatus != "active" || !passwordHasher.verify(password, identity.passwordHash)) return
+        repository.markVerifiedForLocalDev(identity.userId, clock.instant())
+        onAccountVerified?.invoke(identity.userId, account)
     }
 
     private suspend fun deliverSignup(draft: SignupDraft) {
@@ -456,6 +475,15 @@ interface EmailSignupRepository {
         privacyVersion: String,
         verifiedAt: Instant,
     ): UserRecord?
+
+    /**
+     * Local dev shortcut: marks [userId]'s address verified if it isn't (a seed account made before the
+     * dev route verified, or by the public flow and never confirmed). Never touches a verified account.
+     */
+    suspend fun markVerifiedForLocalDev(
+        userId: UUID,
+        verifiedAt: Instant,
+    ) = Unit
 }
 
 class NewPendingSignup(

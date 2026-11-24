@@ -118,7 +118,10 @@ internal class PsyncDeckCoordinator(
                     viewerAction = myActions[card.targetUserId],
                 )
             }
-        val deckSize = (session.deckSize - (allCards.size - cards.size)).coerceAtLeast(0)
+        // A hidden card this viewer already answered (before the block bound) still counts toward their
+        // deck, so their count and their acted count stay consistent; only unanswered ones come off.
+        val hiddenUnanswered = allCards.count { it.targetUserId in hiddenFromViewer && it.targetUserId !in myActions }
+        val deckSize = (session.deckSize - hiddenUnanswered).coerceAtLeast(0)
         return PsyncDeckResponseDto(sessionId = session.id.toString(), deckSize = deckSize, cards = items)
     }
 
@@ -126,19 +129,30 @@ internal class PsyncDeckCoordinator(
      * "Hide from people you know": [targetUserId] hides from [userId], so [userId] can't act on that
      * card (the deck response already leaves it out for them; their partner still can).
      */
+    suspend fun noteActToward(
+        actorUserId: UUID,
+        targetUserId: UUID,
+    ) {
+        contactBlockVisibility?.noteActToward(actorUserId, targetUserId)
+    }
+
     suspend fun targetHidesFrom(
         userId: UUID,
         targetUserId: UUID,
     ): Boolean = contactBlockVisibility?.isHiddenFrom(userId, targetUserId) == true
 
-    /** How many cards of the session's deck [userId] never gets (people hiding from them). */
+    /**
+     * How many cards of the session's deck [userId] never gets and never answered (people hiding from
+     * them). A card they answered before the block bound stays counted, since their acted count holds it.
+     */
     suspend fun hiddenCardCount(
         sessionId: UUID,
         userId: UUID,
     ): Int {
         val hidden = contactBlockVisibility?.hiddenFrom(userId).orEmpty()
         if (hidden.isEmpty()) return 0
-        return repository.listDeckCards(sessionId).count { it.targetUserId in hidden }
+        val answered = repository.listActionsForActor(sessionId, userId).mapTo(mutableSetOf()) { it.targetUserId }
+        return repository.listDeckCards(sessionId).count { it.targetUserId in hidden && it.targetUserId !in answered }
     }
 
     /** Targets blocked (either direction) or hidden by EITHER partner — invalid for the deck. */

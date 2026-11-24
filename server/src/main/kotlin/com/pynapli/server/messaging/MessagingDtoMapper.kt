@@ -25,14 +25,17 @@ internal class MessagingDtoMapper(
         viewerUserId: UUID,
     ): ConversationDetailDto {
         val readReceiptCache = mutableMapOf<UUID, Boolean>()
+        val hidden = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        val shown = detail.conversation.withoutHiddenPeople(hidden)
         return ConversationDetailDto(
-            conversation = toDto(detail.conversation, viewerUserId, readReceiptCache),
+            conversation = toVisibleDto(record = detail.conversation, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache, hidden = hidden),
             messages =
                 detail.messages.map { message ->
                     toDto(
-                        record = message,
+                        record = message.withoutHiddenSender(hidden),
                         viewerUserId = viewerUserId,
-                        conversation = detail.conversation,
+                        // Read receipts count only the people this viewer can see.
+                        conversation = shown,
                         readReceiptCache = readReceiptCache,
                     )
                 },
@@ -45,15 +48,25 @@ internal class MessagingDtoMapper(
         viewerUserId: UUID,
         readReceiptCache: MutableMap<UUID, Boolean> = mutableMapOf(),
     ): ConversationDto {
-        val shown = record.withoutHiddenPeople(contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty())
-        return toVisibleDto(record = record, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache)
+        val hidden = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        val shown = record.withoutHiddenPeople(hidden)
+        return toVisibleDto(record = record, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache, hidden = hidden)
     }
+
+    /**
+     * A system notice (a timer change) by someone hiding from the viewer is shown to them with no
+     * sender: the conversation's timer is a property everyone in it sees, so the change is explained,
+     * attributed to nobody. Every other message from such a person never reaches this point (SQL).
+     */
+    private fun MessageRecord.withoutHiddenSender(hidden: Set<UUID>): MessageRecord =
+        if (senderUserId in hidden) copy(senderUserId = SYSTEM_SENDER) else this
 
     private suspend fun toVisibleDto(
         record: ConversationRecord,
         shown: ConversationRecord,
         viewerUserId: UUID,
         readReceiptCache: MutableMap<UUID, Boolean>,
+        hidden: Set<UUID>,
     ): ConversationDto =
         ConversationDto(
             conversationId = record.conversationId.toString(),
@@ -63,9 +76,9 @@ internal class MessagingDtoMapper(
             lastMessage =
                 record.lastMessage?.let { message ->
                     toDto(
-                        record = message,
+                        record = message.withoutHiddenSender(hidden),
                         viewerUserId = viewerUserId,
-                        conversation = record,
+                        conversation = shown,
                         readReceiptCache = readReceiptCache,
                     )
                 },
@@ -194,5 +207,8 @@ internal class MessagingDtoMapper(
     private companion object {
         private const val DELIVERY_READ = "read"
         private const val DELIVERY_SENT = "sent"
+
+        /** The nil id: "nobody", for a system notice whose author hides from the viewer. */
+        private val SYSTEM_SENDER = UUID(0L, 0L)
     }
 }

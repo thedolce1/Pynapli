@@ -44,6 +44,27 @@ internal const val MATCHED_DIRECT_CONVERSATION_CLAUSE =
     )
     """
 
+/**
+ * [MATCHED_DIRECT_CONVERSATION_CLAUSE] for one viewer (`v.token`, "Hide from people you know"): a match
+ * with someone hiding from the viewer, or made while they were hiding (before a release), never lists
+ * the conversation for the viewer.
+ */
+internal const val MATCHED_DIRECT_CONVERSATION_FOR_VIEWER_CLAUSE =
+    """
+    EXISTS (
+        SELECT 1
+        FROM direct_conversations dc
+        $DIRECT_PAIR_MATCH_JOIN
+        WHERE dc.conversation_id = c.id
+          AND NOT EXISTS (
+              SELECT 1 FROM contact_blocks cb_mt
+              WHERE cb_mt.target_token = v.token
+                AND cb_mt.blocker_user_id IN (dc.user_a_id, dc.user_b_id)
+                AND (cb_mt.released_at IS NULL OR mt.created_at < cb_mt.released_at)
+          )
+    )
+    """
+
 /** Messages of `msg` the viewer (bound once) can see: same rule as the inbox listing. */
 private const val VIEWER_VISIBLE_MESSAGE =
     """
@@ -62,6 +83,9 @@ private const val VIEWER_VISIBLE_MESSAGE =
 internal fun Connection.loadNewMatch(
     userId: UUID,
     conversationId: UUID,
+    // "Hide from people you know": never a new match with someone hiding from the viewer, nor one made
+    // while they were hiding (so a release can't surface it).
+    viewerContactToken: String = com.pynapli.server.contactblocks.ContactBlockSql.NO_VIEWER_TOKEN,
 ): Boolean =
     prepareStatement(
         """
@@ -85,6 +109,12 @@ internal fun Connection.loadNewMatch(
                     AND msg.created_at >= mt.created_at
                     AND $VIEWER_VISIBLE_MESSAGE
               )
+              AND NOT EXISTS (
+                  SELECT 1 FROM contact_blocks cb_mt
+                  WHERE cb_mt.target_token = ?
+                    AND cb_mt.blocker_user_id IN (dc.user_a_id, dc.user_b_id)
+                    AND (cb_mt.released_at IS NULL OR mt.created_at < cb_mt.released_at)
+              )
         )
         """.trimIndent(),
     ).use { statement ->
@@ -92,6 +122,7 @@ internal fun Connection.loadNewMatch(
         statement.setObject(2, userId)
         statement.setObject(3, userId)
         statement.setObject(4, userId)
+        statement.setString(5, viewerContactToken) // hidden-from rule
         statement.executeQuery().use { rs ->
             rs.next()
             rs.getBoolean(1)

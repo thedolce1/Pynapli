@@ -50,6 +50,9 @@ class ProfileLinkService(
         validateCanRequestLink(requesterUserId, targetUserId)
 
         val invitation = repository.createInvitation(requesterUserId, targetUserId)
+        // An invite the target sees: if they hide from the requester (a bind that raced it), the pair is
+        // exempt from now on.
+        contactBlockVisibility?.noteActToward(requesterUserId, targetUserId)
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = targetUserId,

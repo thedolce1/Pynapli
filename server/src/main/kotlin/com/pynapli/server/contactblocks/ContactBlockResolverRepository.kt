@@ -54,12 +54,13 @@ interface ContactBlockResolverRepository {
     )
 
     /**
-     * In ONE transaction: locks the member's user row (FOR SHARE: a concurrent account deletion either
-     * runs first and nothing binds, or after and clears what this set), takes the pair lock every Swipe
-     * and Psync like takes ([SWIPE_PAIR_LOCK_NAMESPACE]), checks [ContactBlockInteractionSql] under it,
-     * and writes [exemptToken] or [targetToken]. So a like by the member landing in the same instant is
-     * either seen here (exempt) or recorded after the bind (and then flips the row to exempt through
-     * [ContactBlockVisibility.noteActToward]).
+     * In ONE transaction, with `lock_timeout` 2 s: locks the member's user row (FOR SHARE: a concurrent
+     * account deletion either runs first and nothing binds, or after and clears what this set), takes
+     * the pair advisory lock ([SWIPE_PAIR_LOCK_NAMESPACE]) that [ContactBlockVisibility.noteActToward]
+     * also takes (and Swipe likes take around their own write), checks [ContactBlockInteractionSql]
+     * under it, and writes [exemptToken] or [targetToken]. An act by the member toward the blocker that
+     * committed before the check is seen here (exempt); one that commits after it is followed by
+     * noteActToward, which waits for this transaction and then finds the bound row and flips it.
      */
     suspend fun settle(
         row: PendingContactBlockRow,
@@ -70,13 +71,18 @@ interface ContactBlockResolverRepository {
     ): ContactBlockSettleOutcome
 
     /**
-     * Claims today's full sweep: true (and records [now]) when the last one was before [now] minus
-     * [every], false otherwise. One statement, so two replicas can't both claim it.
+     * Claims the full sweep: true (and records an attempt at [now]) when the last SUCCESS was before
+     * [now] minus [every] and no attempt was made in the last [retryAfter]. One statement, so two
+     * replicas can't both claim it. A failed sweep is retried after [retryAfter], not a day later.
      */
     suspend fun claimFullSweep(
         now: Instant,
         every: java.time.Duration,
+        retryAfter: java.time.Duration = java.time.Duration.ofHours(1),
     ): Boolean
+
+    /** Records a completed full sweep. */
+    suspend fun recordFullSweepSuccess(now: Instant)
 }
 
 class JdbcContactBlockResolverRepository(
@@ -126,11 +132,15 @@ class JdbcContactBlockResolverRepository(
         memberToken: String,
     ) {
         dataSource.withConnection { connection ->
-            connection.prepareStatement(RECORD_TOKEN_SQL).use { statement ->
-                statement.setString(1, memberToken)
-                statement.setObject(2, userId)
-                statement.setString(3, memberToken)
-                statement.executeUpdate()
+            connection.inTransaction {
+                // Runs inside sign-in and verify too: a held user row fails fast instead of stalling.
+                createStatement().use { it.execute("SET LOCAL lock_timeout = '$SETTLE_LOCK_TIMEOUT'") }
+                prepareStatement(RECORD_TOKEN_SQL).use { statement ->
+                    statement.setString(1, memberToken)
+                    statement.setObject(2, userId)
+                    statement.setString(3, memberToken)
+                    statement.executeUpdate()
+                }
             }
         }
     }
@@ -153,6 +163,9 @@ class JdbcContactBlockResolverRepository(
         targetToken: String,
         exemptToken: String,
     ): ContactBlockSettleOutcome {
+        // Bounded: this runs inside sign-in and verify, so a held row or pair lock must fail fast (an
+        // SQL error ContactBlockSettling turns into a worker retry), never stall the request.
+        createStatement().use { it.execute("SET LOCAL lock_timeout = '$SETTLE_LOCK_TIMEOUT'") }
         val stillOwner =
             prepareStatement(LOCK_TARGET_SQL).use { statement ->
                 statement.setObject(1, targetUserId)
@@ -169,6 +182,7 @@ class JdbcContactBlockResolverRepository(
                     statement.setObject(1, row.blockerUserId)
                     statement.setObject(2, targetUserId)
                     statement.setTimestamp(3, Timestamp.from(row.createdAt))
+                    statement.setString(4, targetToken)
                     statement.executeQuery().use { rs -> rs.next() && rs.getBoolean(1) }
                 }
             }
@@ -188,15 +202,27 @@ class JdbcContactBlockResolverRepository(
     override suspend fun claimFullSweep(
         now: Instant,
         every: java.time.Duration,
+        retryAfter: java.time.Duration,
     ): Boolean =
         dataSource.withConnection { connection ->
             connection.prepareStatement(CLAIM_FULL_SWEEP_SQL).use { statement ->
                 statement.setString(1, FULL_SWEEP_JOB)
                 statement.setTimestamp(2, Timestamp.from(now))
                 statement.setTimestamp(3, Timestamp.from(now.minus(every)))
+                statement.setTimestamp(4, Timestamp.from(now.minus(retryAfter)))
                 statement.executeQuery().use { rs -> rs.next() }
             }
         }
+
+    override suspend fun recordFullSweepSuccess(now: Instant) {
+        dataSource.withConnection { connection ->
+            connection.prepareStatement(RECORD_SWEEP_SUCCESS_SQL).use { statement ->
+                statement.setTimestamp(1, Timestamp.from(now))
+                statement.setString(2, FULL_SWEEP_JOB)
+                statement.executeUpdate()
+            }
+        }
+    }
 
     private fun java.sql.ResultSet.pendingRows(): List<PendingContactBlockRow> =
         buildList {
@@ -214,6 +240,7 @@ class JdbcContactBlockResolverRepository(
 
     private companion object {
         const val FULL_SWEEP_JOB = "contact-block-full-sweep"
+        const val SETTLE_LOCK_TIMEOUT = "2s"
 
         val LIST_PENDING_SQL =
             """
@@ -284,9 +311,13 @@ class JdbcContactBlockResolverRepository(
             VALUES (?, ?::timestamptz)
             ON CONFLICT (job_name) DO UPDATE
             SET last_full_sweep_at = EXCLUDED.last_full_sweep_at
-            WHERE s.last_full_sweep_at < ?::timestamptz
+            WHERE COALESCE(s.last_success_at, '-infinity'::timestamptz) < ?::timestamptz
+              AND s.last_full_sweep_at < ?::timestamptz
             RETURNING 1
             """.trimIndent()
+
+        val RECORD_SWEEP_SUCCESS_SQL =
+            "UPDATE contact_block_job_state SET last_success_at = ?::timestamptz WHERE job_name = ?"
     }
 }
 
@@ -298,22 +329,26 @@ class JdbcContactBlockResolverRepository(
  *  - an Activity row X caused for A (a profile view A can see, a flirt, a like, a Pineapple Like, an
  *    album request or grant, a partner chat invite, a Psync or Playing Tonight row);
  *  - a like or Pineapple Like by X on A (a pass produces no visible signal);
- *  - a match between them;
- *  - a conversation with both of them that X created or wrote in;
+ *  - a match between them that X could have seen (not one made while A was hiding from X, which X was
+ *    never shown: a Psync together match, or a raced like, during an earlier bound period);
+ *  - a conversation holding both of them in which X has ever written or read: durable, so the
+ *    retention purge of disappearing messages can't erase it (V121 `first_written_at`, set by a
+ *    trigger on every visible message; `last_read_at` moved past X's joining);
  *  - a partner link invite from X, a private album request from X, an album grant by X;
  *  - a Psync like by X on A.
  *
  * Nothing A did toward X, before or after adding the address, ever exempts the pair: if X never did
  * anything A could see, binding changes nothing A observes, so there is nothing to protect. What A
  * did that X already saw disappears from X's views once bound, like everything else from A.
- * Favourites are private to the person who stars, so X's favourite of A doesn't count.
+ * Favourites are private to the person who stars, so X's favourite of A doesn't count, and an empty
+ * conversation X opened is invisible to A until X writes in it.
  *
- * Parameters: blocker id, target id, block created_at (kept in the signature; the rule doesn't use it).
+ * Parameters: blocker id, target id, block created_at (unused), the target's own target token.
  */
 internal object ContactBlockInteractionSql {
     val HAD_INTERACTION_SQL =
         """
-        WITH p AS (SELECT ?::uuid AS a, ?::uuid AS x, ?::timestamptz AS t)
+        WITH p AS (SELECT ?::uuid AS a, ?::uuid AS x, ?::timestamptz AS t, ?::text AS xt)
         SELECT (
             EXISTS (
                 SELECT 1 FROM activity_events ae
@@ -326,6 +361,14 @@ internal object ContactBlockInteractionSql {
             OR EXISTS (
                 SELECT 1 FROM matches m
                 WHERE m.user_a = LEAST(p.a, p.x) AND m.user_b = GREATEST(p.a, p.x)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM contact_blocks earlier
+                      WHERE earlier.target_token = p.xt
+                        AND earlier.blocker_user_id = p.a
+                        AND earlier.released_at IS NOT NULL
+                        AND m.created_at >= earlier.created_at
+                        AND m.created_at < earlier.released_at
+                  )
             )
             OR EXISTS (
                 SELECT 1
@@ -333,13 +376,13 @@ internal object ContactBlockInteractionSql {
                 JOIN conversation_participants cpx
                   ON cpx.conversation_id = cpa.conversation_id
                  AND cpx.user_id = p.x
-                JOIN conversations c ON c.id = cpa.conversation_id
                 WHERE cpa.user_id = p.a
                   AND (
-                      c.created_by_user_id = p.x
+                      cpx.first_written_at IS NOT NULL
+                      OR cpx.last_read_at > cpx.joined_at
                       OR EXISTS (
                           SELECT 1 FROM messages msg
-                          WHERE msg.conversation_id = c.id
+                          WHERE msg.conversation_id = cpa.conversation_id
                             AND msg.sender_user_id = p.x
                       )
                   )

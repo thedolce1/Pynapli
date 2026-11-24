@@ -10,10 +10,12 @@ import java.util.UUID
  *  - a conversation in which EVERY other participant hides from the viewer is not theirs (the same rule
  *    as [isHiddenConversationFor]); one with any visible participant is listed, the hidden people
  *    stripped (MessagingDtoMapper) and their messages left out;
- *  - messages from someone hiding from the viewer never make the conversation visible, never move it
- *    up the inbox: when such a message was the last thing that touched `updated_at`, the viewer's sort
- *    time falls back to their last visible message (or the conversation's creation).
- * With no token (unit tests) every hidden-from check matches nothing.
+ *  - messages from someone hiding from the viewer never make the conversation visible, and nothing such
+ *    a person causes moves it up the inbox: when the last bump (`updated_by_user_id`, V121: a message,
+ *    a deletion, leaving, an invite naming them) came from them, the viewer's sort time falls back to
+ *    their last visible message (or the conversation's creation). A system notice (a timer change) is
+ *    shown to the viewer with no sender, so it doesn't make anything visible on its own either.
+ * With no token (unit tests, or nobody hides from this viewer) every check is skipped or matches nothing.
  */
 private const val HIDDEN_SENDER_OF_HM =
     "EXISTS (SELECT 1 FROM contact_blocks cb_m WHERE cb_m.target_token = v.token AND cb_m.blocker_user_id = hm.sender_user_id " +
@@ -23,16 +25,15 @@ private const val HIDDEN_SENDER_OF_VM =
     "EXISTS (SELECT 1 FROM contact_blocks cb_v WHERE cb_v.target_token = v.token AND cb_v.blocker_user_id = vm.sender_user_id " +
         "AND (cb_v.released_at IS NULL OR vm.created_at < cb_v.released_at))"
 
+private const val HIDDEN_BUMPER_OF_C =
+    "EXISTS (SELECT 1 FROM contact_blocks cb_u WHERE cb_u.target_token = v.token AND cb_u.blocker_user_id = c.updated_by_user_id " +
+        "AND (cb_u.released_at IS NULL OR c.updated_at < cb_u.released_at))"
+
 /** The viewer's sort time of conversation `c`; needs `v` in scope. */
 internal val VIEWER_SORT_AT_SQL =
     """
     CASE
-        WHEN v.token <> '' AND EXISTS (
-            SELECT 1 FROM messages hm
-            WHERE hm.conversation_id = c.id
-              AND hm.created_at >= c.updated_at
-              AND $HIDDEN_SENDER_OF_HM
-        )
+        WHEN v.token <> '' AND c.updated_by_user_id IS NOT NULL AND $HIDDEN_BUMPER_OF_C
         THEN COALESCE(
             (
                 SELECT MAX(vm.created_at) FROM messages vm
@@ -68,7 +69,7 @@ internal fun Connection.listConversationIds(
             WHERE (
                c.created_by_user_id = v.viewer
                OR viewer_cp.invitation_status = 'invited'
-               OR $MATCHED_DIRECT_CONVERSATION_CLAUSE
+               OR $MATCHED_DIRECT_CONVERSATION_FOR_VIEWER_CLAUSE
                OR EXISTS (
                    SELECT 1
                    FROM messages hm
@@ -287,7 +288,7 @@ internal fun Connection.loadConversation(
         partnerInvites = viewerInvites,
         viewerExpirySeconds = participants.firstOrNull { it.userId == userId }?.messageExpirySeconds,
         effectiveExpirySeconds = effectiveExpirySeconds,
-        newMatch = loadNewMatch(userId, conversationId),
+        newMatch = loadNewMatch(userId, conversationId, viewerContactToken),
     )
 }
 

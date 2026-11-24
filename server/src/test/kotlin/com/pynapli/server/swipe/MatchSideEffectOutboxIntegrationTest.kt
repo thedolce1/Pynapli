@@ -51,8 +51,8 @@ class MatchSideEffectOutboxIntegrationTest :
 
         class Harness {
             val publisher = RecordingPublisher()
-            val activity = ActivityService(JdbcActivityRepository(dataSource))
-            val messaging = MessagingService(JdbcMessagingRepository(dataSource))
+            val activity = ActivityService(JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()))
+            val messaging = MessagingService(JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()))
             val delivery = MatchSideEffectDelivery(activity, publisher, messaging.matchConversationOpener)
 
             fun drainer(clock: Clock) = MatchSideEffectDrainer(dataSource, delivery, clock)
@@ -169,8 +169,8 @@ class MatchSideEffectOutboxIntegrationTest :
                 val notificationService = NotificationService(notifications)
                 // b needs a push device, or the enqueue skips before ever writing.
                 notificationService.registerPushDevice(b, RegisterPushDeviceRequestDto(platform = "android", deviceToken = "fcm-test-token-for-b"))
-                val activity = ActivityService(JdbcActivityRepository(dataSource))
-                val messaging = MessagingService(JdbcMessagingRepository(dataSource))
+                val activity = ActivityService(JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()))
+                val messaging = MessagingService(JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()))
                 val delivery = MatchSideEffectDelivery(activity, notificationService, messaging.matchConversationOpener)
                 val service =
                     SwipeService(

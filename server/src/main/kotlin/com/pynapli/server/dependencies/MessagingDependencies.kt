@@ -45,7 +45,7 @@ internal fun buildMessagingDependencies(
     messageMediaGateway: com.pynapli.server.messaging.MessageMediaGateway,
     productMetrics: com.pynapli.server.metrics.ProductMetrics,
     travelLocationRepository: com.pynapli.server.location.TravelLocationRepository? = null,
-    contactBlockTokens: com.pynapli.server.contactblocks.ContactBlockTokens? = null,
+    contactBlockTokens: com.pynapli.server.contactblocks.ContactBlockTokens,
     contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ): MessagingDependencies {
     val messagingService =

@@ -116,11 +116,15 @@ internal class PsyncActiveSessionActions(
                 recorded
             }
         if (!outcome.sessionActive) throw PsyncException("PSYNC_INVALID_STATE")
+        // A Psync like reaches the target later: if they hide from this person (a bind that raced it), the
+        // pair is exempt from now on.
+        if (outcome.newlyRecorded && request.action != "pass") deckCoordinator.noteActToward(userId, card.targetUserId)
 
         // Each person's deck leaves out the cards of people hiding from them, so each finishes at
         // their own count.
         val totalCards = repository.countDeckCards(sessionId)
-        val deckCount = totalCards - deckCoordinator.hiddenCardCount(sessionId, userId)
+        val hiddenForMe = deckCoordinator.hiddenCardCount(sessionId, userId)
+        val deckCount = totalCards - hiddenForMe
         val completed =
             if (outcome.actedCount >= deckCount && bothPartnersFinished(session, userId, totalCards)) {
                 val finish = repository.complete(sessionId, userId, clock.instant())
@@ -143,7 +147,8 @@ internal class PsyncActiveSessionActions(
         return PsyncActionResponseDto(
             recorded = outcome.newlyRecorded,
             actedCount = outcome.actedCount,
-            deckSize = session.deckSize,
+            // The size this person's deck has (one less per unanswered card of someone hiding from them).
+            deckSize = (session.deckSize - hiddenForMe).coerceAtLeast(0),
             sessionCompleted = completed,
         )
     }

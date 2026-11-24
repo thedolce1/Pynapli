@@ -47,7 +47,7 @@ class BringPartnerOfferIntegrationTest {
 
     private fun service(): MessagingService =
         MessagingService(
-            JdbcMessagingRepository(dataSource),
+            JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()),
             blockRepository = JdbcBlockRepository(dataSource),
         )
 

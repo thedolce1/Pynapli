@@ -5,19 +5,27 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * Moves the conversation up, recording [causedByUserId]: who (or whom the change is about) caused it,
+ * so a viewer someone hides from never sees the thread move for that person ("Hide from people you
+ * know", V121 `updated_by_user_id`). Null when nobody in particular did (a match).
+ */
 internal fun Connection.touchConversationAt(
     conversationId: UUID,
     updatedAt: Instant,
+    causedByUserId: UUID?,
 ) {
     prepareStatement(
         """
         UPDATE conversations
-        SET updated_at = ?
+        SET updated_at = ?,
+            updated_by_user_id = ?
         WHERE id = ?
         """.trimIndent(),
     ).use { statement ->
         statement.setTimestamp(1, Timestamp.from(updatedAt))
-        statement.setObject(2, conversationId)
+        statement.setObject(2, causedByUserId)
+        statement.setObject(3, conversationId)
         statement.executeUpdate()
     }
 }
@@ -87,29 +95,40 @@ internal fun Connection.leaveConversationParticipant(
         statement.executeUpdate()
     }
 
-internal fun Connection.markConversationGroup(conversationId: UUID) {
+internal fun Connection.markConversationGroup(
+    conversationId: UUID,
+    causedByUserId: UUID?,
+) {
     prepareStatement(
         """
         UPDATE conversations
         SET kind = 'group',
-            updated_at = now()
+            updated_at = now(),
+            updated_by_user_id = ?
         WHERE id = ?
         """.trimIndent(),
     ).use { statement ->
-        statement.setObject(1, conversationId)
+        statement.setObject(1, causedByUserId)
+        statement.setObject(2, conversationId)
         statement.executeUpdate()
     }
 }
 
-internal fun Connection.touchConversation(conversationId: UUID) {
+/** See [touchConversationAt]: [causedByUserId] is who, or whom the change is about, moved it. */
+internal fun Connection.touchConversation(
+    conversationId: UUID,
+    causedByUserId: UUID?,
+) {
     prepareStatement(
         """
         UPDATE conversations
-        SET updated_at = now()
+        SET updated_at = now(),
+            updated_by_user_id = ?
         WHERE id = ?
         """.trimIndent(),
     ).use { statement ->
-        statement.setObject(1, conversationId)
+        statement.setObject(1, causedByUserId)
+        statement.setObject(2, conversationId)
         statement.executeUpdate()
     }
 }

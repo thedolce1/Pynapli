@@ -31,7 +31,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000802")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val conversation =
                 repository.getOrCreateDirectConversation(
@@ -51,7 +51,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.insertMatch(viewer, target)
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val conversation =
                 repository.getOrCreateDirectConversation(
@@ -75,7 +75,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertMatch(viewer, target)
             // Only the target has a public profile photo; the viewer has none.
             val targetPhotoAssetId = dataSource.insertApprovedProfilePhoto(target)
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val created =
                 assertNotNull(
@@ -106,8 +106,8 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.insertMatch(viewer, target)
-            val repository = JdbcMessagingRepository(dataSource)
-            val rival = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
+            val rival = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             // Deterministically provoke the pair unique-index race: the id factory runs
             // after the existing-conversation lookup missed and before the insert, so a
@@ -144,7 +144,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000822")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val conversation =
                 repository.getOrCreateDirectConversation(
@@ -164,7 +164,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "matches_only")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val conversation =
                 repository.getOrCreateDirectConversation(
@@ -185,7 +185,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "matches_only")
             dataSource.insertMatch(viewer, target)
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val conversation =
                 repository.getOrCreateDirectConversation(
@@ -209,7 +209,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(matchesOnlyTarget, "Matches only")
             dataSource.setGridMessagePolicy(verifiedOnlyTarget, allowGridMessages = true, policy = "verified_only")
             dataSource.setGridMessagePolicy(matchesOnlyTarget, allowGridMessages = true, policy = "matches_only")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val service = MessagingService(repository)
 
             assertNull(repository.getOrCreateDirectConversation(viewer, verifiedOnlyTarget, origin = "grid"))
@@ -242,7 +242,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "verified_only")
             dataSource.setPhotoVerified(viewer)
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val created = assertNotNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
             assertEquals("grid", created.origin)
@@ -257,7 +257,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.setGridMessagePolicy(target, allowGridMessages = true, policy = "verified_only")
             dataSource.setPhotoVerified(target)
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             // Only the sender's verification counts.
             assertNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
@@ -272,7 +272,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.setGridMessagePolicy(target, allowGridMessages = false, policy = "verified_only")
             dataSource.setPhotoVerified(viewer)
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             assertNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
         }
@@ -288,7 +288,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.setPhotoVerified(viewer)
             val blockRepository = JdbcBlockRepository(dataSource)
             blockRepository.block(target, viewer, null) { UUID.randomUUID() }
-            val service = MessagingService(JdbcMessagingRepository(dataSource), blockRepository = blockRepository)
+            val service = MessagingService(JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()), blockRepository = blockRepository)
 
             val error =
                 assertFailsWith<MessagingException> {
@@ -303,7 +303,7 @@ class MessagingRepositoryIntegrationTest {
     @Test
     fun swipeMatchConversationIsNeverGatedByTheGridMessagePolicy() =
         runBlocking {
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             listOf("verified_only", "matches_only", "no_one").forEachIndexed { index, policy ->
                 val viewer = UUID.fromString("00000000-0000-0000-0000-0000000008e${index * 2 + 1}")
                 val target = UUID.fromString("00000000-0000-0000-0000-0000000008e${index * 2 + 2}")
@@ -329,7 +329,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-0000000008dd")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation = assertNotNull(repository.getOrCreateDirectConversation(viewer, target, origin = "grid"))
             assertNotNull(repository.sendMessage(viewer, conversation.conversationId, "hello"))
 
@@ -352,7 +352,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000852")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(
                     viewerUserId = viewer,
@@ -386,7 +386,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000872")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(
                     viewerUserId = viewer,
@@ -429,7 +429,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000882")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(
                     viewerUserId = viewer,
@@ -463,7 +463,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000862")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val moderationRepository = JdbcMessageModerationRepository(dataSource)
             val conversation =
                 repository.getOrCreateDirectConversation(
@@ -520,7 +520,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000872")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val moderationRepository = JdbcMessageModerationRepository(dataSource)
             val conversation =
                 repository.getOrCreateDirectConversation(
@@ -568,7 +568,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000876")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(
                     viewerUserId = viewer,
@@ -607,7 +607,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000000878")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(
                     viewerUserId = viewer,
@@ -637,7 +637,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(inviter, "Inviter")
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.insertUserWithProfile(partner, "Partner")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(
                     viewerUserId = inviter,
@@ -699,7 +699,7 @@ class MessagingRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(inviter, "Inviter")
             dataSource.insertUserWithProfile(target, "Target")
             dataSource.insertUserWithProfile(partner, "Partner")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(
                     viewerUserId = inviter,
@@ -729,7 +729,7 @@ class MessagingRepositoryIntegrationTest {
         runBlocking<Unit> {
             val viewer = UUID.fromString("00000000-0000-0000-0000-0000000009b0")
             dataSource.insertUserWithProfile(viewer, "Viewer")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val threads =
                 (1..5).map { n ->
                     val other = UUID.fromString("00000000-0000-0000-0000-0000000009b$n")
@@ -758,7 +758,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-0000000008a2")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(viewer, target, origin = "grid")!!
             repository.sendMessage(viewer, conversation.conversationId, "older one")
@@ -803,7 +803,7 @@ class MessagingRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-0000000008b2")
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(target, "Target")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(viewer, target, origin = "grid")!!
 
@@ -823,7 +823,7 @@ class MessagingRepositoryIntegrationTest {
             val recipient = UUID.fromString("00000000-0000-0000-0000-0000000008c2")
             dataSource.insertUserWithProfile(sender, "Sender")
             dataSource.insertUserWithProfile(recipient, "Recipient")
-            val repository = JdbcMessagingRepository(dataSource)
+            val repository = JdbcMessagingRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
             val conversation =
                 repository.getOrCreateDirectConversation(sender, recipient, origin = "grid")!!
             val assetId = UUID.fromString("00000000-0000-0000-0000-0000000008c9")

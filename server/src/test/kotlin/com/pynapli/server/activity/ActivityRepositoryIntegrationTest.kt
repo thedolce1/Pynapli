@@ -27,7 +27,7 @@ class ActivityRepositoryIntegrationTest {
             val target = UUID.fromString("00000000-0000-0000-0000-000000001002")
             dataSource.insertUserWithDiscovery(viewer)
             dataSource.insertUserWithDiscovery(target)
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             assertTrue(repository.recordProfileView(viewer, target))
             assertTrue(repository.recordProfileView(viewer, target))
@@ -57,7 +57,7 @@ class ActivityRepositoryIntegrationTest {
             dataSource.insertUserWithDiscovery(activeViewer)
             dataSource.insertUserWithDiscovery(optedOutTarget, showInViewedLists = false)
             dataSource.setRiskState(quarantinedViewer, score = 75, tier = "quarantine")
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             assertFalse(repository.recordProfileView(incognitoViewer, target))
             assertFalse(repository.recordProfileView(hiddenFromViewedLists, target))
@@ -102,7 +102,7 @@ class ActivityRepositoryIntegrationTest {
                 eventType = "flirt",
                 occurredAt = Instant.parse("2026-05-18T11:00:00Z"),
             )
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val firstPage =
                 repository.listActivity(
@@ -145,7 +145,7 @@ class ActivityRepositoryIntegrationTest {
                 eventType = "flirt",
                 occurredAt = Instant.parse("2026-05-18T12:00:00Z"),
             )
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             assertFalse(repository.dismissActivityEvent(otherRecipient, eventId))
             assertEquals(1, repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null)).size)
@@ -179,7 +179,7 @@ class ActivityRepositoryIntegrationTest {
                 occurredAt = Instant.parse("2026-05-18T12:00:00Z"),
             )
             dataSource.insertBlock(recipient, blockedActor)
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val feed = repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null))
 
@@ -211,7 +211,7 @@ class ActivityRepositoryIntegrationTest {
                 eventType = "flirt",
                 occurredAt = Instant.parse("2026-05-18T13:31:00Z"),
             )
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val allFeed = repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null))
             val viewsFeed = repository.listActivity(ActivityFeedQuery(recipient, setOf("profile_view"), 10, null))
@@ -276,7 +276,7 @@ class ActivityRepositoryIntegrationTest {
                     occurredAt = row.third,
                 )
             }
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val summary = repository.getActivitySummary(recipient)
 
@@ -324,7 +324,7 @@ class ActivityRepositoryIntegrationTest {
                 eventType = "flirt",
                 occurredAt = Instant.parse("2026-05-18T15:02:00Z"),
             )
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val markedCount = repository.markActivityEventsSeen(recipient, setOf(firstEventId, otherEventId))
             val feed = repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null))
@@ -348,7 +348,7 @@ class ActivityRepositoryIntegrationTest {
             val flirtActor = UUID.fromString("00000000-0000-0000-0000-000000002202")
             val matchActor = UUID.fromString("00000000-0000-0000-0000-000000002203")
             listOf(recipient, flirtActor, matchActor).forEach { userId -> dataSource.insertUserWithDiscovery(userId) }
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             // An unseen match alone: Activity has no Matches tab, so nothing could ever clear it.
             dataSource.insertActivityEvent(
@@ -401,7 +401,7 @@ class ActivityRepositoryIntegrationTest {
             dataSource.insertActivityEvent(inviteId, recipient, inviteActor, "partner_chat_invite", Instant.parse("2026-05-18T17:03:00Z"))
             dataSource.insertActivityEvent(viewId, recipient, viewActor, "profile_view", Instant.parse("2026-05-18T17:04:00Z"))
             dataSource.insertActivityEvent(matchId, recipient, matchActor, "match", Instant.parse("2026-05-18T17:05:00Z"))
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             val before = repository.getActivitySummary(recipient)
             // Views are counted for the Views tab but have never been in the badge.
@@ -428,7 +428,7 @@ class ActivityRepositoryIntegrationTest {
             val conversationId = UUID.fromString("00000000-0000-0000-0000-000000001804")
             dataSource.insertUserWithDiscovery(viewer, displayName = "Viewer")
             dataSource.insertUserWithDiscovery(target, displayName = "Target")
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             assertTrue(repository.recordSwipeInterest(viewer, target, "swipe_like"))
             assertFalse(repository.recordSwipeInterest(viewer, target, "swipe_like"))
@@ -455,7 +455,7 @@ class ActivityRepositoryIntegrationTest {
             val requester = UUID.fromString("00000000-0000-0000-0000-000000001852")
             dataSource.insertUserWithDiscovery(owner, displayName = "Owner")
             dataSource.insertUserWithDiscovery(requester, displayName = "Requester")
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             assertTrue(repository.recordAlbumGranted(owner, requester))
             val first = repository.listActivity(ActivityFeedQuery(requester, setOf("album_granted"), 10, null)).single()
@@ -479,7 +479,7 @@ class ActivityRepositoryIntegrationTest {
             val recipient = UUID.fromString("00000000-0000-0000-0000-000000002104")
             listOf(taggedSender, untaggedSender, unknownSourceSender, recipient)
                 .forEach { userId -> dataSource.insertUserWithDiscovery(userId) }
-            val repository = JdbcActivityRepository(dataSource)
+            val repository = JdbcActivityRepository(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
 
             // The service normalizes the source before reaching the repository, so the repository
             // only ever sees "playing_tonight" or null. Passing a stray value here proves the

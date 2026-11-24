@@ -462,7 +462,10 @@ class ContactBlockBindingIntegrationTest :
                 assertTrue(graph.visibility.hiddenFrom(TARGET).isEmpty(), "the pair is exempt from now on")
                 // A's own act toward X never changes anything.
                 graph.visibility.noteActToward(actorUserId = BLOCKER, targetUserId = TARGET)
-                assertEquals(1, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE target_token IS NOT NULL"))
+                // The flip: the bound row is now a tombstone beside one active (exempt) row; A's count is unchanged.
+                assertEquals(1, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE target_token IS NOT NULL AND released_at IS NULL"))
+                assertEquals(1, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE released_at IS NOT NULL"))
+                assertEquals(1, graph.contactBlocks.summary(BLOCKER).count)
             }
         }
 

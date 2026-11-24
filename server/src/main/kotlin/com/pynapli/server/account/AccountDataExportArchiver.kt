@@ -197,7 +197,25 @@ class JdbcAccountDataExportArchiver(
                     FROM conversation_participants cp
                     JOIN conversations c ON c.id = cp.conversation_id, me
                     WHERE cp.user_id = me.id
-                      AND NOT EXISTS (SELECT 1 FROM contact_blocks cb WHERE cb.target_token = me.hidden_token AND cb.blocker_user_id = c.created_by_user_id AND (cb.released_at IS NULL OR c.created_at < cb.released_at))
+                      -- The inbox rule: a conversation whose every other participant hides from this
+                      -- person (or did, when it was created) isn't theirs, whoever created it.
+                      AND (
+                          NOT EXISTS (
+                              SELECT 1 FROM conversation_participants other
+                              WHERE other.conversation_id = cp.conversation_id AND other.user_id <> me.id
+                          )
+                          OR EXISTS (
+                              SELECT 1 FROM conversation_participants other
+                              WHERE other.conversation_id = cp.conversation_id
+                                AND other.user_id <> me.id
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM contact_blocks cb
+                                    WHERE cb.target_token = me.hidden_token
+                                      AND cb.blocker_user_id = other.user_id
+                                      AND (cb.released_at IS NULL OR c.created_at < cb.released_at)
+                                )
+                          )
+                      )
                     """.trimIndent(),
                 "partnerLinks" to
                     """

@@ -50,7 +50,13 @@ class ContactBlockResolver(
     suspend fun resolveAllPending(): Int = resolveSince(Instant.EPOCH)
 
     /** The daily full sweep, when no replica has run it in the last [FULL_SWEEP_EVERY]; else the recent pass. */
-    suspend fun resolveScheduled(): Int = if (repository.claimFullSweep(clock.instant(), FULL_SWEEP_EVERY)) resolveAllPending() else resolveRecent()
+    suspend fun resolveScheduled(): Int {
+        if (!repository.claimFullSweep(clock.instant(), FULL_SWEEP_EVERY)) return resolveRecent()
+        // Success is recorded only after the sweep finished: a failed one is retried within the hour.
+        val settled = resolveAllPending()
+        repository.recordFullSweepSuccess(clock.instant())
+        return settled
+    }
 
     private suspend fun resolveSince(createdSince: Instant): Int {
         var settled = 0
@@ -144,8 +150,10 @@ fun interface ContactBlockResolutionTrigger {
  * few seconds), and returns normally.
  *
  * The window when it fails: until that tick (5 to 30 seconds), the member's reads don't yet hide the
- * rows of that address that weren't settled. A worker restart in that window loses the retry; the
- * member's next sign-in settles again.
+ * rows of that address that weren't settled. The retry queue is in memory on THIS instance only: a
+ * restart in that window loses the retry and other replicas never see it; the member's next sign-in
+ * settles again, and the daily full sweep covers the address's pending rows (its member has a token).
+ * The settle runs with a 2 s lock timeout, so a held lock lands here fast instead of stalling.
  */
 class ContactBlockSettling(
     private val resolver: ContactBlockResolver,
