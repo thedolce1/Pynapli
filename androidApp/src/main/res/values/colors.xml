@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The app background (PynapliColors.Black). Painted by the window before the first Compose
+        frame, so the pre-compose window, the boot splash and the session splash share one colour.
+    -->
+    <color name="pynapli_window_background">#0B0B0E</color>
+</resources>
