@@ -21,6 +21,8 @@ import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.SearchOff
+import com.pynapli.app.location.LOCATION_SKIP_COST_COPY
+import com.pynapli.app.location.LocationAccessHelp
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.perf.PynapliPerfMarks
 
@@ -101,6 +103,15 @@ internal fun GridBody(
                             modifier = Modifier.padding(top = 10.dp),
                         )
                     }
+                    // Blocked for good or services off: the way to Settings (or the browser's switch).
+                    LocationAccessHelp(locationState, modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        text = LOCATION_SKIP_COST_COPY,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
                 }
             }
 

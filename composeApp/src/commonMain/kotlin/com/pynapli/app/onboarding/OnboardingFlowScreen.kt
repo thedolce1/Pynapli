@@ -53,6 +53,8 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
+import com.pynapli.app.location.LOCATION_SKIP_COST_COPY
+import com.pynapli.app.location.LocationAccessHelp
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.media.MediaAlbumsUiState
 import com.pynapli.shared.core.config.LegalLinks
@@ -518,6 +520,8 @@ private fun LocationStep(
                 "while you use the app. Your exact position is never shown to others.",
     )
     StepError(locationState.errorMessage)
+    // Blocked for good or services off: the way to Settings (or where the browser keeps it).
+    LocationAccessHelp(locationState)
     Spacer(modifier = Modifier.height(28.dp))
     SubmittingButton(
         text = "Share my location",
@@ -528,6 +532,14 @@ private fun LocationStep(
     TextButton(onClick = onContinue, enabled = !locationState.isUpdating, modifier = Modifier.handCursor(enabled = !locationState.isUpdating)) {
         Text("Skip for now")
     }
+    // What skipping costs, said plainly next to the choice (Section 1, Permissions).
+    Text(
+        text = LOCATION_SKIP_COST_COPY,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

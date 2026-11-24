@@ -41,7 +41,9 @@ class WebLocationAdapter(
                     )
                 }
             },
-            onPermissionDenied = { locationStateHolder.markPermissionDenied() },
+            // A browser remembers a refusal for the site and will not prompt again from a click, so
+            // the screen explains where its switch is (LocationSettingsAccess.blockedHint).
+            onPermissionDenied = { locationStateHolder.markPermissionDenied(permanently = true) },
             onUnavailable = { locationStateHolder.markUnavailable() },
         )
     }

@@ -160,6 +160,30 @@ class LocationStateHolderTest {
         }
 
     @Test
+    fun aBlockedPermissionOrServicesOffSaysSoUntilTheNextAttempt() =
+        runTest {
+            val stateHolder = LocationStateHolder(FakeLocationUpdateRepository())
+
+            stateHolder.markPermissionDenied()
+            assertNull(stateHolder.state.value.blockedReason, "a first refusal can still be asked again")
+
+            stateHolder.markPermissionDenied(permanently = true)
+            assertEquals(LocationBlockedReason.PermissionBlocked, stateHolder.state.value.blockedReason)
+            assertEquals("Location permission is required to load nearby profiles.", stateHolder.state.value.errorMessage)
+
+            stateHolder.markServicesOff()
+            assertEquals(LocationBlockedReason.ServicesOff, stateHolder.state.value.blockedReason)
+
+            // Back from Settings: the next attempt clears it, and a fix that lands keeps it clear.
+            stateHolder.beginUpdate()
+            assertNull(stateHolder.state.value.blockedReason)
+            stateHolder.markServicesOff()
+            stateHolder.submitLocation(DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20))
+            assertNull(stateHolder.state.value.blockedReason)
+            assertNull(stateHolder.state.value.errorMessage)
+        }
+
+    @Test
     fun aSubmitStillInFlightAtSignOutNeverWritesIntoTheNextAccount() =
         runTest {
             val gate = CompletableDeferred<Unit>()

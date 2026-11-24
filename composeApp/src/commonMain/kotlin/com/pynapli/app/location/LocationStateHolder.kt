@@ -38,15 +38,32 @@ class LocationStateHolder(
 
     fun beginUpdate() {
         _state.update { current ->
-            current.copy(isUpdating = true, errorMessage = null)
+            current.copy(isUpdating = true, errorMessage = null, blockedReason = null)
         }
     }
 
-    fun markPermissionDenied() {
+    /**
+     * The OS (or browser) said no. [permanently] when asking again would not show a prompt (Android
+     * "Don't allow" twice or "Don't ask again", a browser that remembers the block): the screen then
+     * offers the way to Settings instead of a button that can no longer ask.
+     */
+    fun markPermissionDenied(permanently: Boolean = false) {
         _state.update { current ->
             current.copy(
                 isUpdating = false,
                 errorMessage = "Location permission is required to load nearby profiles.",
+                blockedReason = if (permanently) LocationBlockedReason.PermissionBlocked else null,
+            )
+        }
+    }
+
+    /** Device location services are switched off (no provider at all), so no app can get a fix. */
+    fun markServicesOff() {
+        _state.update { current ->
+            current.copy(
+                isUpdating = false,
+                errorMessage = "Location services are turned off on this device.",
+                blockedReason = LocationBlockedReason.ServicesOff,
             )
         }
     }
@@ -56,13 +73,14 @@ class LocationStateHolder(
             current.copy(
                 isUpdating = false,
                 errorMessage = "Current location is not available yet.",
+                blockedReason = null,
             )
         }
     }
 
     suspend fun submitLocation(location: DeviceLocation): LocationUpdateResult {
         _state.update { current ->
-            current.copy(isUpdating = true, errorMessage = null)
+            current.copy(isUpdating = true, errorMessage = null, blockedReason = null)
         }
 
         val gridRefresh = gridRefreshFor(location)

@@ -24,6 +24,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 import com.pynapli.app.location.DeviceLocation
+import com.pynapli.app.location.LocationSettingsAccess
+import com.pynapli.app.location.ProvideLocationSettingsAccess
 import com.pynapli.app.location.submitAndRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaPickTarget
@@ -58,9 +60,19 @@ class MainActivity : ComponentActivity() {
             if (permissions.values.any { granted -> granted }) {
                 submitCurrentLocation()
             } else {
-                appGraph?.pynapliAppGraph?.locationStateHolder?.markPermissionDenied()
+                // Read after the dialog: no rationale to show for either permission now means Android
+                // will not ask again ("Don't allow" twice, or the dialog was skipped entirely because
+                // it already refused), so the screen offers Settings instead of a dead button. It is
+                // also false before the first ask, which is why it is never read up front.
+                val blockedForGood =
+                    !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) &&
+                        !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_COARSE_LOCATION)
+                appGraph?.pynapliAppGraph?.locationStateHolder?.markPermissionDenied(permanently = blockedForGood)
             }
         }
+    private val locationSettingsAccess by lazy {
+        LocationSettingsAccess(opener = AndroidLocationSettingsOpener(this))
+    }
     private val mediaPickerLauncher =
         registerForActivityResult(
             ActivityResultContracts.PickVisualMedia(),
@@ -110,19 +122,21 @@ class MainActivity : ComponentActivity() {
             when (val graph = appGraphState.value) {
                 null -> PynapliBootSplash()
                 else ->
-                    PynapliApp(
-                        graph = graph.pynapliAppGraph,
-                        platform =
-                            PynapliPlatform(
-                                onUseCurrentLocation = ::requestCurrentLocation,
-                                onPickMediaForAlbum = ::pickMediaForAlbum,
-                                onPickConversationPhoto = ::pickConversationPhoto,
-                                onPickVerificationSelfie = ::pickVerificationSelfie,
-                                onSetDiscreetIcon = ::applyLauncherIcon,
-                                devLoginCredentials = graph.devLoginCredentials,
-                                testerDiagnosticLabel = graph.testerDiagnosticLabel,
-                            ),
-                    )
+                    ProvideLocationSettingsAccess(locationSettingsAccess) {
+                        PynapliApp(
+                            graph = graph.pynapliAppGraph,
+                            platform =
+                                PynapliPlatform(
+                                    onUseCurrentLocation = ::requestCurrentLocation,
+                                    onPickMediaForAlbum = ::pickMediaForAlbum,
+                                    onPickConversationPhoto = ::pickConversationPhoto,
+                                    onPickVerificationSelfie = ::pickVerificationSelfie,
+                                    onSetDiscreetIcon = ::applyLauncherIcon,
+                                    devLoginCredentials = graph.devLoginCredentials,
+                                    testerDiagnosticLabel = graph.testerDiagnosticLabel,
+                                ),
+                        )
+                    }
             }
         }
     }
@@ -312,7 +326,8 @@ class MainActivity : ComponentActivity() {
         val providers = locationManager.enabledLocationProviders()
 
         if (providers.isEmpty()) {
-            locationStateHolder.markUnavailable()
+            // Neither network nor GPS is enabled: location services are off for the whole device.
+            locationStateHolder.markServicesOff()
             return
         }
 
