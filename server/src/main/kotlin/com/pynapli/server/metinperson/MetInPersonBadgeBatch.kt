@@ -24,6 +24,7 @@ import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
 import java.util.UUID
 import javax.sql.DataSource
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.random.Random
 import kotlin.random.asKotlinRandom
 
@@ -38,6 +39,9 @@ import kotlin.random.asKotlinRandom
  *   interrupted pass resumes at the next tick with its own evaluation time, and each chunk moves the
  *   cursor under the row lock, so nobody is stepped twice in one pass.
  * - [recomputeNow] (an operator's look) writes nothing and never steps the hysteresis.
+ * - A chunk that keeps failing cannot stall every future pass: after [MAX_CHUNK_FAILURES] failures at the
+ *   same cursor (V126 `pass_failures`), the pass takes that chunk member by member, skips the members that
+ *   fail (logged at error with no user id) and moves on.
  * - Each chunk of members is its own short transaction; nothing loads every confirmation.
  * - A couple badge is written only if its link is still active at write time, and is stamped with the
  *   chunk's database time, so a concurrent unlink (which stamps `vouch_link_ends`) always wins and a
@@ -50,7 +54,11 @@ class MetInPersonBadgeBatch(
     private val clock: Clock = Clock.systemUTC(),
     private val random: Random = SecureRandom().asKotlinRandom(),
     private val chunkSize: Int = 500,
+    // Tests only: called before each member is stepped, to inject a failure.
+    private val beforeStep: (UUID) -> Unit = {},
 ) {
+    private val logger = LoggerFactory.getLogger(MetInPersonBadgeBatch::class.java)
+
     private val evaluator = MetInPersonEvaluator(tokens)
 
     /**
@@ -145,24 +153,70 @@ class MetInPersonBadgeBatch(
     private suspend fun runScheduledPass(passId: UUID) {
         while (true) {
             val more =
-                dataSource.withConnection { connection ->
-                    connection.inTransaction {
-                        val schedule = lockedSchedule()
-                        val passNow = schedule.passNow
-                        if (schedule.passId != passId || passNow == null) return@inTransaction false
-                        val chunk = userChunk(schedule.passCursor, chunkSize)
-                        if (chunk.isEmpty()) {
-                            finishPass()
-                            return@inTransaction false
-                        }
-                        processChunk(this, chunk, passNow)
-                        moveCursor(chunk.last())
-                        true
+                try {
+                    dataSource.withConnection { connection ->
+                        connection.inTransaction { nextChunk(passId, memberByMember = false) }
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    // The chunk rolled back. Count the failure; after a few, take that chunk member by member.
+                    val failures = dataSource.withConnection { connection -> connection.recordChunkFailure(passId) }
+                    if (failures < MAX_CHUNK_FAILURES) throw error
+                    logger.error("Met in person badge pass: a chunk failed {} times; taking it member by member", failures, error)
+                    dataSource.withConnection { connection ->
+                        connection.inTransaction { nextChunk(passId, memberByMember = true) }
                     }
                 }
             if (!more) return
         }
     }
+
+    /**
+     * Steps the chunk at the cursor of [passId] and moves the cursor, under the schedule row's lock. False
+     * when the pass is over (or no longer this one). [memberByMember] isolates each member in a savepoint
+     * and skips the ones that fail.
+     */
+    private fun Connection.nextChunk(
+        passId: UUID,
+        memberByMember: Boolean,
+    ): Boolean {
+        val schedule = lockedSchedule()
+        val passNow = schedule.passNow
+        if (schedule.passId != passId || passNow == null) return false
+        val chunk = userChunk(schedule.passCursor, chunkSize)
+        if (chunk.isEmpty()) {
+            finishPass()
+            return false
+        }
+        if (memberByMember) {
+            var skipped = 0
+            chunk.forEach { userId ->
+                val savepoint = setSavepoint()
+                try {
+                    processChunk(this, listOf(userId), passNow)
+                    releaseSavepoint(savepoint)
+                } catch (error: Exception) {
+                    rollback(savepoint)
+                    skipped++
+                }
+            }
+            // No user id: next to badge state it would say who is near a badge.
+            if (skipped > 0) logger.error("Met in person badge pass skipped {} member(s) that failed this week", skipped)
+        } else {
+            processChunk(this, chunk, passNow)
+        }
+        moveCursor(chunk.last())
+        return true
+    }
+
+    private fun Connection.recordChunkFailure(passId: UUID): Int =
+        prepareStatement(
+            "UPDATE vouch_batch_schedule SET pass_failures = pass_failures + 1 WHERE id = 1 AND pass_id = ? RETURNING pass_failures",
+        ).use { statement ->
+            statement.setObject(1, passId)
+            statement.executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+        }
 
     /** Members of [userIds] whose evaluation now differs from what is published (frozen ones excluded). */
     private fun Connection.countDiffering(
@@ -193,6 +247,7 @@ class MetInPersonBadgeBatch(
         val states = connection.badgeStates(tokenOf.values)
         var written = 0
         userIds.forEach { userId ->
+            beforeStep(userId)
             val evaluation = evaluations[userId]
             val badge = published[userId]
             val state = states[tokenOf.getValue(userId)]
@@ -453,7 +508,8 @@ class MetInPersonBadgeBatch(
         nextRunAt: Instant,
     ) {
         prepareStatement(
-            "UPDATE vouch_batch_schedule SET last_run_at = ?, next_run_at = ?, pass_id = ?, pass_now = ?, pass_cursor = NULL WHERE id = 1",
+            "UPDATE vouch_batch_schedule SET last_run_at = ?, next_run_at = ?, pass_id = ?, pass_now = ?, pass_cursor = NULL, " +
+                "pass_failures = 0 WHERE id = 1",
         ).use { statement ->
             statement.setTimestamp(1, Timestamp.from(now))
             statement.setTimestamp(2, Timestamp.from(nextRunAt))
@@ -464,20 +520,25 @@ class MetInPersonBadgeBatch(
     }
 
     private fun Connection.moveCursor(cursor: UUID) {
-        prepareStatement("UPDATE vouch_batch_schedule SET pass_cursor = ? WHERE id = 1").use { statement ->
+        prepareStatement("UPDATE vouch_batch_schedule SET pass_cursor = ?, pass_failures = 0 WHERE id = 1").use { statement ->
             statement.setObject(1, cursor)
             statement.executeUpdate()
         }
     }
 
     private fun Connection.finishPass() {
-        prepareStatement("UPDATE vouch_batch_schedule SET pass_id = NULL, pass_now = NULL, pass_cursor = NULL WHERE id = 1").use { statement ->
+        prepareStatement(
+            "UPDATE vouch_batch_schedule SET pass_id = NULL, pass_now = NULL, pass_cursor = NULL, pass_failures = 0 WHERE id = 1",
+        ).use { statement ->
             statement.executeUpdate()
         }
     }
 
     internal companion object {
         val WEEK: Duration = Duration.ofDays(7)
+
+        /** Failures of the same chunk before the pass takes it member by member. */
+        const val MAX_CHUNK_FAILURES = 3
 
         fun weekStart(instant: Instant): Instant =
             instant

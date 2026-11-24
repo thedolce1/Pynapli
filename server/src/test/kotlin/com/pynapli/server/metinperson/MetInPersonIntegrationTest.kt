@@ -969,6 +969,29 @@ class MetInPersonIntegrationTest {
     }
 
     @Test
+    fun aMemberWhoseStepKeepsFailingIsSkippedInsteadOfStallingEveryPass() {
+        runBlocking {
+            val subject = fx.member("Sam")
+            fx.optIn(subject)
+            confirmedBy(subject, 3)
+            val broken = fx.member("Broken")
+            val failing =
+                MetInPersonBadgeBatch(dataSource, tokens, clock, Random(3), beforeStep = { if (it == broken) error("injected failure") })
+            setPassInProgress(cursor = "00000000-0000-0000-0000-000000000000", nextRunAt = clock.instant().plus(Duration.ofDays(3)))
+
+            repeat(MetInPersonBadgeBatch.MAX_CHUNK_FAILURES - 1) {
+                assertFailsWith<IllegalStateException> { failing.runIfDue() }
+                assertEquals(1, fx.count("SELECT count(*) FROM vouch_batch_schedule WHERE pass_id IS NOT NULL"), "the pass waits for a retry")
+                assertEquals("- -", batchRowsFor(subject), "the failed chunk rolled back")
+            }
+            assertFalse(failing.runIfDue(), "the third failure takes the chunk member by member")
+            assertEquals(0, fx.count("SELECT count(*) FROM vouch_batch_schedule WHERE pass_id IS NOT NULL"), "the pass finished")
+            assertTrue(batchRowsFor(subject) != "- -", "everyone else was stepped")
+            assertEquals("- -", batchRowsFor(broken), "the failing member was skipped")
+        }
+    }
+
+    @Test
     fun anOperatorRecomputeNeverStepsTheHysteresis() {
         runBlocking {
             val subject = fx.member("Sam")

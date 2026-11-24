@@ -237,7 +237,10 @@ Independence (fakery):
   never loads every confirmation. It refuses to run when the key check fails. The pass in progress, its
   evaluation time and a cursor live on the schedule row (V125): each chunk is chosen, stepped and the
   cursor moved in one transaction under the row lock, so a crash or deploy mid-pass resumes the same
-  pass at the next tick instead of skipping a week, and nobody is stepped twice in a pass.
+  pass at the next tick instead of skipping a week, and nobody is stepped twice in a pass. A chunk that
+  fails 3 times at the same cursor (V126 `pass_failures`) is then taken member by member, each in a
+  savepoint; members that fail are skipped for that week and logged at error by count only (no user id),
+  so one bad member cannot stall every future pass.
   `recomputeNow` (an operator's look) writes nothing and never steps the hysteresis; only the weekly pass
   advances the delay.
 - Hysteresis (`MetInPersonHysteresis`): each crossing, on or off, takes effect only after a random 1 to 4
