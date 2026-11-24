@@ -1,6 +1,7 @@
 package com.pynapli.server.metinperson
 
 import com.pynapli.server.account.JdbcAccountDataExportArchiver
+import com.pynapli.server.contactblocks.ContactBlockTestGraph
 import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.contactblocks.JdbcContactBlockVisibility
 import com.pynapli.server.messaging.MessagingException
@@ -11,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import kotlin.random.Random
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,6 +35,7 @@ class MetInPersonContactBlockIntegrationTest {
     private val contactTokens = ContactBlockTokens.localDevelopment()
     private val fx = MetInPersonFixtures(dataSource, clock)
     private val service = MetInPersonService(dataSource, tokens, JdbcContactBlockVisibility(dataSource, contactTokens), clock)
+    private val batch = MetInPersonBadgeBatch(dataSource, tokens, clock, Random(7))
 
     @BeforeTest
     fun reset() {
@@ -163,6 +166,44 @@ class MetInPersonContactBlockIntegrationTest {
             val after = archiver.buildArchive(viewer).bytes.decodeToString()
             assertFalse("Zephyrine Hidewell" in after, "the export never names someone hiding from the person")
             assertTrue("Quillon Seenmore" in after)
+        }
+    }
+
+    @Test
+    fun aProfileWhosePartnerIsHiddenShowsNoCoupleBadge() {
+        runBlocking {
+            val sam = fx.member("Sam")
+            val riley = fx.member("Riley")
+            val stranger = fx.member("Stranger")
+            val viewer = fx.member("Xan")
+            fx.link(sam, riley)
+            fx.optIn(sam)
+            fx.optIn(riley)
+            repeat(3) { index ->
+                val voucher = fx.member("Group voucher $index")
+                val group = fx.conversation(sam, riley, voucher)
+                fx.message(group, voucher, Duration.ofDays(10))
+                fx.message(group, sam, Duration.ofDays(9))
+                fx.message(group, riley, Duration.ofDays(8))
+                service.confirm(
+                    voucher,
+                    group.toString(),
+                    ConfirmMetInPersonRequestDto(sam.toString(), includePartner = true),
+                )
+            }
+            repeat(8) { batch.recomputeNow() }
+            val profiles = ContactBlockTestGraph(dataSource).profiles
+            assertTrue(profiles.getPublicProfile(stranger, sam).metInPersonAsCouple, "the couple badge is published")
+            assertTrue(profiles.getPublicProfile(viewer, sam).metInPersonAsCouple)
+
+            hide(riley, viewer)
+
+            val seen = profiles.getPublicProfile(viewer, sam)
+            assertEquals(null, seen.linkedPartner)
+            assertFalse(seen.coupleVerified)
+            assertFalse(seen.metInPersonAsCouple, "the couple badge would name the hidden partner")
+            assertTrue(seen.metInPerson, "Sam's own badge is Sam's")
+            assertTrue(profiles.getPublicProfile(stranger, sam).metInPersonAsCouple, "nobody else is affected")
         }
     }
 }
