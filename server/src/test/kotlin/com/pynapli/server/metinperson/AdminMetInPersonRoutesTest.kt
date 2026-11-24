@@ -267,6 +267,68 @@ class AdminMetInPersonRoutesTest {
         }
     }
 
+    private fun auditMetadata(action: String): List<String> =
+        dataSource.connection.use { connection ->
+            connection.prepareStatement("SELECT metadata::text FROM admin_audit_log WHERE action = ? ORDER BY created_at").use { statement ->
+                statement.setString(1, action)
+                statement.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getString(1)) } }
+            }
+        }
+
+    @Test
+    fun theViewAuditHoldsNoCountsAndTheSubjectRefIsItsOwnDomain() {
+        runBlocking {
+            val (subject, _) = confirmedSubject()
+            admin.view("senior-1", subject, reason = "review")
+            assertEquals(listOf("{}"), auditMetadata("met_in_person.view").map { it.replace(" ", "") })
+
+            admin.setConfirmationVoided("senior-1", subject, firstVouchId(subject), voided = true, reason = "farm")
+            val metadata = auditMetadata("met_in_person.void_confirmation").single()
+            assertTrue(metadata.contains(tokens.auditSubject(subject)), metadata)
+            assertFalse(allAuditText().contains(tokens.subject(subject)), "never the token stored in vouches")
+        }
+    }
+
+    @Test
+    fun undoingAVoucherVoidLeavesIndividuallyVoidedRowsVoided() {
+        runBlocking {
+            val voucher = fx.member("Voucher")
+            val first = fx.member("First")
+            val second = fx.member("Second")
+            listOf(first, second).forEach { subject ->
+                service.confirm(voucher, fx.talked(voucher, subject).toString(), ConfirmMetInPersonRequestDto(subject.toString()))
+            }
+            admin.setConfirmationVoided("senior-1", first, firstVouchId(first), voided = true, reason = "this one")
+
+            assertEquals(1, admin.setVoucherVoided("senior-1", voucher, voided = true, reason = "farm").affected)
+            assertEquals(1, admin.setVoucherVoided("senior-1", voucher, voided = false, reason = "cleared").affected)
+
+            fun voided(subject: UUID): Int =
+                fx.count("SELECT count(*) FROM vouches WHERE subject_token = ? AND voided_at IS NOT NULL", tokens.subject(subject))
+            assertEquals(1, voided(first), "voided on its own: stays voided")
+            assertEquals(0, voided(second))
+            admin.setVoucherVoided("senior-1", voucher, voided = true, reason = "again")
+            val notWholeDays =
+                fx.count(
+                    "SELECT count(*) FROM vouches WHERE voided_at IS NOT NULL " +
+                        "AND voided_at <> date_trunc('day', voided_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'",
+                )
+            assertEquals(0, notWholeDays, "a void keeps the day only")
+        }
+    }
+
+    @Test
+    fun unfreezingSomeoneWithoutABadgeRowWritesNoRow() {
+        runBlocking {
+            val member = fx.member("Nobody")
+            admin.setFrozen("senior-1", member, frozen = false, reason = "mistake")
+            assertEquals(0, fx.count("SELECT count(*) FROM vouch_badges WHERE subject_user_id = ?", member))
+            admin.setFrozen("senior-1", member, frozen = true, reason = "ring")
+            admin.setFrozen("senior-1", member, frozen = false, reason = "cleared")
+            assertEquals(0, fx.count("SELECT count(*) FROM vouch_badges WHERE subject_user_id = ?", member), "nothing published, so no row")
+        }
+    }
+
     private companion object {
         const val TOKEN = "met-in-person-admin-token"
     }

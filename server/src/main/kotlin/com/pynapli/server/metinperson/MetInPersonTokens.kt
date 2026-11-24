@@ -36,6 +36,9 @@ class MetInPersonTokens(
 
     fun auditVoucher(userId: UUID): String = hmac("audit-voucher:$userId")
 
+    /** Audit log reference to a subject: its own domain, so it never equals a stored `subject_token`. */
+    fun auditSubject(userId: UUID): String = hmac("audit-subject:$userId")
+
     fun checkValue(): String = hmac("key-check:met-in-person")
 
     private fun hmac(input: String): String {

@@ -53,11 +53,9 @@ class AdminMetInPersonService(
                 targetType = "user",
                 targetId = subjectUserId,
                 reason = reason,
-                metadataJson =
-                    buildJsonObject {
-                        put("confirmations", verdicts.size)
-                        put("qualifyingPerson", evaluation?.independentVouchers ?: 0)
-                    }.toString(),
+                // No counts: the audit log is read more widely than this view, and a count is part of
+                // what the subject must never learn.
+                metadataJson = "{}",
             )
             AdminMetInPersonSubjectDto(
                 subjectUserId = subjectUserId.toString(),
@@ -115,7 +113,7 @@ class AdminMetInPersonService(
                     ?.rows
                     ?.firstOrNull { it.vouch.id == row.id }
                     ?.voucherUserId
-            val affected = setVoided(listOf(row.pairToken), voided, now)
+            val affected = setVoided(listOf(row.pairToken), voided, VoidScope.CONFIRMATION, now)
             insertAdminAuditLog(
                 actorId = actorId,
                 action = if (voided) "met_in_person.void_confirmation" else "met_in_person.unvoid_confirmation",
@@ -124,7 +122,8 @@ class AdminMetInPersonService(
                 reason = reason,
                 metadataJson =
                     buildJsonObject {
-                        put("subjectRef", tokens.subject(subjectUserId))
+                        // Its own domain, so it never equals the subject token stored in `vouches`.
+                        put("subjectRef", tokens.auditSubject(subjectUserId))
                         put("voucherRef", voucher?.let(tokens::auditVoucher))
                     }.toString(),
             )
@@ -141,7 +140,7 @@ class AdminMetInPersonService(
         withKey { now ->
             val pairTokens = conversationPartners(voucherUserId).map { tokens.pair(voucherUserId, it) }
             val ids = storedByPairTokens(pairTokens).map { it.id.toString() }
-            val affected = setVoided(pairTokens, voided, now)
+            val affected = setVoided(pairTokens, voided, VoidScope.VOUCHER, now)
             insertAdminAuditLog(
                 actorId = actorId,
                 action = if (voided) "met_in_person.void_voucher" else "met_in_person.unvoid_voucher",
@@ -158,7 +157,10 @@ class AdminMetInPersonService(
             AdminMetInPersonActionResultDto(affected = affected)
         }
 
-    /** Freeze hides both badges at once and keeps them off at every batch; unfreeze lets later batches decide. */
+    /**
+     * Freeze hides both badges at once and keeps them off at every batch; unfreeze lets later batches
+     * decide. Unfreezing someone with no row writes nothing (a row would say someone once confirmed them).
+     */
     suspend fun setFrozen(
         actorId: String,
         subjectUserId: UUID,
@@ -168,6 +170,29 @@ class AdminMetInPersonService(
         withKey { now ->
             subjectSettings(subjectUserId) ?: throw ModerationException("USER_NOT_FOUND")
             val at = Timestamp.from(now)
+            if (!frozen) {
+                prepareStatement("UPDATE vouch_badges SET frozen_at = NULL, updated_at = ? WHERE subject_user_id = ?").use { statement ->
+                    statement.setTimestamp(1, at)
+                    statement.setObject(2, subjectUserId)
+                    statement.executeUpdate()
+                }
+                // Batches may have kept a row only for the freeze: drop it when nothing is published.
+                prepareStatement(
+                    "DELETE FROM vouch_badges WHERE subject_user_id = ? AND NOT person_badge AND NOT couple_badge AND frozen_at IS NULL",
+                ).use { statement ->
+                    statement.setObject(1, subjectUserId)
+                    statement.executeUpdate()
+                }
+                insertAdminAuditLog(
+                    actorId = actorId,
+                    action = "met_in_person.unfreeze",
+                    targetType = "user",
+                    targetId = subjectUserId,
+                    reason = reason,
+                    metadataJson = "{}",
+                )
+                return@withKey AdminMetInPersonActionResultDto(affected = 1)
+            }
             prepareStatement(
                 """
                 INSERT INTO vouch_badges (subject_user_id, person_badge, couple_badge, couple_link_id, updated_at, frozen_at)
@@ -205,21 +230,37 @@ class AdminMetInPersonService(
             }
         }
 
+    private enum class VoidScope { CONFIRMATION, VOUCHER }
+
+    /**
+     * Voids only rows not already voided, recording whether a voucher-level void did it; the day only
+     * (whole UTC days, like every other date here). Undoing a voucher-level void restores only the rows
+     * it voided; undoing one confirmation restores that row whichever void voided it.
+     */
     private fun Connection.setVoided(
         pairTokens: List<String>,
         voided: Boolean,
+        scope: VoidScope,
         now: java.time.Instant,
     ): Int {
         if (pairTokens.isEmpty()) return 0
         val sql =
-            if (voided) {
-                "UPDATE vouches SET voided_at = ? WHERE pair_token = ANY(?) AND voided_at IS NULL"
-            } else {
-                "UPDATE vouches SET voided_at = NULL WHERE ?::timestamptz IS NOT NULL AND pair_token = ANY(?) AND voided_at IS NOT NULL"
+            when {
+                voided ->
+                    "UPDATE vouches SET voided_at = ?, voided_with_voucher = ? WHERE pair_token = ANY(?) AND voided_at IS NULL"
+                // An un-void binds the same three parameters; the first two only keep the binding uniform.
+                scope == VoidScope.VOUCHER ->
+                    "UPDATE vouches SET voided_at = NULL, voided_with_voucher = false " +
+                        "WHERE ?::timestamptz IS NOT NULL AND ?::boolean IS NOT NULL AND pair_token = ANY(?) " +
+                        "AND voided_at IS NOT NULL AND voided_with_voucher"
+                else ->
+                    "UPDATE vouches SET voided_at = NULL, voided_with_voucher = false " +
+                        "WHERE ?::timestamptz IS NOT NULL AND ?::boolean IS NOT NULL AND pair_token = ANY(?) AND voided_at IS NOT NULL"
             }
         return prepareStatement(sql).use { statement ->
-            statement.setTimestamp(1, Timestamp.from(now))
-            statement.setArray(2, createArrayOf("text", pairTokens.toTypedArray()))
+            statement.setTimestamp(1, Timestamp.from(MetInPersonRules.day(now)))
+            statement.setBoolean(2, scope == VoidScope.VOUCHER)
+            statement.setArray(3, createArrayOf("text", pairTokens.toTypedArray()))
             statement.executeUpdate()
         }
     }
