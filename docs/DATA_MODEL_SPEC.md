@@ -161,7 +161,7 @@ every change must keep.
   `voided_at` is an admin void. `met_in_person_key` holds the key check value (writes and the batch refuse
   a different key). `vouch_badges` (by user id: published booleans and a freeze only, deleted when both are
   off), `vouch_badge_states` (pending crossings, by subject token), `vouch_link_ends`, and
-  `vouch_batch_schedule` (with the pass in progress and its cursor, V125). V123 adds
+  `vouch_batch_schedule` (with the pass in progress and its cursor, V125, and failures at that cursor, V126). V123 adds
   `vouches.voided_with_voucher` (which void voided a row). Deletion removes the person's rows by
   recomputed tokens and, like export, refuses under a key that does not match. Any database that ran this
   feature's earlier V120 must be reset. Details: TRUST_AND_SAFETY_SPEC "Met in person".
