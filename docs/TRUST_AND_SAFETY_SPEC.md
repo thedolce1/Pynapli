@@ -161,7 +161,9 @@ voucher (whatever they toggle), not someone holding a copy of the database witho
   the latest at most 90 days old. In a group, other people's messages never count. Messages are checked
   only when confirming, never at the batch.
 - Never (at write time, facts the voucher knows): any `user_profile_links` row between the two, any
-  status; a block by the voucher.
+  status; a block by the voucher. A link invite the subject sends therefore stops future offers from that
+  person too. That is not an oracle: the menu shows the voucher nothing about the subject's other
+  confirmations, and the subject learns nothing from whether a given person can still confirm them.
 - Once per directed pair, ever: A confirming B and B confirming A are separate rows. A repeat of a
   standing confirmation changes nothing, not even its date.
 - At most 10 given per voucher per rolling 30 days, counting withdrawn and voided ones: taking one back
@@ -229,7 +231,12 @@ Independence (fakery):
   Monday-to-Monday week (`SecureRandom`): claimed in its own transaction holding the
   `vouch_batch_schedule` row lock (due check and move to next week's random time together, so it runs
   once across replicas and deploys), then members in chunks of 500, each its own short transaction; it
-  never loads every confirmation. It refuses to run when the key check fails.
+  never loads every confirmation. It refuses to run when the key check fails. The pass in progress, its
+  evaluation time and a cursor live on the schedule row (V125): each chunk is chosen, stepped and the
+  cursor moved in one transaction under the row lock, so a crash or deploy mid-pass resumes the same
+  pass at the next tick instead of skipping a week, and nobody is stepped twice in a pass.
+  `recomputeNow` (an operator's look) writes nothing and never steps the hysteresis; only the weekly pass
+  advances the delay.
 - Hysteresis (`MetInPersonHysteresis`): each crossing, on or off, takes effect only after a random 1 to 4
   further batches, chosen per subject per crossing and stored (`vouch_badge_states`, keyed by the subject
   token); turning off also needs the count to stay below the threshold for 2 consecutive batches first; a
@@ -263,12 +270,30 @@ when both are off and the member is not frozen. `vouch_badge_states` (pending cr
 subject token. `vouch_link_ends` records when a link row last ended. `met_in_person_key` holds a check
 value (an HMAC of a constant): writes, the menu, the admin view and the batch refuse to run when the
 configured key does not reproduce it, so a lost or rotated key cannot silently reset caps or turn badges
-off; `key_version` marks rows for a future re-tokenising rotation (not built).
+off; account deletion and data export refuse loudly too (error log, exception, the deletion rolls back),
+rather than silently leaving or omitting the person's rows; and staging and production refuse to start
+when a stored check value does not match the configured key (`verifyMetInPersonKeyAtStartup`, read only,
+after migrations). `key_version` marks rows for a future re-tokenising rotation (not built).
+`vouches.voided_with_voucher` (V123) records that a voucher-level void voided the row, so undoing it
+restores only those rows; `voided_at` is a whole UTC day like every other date. `profile_link_history`
+(V124, not a Met in person table: user ids, kept by a trigger) is the durable partner-link record the
+evaluator reads.
+
+Migration numbering: this feature's tables are V122 (V123 to V125 follow it). An earlier branch build
+shipped them as V120, which main later used for contact blocks: any database that ran the old V120 must
+be reset (Flyway cannot reconcile the two V120s), which only affects local and branch-test databases.
 
 The voucher's own rows (cap, withdraw, void-all, deletion, export) are found by recomputing their pair
 tokens over everyone they ever shared a conversation with; participant rows are never hard-deleted (no
 code deletes `conversation_participants` or `conversations`), so no extra record was needed. The batch
 and admin view recompute each member's subject token and the pair tokens over that member's partners.
+
+Someone with SQL-level access to the live database (not just a copy) sees more than a copy shows: row
+system columns (`xmin`, the writing transaction id) and the order and adjacency of writes can tie a
+`vouches` insert to other writes in the same or a neighbouring transaction (for example the voucher's own
+request touching other tables), and query logs or `pg_stat_statements` can carry bound values. Tokens
+keep the row itself anonymous; transaction-level correlation is out of scope and needs database access
+control, not this design.
 
 A copy of the database without K3 shows: the number of rows, their days (given, first given, withdrawn,
 voided), and which rows concern the same (unknown) subject, since a subject's token is stable. It shows
@@ -290,8 +315,11 @@ un-voids), `POST .../vouchers/void` (body `{voucherUserId, voided}`; the id is n
 request audit rows store) and `POST .../users/{userId}/freeze` (`{"frozen": false}` unfreezes). All need a
 senior admin, step-up MFA and `X-Admin-Reason`, and write `met_in_person.*` audit rows. An audit row never
 holds a voucher id in clear: it carries `voucherRef` (an audit-voucher K3 token) and the confirmation ids,
-so a key holder can tell whose confirmations were voided and lower roles cannot. A void is invisible to
-the voucher.
+so a key holder can tell whose confirmations were voided and lower roles cannot; a subject appears as
+`subjectRef`, an audit-subject token in its own HMAC domain, so it never equals the `subject_token` stored
+in `vouches`. The view's audit row holds no counts. Undoing a voucher-level void restores only the rows
+that void voided; a row voided on its own stays voided. Unfreezing someone with no badge row writes none.
+A void is invisible to the voucher.
 
 Not closed:
 
@@ -310,6 +338,14 @@ Not closed:
 - The batch reads stored risk tiers (no lazy decay) and the couple badge's write re-checks the link at
   write time; the display then also requires the badge to postdate the link's last change, which covers
   an unlink racing the batch.
+- Disappearing messages (checked 2026-11-24): the purge hard-deletes a message only after its timer plus
+  `PYNAPLI_EXPIRED_MESSAGE_GRACE_DAYS` (default 30), and the write-time rules read the rows (hidden from
+  members) until then. So the 24-hour first-message rule is reachable with every timer (1 h, 24 h, 7 d,
+  30 d) at the default grace. What shrinks: the "last message within 90 days" and "both wrote" rules see
+  only messages younger than timer + grace, so with a timer the window to confirm is about 30 days after
+  the last message rather than 90. With the grace set below a day and a 1 h or 24 h timer, Met in person
+  becomes unreachable in that chat. No per-participant stamps were added: they would keep message
+  metadata past the timer the members chose.
 
 ### Account deletion and export
 
