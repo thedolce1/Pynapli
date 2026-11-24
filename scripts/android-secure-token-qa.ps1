@@ -22,27 +22,20 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force -DisableNameChecking
 Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaDevice.psm1") -Force -DisableNameChecking
 
-function Dismiss-NotificationPromptIfPresent {
-    # The OS POST_NOTIFICATIONS prompt (Android 13+) appears only AFTER the session
-    # authenticates, which lags the login tap by a network round-trip. Poll for it (don't
-    # bail on the first miss) so we catch it whenever it appears; tap Allow and return, or
-    # give up after the window if it never shows. Exact match: the dialog title also has "Allow".
-    for ($attempt = 1; $attempt -le 10; $attempt++) {
-        Start-Sleep -Milliseconds 1500
-        $xml = Dump-Ui "notification_prompt_check"
-        $allowButton = Find-NodeByExactText $xml "Allow"
-        if ($null -eq $allowButton) {
-            continue
-        }
-        $bounds = $allowButton.GetAttribute("bounds")
-        if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-            return
-        }
-        $centerX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-        $centerY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-        Invoke-Adb @("shell", "input", "tap", "$centerX", "$centerY") | Out-Null
-        Write-Host "[note] OS notification prompt allowed (tap at $centerX,$centerY)."
-        return
+# POST_NOTIFICATIONS is granted up front (Grant-QaNotificationPermission), so the old
+# "dismiss the OS prompt after login" poll could no longer fire and is gone.
+
+function Assert-StillSignedInAfterBackgroundCheck {
+    # A stored session now goes straight to the shell and GET /v1/me checks it in the background
+    # (ONBOARDING_AUTH_SPEC, Returning members), so the Grid showing proves nothing on its own: a
+    # terminal answer would bounce to sign-in a moment later. Let that check (and any refresh behind
+    # its 401) finish, then look again.
+    param([string]$Stage)
+
+    Start-Sleep -Seconds 8
+    $xml = Dump-Ui "${Stage}_after_background_check"
+    if ($null -ne (Find-NodeByText $xml "Dev login")) {
+        throw "${Stage}: the session was signed out once the background /me check finished."
     }
 }
 
@@ -125,6 +118,7 @@ if (-not $SkipInstall) {
 
 Write-Host "[step] Clearing app data for a fresh session"
 Invoke-Adb @("shell", "pm", "clear", $PackageName) | Out-Null
+Grant-QaNotificationPermission -PackageName $PackageName
 
 $component = "$PackageName/$LaunchActivity"
 Write-Host "[step] Launching $component"
@@ -133,7 +127,6 @@ Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
 # --- Sign in via dev login ---
 Wait-ForAnyText @("Dev login") | Out-Null
 Tap-Text "Dev login"
-Dismiss-NotificationPromptIfPresent
 Wait-ForAnyText @("Use current location", "Filters", "Grid") 45 | Out-Null
 Start-Sleep -Milliseconds 1500
 $signedInShot = Save-Screen "00_signed_in"
@@ -153,11 +146,11 @@ Write-Host "[step] Force-stop + relaunch to prove encrypted session restore"
 Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
 Start-Sleep -Milliseconds 1200
 Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
-Dismiss-NotificationPromptIfPresent
 $afterRestart = Wait-ForAnyText @("Use current location", "Filters", "Grid", "Dev login") 45
 if ($afterRestart.Text -eq "Dev login") {
     throw "Session did not survive restart: the auth screen is showing again."
 }
+Assert-StillSignedInAfterBackgroundCheck "01_restart"
 $restoredShot = Save-Screen "01_session_restored"
 
 # --- Expired-access-token proof: the app refreshes instead of signing the user out ---
@@ -185,11 +178,11 @@ Start-Sleep -Seconds 8
 Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
 Start-Sleep -Milliseconds 1200
 Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
-Dismiss-NotificationPromptIfPresent
 $afterExpiry = Wait-ForAnyText @("Use current location", "Filters", "Grid", "Dev login") 45
 if ($afterExpiry.Text -eq "Dev login") {
     throw "Expired access token signed the user out. The client is not refreshing (see StoredSessionRefresher / the refresh-on-401 interceptor)."
 }
+Assert-StillSignedInAfterBackgroundCheck "02_expired_token"
 $refreshedShot = Save-Screen "02_expired_token_refreshed"
 
 # Server-side confirmation: a refresh rotates the session, so the row must be live again. Without

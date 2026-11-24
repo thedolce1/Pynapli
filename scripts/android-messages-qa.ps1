@@ -237,6 +237,7 @@ function Find-DebugApk {
 
 function Start-App {
     $component = "$PackageName/$LaunchActivity"
+    Grant-QaNotificationPermission -PackageName $PackageName
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
         Start-Sleep -Milliseconds 800

@@ -140,7 +140,9 @@ try {
 
     Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, "android.permission.ACCESS_FINE_LOCATION")
     Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, "android.permission.ACCESS_COARSE_LOCATION")
-    Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, "android.permission.POST_NOTIFICATIONS")
+    # Granted, not revoked: the in-app ask now lands ~20 s into the Grid and would cover this run's
+    # location dialog. The denied-notification path has its own QA (android-notification-permission-qa).
+    Grant-QaNotificationPermission -PackageName $PackageName
     Invoke-AdbBestEffort @("shell", "pm", "clear-permission-flags", $PackageName, "android.permission.ACCESS_FINE_LOCATION", "user-set", "user-fixed")
     Invoke-AdbBestEffort @("shell", "pm", "clear-permission-flags", $PackageName, "android.permission.ACCESS_COARSE_LOCATION", "user-set", "user-fixed")
     Invoke-AdbBestEffort @("shell", "appops", "set", $PackageName, "android:fine_location", "default")

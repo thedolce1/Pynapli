@@ -163,27 +163,6 @@ function Restore-SoftKeyboard {
     $script:DisabledImes = @()
 }
 
-function Dismiss-NotificationPromptIfPresent {
-    # The OS POST_NOTIFICATIONS prompt (Android 13+) appears only AFTER the session authenticates,
-    # which lags the account-creation tap by a network round-trip. Poll for it and CONTINUE on a
-    # miss — an earlier version returned on the first miss, so whenever the prompt was slower than
-    # one 1.5s tick it was never dismissed and then blocked the rest of the run behind a modal
-    # ("Timed out waiting for one of: See who's nearby"). Matches the proven shape in
-    # android-secure-token-qa.ps1. Exact match: the dialog TITLE also contains the word "Allow".
-    for ($attempt = 1; $attempt -le 10; $attempt++) {
-        Start-Sleep -Milliseconds 1500
-        $xml = Dump-Ui "notification_prompt_check"
-        $allowButton = Find-NodeByExactText $xml "Allow"
-        if ($null -eq $allowButton) {
-            continue
-        }
-        $bounds = Get-Bounds $allowButton
-        Invoke-Adb @("shell", "input", "tap", "$($bounds.CenterX)", "$($bounds.CenterY)") | Out-Null
-        Write-Host "[note] OS notification prompt allowed (tap at $($bounds.CenterX),$($bounds.CenterY))."
-        return
-    }
-}
-
 function Get-SignupCode {
     # The code is written off the request path, so poll the local-only dev lookup
     # (POST /v1/dev/auth/email/signup/latest-code). It exists only on a PYNAPLI_ENV=local
@@ -221,20 +200,22 @@ function Write-Summary {
 }
 
 function Reset-AppForFreshSignup {
-    # pm clear also resets runtime permissions; revoke + clear the flags so the OS prompts again,
-    # then (allowed path) grant location up front so "Share my location" needs no prompt.
+    # pm clear also resets runtime permissions; revoke + clear the location flags so the OS prompts
+    # again, then (allowed path) grant location up front so "Share my location" needs no prompt.
+    # Notifications are granted on both paths: sign-up no longer asks (the app asks ~20 s into the
+    # Grid), and that later dialog would otherwise cover the Grid this script inspects.
     param([switch]$GrantLocation)
 
     Write-Host "[step] Clearing app data + permissions for a fresh signup"
     Invoke-Adb @("shell", "pm", "clear", $PackageName) | Out-Null
     foreach ($permission in @(
             "android.permission.ACCESS_FINE_LOCATION",
-            "android.permission.ACCESS_COARSE_LOCATION",
-            "android.permission.POST_NOTIFICATIONS"
+            "android.permission.ACCESS_COARSE_LOCATION"
         )) {
         Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, $permission)
         Invoke-AdbBestEffort @("shell", "pm", "clear-permission-flags", $PackageName, $permission, "user-set", "user-fixed")
     }
+    Grant-QaNotificationPermission -PackageName $PackageName
     if ($GrantLocation) {
         foreach ($permission in @("android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION")) {
             Invoke-Adb @("shell", "pm", "grant", $PackageName, $permission) | Out-Null
@@ -313,9 +294,6 @@ function Complete-SignupToLocationStep {
     Hide-Keyboard
     $shots.checkEmail = Save-Screen "${Prefix}03b_check_email"
     Tap-ExactText "Verify"
-
-    # The session (and with it the OS notification prompt) only exists after the code is verified.
-    Dismiss-NotificationPromptIfPresent
 
     Wait-ForAnyText @("See who's nearby") 45 | Out-Null
     $shots.location = Save-Screen "${Prefix}04_location"

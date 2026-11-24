@@ -222,6 +222,15 @@ if (-not $SkipInstall) {
     Invoke-Adb @("install", "-r", $ApkPath) | Out-Null
 }
 
+# The app asks for POST_NOTIFICATIONS ~20 s into the Grid (not at sign-in); grant it up front so that
+# dialog never lands mid-run. Android 13 (API 33) introduced it; below that there is nothing to grant.
+# Inline rather than Grant-QaNotificationPermission: this script keeps its own adb helpers.
+$apiLevel = 0
+$reportedApi = (& $script:Adb -s $script:DeviceId shell getprop ro.build.version.sdk 2>$null | Select-Object -First 1)
+if ([int]::TryParse("$reportedApi".Trim(), [ref]$apiLevel) -and $apiLevel -ge 33) {
+    & $script:Adb -s $script:DeviceId shell pm grant $PackageName android.permission.POST_NOTIFICATIONS 2>&1 | Out-Null
+}
+
 # Disable stylus/handwriting IME interference and start fresh.
 Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
 Invoke-Adb @("shell", "monkey", "-p", $PackageName, "-c", "android.intent.category.LAUNCHER", "1") | Out-Null
