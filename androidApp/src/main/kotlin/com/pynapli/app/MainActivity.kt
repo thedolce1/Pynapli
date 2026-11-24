@@ -432,7 +432,13 @@ class MainActivity : ComponentActivity() {
         gate.allowsSilentRefresh(
             onboardingActive = onboardingActive(graph),
             osPermissionGranted = hasLocationPermission(),
-            serverHasLocation = graph.pynapliAppGraph.gridStateHolder.serverHasLocation.value == true,
+            // A grid answered from Travel mode says nothing about a shared current location.
+            serverHasLocation =
+                graph.pynapliAppGraph.gridStateHolder.serverHasLocation.value == true &&
+                    graph.pynapliAppGraph.travelLocationStateHolder
+                        ?.state
+                        ?.value
+                        ?.current == null,
         )
 
     private fun onboardingActive(graph: AndroidAppGraph): Boolean =

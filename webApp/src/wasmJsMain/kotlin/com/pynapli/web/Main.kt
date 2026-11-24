@@ -56,6 +56,12 @@ fun main() {
             scope = appScope,
             sharingGate = graph.pynapliAppGraph.locationSharingGate,
             onboardingActive = { graph.onboardingStateHolder.state.value.active },
+            travelActive = {
+                graph.pynapliAppGraph.travelLocationStateHolder
+                    ?.state
+                    ?.value
+                    ?.current != null
+            },
         )
     val mediaPicker =
         WebMediaPicker(
@@ -95,7 +101,10 @@ fun main() {
         val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
         if (!settled.authenticated) return@launch
         // Bounded wait for the first live Grid answer (LocationSharingGate rule (b) reads it).
-        withTimeoutOrNull(20_000L) { graph.pynapliAppGraph.gridStateHolder.serverHasLocation.first { it != null } }
+        withTimeoutOrNull(20_000L) {
+            graph.pynapliAppGraph.gridStateHolder.serverHasLocation
+                .first { it != null }
+        }
         locationAdapter.refreshIfAlreadyGranted()
     }
 

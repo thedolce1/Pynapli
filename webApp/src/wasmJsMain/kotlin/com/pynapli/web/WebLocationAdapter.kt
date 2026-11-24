@@ -28,6 +28,8 @@ class WebLocationAdapter(
     private val sharingGate: LocationSharingGate?,
     /** True while the sign-up stepper is on screen: its Location step asks, nothing answers it silently. */
     private val onboardingActive: () -> Boolean,
+    /** True while a Travel location is set: a grid answered from there says nothing about a shared current location. */
+    private val travelActive: () -> Boolean = { false },
 ) {
     fun requestCurrentLocation() {
         if (!geolocationAvailable()) {
@@ -66,12 +68,13 @@ class WebLocationAdapter(
     fun refreshIfAlreadyGranted() {
         if (!geolocationAvailable()) return
         val gate = sharingGate ?: return
+
         // Only reached when the site already holds the permission, so it is passed as granted.
         suspend fun allowed(): Boolean =
             gate.allowsSilentRefresh(
                 onboardingActive = onboardingActive(),
                 osPermissionGranted = true,
-                serverHasLocation = gridStateHolder.serverHasLocation.value == true,
+                serverHasLocation = gridStateHolder.serverHasLocation.value == true && !travelActive(),
             )
         whenGeolocationAlreadyGranted {
             scope.launch {
