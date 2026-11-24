@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -814,6 +815,42 @@ class GridStateHolderTest {
             assertEquals(1, repository.loadCount)
             assertEquals(listOf("fresh"), snapshotStore.saved.last().map { it.id })
         }
+
+    // Section 0 repro (onboarding + first grid plan). Fails today; the Section 1 slice that fixes it
+    // removes the @Ignore.
+    @Ignore("Section 0 repro: B4 the grid load started at the Location step is discarded when GridScreen composes — fixed in Section 1")
+    @Test
+    fun theGridScreenReusesTheLoadTheLocationStepStarted() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                GatedGridFeedRepository(
+                    feeds = listOf(GridFeedUi(cards = listOf(card("nearby")))),
+                    gateBeforeIndex = 0,
+                    gate = gate,
+                )
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore(initial = emptyList()))
+
+            // Location step: the shared fix's submitAndRefresh starts the first grid load.
+            val prefetch = async { stateHolder.load() }
+            runCurrent()
+            assertTrue(repository.parkedAtGate, "the Location step's load must be in flight")
+
+            // The member reaches the grid before it answers: GridScreen composes and primes. Today
+            // that starts a second request and bumps the generation, so the first answer is dropped.
+            val priming = async { stateHolder.primeFromCacheThenLoad() }
+            runCurrent()
+            gate.complete(Unit)
+            prefetch.await()
+            priming.await()
+
+            assertEquals(1, repository.loadCount, "one grid request for one first grid")
+            assertEquals(
+                listOf("nearby"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
+        }
 }
 
 class GridInstantLoadTest {
@@ -924,7 +961,8 @@ private class GatedGridFeedRepository(
     private val gateBeforeIndex: Int,
     private val gate: CompletableDeferred<Unit>,
 ) : GridFeedRepository {
-    private var loadCount = 0
+    var loadCount = 0
+        private set
 
     /** True once a load is waiting on [gate]: lets a test prove it observed the in-flight state. */
     var parkedAtGate = false

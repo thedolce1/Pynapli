@@ -5,6 +5,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.location.LocationCell
 import com.pynapli.shared.network.dto.CurrentLocationDto
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -128,6 +129,33 @@ class LocationStateHolderTest {
             assertTrue(retried.submitted)
             assertEquals(GridLocationRefresh.QuietRefresh, retried.gridRefresh)
             assertEquals(3, repository.locations.size)
+        }
+
+    // Section 0 repro (onboarding + first grid plan). Fails today; the Section 1 slice that adds a
+    // sign-out reset calls it at the marked line and removes the @Ignore.
+    @Ignore("Section 0 repro: B2 LocationStateHolder keeps the previous account's location after sign-out — fixed in Section 1")
+    @Test
+    fun theNextAccountOnThisDeviceSendsItsOwnLocation() =
+        runTest {
+            val repository = FakeLocationUpdateRepository()
+            // One holder per app process: every shell builds it once in PynapliCommonGraph.
+            val stateHolder = LocationStateHolder(repository)
+            val here = DeviceLocation(latitude = 45.5017, longitude = -73.5673, accuracyMeters = 20)
+
+            // Account A shares its location during sign-up.
+            assertTrue(stateHolder.submitLocation(here).submitted)
+
+            // Account A signs out and account B signs up in the same process, standing in the same
+            // place. Nothing resets this holder on sign-out today (App.kt clears only the Grid and
+            // Favorites). Section 1: reset the holder here.
+
+            // B's Location step auto-continues on a non-null currentLocation, so B skips it ...
+            assertNull(stateHolder.state.value.currentLocation, "account A's location must not carry over to account B")
+            // ... and if B does share, the <250 m rule drops it, so B's location never reaches the
+            // server and B's grid stays on "Use current location".
+            val forB = stateHolder.submitLocation(here)
+            assertTrue(forB.submitted)
+            assertEquals(2, repository.locations.size)
         }
 }
 

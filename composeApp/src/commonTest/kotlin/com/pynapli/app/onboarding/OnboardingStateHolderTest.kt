@@ -1,5 +1,6 @@
 package com.pynapli.app.onboarding
 
+import com.pynapli.app.auth.AuthMode
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SessionStore
@@ -29,8 +30,12 @@ import com.pynapli.shared.settings.OnboardingProgress
 import com.pynapli.shared.settings.OnboardingProgressStore
 import com.pynapli.shared.settings.PendingSignup
 import com.pynapli.shared.settings.maskEmailAddress
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -633,6 +638,90 @@ class OnboardingStateHolderTest {
             assertTrue(fixture.progressStore.progress.photoNudgeDismissed)
         }
 
+    // Section 0 repros (onboarding + first grid plan). Each fails today and is ignored so the gates
+    // stay green; the Section 1 slice that fixes the bug removes its @Ignore.
+
+    @Ignore("Section 0 repro: B1 auth mode not reset after sign-out — fixed in Section 1")
+    @Test
+    fun signingOutAfterASignUpLeavesTheAuthScreenInSignInMode() =
+        runTest {
+            val fixture = Fixture()
+            fixture.completeSignupToGrid()
+            // signupWithDetails flipped the auth mode to CreateAccount; nothing flips it back.
+            fixture.auth.logout()
+
+            // Left at CreateAccount, AuthScreen draws the legacy create-account form: its submit answers
+            // SIGNUP_NEEDS_STEPPER and its bottom link reads "Sign in" instead of opening the stepper.
+            assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
+        }
+
+    @Ignore("Section 0 repro: B1 auth mode not reset after cancelling a sign-up — fixed in Section 1")
+    @Test
+    fun cancellingASignUpLeavesTheAuthScreenInSignInMode() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            fixture.onboarding.cancelToSignIn()
+
+            assertFalse(fixture.onboarding.state.value.active)
+            assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
+        }
+
+    @Ignore("Section 0 repro: B3 grid shows while a sign-up resume waits for /me — fixed in Section 1")
+    @Test
+    fun aResumedSignUpHoldsTheStepperWhileTheProfileLoads() =
+        runTest {
+            val meGate = CompletableDeferred<Unit>()
+            val fixture =
+                Fixture(
+                    progressStore = InMemoryProgressStore(OnboardingProgress(completed = false, userId = "user-1")),
+                    profileRepository = FakeOnboardingProfileRepository(getMeGate = meGate),
+                )
+            fixture.signIn("user-1")
+
+            val ready = launch { fixture.onboarding.onSessionReady() }
+            runCurrent()
+
+            // App.kt draws the main shell (and composes GridScreen, which starts a grid load) whenever
+            // the session is settled, authenticated and the stepper is not active. While /me is in
+            // flight that is exactly this state, so the grid shows before the Profile step does.
+            assertNotNull(fixture.auth.state.value.session)
+            assertTrue(fixture.onboarding.state.value.active, "the stepper must hold the screen while the resume is decided")
+
+            meGate.complete(Unit)
+            ready.join()
+            assertEquals(OnboardingStep.Profile, fixture.onboarding.state.value.step)
+        }
+
+    @Ignore("Section 0 repro: photo nudge can arm in the sign-up session — fixed in Section 1")
+    @Test
+    fun thePhotoNudgeNeverArmsInTheSignUpSession() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            fixture.onboarding.updateSignupCode("123456")
+            // Hold the "onboarding in progress" write, the way a device store slower than a frame does.
+            val saveGate = CompletableDeferred<Unit>()
+            fixture.progressStore.saveGate = saveGate
+
+            val verifying = launch { fixture.onboarding.verifySignupCode() }
+            runCurrent()
+            // The session is already live, so App.kt's session effect calls onSessionReady() here,
+            // while the stored progress still reads completed = true (its default).
+            assertNotNull(fixture.auth.state.value.session)
+            fixture.onboarding.onSessionReady()
+
+            saveGate.complete(Unit)
+            verifying.join()
+            fixture.onboarding.continueFromLocation()
+            fixture.onboarding.finishProfile()
+
+            // Spec: the first nudge lands a session later, never in the session the stepper ran.
+            assertFalse(fixture.onboarding.state.value.active)
+            assertFalse(fixture.onboarding.state.value.photoNudgeEligible)
+        }
+
     private inner class Fixture(
         val progressStore: InMemoryProgressStore = InMemoryProgressStore(),
         val pendingStore: InMemoryPendingSignupStore = InMemoryPendingSignupStore(),
@@ -690,6 +779,17 @@ class OnboardingStateHolderTest {
             onboarding.updateEmail("new@pynapli.local")
             onboarding.updatePassword("LongEnoughPassword1!")
             onboarding.submitAccount()
+        }
+
+        /** Runs the whole stepper (blank name, no photo) to the grid with a live session. */
+        suspend fun completeSignupToGrid() {
+            startSignup()
+            onboarding.updateSignupCode("123456")
+            onboarding.verifySignupCode()
+            onboarding.continueFromLocation()
+            onboarding.finishProfile()
+            assertNotNull(auth.state.value.session)
+            assertFalse(onboarding.state.value.active)
         }
 
         /** Puts a live session into the auth state without going through signup. */
@@ -806,9 +906,13 @@ private class InMemorySessionStore : SessionStore {
 private class InMemoryProgressStore(
     var progress: OnboardingProgress = OnboardingProgress(),
 ) : OnboardingProgressStore {
+    /** When set, every save waits for it first: models a device store slower than a frame. */
+    var saveGate: CompletableDeferred<Unit>? = null
+
     override suspend fun load(): OnboardingProgress = progress
 
     override suspend fun save(progress: OnboardingProgress) {
+        saveGate?.await()
         this.progress = progress
     }
 }
@@ -816,6 +920,8 @@ private class InMemoryProgressStore(
 private class FakeOnboardingProfileRepository(
     private val updateDisplayNameResult: (String) -> AppResult<MeDto> = { AppResult.Success(meDto(it)) },
     private val getMeResult: () -> AppResult<MeDto> = { AppResult.Success(meDto(null)) },
+    // When set, getMe waits for it first: lets a test look at the state while /me is in flight.
+    private val getMeGate: CompletableDeferred<Unit>? = null,
 ) : OnboardingProfileRepository {
     var lastDisplayName: String? = null
         private set
@@ -825,5 +931,8 @@ private class FakeOnboardingProfileRepository(
         return updateDisplayNameResult(displayName)
     }
 
-    override suspend fun getMe(): AppResult<MeDto> = getMeResult()
+    override suspend fun getMe(): AppResult<MeDto> {
+        getMeGate?.await()
+        return getMeResult()
+    }
 }
