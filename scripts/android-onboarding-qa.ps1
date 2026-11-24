@@ -31,6 +31,9 @@ param(
     # Seeded grid tiles that must be on screen. Earlier allowed-path accounts also live in this cell
     # and can sort ahead of the seed, so the check scrolls a little before giving up.
     [int]$MinSeededTiles = 1,
+    # Card text nodes (name + distance per tile) that also prove real faces when earlier QA or load-test
+    # accounts in the same cell outrank the seeded names.
+    [int]$MinGridCardTexts = 6,
     [int]$WaitSeconds = 35
 )
 
@@ -423,7 +426,8 @@ function Wait-ForSeededGrid {
             }
         }
         $names = @(Get-SeededTileNames $xml)
-        if ($names.Count -gt 0) {
+        $cardTexts = @(Get-GridCardSnapshot $xml 60).Count
+        if ($names.Count -gt 0 -or $cardTexts -ge $MinGridCardTexts) {
             return [pscustomobject]@{ Xml = $xml; Names = $names }
         }
         Start-Sleep -Milliseconds 500
@@ -492,10 +496,10 @@ function Invoke-AllowedLocationPath {
         Assert-TextAbsent $scrolledXml "Use current location" "First grid scroll $scroll (location allowed)"
         foreach ($name in @(Get-SeededTileNames $scrolledXml)) { [void]$seenNames.Add($name) }
     }
-    if ($seenNames.Count -lt $MinSeededTiles) {
-        throw "Only $($seenNames.Count) seeded grid tile(s) found ($(@($seenNames) -join ', ')); expected at least $MinSeededTiles."
+    if ($seenNames.Count -lt $MinSeededTiles -and $tileTexts -lt $MinGridCardTexts) {
+        throw "Only $($seenNames.Count) seeded grid tile(s) found ($(@($seenNames) -join ', ')) and $tileTexts card text node(s); expected at least $MinSeededTiles seeded tile(s) or $MinGridCardTexts card text nodes."
     }
-    Write-Host "[ok] First grid shows seeded faces: $(@($seenNames) -join ', ') ($tileTexts card text nodes on the first screen)"
+    Write-Host "[ok] First grid shows real cards: seeded [$(@($seenNames) -join ', ')], $tileTexts card text nodes on the first screen"
 
     # --- Time to first card (PynapliPerf logcat markers) ---
     $marks = Read-PerfMarkers
