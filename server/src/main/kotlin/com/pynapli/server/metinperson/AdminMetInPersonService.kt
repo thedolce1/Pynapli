@@ -113,6 +113,8 @@ class AdminMetInPersonService(
                     ?.rows
                     ?.firstOrNull { it.vouch.id == row.id }
                     ?.voucherUserId
+            // A row a voucher-level void voided is restored only by undoing that void, never one by one.
+            if (!voided && voidedWithVoucher(row.pairToken)) throw ModerationException("MET_IN_PERSON_VOIDED_WITH_VOUCHER")
             val affected = setVoided(listOf(row.pairToken), voided, VoidScope.CONFIRMATION, now)
             insertAdminAuditLog(
                 actorId = actorId,
@@ -232,10 +234,16 @@ class AdminMetInPersonService(
 
     private enum class VoidScope { CONFIRMATION, VOUCHER }
 
+    private fun Connection.voidedWithVoucher(pairToken: String): Boolean =
+        prepareStatement("SELECT voided_with_voucher FROM vouches WHERE pair_token = ?").use { statement ->
+            statement.setString(1, pairToken)
+            statement.executeQuery().use { rs -> rs.next() && rs.getBoolean(1) }
+        }
+
     /**
      * Voids only rows not already voided, recording whether a voucher-level void did it; the day only
      * (whole UTC days, like every other date here). Undoing a voucher-level void restores only the rows
-     * it voided; undoing one confirmation restores that row whichever void voided it.
+     * it voided; undoing one confirmation restores only a row voided on its own (the caller refuses the other).
      */
     private fun Connection.setVoided(
         pairTokens: List<String>,
@@ -255,7 +263,8 @@ class AdminMetInPersonService(
                         "AND voided_at IS NOT NULL AND voided_with_voucher"
                 else ->
                     "UPDATE vouches SET voided_at = NULL, voided_with_voucher = false " +
-                        "WHERE ?::timestamptz IS NOT NULL AND ?::boolean IS NOT NULL AND pair_token = ANY(?) AND voided_at IS NOT NULL"
+                        "WHERE ?::timestamptz IS NOT NULL AND ?::boolean IS NOT NULL AND pair_token = ANY(?) " +
+                        "AND voided_at IS NOT NULL AND NOT voided_with_voucher"
             }
         return prepareStatement(sql).use { statement ->
             statement.setTimestamp(1, Timestamp.from(MetInPersonRules.day(now)))

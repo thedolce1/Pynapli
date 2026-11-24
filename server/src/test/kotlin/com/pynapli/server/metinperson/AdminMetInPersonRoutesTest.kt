@@ -28,6 +28,7 @@ import kotlin.random.Random
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -313,6 +314,26 @@ class AdminMetInPersonRoutesTest {
                         "AND voided_at <> date_trunc('day', voided_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'",
                 )
             assertEquals(0, notWholeDays, "a void keeps the day only")
+        }
+    }
+
+    @Test
+    fun aRowVoidedWithItsVoucherCannotBeUnvoidedOnItsOwn() {
+        runBlocking {
+            val (subject, vouchers) = confirmedSubject()
+            admin.setVoucherVoided("senior-1", vouchers[0], voided = true, reason = "farm")
+            val row =
+                UUID.fromString(
+                    fx.queryText("SELECT id::text FROM vouches WHERE pair_token = ?", tokens.pair(vouchers[0], subject)),
+                )
+            val refusal =
+                assertFailsWith<com.pynapli.server.moderation.ModerationException> {
+                    admin.setConfirmationVoided("senior-1", subject, row, voided = false, reason = "one only")
+                }
+            assertEquals("MET_IN_PERSON_VOIDED_WITH_VOUCHER", refusal.code)
+            assertEquals(1, fx.count("SELECT count(*) FROM vouches WHERE id = ? AND voided_at IS NOT NULL", row), "still voided")
+            assertEquals(0, fx.count("SELECT count(*) FROM admin_audit_log WHERE action = 'met_in_person.unvoid_confirmation'"))
+            assertEquals(1, admin.setVoucherVoided("senior-1", vouchers[0], voided = false, reason = "cleared").affected)
         }
     }
 
