@@ -106,6 +106,8 @@ fun OnboardingFlowScreen(
     onStartSignupAgain: () -> Unit,
     onShareLocation: () -> Unit,
     onContinueFromLocation: () -> Unit,
+    // "Skip for now": also records that this account chose not to share (no silent resume refresh).
+    onSkipLocation: () -> Unit,
     onDisplayNameChanged: (String) -> Unit,
     onPickPhoto: () -> Unit,
     onFinishProfile: () -> Unit,
@@ -212,6 +214,7 @@ fun OnboardingFlowScreen(
                     locationState = locationState,
                     onShareLocation = onShareLocation,
                     onContinue = onContinueFromLocation,
+                    onSkip = onSkipLocation,
                 )
 
             OnboardingStep.Profile ->
@@ -660,6 +663,7 @@ private fun LocationStep(
     locationState: LocationUiState,
     onShareLocation: () -> Unit,
     onContinue: () -> Unit,
+    onSkip: () -> Unit,
 ) {
     // The grid is distance-ordered, so a successful location submit is the natural
     // "done" signal — advance without an extra tap. Skipping or a denied prompt
@@ -685,7 +689,7 @@ private fun LocationStep(
         onClick = onShareLocation,
     )
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onContinue, enabled = !locationState.isUpdating, modifier = Modifier.handCursor(enabled = !locationState.isUpdating)) {
+    TextButton(onClick = onSkip, enabled = !locationState.isUpdating, modifier = Modifier.handCursor(enabled = !locationState.isUpdating)) {
         Text("Skip for now")
     }
     // What skipping costs, said plainly next to the choice (Section 1, Permissions).

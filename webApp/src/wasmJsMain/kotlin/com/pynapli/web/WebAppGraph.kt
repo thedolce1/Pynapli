@@ -10,6 +10,7 @@ import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.grid.NoOpGridSnapshotStore
+import com.pynapli.app.location.LocationSharingGate
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.store.UnavailableStorePurchaseGateway
@@ -26,6 +27,7 @@ import com.pynapli.shared.network.webRealtimeStreams
 import com.pynapli.web.auth.LocalStorageSessionStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
+import com.pynapli.web.settings.LocalStorageLocationSharingConsentStore
 import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
 import com.pynapli.web.settings.SessionStoragePendingSignupStore
 import kotlinx.coroutines.CoroutineScope
@@ -142,6 +144,13 @@ class WebAppGraph {
                 realtimeStreams.message,
         )
 
+    /** Which accounts in this browser shared location in the app; gates the tab-visible refresh. */
+    private val locationSharingGate =
+        LocationSharingGate(
+            store = LocalStorageLocationSharingConsentStore(),
+            currentUserId = { authStateHolder.state.value.session?.userId },
+        )
+
     /** The object the web entry point hands to `PynapliApp`. */
     val pynapliAppGraph: PynapliAppGraph =
         common.appGraph(
@@ -150,6 +159,7 @@ class WebAppGraph {
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
             psyncStreamClient = realtimeStreams.psync,
+            locationSharingGate = locationSharingGate,
         )
 
     /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */

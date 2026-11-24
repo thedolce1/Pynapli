@@ -53,6 +53,8 @@ fun main() {
             locationStateHolder = graph.pynapliAppGraph.locationStateHolder,
             gridStateHolder = graph.pynapliAppGraph.gridStateHolder,
             scope = appScope,
+            sharingGate = graph.pynapliAppGraph.locationSharingGate,
+            onboardingActive = { graph.onboardingStateHolder.state.value.active },
         )
     val mediaPicker =
         WebMediaPicker(

@@ -232,6 +232,7 @@ class PynapliCommonGraph(
         deepLinkStateHolder: AppDeepLinkStateHolder? = null,
         onboardingStateHolder: OnboardingStateHolder? = null,
         psyncStreamClient: PsyncStreamClient,
+        locationSharingGate: com.pynapli.app.location.LocationSharingGate? = null,
     ): PynapliAppGraph =
         PynapliAppGraph(
             authStateHolder = authStateHolder,
@@ -259,6 +260,7 @@ class PynapliCommonGraph(
             favoritesStateHolder = favoritesStateHolder,
             matchCelebrationStateHolder = matchCelebrationStateHolder,
             contactBlocksStateHolder = contactBlocksStateHolder,
+            locationSharingGate = locationSharingGate,
         )
 
     /**

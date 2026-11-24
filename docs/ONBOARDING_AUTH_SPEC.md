@@ -333,8 +333,11 @@ Location:
   - Web: a browser refusal is treated as blocked (browsers remember it per site), and the screen
     explains where the site setting is; a page cannot open it.
   - Desktop and iOS: nothing extra yet.
-  - Coming back from Settings fires the resume refresh (GRID_IMPLEMENTATION_SPEC, Location
-    Strategy), which sends a fix once the permission is granted.
+  - Coming back from Settings: on the Location step the member taps "Share my location", which
+    now needs no prompt. Nothing is sent silently while the stepper is on screen, so the step is
+    always answered by the member's own Share or Skip, never by a resume. Outside the stepper the
+    resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy) runs only for an account that
+    shared in the app on this device; "Skip for now" turns it off for that account until it shares.
 - A plain first refusal keeps the existing copy and the share button, which can ask again.
 
 Notifications:

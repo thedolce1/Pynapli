@@ -15,6 +15,7 @@ import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.debug.DebugQaFlags
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
+import com.pynapli.app.location.LocationSharingGate
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
 import com.pynapli.app.notifications.AndroidPushRegistrationStore
@@ -38,6 +39,7 @@ import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.androidRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
+import com.pynapli.shared.settings.SqlDelightLocationSharingConsentStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.settings.SqlDelightPendingSignupStore
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
@@ -221,6 +223,13 @@ class AndroidAppGraph(
             askMomentReached = notificationAskTiming.ready,
         )
 
+    /** Which accounts on this device shared location in the app; gates MainActivity's resume refresh. */
+    private val locationSharingGate =
+        LocationSharingGate(
+            store = SqlDelightLocationSharingConsentStore(database),
+            currentUserId = { authStateHolder.state.value.session?.userId },
+        )
+
     /** The object MainActivity hands to `PynapliApp`: every common holder plus this shell's pieces. */
     val pynapliAppGraph: PynapliAppGraph =
         common.appGraph(
@@ -229,6 +238,7 @@ class AndroidAppGraph(
             deepLinkStateHolder = deepLinkStateHolder,
             onboardingStateHolder = onboardingStateHolder,
             psyncStreamClient = psyncStreamClient,
+            locationSharingGate = locationSharingGate,
         )
 
     /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */
