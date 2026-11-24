@@ -267,7 +267,9 @@ Current implementation:
 - Movement from 250m to 1km submits location and refreshes the existing grid quietly: the grid state holder keeps the existing cards visible, never flips `isRefreshing` while cards exist, and a failed quiet refresh leaves the visible cards and prior `errorMessage`/`errorCode` untouched. The new feed is swapped in atomically when it arrives.
 - Movement of 1km or more submits location and requests a normal grid refresh (clears `errorMessage`, sets `isRefreshing`, and surfaces failures).
 - Android uses last-known location first, then a cancellable one-shot `getCurrentLocation` request only when needed. `MainActivity.onStop` cancels any pending one-shot location request so the Grid does not keep GPS work alive after the app backgrounds.
-- Denied location keeps the Grid in a recovery state: no Grid cards are shown, the `Use current location` action remains available, and the app displays `Location permission is required to load nearby profiles.` after Android permission denial.
+- Denied location keeps the Grid in a recovery state: no Grid cards are shown, the `Use current location` action remains available, and the app displays `Location permission is required to load nearby profiles.` after Android permission denial. Under it the state says neutrally what not sharing costs ("Without your location, you won't appear to anyone nearby."), and when asking again cannot help (permission blocked for good, location services off, a browser that remembers the refusal) it offers "Open Settings" on Android or directions to the site setting on the web (ONBOARDING_AUTH_SPEC, Permissions).
+- Resume refresh (2026-11-24, Section 1): on app resume (Android `onStart`, and once at cold start after the session settles) and on a web tab becoming visible (and a signed-in page load), a member who is signed in and has *already* granted location gets a fresh fix, silently: no progress, no error text, never a prompt (Android checks the permission; the web checks `navigator.permissions` reports `granted` first). Android uses a last-known fix under 2 minutes old, else one cancellable `getCurrentLocation` that `onStop` cancels. `LocationStateHolder.refreshInBackground` applies the thresholds above plus one more rule: a fix still in the last sent 0.01-degree cell is not sent. When it is sent, the grid refreshes quietly (cards swap in place). The movement anchor stays in memory only, so the first fix after a process start is always sent. Coordinates are never logged.
+- Sign-out resets `LocationStateHolder` (state, anchor, and any submit still in flight), so the next account on the device sends its own first fix.
 
 ## Client Implementation
 
@@ -298,6 +300,20 @@ The profile should open as:
 - a navigation destination over retained state.
 
 Do not refetch/rebuild the grid when closing a profile unless the user explicitly refreshes or the grid state is expired.
+
+### Launch path (2026-11-24, Section 1, plan G1)
+
+- A stored session goes straight to the shell; `GET /v1/me` runs in the background, and only a
+  terminal auth answer signs out (ONBOARDING_AUTH_SPEC, Returning members). The cached grid
+  therefore paints without waiting on the network.
+- While the cold-start snapshot is read, the grid shows the tile skeleton (the same phase as a first
+  network load), and cached cards crossfade in over it.
+- The first page joins a load already in flight: when the Location step's `submitAndRefresh` (or a
+  resume location refresh) has a request on the wire for the current filters, `GridScreen`'s
+  `primeFromCacheThenLoad` waits for it instead of starting a second request that would supersede
+  it. Only that compose-time path joins. A filter change, pull-to-refresh or location move always
+  calls `load()`, which bumps the generation and drops the older answer. A joined load that is
+  cancelled before it answers makes the grid load for itself.
 
 ## Filter Application
 
