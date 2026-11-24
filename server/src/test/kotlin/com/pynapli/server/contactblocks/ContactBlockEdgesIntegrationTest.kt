@@ -142,6 +142,7 @@ class ContactBlockEdgesIntegrationTest :
                 graph.messaging.setConversationExpiry(A, conversationId, 3_600)
                 assertEquals(before, xSort(), "A's timer change didn't move it")
                 val notices = graph.messaging.getConversationDetail(X, conversationId).messages.filter { it.messageType == "system" }
+                assertTrue(notices.isNotEmpty(), "the timer change is explained")
                 assertTrue(notices.all { it.senderUserId == NOBODY }, "a notice by A is attributed to nobody")
                 graph.messaging.leaveConversation(A, conversationId)
                 assertEquals(before, xSort(), "A leaving didn't move it")
@@ -151,6 +152,12 @@ class ContactBlockEdgesIntegrationTest :
                         .messages
                         .none { it.senderUserId == A.toString() },
                 )
+
+                // After A removes the address, the notice A wrote while hidden still names nobody.
+                graph.execute("UPDATE messages SET created_at = created_at - interval '1 minute' WHERE sender_user_id = ?", A)
+                graph.contactBlocks.remove(A, X_ADDRESS)
+                val afterRelease = graph.messaging.getConversationDetail(X, conversationId).messages.filter { it.messageType == "system" }
+                assertTrue(afterRelease.isNotEmpty() && afterRelease.all { it.senderUserId == NOBODY }, "the tombstone keeps it unattributed")
             }
         }
 
@@ -166,6 +173,9 @@ class ContactBlockEdgesIntegrationTest :
                 graph.execute("UPDATE messages SET created_at = now() - interval '40 days' WHERE conversation_id = ?::uuid", conversationId)
                 DataRetentionService(dataSource).runOnce()
                 assertEquals(0, graph.count("SELECT COUNT(*) FROM messages WHERE sender_user_id = ?", X), "purged")
+                assertEquals(1, graph.count("SELECT COUNT(*) FROM conversation_participants WHERE user_id = ? AND first_written_at IS NOT NULL", X), "the trigger marked it")
+                // Only the durable marker may carry it: no read evidence.
+                graph.execute("UPDATE conversation_participants SET last_read_at = joined_at WHERE user_id = ?", X)
                 graph.addAndResolve()
                 assertTrue(graph.visibility.hiddenFrom(X).isEmpty(), "X wrote: exempt, even with the message gone")
 

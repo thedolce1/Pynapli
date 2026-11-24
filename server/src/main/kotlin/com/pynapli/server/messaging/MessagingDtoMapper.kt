@@ -25,14 +25,15 @@ internal class MessagingDtoMapper(
         viewerUserId: UUID,
     ): ConversationDetailDto {
         val readReceiptCache = mutableMapOf<UUID, Boolean>()
-        val hidden = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        val rules = contactBlockVisibility?.rulesFor(viewerUserId) ?: NO_RULES
+        val hidden = rules.hidden
         val shown = detail.conversation.withoutHiddenPeople(hidden)
         return ConversationDetailDto(
-            conversation = toVisibleDto(record = detail.conversation, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache, hidden = hidden),
+            conversation = toVisibleDto(record = detail.conversation, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache, rules = rules),
             messages =
                 detail.messages.map { message ->
                     toDto(
-                        record = message.withoutHiddenSender(hidden),
+                        record = message.withoutHiddenSender(rules),
                         viewerUserId = viewerUserId,
                         // Read receipts count only the people this viewer can see.
                         conversation = shown,
@@ -48,25 +49,27 @@ internal class MessagingDtoMapper(
         viewerUserId: UUID,
         readReceiptCache: MutableMap<UUID, Boolean> = mutableMapOf(),
     ): ConversationDto {
-        val hidden = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        val rules = contactBlockVisibility?.rulesFor(viewerUserId) ?: NO_RULES
+        val hidden = rules.hidden
         val shown = record.withoutHiddenPeople(hidden)
-        return toVisibleDto(record = record, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache, hidden = hidden)
+        return toVisibleDto(record = record, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache, rules = rules)
     }
 
     /**
      * A system notice (a timer change) by someone hiding from the viewer is shown to them with no
      * sender: the conversation's timer is a property everyone in it sees, so the change is explained,
-     * attributed to nobody. Every other message from such a person never reaches this point (SQL).
+     * attributed to nobody; the same for one they wrote before a release (a tombstone). Every other
+     * message from such a person never reaches this point (SQL).
      */
-    private fun MessageRecord.withoutHiddenSender(hidden: Set<UUID>): MessageRecord =
-        if (senderUserId in hidden) copy(senderUserId = SYSTEM_SENDER) else this
+    private fun MessageRecord.withoutHiddenSender(rules: com.pynapli.server.contactblocks.ContactBlockViewerRules): MessageRecord =
+        if (rules.hidesAct(senderUserId, createdAt)) copy(senderUserId = SYSTEM_SENDER) else this
 
     private suspend fun toVisibleDto(
         record: ConversationRecord,
         shown: ConversationRecord,
         viewerUserId: UUID,
         readReceiptCache: MutableMap<UUID, Boolean>,
-        hidden: Set<UUID>,
+        rules: com.pynapli.server.contactblocks.ContactBlockViewerRules,
     ): ConversationDto =
         ConversationDto(
             conversationId = record.conversationId.toString(),
@@ -76,7 +79,7 @@ internal class MessagingDtoMapper(
             lastMessage =
                 record.lastMessage?.let { message ->
                     toDto(
-                        record = message.withoutHiddenSender(hidden),
+                        record = message.withoutHiddenSender(rules),
                         viewerUserId = viewerUserId,
                         conversation = shown,
                         readReceiptCache = readReceiptCache,
@@ -210,5 +213,9 @@ internal class MessagingDtoMapper(
 
         /** The nil id: "nobody", for a system notice whose author hides from the viewer. */
         private val SYSTEM_SENDER = UUID(0L, 0L)
+
+        private val NO_RULES =
+            com.pynapli.server.contactblocks
+                .ContactBlockViewerRules(emptySet(), emptyMap())
     }
 }

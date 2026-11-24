@@ -167,16 +167,16 @@ class JdbcContactBlockRepository(
             ),
             pruned AS (
                 -- Older tombstones of the same pair hide acts before an earlier time (subsumed); beyond the newest few they go.
-                DELETE FROM contact_blocks old
+                DELETE FROM contact_blocks prior
                 USING released
-                WHERE old.blocker_user_id = released.blocker_user_id
-                  AND old.target_token = released.target_token
-                  AND old.released_at IS NOT NULL
-                  AND old.id <> released.id
+                WHERE prior.blocker_user_id = released.blocker_user_id
+                  AND prior.target_token = released.target_token
+                  AND prior.released_at IS NOT NULL
+                  AND prior.id <> released.id
                   -- Keep the newest few: their windows still tell 'a match X was never shown' apart (Interaction).
-                  AND old.id NOT IN (
+                  AND prior.id NOT IN (
                       SELECT keep.id FROM contact_blocks keep
-                      WHERE keep.blocker_user_id = old.blocker_user_id AND keep.target_token = old.target_token AND keep.released_at IS NOT NULL
+                      WHERE keep.blocker_user_id = prior.blocker_user_id AND keep.target_token = prior.target_token AND keep.released_at IS NOT NULL
                       ORDER BY keep.released_at DESC
                       LIMIT $TOMBSTONES_KEPT_BEFORE_NEW
                   )
@@ -205,16 +205,16 @@ class JdbcContactBlockRepository(
             ),
             pruned AS (
                 -- Older tombstones of the same pair hide acts before an earlier time (subsumed); beyond the newest few they go.
-                DELETE FROM contact_blocks old
+                DELETE FROM contact_blocks prior
                 USING released
-                WHERE old.blocker_user_id = released.blocker_user_id
-                  AND old.target_token = released.target_token
-                  AND old.released_at IS NOT NULL
-                  AND old.id <> released.id
+                WHERE prior.blocker_user_id = released.blocker_user_id
+                  AND prior.target_token = released.target_token
+                  AND prior.released_at IS NOT NULL
+                  AND prior.id <> released.id
                   -- Keep the newest few: their windows still tell 'a match X was never shown' apart (Interaction).
-                  AND old.id NOT IN (
+                  AND prior.id NOT IN (
                       SELECT keep.id FROM contact_blocks keep
-                      WHERE keep.blocker_user_id = old.blocker_user_id AND keep.target_token = old.target_token AND keep.released_at IS NOT NULL
+                      WHERE keep.blocker_user_id = prior.blocker_user_id AND keep.target_token = prior.target_token AND keep.released_at IS NOT NULL
                       ORDER BY keep.released_at DESC
                       LIMIT $TOMBSTONES_KEPT_BEFORE_NEW
                   )

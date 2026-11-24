@@ -43,6 +43,18 @@ CREATE TRIGGER trg_messages_mark_participant_written
 --    back to their own last visible message (JdbcMessagingConversationLookupSql).
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS updated_by_user_id UUID;
 
+-- Existing conversations: the sender of the latest message is the best attribution there is (a later
+-- non-message bump stays unattributed, so it orders as before).
+UPDATE conversations c
+SET updated_by_user_id = latest.sender_user_id
+FROM (
+    SELECT DISTINCT ON (conversation_id) conversation_id, sender_user_id
+    FROM messages
+    ORDER BY conversation_id, created_at DESC, id DESC
+) latest
+WHERE latest.conversation_id = c.id
+  AND c.updated_by_user_id IS NULL;
+
 -- 3. The resolver's daily full sweep: the claim (an attempt) and the last success are separate, so a
 --    failed sweep is retried within the hour instead of a day later.
 ALTER TABLE contact_block_job_state ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ;
