@@ -20,6 +20,7 @@ internal class PsyncDeckCoordinator(
     private val mediaAssetUrlResolver: MediaAssetUrlResolver?,
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val clock: Clock,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun activateWithGeneratedDeck(
         sessionId: UUID,
@@ -82,7 +83,13 @@ internal class PsyncDeckCoordinator(
             } else {
                 blockedOrHiddenTargets(session.initiatorUserId, partnerId)
             }
-        val cards = repository.listDeckCards(session.id).filterNot { it.targetUserId in invalidated }
+        // "Hide from people you know", per person: a card of someone hiding from THIS viewer is left out
+        // of this viewer's view of the shared deck only (their partner still sees and answers it, so the
+        // hidden person's world is the same whether or not the address was theirs), and a partner mini
+        // of such a person comes off the card (with the couple badge).
+        val hiddenFromViewer = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        val allCards = repository.listDeckCards(session.id).filterNot { it.targetUserId in invalidated }
+        val cards = allCards.filterNot { it.targetUserId in hiddenFromViewer }
         val myActions = repository.listActionsForActor(session.id, viewerUserId).associate { it.targetUserId to it.action }
         val online = onlineFor(cards.map { it.targetUserId })
         val items =
@@ -97,12 +104,55 @@ internal class PsyncDeckCoordinator(
                     )
                 PsyncDeckCardDto(
                     // The snapshot's signed photo links expire within minutes; issue fresh ones.
-                    card = card.snapshot.copy(online = card.targetUserId in online).withFreshPhotoUrls(mediaAssetUrlResolver),
+                    card =
+                        card.snapshot
+                            .copy(online = card.targetUserId in online)
+                            .let { snapshot ->
+                                if (snapshot.linkedPartner?.userId?.let { runCatching { UUID.fromString(it) }.getOrNull() } in hiddenFromViewer) {
+                                    snapshot.copy(linkedPartner = null, coupleVerified = false)
+                                } else {
+                                    snapshot
+                                }
+                            }.withFreshPhotoUrls(mediaAssetUrlResolver),
                     cardToken = rawToken,
                     viewerAction = myActions[card.targetUserId],
                 )
             }
-        return PsyncDeckResponseDto(sessionId = session.id.toString(), deckSize = session.deckSize, cards = items)
+        // A hidden card this viewer already answered (before the block bound) still counts toward their
+        // deck, so their count and their acted count stay consistent; only unanswered ones come off.
+        val hiddenUnanswered = allCards.count { it.targetUserId in hiddenFromViewer && it.targetUserId !in myActions }
+        val deckSize = (session.deckSize - hiddenUnanswered).coerceAtLeast(0)
+        return PsyncDeckResponseDto(sessionId = session.id.toString(), deckSize = deckSize, cards = items)
+    }
+
+    /**
+     * "Hide from people you know": [targetUserId] hides from [userId], so [userId] can't act on that
+     * card (the deck response already leaves it out for them; their partner still can).
+     */
+    suspend fun noteActToward(
+        actorUserId: UUID,
+        targetUserId: UUID,
+    ) {
+        contactBlockVisibility?.noteActToward(actorUserId, targetUserId)
+    }
+
+    suspend fun targetHidesFrom(
+        userId: UUID,
+        targetUserId: UUID,
+    ): Boolean = contactBlockVisibility?.isHiddenFrom(userId, targetUserId) == true
+
+    /**
+     * How many cards of the session's deck [userId] never gets and never answered (people hiding from
+     * them). A card they answered before the block bound stays counted, since their acted count holds it.
+     */
+    suspend fun hiddenCardCount(
+        sessionId: UUID,
+        userId: UUID,
+    ): Int {
+        val hidden = contactBlockVisibility?.hiddenFrom(userId).orEmpty()
+        if (hidden.isEmpty()) return 0
+        val answered = repository.listActionsForActor(sessionId, userId).mapTo(mutableSetOf()) { it.targetUserId }
+        return repository.listDeckCards(sessionId).count { it.targetUserId in hidden && it.targetUserId !in answered }
     }
 
     /** Targets blocked (either direction) or hidden by EITHER partner — invalid for the deck. */
@@ -119,6 +169,7 @@ internal class PsyncDeckCoordinator(
                 addAll(it.listHiddenProfileIds(partnerA))
                 addAll(it.listHiddenProfileIds(partnerB))
             }
+            // "Hide from people you know" is applied per person, not here (see buildDeckResponse).
         }
 
     fun issueCardToken(

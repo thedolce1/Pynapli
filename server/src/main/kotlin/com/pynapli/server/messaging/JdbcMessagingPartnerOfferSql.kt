@@ -1,5 +1,6 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.contactblocks.ContactBlockSql
 import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import java.sql.Connection
 import java.util.UUID
@@ -30,12 +31,16 @@ import java.util.UUID
 internal fun Connection.loadPartnerOffers(
     viewerUserId: UUID,
     conversation: ConversationRecord,
+    // "Hide from people you know": a partner hiding from the viewer is never named nor considered
+    // (like any partner the viewer may not see, so their blocks never change what the viewer sees).
+    viewerContactToken: String = ContactBlockSql.NO_VIEWER_TOKEN,
 ): ConversationPartnerOffersRecord? {
     val rows =
         prepareStatement(PARTNER_OFFER_QUERY).use { statement ->
             statement.setObject(1, conversation.conversationId)
             // The viewer, then ownerShowsPartnerToViewer's three viewer placeholders.
             (2..5).forEach { index -> statement.setObject(index, viewerUserId) }
+            statement.setString(6, viewerContactToken) // hidden-from rule (last placeholder)
             statement.executeQuery().use { rs ->
                 buildList {
                     while (rs.next()) {
@@ -165,6 +170,7 @@ private val PARTNER_OFFER_QUERY =
                          OR (viewer_block.blocker_user_id = partner_user.id AND viewer_block.blocked_user_id = pair.viewer_id)
                   )
                   AND ${CoupleVerifiedFilterSql.ownerShowsPartnerToViewer(settings = "owner_ds", owner = "owner_cp.user_id")}
+                  AND ${ContactBlockSql.notHiddenFromViewer("partner_user.id")}
               )
           )
     ),

@@ -34,11 +34,13 @@ class MessagingService(
     activityService: ActivityService? = null,
     messageMediaGateway: MessageMediaGateway? = null,
     private val productMetrics: ProductMetrics? = null,
+    // "Hide from people you know" (viewer side only): pair with JdbcMessagingRepository's tokens.
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     private val featureAccess = MessagingFeatureAccess(subscriptionService)
-    private val dtoMapper = MessagingDtoMapper(featureAccess, messageMediaGateway)
-    private val conversationGuard = MessagingConversationGuard(blockRepository)
-    private val realtimePublisher = MessagingRealtimePublisher(messageBroadcaster, clock)
+    private val dtoMapper = MessagingDtoMapper(featureAccess, messageMediaGateway, contactBlockVisibility)
+    private val conversationGuard = MessagingConversationGuard(blockRepository, contactBlockVisibility)
+    private val realtimePublisher = MessagingRealtimePublisher(messageBroadcaster, clock, contactBlockVisibility)
     private val notificationDispatcher = MessagingNotificationDispatcher(notificationPublisher)
     private val conversationActions =
         MessagingConversationActions(
@@ -100,6 +102,9 @@ class MessagingService(
             conversationId = conversation.conversationId,
             participants = conversation.participants,
             statuses = MessagingParticipantStatuses.visible,
+            // Nobody made this change: no hint to either person if the other hides from them (a Psync
+            // together match can pair someone with a person hiding from them).
+            subjectUserIds = listOf(userA, userB),
         )
     }
 

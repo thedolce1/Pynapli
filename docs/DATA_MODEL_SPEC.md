@@ -38,7 +38,7 @@ every change must keep.
 | Media and albums | `media_assets`, `media_albums`, `media_album_items`, `media_album_access_grants`, `media_album_access_requests` |
 | Activity | `activity_events` |
 | Monetization | `subscriptions`, `entitlements`, `premium_inventory`, `boost_activations`, `play_store_rtdn_events`, `play_store_product_purchases` |
-| Safety and moderation | `user_blocks`, `user_hidden_profiles`, `safety_reports`, `moderation_appeals`, `account_risk_states`, `account_risk_events`, `age_verifications`, `admin_audit_log` |
+| Safety and moderation | `user_blocks`, `user_hidden_profiles`, `contact_blocks`, `safety_reports`, `moderation_appeals`, `account_risk_states`, `account_risk_events`, `age_verifications`, `admin_audit_log` |
 | Notifications | `push_devices`, `notification_preferences`, `notification_outbox` |
 
 ## Rules
@@ -71,6 +71,22 @@ every change must keep.
   data-retention job. A pending row can't sign
   in and belongs to no account (out of export and deletion). `users.email_verified_at` is set for
   accounts created through it; older accounts stay NULL and nothing is gated on it yet.
+- **Contact blocks** (V119, [TRUST_AND_SAFETY_SPEC](TRUST_AND_SAFETY_SPEC.md#contact-blocks-hide-from-people-you-know)):
+  `contact_blocks(id, blocker_user_id, email_token, target_token NULL, created_at)`, unique on
+  (blocker, email_token); `email_token = HMAC(K1, normalised address)`, `target_token` NULL (pending),
+  `HMAC(K2, "target:" + member)` (bound) or `HMAC(K2, "exempt:" + member)` (exempt). No plaintext and no
+  plain `email_hash`. `users.contact_token = HMAC(K2, "member:" + email_token)` for verified members
+  (written at verify and sign-in), so the tables can't be joined without K2. Deletion deletes the
+  blocker's rows, sends rows pointing at the deleted member back to pending, and clears their token;
+  export shows the blocker only the dates added. V120 adds `released_at`: removing a bound address
+  keeps the row as a tombstone (nothing the blocker did before it ever reaches the person it pointed
+  at); uniqueness and the count apply to rows with `released_at` NULL only; `contact_block_job_state`
+  records the resolver's daily full sweep. At most five tombstones are kept per (blocker, target) pair.
+  V121 adds `conversation_participants.first_written_at` (set by trigger
+  `trg_messages_mark_participant_written` on every visible message, backfilled; durable evidence for
+  the exemption after a retention purge), `conversations.updated_by_user_id` (who caused the last
+  bump, so a hidden person's acts don't reorder a viewer's inbox) and
+  `contact_block_job_state.last_success_at` (a failed sweep is retried within the hour).
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
   the integrity of retained safety/legal records. In the same transaction, GDPR/CCPA erasure nulls
   identity hashes (`email_hash`, `phone_hash`, `firebase_uid`), clears `auth_identities` credentials
@@ -139,7 +155,7 @@ every change must keep.
 - One open or under-review appeal per user/action/target. User-facing appeal history **never exposes
   `admin_reason` or audit metadata**. Severe legal/CSAM decisions are non-appealable by policy above
   the table.
-- "Met in person" (V120): `vouches` holds no user, conversation or link id: the unique directed
+- "Met in person" (V122): `vouches` holds no user, conversation or link id: the unique directed
   `pair_token` and `subject_token`, `partner_token`, `link_token` are HMAC-SHA256 values under K3
   (`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`), one domain prefix per kind; dates are whole UTC days;
   `voided_at` is an admin void. `met_in_person_key` holds the key check value (writes and the batch refuse

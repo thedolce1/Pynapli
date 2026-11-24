@@ -60,7 +60,13 @@ class AccountDataExportContentsIntegrationTest {
                 myId,
             )
 
-            val archive = JdbcAccountDataExportArchiver(dataSource).buildArchive(myId)
+            val archive =
+                JdbcAccountDataExportArchiver(
+                    dataSource,
+                    contactBlockTokens =
+                        com.pynapli.server.contactblocks.ContactBlockTokens
+                            .localDevelopment(),
+                ).buildArchive(myId)
             val text = archive.bytes.decodeToString()
             val document = Json.parseToJsonElement(text).jsonObject
 

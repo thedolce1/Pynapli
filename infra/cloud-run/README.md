@@ -102,7 +102,7 @@ gcloud storage buckets create gs://pynapli-staging-media --location=us-central1 
   --uniform-bucket-level-access --project PROJECT_ID
 ```
 
-## Step 6: Secret Manager (7 secrets)
+## Step 6: Secret Manager (9 secrets)
 
 Values must be strong and unique per environment (`openssl rand -base64 32`). The media signer JSON
 is a service-account key with signing rights for the bucket: the current GCS V4 signing code needs it
@@ -115,6 +115,9 @@ openssl rand -base64 32 | gcloud secrets create pynapli-staging-admin-api-token 
 openssl rand -base64 32 | gcloud secrets create pynapli-staging-discovery-cursor-secret  --data-file=- --project PROJECT_ID
 openssl rand -base64 32 | gcloud secrets create pynapli-staging-activity-cursor-secret   --data-file=- --project PROJECT_ID
 openssl rand -base64 32 | gcloud secrets create pynapli-staging-swipe-deck-token-secret  --data-file=- --project PROJECT_ID
+# "Hide from people you know" keys (TRUST_AND_SAFETY_SPEC "Contact Blocks"); never rotate casually.
+openssl rand -base64 32 | gcloud secrets create pynapli-staging-contact-block-email-key  --data-file=- --project PROJECT_ID
+openssl rand -base64 32 | gcloud secrets create pynapli-staging-contact-block-target-key --data-file=- --project PROJECT_ID
 # K3 for "Met in person" tokens: never rotate or delete once confirmations exist (they could no longer be matched).
 openssl rand -base64 32 | gcloud secrets create pynapli-staging-met-in-person-token-secret --data-file=- --project PROJECT_ID
 ```
@@ -152,6 +155,8 @@ creation, and ADC comes from the attached service account.
   -DiscoveryCursorSecretName pynapli-staging-discovery-cursor-secret `
   -ActivityCursorSecretName pynapli-staging-activity-cursor-secret `
   -SwipeDeckTokenSecretName pynapli-staging-swipe-deck-token-secret `
+  -ContactBlockEmailKeySecretName pynapli-staging-contact-block-email-key `
+  -ContactBlockTargetKeySecretName pynapli-staging-contact-block-target-key `
   -MetInPersonTokenSecretName pynapli-staging-met-in-person-token-secret `
   -RedisUrl redis://MEMORYSTORE_PRIVATE_IP:6379 `
   -VpcConnector pynapli-staging-connector `

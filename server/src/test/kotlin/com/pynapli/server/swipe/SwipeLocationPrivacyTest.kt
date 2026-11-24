@@ -242,7 +242,15 @@ class SwipeLocationPrivacyTest :
                 dataSource.insertDiscoverableUser(traveller, "Traveller", 30, -122.0810, 37.4010)
                 dataSource.setShowDistance(hidden, false)
                 dataSource.insertActiveTravelLocation(traveller, "Elsewhere", latitude = 37.80, longitude = -122.27)
-                val activity = ActivityService(JdbcActivityRepository(dataSource))
+                val activity =
+                    ActivityService(
+                        JdbcActivityRepository(
+                            dataSource,
+                            contactBlockTokens =
+                                com.pynapli.server.contactblocks.ContactBlockTokens
+                                    .localDevelopment(),
+                        ),
+                    )
                 listOf(shown, hidden, traveller).forEach { activity.recordSwipeInterest(it, recipient, "swipe_like") }
 
                 val readings =

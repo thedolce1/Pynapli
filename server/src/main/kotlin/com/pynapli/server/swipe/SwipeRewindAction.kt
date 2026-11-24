@@ -24,6 +24,7 @@ internal class SwipeRewindAction(
     private val presenceService: PresenceService?,
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val clock: Clock,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun rewind(viewerUserId: UUID): SwipeRewindResponseDto {
         if (profile("swipe.rewind.risk") { riskPolicyService?.isSocialActionRestricted(viewerUserId) == true }) {
@@ -56,6 +57,11 @@ internal class SwipeRewindAction(
         ) {
             return SwipeRewindResponseDto(rewound = false)
         }
+        // "Hide from people you know": never deal back someone hiding from the viewer (a pass isn't an
+        // interaction, so a pass from before the block can be the latest one), nor their partner mini.
+        val hiddenFromViewerIds = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        if (candidate.targetUserId in hiddenFromViewerIds) return SwipeRewindResponseDto(rewound = false)
+        val card = candidate.card.withoutPartnerIn(hiddenFromViewerIds)
 
         val now = clock.instant()
         val filters = DiscoveryFilters()
@@ -114,7 +120,7 @@ internal class SwipeRewindAction(
             val presenceLookupIds =
                 buildSet {
                     add(candidate.targetUserId)
-                    candidate.card.linkedPartnerUserId?.let { add(it) }
+                    card.linkedPartnerUserId?.let { add(it) }
                 }
             val online =
                 profile("swipe.rewind.presence") {
@@ -125,7 +131,7 @@ internal class SwipeRewindAction(
                 deckSessionId = deckSession.deckSessionId,
                 card =
                     dtoMapper.cardToDto(
-                        card = candidate.card,
+                        card = card,
                         rankToken = cardToken,
                         online = candidate.targetUserId in online,
                         onlineUserIds = online,

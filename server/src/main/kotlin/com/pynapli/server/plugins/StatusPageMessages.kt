@@ -211,6 +211,7 @@ internal fun userSafeMessage(code: String): String =
         "BLOCK_REASON_TOO_LONG" -> "Block reason is too long."
         "INVALID_HIDDEN_PROFILE_TARGET" -> "That profile could not be hidden."
         "HIDE_SELF_FORBIDDEN" -> "You cannot hide yourself."
+        "CONTACT_BLOCK_LIMIT_REACHED" -> "You've added the most addresses you can (1,000). Remove some to add more."
         "INVALID_REPORT_TARGET" -> "That target could not be reported."
         "REPORT_TARGET_NOT_FOUND" -> "That can't be reported. It may have been removed or was never shared with you."
         "INVALID_REPORT_CATEGORY" -> "Choose a valid report reason."

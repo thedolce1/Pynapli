@@ -20,6 +20,8 @@
     [string]$DiscoveryCursorSecretName = "",
     [string]$ActivityCursorSecretName = "",
     [string]$SwipeDeckTokenSecretName = "",
+    [string]$ContactBlockEmailKeySecretName = "",
+    [string]$ContactBlockTargetKeySecretName = "",
     [string]$MetInPersonTokenSecretName = "",
     [string]$RedisUrl = "",
     [string]$VpcConnector = "",
@@ -55,6 +57,8 @@ if ($productionLike) {
         DiscoveryCursorSecretName = $DiscoveryCursorSecretName
         ActivityCursorSecretName = $ActivityCursorSecretName
         SwipeDeckTokenSecretName = $SwipeDeckTokenSecretName
+        ContactBlockEmailKeySecretName = $ContactBlockEmailKeySecretName
+        ContactBlockTargetKeySecretName = $ContactBlockTargetKeySecretName
         MetInPersonTokenSecretName = $MetInPersonTokenSecretName
         RedisUrl = $RedisUrl
     }
@@ -117,6 +121,12 @@ if (-not [string]::IsNullOrWhiteSpace($ActivityCursorSecretName)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($SwipeDeckTokenSecretName)) {
     $secretVars += "PYNAPLI_SWIPE_DECK_TOKEN_SECRET=${SwipeDeckTokenSecretName}:latest"
+}
+if (-not [string]::IsNullOrWhiteSpace($ContactBlockEmailKeySecretName)) {
+    $secretVars += "PYNAPLI_CONTACT_BLOCK_EMAIL_KEY=${ContactBlockEmailKeySecretName}:latest"
+}
+if (-not [string]::IsNullOrWhiteSpace($ContactBlockTargetKeySecretName)) {
+    $secretVars += "PYNAPLI_CONTACT_BLOCK_TARGET_KEY=${ContactBlockTargetKeySecretName}:latest"
 }
 if (-not [string]::IsNullOrWhiteSpace($MetInPersonTokenSecretName)) {
     $secretVars += "PYNAPLI_MET_IN_PERSON_TOKEN_SECRET=${MetInPersonTokenSecretName}:latest"

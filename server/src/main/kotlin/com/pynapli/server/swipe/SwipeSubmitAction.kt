@@ -19,6 +19,7 @@ internal class SwipeSubmitAction(
     private val riskPolicyService: RiskPolicyService?,
     private val subscriptionService: SubscriptionService?,
     private val clock: Clock,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun submitAction(
         viewerUserId: UUID,
@@ -86,6 +87,11 @@ internal class SwipeSubmitAction(
         if (!preconditions.targetEligible) {
             throw SwipeException("INVALID_SWIPE_TARGET")
         }
+        // "Hide from people you know": a card dealt before the block was bound can't be used to like
+        // (and so match) someone who now hides from the viewer. Same answer as any ineligible target.
+        if (contactBlockVisibility?.isHiddenFrom(viewerUserId, targetUserId) == true) {
+            throw SwipeException("INVALID_SWIPE_TARGET")
+        }
 
         // "Allow notes with Pineapple Likes" off: refuse the note, not the like. Nothing is spent, so
         // the client can offer to send the same Pineapple Like without it.
@@ -127,6 +133,8 @@ internal class SwipeSubmitAction(
         if (result.inventoryUnavailable) {
             throw SwipeException("PINEAPPLE_LIKE_INVENTORY_REQUIRED")
         }
+        // A like the target can see: if the target hides from the viewer (a bind that raced this like), the pair is now exempt.
+        if (action != SwipeAction.PASS) contactBlockVisibility?.noteActToward(viewerUserId, targetUserId)
         sideEffects.deliver(result, actorUserId = viewerUserId, targetUserId = targetUserId, action = action)
         val match = result.match
 

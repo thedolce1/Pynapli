@@ -156,6 +156,7 @@ internal class MessagingMessageActions(
             participants = participants,
             messageId = deleted.messageId,
             statuses = MessagingParticipantStatuses.active,
+            actorUserId = userId,
         )
         return dtoMapper.toDto(deleted, userId)
     }
@@ -166,12 +167,18 @@ internal class MessagingMessageActions(
         message: MessageDto,
         participants: List<ConversationParticipantRecord>,
     ) {
+        // A message in a one-to-one conversation is an act the other person sees: if they hide from the
+        // sender (a bind that raced it), the pair is exempt from now on. In a group the other people's
+        // view of the sender doesn't depend on the block, so nothing changes there.
+        val others = participants.filter { it.userId != userId }.map { it.userId }.distinct()
+        if (others.size == 1) conversationGuard.noteActToward(userId, others.single())
         realtimePublisher.publishDelta(
             type = MessageDeltaType.MESSAGE_CREATED,
             conversationId = conversationId,
             participants = participants,
             messageId = UUID.fromString(message.messageId),
             statuses = MessagingParticipantStatuses.active,
+            actorUserId = userId,
         )
         notificationDispatcher.enqueueMessageNotifications(
             actorUserId = userId,

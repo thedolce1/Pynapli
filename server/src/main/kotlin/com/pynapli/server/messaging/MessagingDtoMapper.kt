@@ -16,20 +16,27 @@ import java.util.UUID
 internal class MessagingDtoMapper(
     private val featureAccess: MessagingFeatureAccess,
     private val messageMediaGateway: MessageMediaGateway? = null,
+    // "Hide from people you know": people hiding from the viewer are left out of what the viewer is
+    // shown of a conversation (participants, partner invites). Fan-out keeps using the full record.
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun toDto(
         detail: ConversationDetailRecord,
         viewerUserId: UUID,
     ): ConversationDetailDto {
         val readReceiptCache = mutableMapOf<UUID, Boolean>()
+        val rules = contactBlockVisibility?.rulesFor(viewerUserId) ?: NO_RULES
+        val hidden = rules.hidden
+        val shown = detail.conversation.withoutHiddenPeople(hidden)
         return ConversationDetailDto(
-            conversation = toDto(detail.conversation, viewerUserId, readReceiptCache),
+            conversation = toVisibleDto(record = detail.conversation, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache, rules = rules),
             messages =
                 detail.messages.map { message ->
                     toDto(
-                        record = message,
+                        record = message.withoutHiddenSender(rules),
                         viewerUserId = viewerUserId,
-                        conversation = detail.conversation,
+                        // Read receipts count only the people this viewer can see.
+                        conversation = shown,
                         readReceiptCache = readReceiptCache,
                     )
                 },
@@ -41,25 +48,46 @@ internal class MessagingDtoMapper(
         record: ConversationRecord,
         viewerUserId: UUID,
         readReceiptCache: MutableMap<UUID, Boolean> = mutableMapOf(),
+    ): ConversationDto {
+        val rules = contactBlockVisibility?.rulesFor(viewerUserId) ?: NO_RULES
+        val hidden = rules.hidden
+        val shown = record.withoutHiddenPeople(hidden)
+        return toVisibleDto(record = record, shown = shown, viewerUserId = viewerUserId, readReceiptCache = readReceiptCache, rules = rules)
+    }
+
+    /**
+     * A system notice (a timer change) by someone hiding from the viewer is shown to them with no
+     * sender: the conversation's timer is a property everyone in it sees, so the change is explained,
+     * attributed to nobody; the same for one they wrote before a release (a tombstone). Every other
+     * message from such a person never reaches this point (SQL).
+     */
+    private fun MessageRecord.withoutHiddenSender(rules: com.pynapli.server.contactblocks.ContactBlockViewerRules): MessageRecord = if (rules.hidesAct(senderUserId, createdAt)) copy(senderUserId = SYSTEM_SENDER) else this
+
+    private suspend fun toVisibleDto(
+        record: ConversationRecord,
+        shown: ConversationRecord,
+        viewerUserId: UUID,
+        readReceiptCache: MutableMap<UUID, Boolean>,
+        rules: com.pynapli.server.contactblocks.ContactBlockViewerRules,
     ): ConversationDto =
         ConversationDto(
             conversationId = record.conversationId.toString(),
             kind = record.kind,
             origin = record.origin,
-            participants = record.participants.map { it.toDto() },
+            participants = shown.participants.map { it.toDto() },
             lastMessage =
                 record.lastMessage?.let { message ->
                     toDto(
-                        record = message,
+                        record = message.withoutHiddenSender(rules),
                         viewerUserId = viewerUserId,
-                        conversation = record,
+                        conversation = shown,
                         readReceiptCache = readReceiptCache,
                     )
                 },
             unreadCount = record.unreadCount,
             updatedAt = record.updatedAt.toString(),
-            partnerInvite = record.partnerInvite?.toDto(),
-            partnerInvites = record.partnerInvites.map { it.toDto() },
+            partnerInvite = shown.partnerInvite?.toDto(),
+            partnerInvites = shown.partnerInvites.map { it.toDto() },
             messageExpirySeconds = record.viewerExpirySeconds,
             effectiveMessageExpirySeconds = record.effectiveExpirySeconds,
             newMatch = record.newMatch,
@@ -181,5 +209,12 @@ internal class MessagingDtoMapper(
     private companion object {
         private const val DELIVERY_READ = "read"
         private const val DELIVERY_SENT = "sent"
+
+        /** The nil id: "nobody", for a system notice whose author hides from the viewer. */
+        private val SYSTEM_SENDER = UUID(0L, 0L)
+
+        private val NO_RULES =
+            com.pynapli.server.contactblocks
+                .ContactBlockViewerRules(emptySet(), emptyMap())
     }
 }

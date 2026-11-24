@@ -56,6 +56,7 @@ internal fun buildSwipeDependencies(
     psyncBroadcaster: PsyncBroadcaster,
     productMetrics: com.pynapli.server.metrics.ProductMetrics,
     matchConversationOpener: com.pynapli.server.messaging.MatchConversationOpener? = null,
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ): SwipeDependencies {
     val swipeRepository = JdbcSwipeRepository(dataSource)
     val swipeService =
@@ -73,6 +74,7 @@ internal fun buildSwipeDependencies(
             activityService = activityService,
             productMetrics = productMetrics,
             matchConversationOpener = matchConversationOpener,
+            contactBlockVisibility = contactBlockVisibility,
         )
     val psyncSessionService =
         PsyncSessionService(
@@ -90,6 +92,7 @@ internal fun buildSwipeDependencies(
             rateLimitService = rateLimitService,
             riskPolicyService = riskPolicyService,
             subscriptionService = subscriptionService,
+            contactBlockVisibility = contactBlockVisibility,
         )
     return SwipeDependencies(
         swipeService = swipeService,
@@ -103,6 +106,7 @@ internal fun buildSwipeDependencies(
                     com.pynapli.server.swipe
                         .JdbcMatchCelebrationRepository(dataSource),
                 mediaAssetUrlResolver = mediaAssetUrlResolver,
+                contactBlockVisibility = contactBlockVisibility,
             ),
         // Delivers match side effects (Activity rows, match conversation, match push) whose request
         // died between its commit and its fast-path delivery. One replica per tick.

@@ -120,7 +120,7 @@ class JdbcMessageModerationRepository(
                 // The released message is now visible to both: it ends a match's new-matches rail
                 // item for both people, in this transaction.
                 consumeMatchInInbox(queued.conversationId)
-                touchConversation(queued.conversationId)
+                touchConversation(queued.conversationId, causedByUserId = queued.senderUserId)
             }
             insertAdminAuditLog(
                 actorId = actorId,
@@ -222,15 +222,21 @@ class JdbcMessageModerationRepository(
         }
     }
 
-    private fun Connection.touchConversation(conversationId: UUID) {
+    /** Releasing a held message moves the thread for its sender's act (V121 `updated_by_user_id`). */
+    private fun Connection.touchConversation(
+        conversationId: UUID,
+        causedByUserId: UUID?,
+    ) {
         prepareStatement(
             """
             UPDATE conversations
-            SET updated_at = now()
+            SET updated_at = now(),
+                updated_by_user_id = ?
             WHERE id = ?
             """.trimIndent(),
         ).use { statement ->
-            statement.setObject(1, conversationId)
+            statement.setObject(1, causedByUserId)
+            statement.setObject(2, conversationId)
             statement.executeUpdate()
         }
     }

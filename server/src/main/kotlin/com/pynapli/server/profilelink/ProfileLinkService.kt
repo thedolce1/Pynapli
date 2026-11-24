@@ -21,8 +21,21 @@ class ProfileLinkService(
     private val riskPolicyService: RiskPolicyService? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val linkActivationCooldown: Duration = LINK_ACTIVATION_COOLDOWN,
+    // "Hide from people you know": an invite from someone hiding from the viewer is never shown to the
+    // viewer and can't be answered by them; the sender sees it pending, as if unanswered.
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
-    suspend fun getSummary(viewerUserId: UUID): ProfileLinksSummaryDto = repository.getSummary(viewerUserId).toDto()
+    /** The member's own view of their links. */
+    suspend fun getSummary(viewerUserId: UUID): ProfileLinksSummaryDto {
+        val summary = repository.getSummary(viewerUserId)
+        // Invites from someone hiding from the viewer, and any they sent before removing the address.
+        val rules = contactBlockVisibility?.rulesFor(viewerUserId) ?: return summary.toDto()
+        if (rules.isEmpty) return summary.toDto()
+        return summary.copy(incomingInvites = summary.incomingInvites.filterNot { rules.hidesAct(it.otherUserId, it.createdAt) }).toDto()
+    }
+
+    /** Support and moderation tooling: everything, unfiltered (contact blocks never hide from staff). */
+    suspend fun getSummaryForAdmin(userId: UUID): ProfileLinksSummaryDto = repository.getSummary(userId).toDto()
 
     suspend fun createInvitation(
         requesterUserId: UUID,
@@ -37,6 +50,9 @@ class ProfileLinkService(
         validateCanRequestLink(requesterUserId, targetUserId)
 
         val invitation = repository.createInvitation(requesterUserId, targetUserId)
+        // An invite the target sees: if they hide from the requester (a bind that raced it), the pair is
+        // exempt from now on.
+        contactBlockVisibility?.noteActToward(requesterUserId, targetUserId)
         notificationPublisher?.enqueue(
             NotificationEventDraft(
                 recipientUserId = targetUserId,
@@ -57,7 +73,9 @@ class ProfileLinkService(
     ): ProfileLinksSummaryDto {
         val linkId = linkIdValue.toUuidOrThrow()
         val invitation =
-            repository.getPendingInvitationForRecipient(viewerUserId, linkId)
+            repository
+                .getPendingInvitationForRecipient(viewerUserId, linkId)
+                ?.takeUnless { contactBlockVisibility?.isHiddenFrom(viewerUserId, it.requesterUserId) == true }
                 ?: throw ProfileLinkException("PROFILE_LINK_INVITE_NOT_FOUND")
 
         validatePairCanLink(invitation.requesterUserId, invitation.recipientUserId)
@@ -87,6 +105,13 @@ class ProfileLinkService(
         linkIdValue: String,
     ): ProfileLinksSummaryDto {
         val linkId = linkIdValue.toUuidOrThrow()
+        // A hidden sender's invite can't be declined either: the sender would see the answer.
+        if (contactBlockVisibility != null) {
+            val invitation = repository.getPendingInvitationForRecipient(viewerUserId, linkId)
+            if (invitation != null && contactBlockVisibility.isHiddenFrom(viewerUserId, invitation.requesterUserId)) {
+                throw ProfileLinkException("PROFILE_LINK_INVITE_NOT_FOUND")
+            }
+        }
         if (!repository.declineInvitation(viewerUserId, linkId)) {
             throw ProfileLinkException("PROFILE_LINK_INVITE_NOT_FOUND")
         }
@@ -106,6 +131,10 @@ class ProfileLinkService(
     ) {
         if (requesterUserId == targetUserId) throw ProfileLinkException("PROFILE_LINK_SELF_FORBIDDEN")
         if (!repository.isLinkableUser(targetUserId)) throw ProfileLinkException("PROFILE_LINK_TARGET_NOT_FOUND")
+        // Someone hiding from the requester: the same answer as a missing account.
+        if (contactBlockVisibility?.isHiddenFrom(requesterUserId, targetUserId) == true) {
+            throw ProfileLinkException("PROFILE_LINK_TARGET_NOT_FOUND")
+        }
         validatePairCanLink(requesterUserId, targetUserId)
         validateLinkActivationCooldown(requesterUserId, targetUserId)
         repository.findPendingBetween(requesterUserId, targetUserId)?.let {

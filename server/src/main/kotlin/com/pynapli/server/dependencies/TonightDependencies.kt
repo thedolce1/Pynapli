@@ -37,6 +37,7 @@ internal fun buildTonightDependencies(
     blockRepository: BlockRepository,
     hiddenProfileRepository: HiddenProfileRepository,
     riskPolicyService: RiskPolicyService,
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ): TonightDependencies {
     val tonightSessionService =
         TonightSessionService(
@@ -55,6 +56,7 @@ internal fun buildTonightDependencies(
             hiddenProfileRepository = hiddenProfileRepository,
             viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
             subscriptionService = subscriptionService,
+            contactBlockVisibility = contactBlockVisibility,
         )
     // Hygiene sweep so elapsed sessions move to 'expired' (reads already filter on
     // expires_at, so this is not load-bearing for correctness). Default every 5 minutes.

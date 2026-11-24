@@ -23,6 +23,8 @@ interface NotificationPublisher {
 class NotificationService(
     repository: NotificationRepository,
     clock: Clock = Clock.systemUTC(),
+    // "Hide from people you know": drops pushes an actor causes for someone they hide from.
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) : NotificationPublisher {
     private val preferenceActions = NotificationPreferenceActions(repository)
     private val deviceActions = NotificationDeviceActions(repository)
@@ -30,6 +32,7 @@ class NotificationService(
         NotificationEnqueueActions(
             repository = repository,
             clock = clock,
+            contactBlockVisibility = contactBlockVisibility,
         )
 
     suspend fun getPreferences(userId: UUID): NotificationPreferencesDto = preferenceActions.getPreferences(userId)

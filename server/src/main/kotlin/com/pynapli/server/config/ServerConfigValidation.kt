@@ -264,12 +264,35 @@ private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config
     )
     require(
         condition =
+            config.contactBlockEmailKey.isStrongRuntimeSecret() &&
+                config.contactBlockTargetKey.isStrongRuntimeSecret(),
+        code = "CONTACT_BLOCK_KEYS_REQUIRED",
+        message = "Production-like environments need explicit, strong PYNAPLI_CONTACT_BLOCK_EMAIL_KEY and PYNAPLI_CONTACT_BLOCK_TARGET_KEY values.",
+    )
+    require(
+        condition =
+            setOf(
+                config.contactBlockEmailKey,
+                config.contactBlockTargetKey,
+                config.discoveryCursorSecret,
+                config.activityCursorSecret,
+                config.swipeDeckTokenSecret,
+            ).size == 5,
+        code = "CONTACT_BLOCK_KEYS_MUST_DIFFER",
+        message = "The two contact block keys must differ from each other and from every cursor/deck secret.",
+    )
+    // K3 must differ from every other secret, including both contact block keys (which keeps those keys
+    // distinct from K3 too: distinctness is symmetric, so one check covers both directions).
+    require(
+        condition =
             config.metInPersonTokenSecret.isStrongRuntimeSecret() &&
                 config.metInPersonTokenSecret !in
                 setOf(
                     config.discoveryCursorSecret,
                     config.activityCursorSecret,
                     config.swipeDeckTokenSecret,
+                    config.contactBlockEmailKey,
+                    config.contactBlockTargetKey,
                     config.adminApiToken,
                 ),
         code = "MET_IN_PERSON_TOKEN_SECRET_REQUIRED",

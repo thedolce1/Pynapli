@@ -1,17 +1,24 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.contactblocks.ContactBlockTokens
+import com.pynapli.server.contactblocks.viewerTokenIfTargeted
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
 
 class JdbcMessagingRepository(
     private val dataSource: DataSource,
+    // "Hide from people you know": the viewer's reads (inbox, thread, read mark, offers) leave out
+    // anyone hiding from the viewer. Required, so a dropped wiring fails the build instead of filtering nothing.
+    private val contactBlockTokens: ContactBlockTokens,
 ) : MessagingRepository {
+    private suspend fun tokenFor(viewerUserId: UUID): String = dataSource.viewerTokenIfTargeted(contactBlockTokens, viewerUserId)
+
     override suspend fun listConversations(
         userId: UUID,
         limit: Int,
         after: ConversationPageCursor?,
-    ): List<ConversationRecord> = dataSource.listMessagingConversations(userId, limit, after)
+    ): List<ConversationRecord> = dataSource.listMessagingConversations(userId, limit, after, tokenFor(userId))
 
     override suspend fun getOrCreateDirectConversation(
         viewerUserId: UUID,
@@ -37,12 +44,13 @@ class JdbcMessagingRepository(
             conversationId = conversationId,
             limit = limit,
             before = before,
+            viewerContactToken = tokenFor(userId),
         )
 
     override suspend fun markConversationRead(
         userId: UUID,
         conversationId: UUID,
-    ): ConversationRecord? = dataSource.markMessagingConversationRead(userId, conversationId)
+    ): ConversationRecord? = dataSource.markMessagingConversationRead(userId, conversationId, tokenFor(userId))
 
     override suspend fun sendMessage(
         userId: UUID,
@@ -114,7 +122,7 @@ class JdbcMessagingRepository(
     override suspend fun loadPartnerOffers(
         viewerUserId: UUID,
         conversation: ConversationRecord,
-    ): ConversationPartnerOffersRecord? = dataSource.loadMessagingPartnerOffers(viewerUserId, conversation)
+    ): ConversationPartnerOffersRecord? = dataSource.loadMessagingPartnerOffers(viewerUserId, conversation, tokenFor(viewerUserId))
 
     override suspend fun isOwnPartnerInviteCoolingDown(
         viewerUserId: UUID,

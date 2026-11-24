@@ -10,6 +10,7 @@ internal class MediaPrivateAlbumAccessActions(
     private val repository: MediaRepository,
     private val blockRepository: BlockRepository?,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver?,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun listPrivateAlbumForViewer(
         viewerUserId: UUID,
@@ -17,6 +18,9 @@ internal class MediaPrivateAlbumAccessActions(
     ): MediaAlbumItemsResponseDto {
         val ownerUserId = ownerUserIdText.toMediaUuidOrThrow()
         if (blockRepository?.isBlockedEitherWay(viewerUserId, ownerUserId) == true) {
+            throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+        }
+        if (contactBlockVisibility?.isHiddenFrom(viewerUserId, ownerUserId) == true) {
             throw MediaException("MEDIA_ALBUM_NOT_FOUND")
         }
         val result =
@@ -39,6 +43,9 @@ internal class MediaPrivateAlbumAccessActions(
     ): Boolean {
         if (requesterUserId == ownerUserId) throw MediaException("INVALID_ALBUM_REQUEST_TARGET")
         if (blockRepository?.isBlockedEitherWay(requesterUserId, ownerUserId) == true) {
+            throw MediaException("INVALID_ALBUM_REQUEST_TARGET")
+        }
+        if (contactBlockVisibility?.isHiddenFrom(requesterUserId, ownerUserId) == true) {
             throw MediaException("INVALID_ALBUM_REQUEST_TARGET")
         }
         return repository.requestAlbumAccess(

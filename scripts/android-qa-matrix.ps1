@@ -111,8 +111,11 @@ function Wait-ForBoot {
         # `pm path android` only answers once PackageManager can actually service install requests.
         $pmReady = (& $adb -s $Serial shell pm path android 2>$null | Select-Object -First 1)
 
+        # Booted with -no-boot-anim the service may never start, leaving the property unset: that is
+        # as good as "stopped". Only a boot animation still RUNNING means "not ready yet".
+        $bootanimDone = (-not $bootanim) -or ($bootanim.Trim() -in @("stopped", ""))
         if ($booted -and $booted.Trim() -eq "1" -and
-            $bootanim -and $bootanim.Trim() -eq "stopped" -and
+            $bootanimDone -and
             $pmReady -and $pmReady -match "package:") {
             Start-Sleep -Seconds 5   # let early-boot dexopt/broadcast churn drain before installing
             return

@@ -56,6 +56,12 @@ class EmailSignupService(
     private val launchSignupWork: (suspend () -> Unit) -> Unit,
     private val codeGenerator: () -> String = ::newSignupCode,
     private val tokenGenerator: () -> String = TokenGenerator::newToken,
+    /**
+     * Runs once the account exists and BEFORE its first session is returned, with the new account and
+     * its normalised, just-proven address: binds "Hide from people you know" rows naming the address,
+     * so the new member can't see anyone hiding from them for even one request.
+     */
+    private val onAccountVerified: (suspend (userId: UUID, normalisedEmail: String) -> Unit)? = null,
 ) {
     private val validator = AuthRequestValidator(clock)
     private val rateLimitGuard = AuthRateLimitGuard(rateLimitService)
@@ -162,8 +168,10 @@ class EmailSignupService(
             )
         // A concurrent verify won, or the address got an account meanwhile: same answer as any other
         // failure (this branch needs the right code, so it tells a guesser nothing).
-        return user?.let { authService.startFirstSession(it, deviceId, platform, appVersion) }
-            ?: throw AuthException("INVALID_SIGNUP_CODE")
+        if (user == null) throw AuthException("INVALID_SIGNUP_CODE")
+        // Bound before the session exists, so no discovery request of the new member can come first.
+        onAccountVerified?.invoke(user.id, account)
+        return authService.startFirstSession(user, deviceId, platform, appVersion)
     }
 
     /**
@@ -206,8 +214,28 @@ class EmailSignupService(
                 termsVersion = AUTH_TERMS_VERSION,
                 privacyVersion = AUTH_PRIVACY_VERSION,
                 verifiedAt = clock.instant(),
-            ) ?: throw AuthException("EMAIL_ALREADY_EXISTS")
+            ) ?: run {
+                ensureExistingVerifiedForLocalDev(account, password)
+                throw AuthException("EMAIL_ALREADY_EXISTS")
+            }
+        onAccountVerified?.invoke(user.id, account)
         return authService.startFirstSession(user, deviceId, platform, appVersion)
+    }
+
+    /**
+     * The dev route on an address that already has an account (re-running the seeds on an existing
+     * database): with the right password, the account ends up verified and its contact token written
+     * (the same [onAccountVerified] work as a first verify), so seeded members can be hidden from. The
+     * answer stays EMAIL_ALREADY_EXISTS; the seeds then sign in. A wrong password changes nothing.
+     */
+    private suspend fun ensureExistingVerifiedForLocalDev(
+        account: String,
+        password: String,
+    ) {
+        val identity = repository.findEmailIdentity(Sha256.hash(account)) ?: return
+        if (identity.userStatus != "active" || !passwordHasher.verify(password, identity.passwordHash)) return
+        repository.markVerifiedForLocalDev(identity.userId, clock.instant())
+        onAccountVerified?.invoke(identity.userId, account)
     }
 
     private suspend fun deliverSignup(draft: SignupDraft) {
@@ -447,6 +475,15 @@ interface EmailSignupRepository {
         privacyVersion: String,
         verifiedAt: Instant,
     ): UserRecord?
+
+    /**
+     * Local dev shortcut: marks [userId]'s address verified if it isn't (a seed account made before the
+     * dev route verified, or by the public flow and never confirmed). Never touches a verified account.
+     */
+    suspend fun markVerifiedForLocalDev(
+        userId: UUID,
+        verifiedAt: Instant,
+    ) = Unit
 }
 
 class NewPendingSignup(

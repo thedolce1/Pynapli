@@ -30,6 +30,6 @@ class SwipeServicePsyncDeckGenerator(
         limit: Int,
     ): List<SwipeCardDto> =
         swipeService
-            .queryDeck(viewerUserId, filters.copy(limit = limit, cursor = null))
+            .queryDeckForPsync(viewerUserId, filters.copy(limit = limit, cursor = null))
             .items
 }

@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.appsettings.AppSettingsStateHolder
+import com.pynapli.app.contactblocks.ContactBlocksStateHolder
+import com.pynapli.app.contactblocks.HideFromPeopleYouKnowSheet
 import com.pynapli.app.design.PynapliConfirmDialog
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.media.MediaAlbumsUiState
@@ -59,8 +61,11 @@ fun ProfileHubScreen(
     photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
     // The platform photo picker for the selfie; null hides the action (not wired on this shell).
     onPickVerificationSelfie: (() -> Unit)? = null,
+    // "Hide from people you know" (Privacy); null hides the entry.
+    contactBlocksStateHolder: ContactBlocksStateHolder? = null,
 ) {
     val state by stateHolder.state.collectAsState()
+    var showHideFromPeopleYouKnow by remember { mutableStateOf(false) }
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
     val partnerChatInvites = messagesState.partnerChatInvites(viewerUserId)
     val actionItemCount = profileLinksState.incomingInvites.size + partnerChatInvites.size
@@ -117,8 +122,15 @@ fun ProfileHubScreen(
             onSharePsyncSoloMatchesChanged = stateHolder::updateSharePsyncSoloMatches,
             onShowMetInPersonBadgeChanged = stateHolder::updateShowMetInPersonBadge,
             onSave = { scope.launch { stateHolder.savePrivacySettings() } },
+            onOpenHideFromPeopleYouKnow = contactBlocksStateHolder?.let { { showHideFromPeopleYouKnow = true } },
             modifier = modifier,
         )
+        if (showHideFromPeopleYouKnow && contactBlocksStateHolder != null) {
+            HideFromPeopleYouKnowSheet(
+                stateHolder = contactBlocksStateHolder,
+                onDismiss = { showHideFromPeopleYouKnow = false },
+            )
+        }
     } else if (state.partnerVisible) {
         PartnerManagementContent(
             state = state,

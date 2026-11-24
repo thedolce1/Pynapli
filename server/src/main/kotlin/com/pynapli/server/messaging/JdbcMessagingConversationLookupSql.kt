@@ -1,61 +1,153 @@
 package com.pynapli.server.messaging
 
+import com.pynapli.server.contactblocks.ContactBlockSql
 import java.sql.Connection
 import java.time.Instant
 import java.util.UUID
+
+/**
+ * "Hide from people you know", for one viewer (`v.viewer`, `v.token`):
+ *  - a conversation in which EVERY other participant hides from the viewer is not theirs (the same rule
+ *    as [isHiddenConversationFor]); one with any visible participant is listed, the hidden people
+ *    stripped (MessagingDtoMapper) and their messages left out;
+ *  - messages from someone hiding from the viewer never make the conversation visible, and nothing such
+ *    a person causes moves it up the inbox: when the last bump (`updated_by_user_id`, V121: a message,
+ *    a deletion, leaving, an invite naming them) came from them, the viewer's sort time falls back to
+ *    their last visible message (or the conversation's creation). A system notice (a timer change) is
+ *    shown to the viewer with no sender, so it doesn't make anything visible on its own either.
+ * With no token (unit tests, or nobody hides from this viewer) every check is skipped or matches nothing.
+ */
+private const val HIDDEN_SENDER_OF_HM =
+    "EXISTS (SELECT 1 FROM contact_blocks cb_m WHERE cb_m.target_token = v.token AND cb_m.blocker_user_id = hm.sender_user_id " +
+        "AND (cb_m.released_at IS NULL OR hm.created_at < cb_m.released_at))"
+
+private const val HIDDEN_SENDER_OF_VM =
+    "EXISTS (SELECT 1 FROM contact_blocks cb_v WHERE cb_v.target_token = v.token AND cb_v.blocker_user_id = vm.sender_user_id " +
+        "AND (cb_v.released_at IS NULL OR vm.created_at < cb_v.released_at))"
+
+private const val HIDDEN_BUMPER_OF_C =
+    "EXISTS (SELECT 1 FROM contact_blocks cb_u WHERE cb_u.target_token = v.token AND cb_u.blocker_user_id = c.updated_by_user_id " +
+        "AND (cb_u.released_at IS NULL OR c.updated_at < cb_u.released_at))"
+
+/** The viewer's sort time of conversation `c`; needs `v` in scope. */
+internal val VIEWER_SORT_AT_SQL =
+    """
+    CASE
+        WHEN v.token <> '' AND c.updated_by_user_id IS NOT NULL AND $HIDDEN_BUMPER_OF_C
+        THEN COALESCE(
+            (
+                SELECT MAX(vm.created_at) FROM messages vm
+                WHERE vm.conversation_id = c.id
+                  AND (vm.moderation_status = 'visible' OR vm.sender_user_id = v.viewer)
+                  AND NOT $HIDDEN_SENDER_OF_VM
+            ),
+            c.created_at
+        )
+        ELSE c.updated_at
+    END
+    """.trimIndent()
 
 internal fun Connection.listConversationIds(
     userId: UUID,
     limit: Int,
     after: ConversationPageCursor? = null,
+    viewerContactToken: String = ContactBlockSql.NO_VIEWER_TOKEN,
 ): List<UUID> =
     prepareStatement(
         """
-        SELECT c.id
-        FROM conversations c
-        JOIN conversation_participants viewer_cp
-          ON viewer_cp.conversation_id = c.id
-         AND viewer_cp.user_id = ?
-         AND viewer_cp.left_at IS NULL
-         AND viewer_cp.invitation_status IN ('active', 'invited')
-        WHERE (?::timestamptz IS NULL OR (c.updated_at, c.id) < (?::timestamptz, ?::uuid))
-          AND (
-           c.created_by_user_id = ?
-           OR viewer_cp.invitation_status = 'invited'
-           OR $MATCHED_DIRECT_CONVERSATION_CLAUSE
-           OR EXISTS (
-               SELECT 1
-               FROM messages m
-               WHERE m.conversation_id = c.id
-                 AND (
-                     (m.deleted_at IS NOT NULL AND m.moderation_status = 'visible')
-                     OR (
-                         m.deleted_at IS NULL
-                         AND (
-                             m.moderation_status = 'visible'
-                             OR (m.moderation_status = 'held' AND m.sender_user_id = ?)
+        WITH v AS (SELECT ?::uuid AS viewer, ?::text AS token)
+        SELECT listed.id
+        FROM (
+            SELECT c.id, $VIEWER_SORT_AT_SQL AS sort_at
+            FROM conversations c
+            CROSS JOIN v
+            JOIN conversation_participants viewer_cp
+              ON viewer_cp.conversation_id = c.id
+             AND viewer_cp.user_id = v.viewer
+             AND viewer_cp.left_at IS NULL
+             AND viewer_cp.invitation_status IN ('active', 'invited')
+            WHERE (
+               c.created_by_user_id = v.viewer
+               OR viewer_cp.invitation_status = 'invited'
+               OR $MATCHED_DIRECT_CONVERSATION_FOR_VIEWER_CLAUSE
+               OR EXISTS (
+                   SELECT 1
+                   FROM messages hm
+                   WHERE hm.conversation_id = c.id
+                     AND (
+                         (hm.deleted_at IS NOT NULL AND hm.moderation_status = 'visible')
+                         OR (
+                             hm.deleted_at IS NULL
+                             AND (
+                                 hm.moderation_status = 'visible'
+                                 OR (hm.moderation_status = 'held' AND hm.sender_user_id = v.viewer)
+                             )
                          )
                      )
-                 )
-           )
-          )
-        ORDER BY c.updated_at DESC, c.id DESC
+                     AND NOT $HIDDEN_SENDER_OF_HM
+               )
+            )
+            AND (
+                NOT EXISTS (
+                    SELECT 1 FROM conversation_participants other_cp
+                    WHERE other_cp.conversation_id = c.id
+                      AND other_cp.user_id <> v.viewer
+                      AND other_cp.left_at IS NULL
+                      AND other_cp.invitation_status IN ('active', 'invited')
+                )
+                OR EXISTS (
+                    SELECT 1 FROM conversation_participants other_cp
+                    WHERE other_cp.conversation_id = c.id
+                      AND other_cp.user_id <> v.viewer
+                      AND other_cp.left_at IS NULL
+                      AND other_cp.invitation_status IN ('active', 'invited')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM contact_blocks cb_p
+                          WHERE cb_p.target_token = v.token
+                            AND cb_p.blocker_user_id = other_cp.user_id
+                            AND cb_p.released_at IS NULL
+                      )
+                )
+            )
+        ) listed
+        WHERE (?::timestamptz IS NULL OR (listed.sort_at, listed.id) < (?::timestamptz, ?::uuid))
+        ORDER BY listed.sort_at DESC, listed.id DESC
         LIMIT ?
         """.trimIndent(),
     ).use { statement ->
         val afterTime = after?.updatedAt?.let { java.sql.Timestamp.from(it) }
         statement.setObject(1, userId)
-        statement.setTimestamp(2, afterTime)
+        statement.setString(2, viewerContactToken)
         statement.setTimestamp(3, afterTime)
-        statement.setObject(4, after?.conversationId)
-        statement.setObject(5, userId)
-        statement.setObject(6, userId)
-        statement.setInt(7, limit.coerceIn(1, 101))
+        statement.setTimestamp(4, afterTime)
+        statement.setObject(5, after?.conversationId)
+        statement.setInt(6, limit.coerceIn(1, 101))
         statement.executeQuery().use { rs ->
             buildList {
                 while (rs.next()) add(rs.getObject("id", UUID::class.java))
             }
         }
+    }
+
+/** The viewer's sort time ([VIEWER_SORT_AT_SQL]) of one conversation, or null when it doesn't exist. */
+internal fun Connection.loadViewerSortAt(
+    userId: UUID,
+    conversationId: UUID,
+    viewerContactToken: String,
+): Instant? =
+    prepareStatement(
+        """
+        WITH v AS (SELECT ?::uuid AS viewer, ?::text AS token)
+        SELECT $VIEWER_SORT_AT_SQL AS sort_at
+        FROM conversations c
+        CROSS JOIN v
+        WHERE c.id = ?
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, userId)
+        statement.setString(2, viewerContactToken)
+        statement.setObject(3, conversationId)
+        statement.executeQuery().use { rs -> if (rs.next()) rs.getTimestamp("sort_at")?.toInstant() else null }
     }
 
 internal fun Connection.findDirectConversationId(
@@ -128,6 +220,9 @@ internal fun Connection.insertDirectConversation(
 internal fun Connection.loadConversation(
     userId: UUID,
     conversationId: UUID,
+    // "Hide from people you know": the viewer's token, so the preview and the unread count leave out
+    // messages from anyone hiding from the viewer (participants are stripped in MessagingDtoMapper).
+    viewerContactToken: String = ContactBlockSql.NO_VIEWER_TOKEN,
 ): ConversationRecord? {
     val participants = mutableListOf<ConversationParticipantRecord>()
     var kind: String? = null
@@ -181,14 +276,19 @@ internal fun Connection.loadConversation(
         kind = kind ?: return null,
         origin = origin ?: return null,
         participants = visibleParticipants,
-        lastMessage = loadLastMessage(userId, conversationId, effectiveExpirySeconds),
-        unreadCount = loadUnreadCount(userId, conversationId),
-        updatedAt = updatedAt ?: return null,
+        lastMessage = loadLastMessage(userId, conversationId, effectiveExpirySeconds, viewerContactToken),
+        unreadCount = loadUnreadCount(userId, conversationId, viewerContactToken),
+        // The viewer's own sort time, so a hidden sender's message never moves the thread up (and the
+        // inbox cursor, built from this, pages in the same order the listing sorts).
+        updatedAt =
+            (if (viewerContactToken.isNotEmpty()) loadViewerSortAt(userId, conversationId, viewerContactToken) else null)
+                ?: updatedAt
+                ?: return null,
         partnerInvite = viewerInvites.primaryFor(userId),
         partnerInvites = viewerInvites,
         viewerExpirySeconds = participants.firstOrNull { it.userId == userId }?.messageExpirySeconds,
         effectiveExpirySeconds = effectiveExpirySeconds,
-        newMatch = loadNewMatch(userId, conversationId),
+        newMatch = loadNewMatch(userId, conversationId, viewerContactToken),
     )
 }
 

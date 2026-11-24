@@ -2,6 +2,7 @@ package com.pynapli.server.metinperson
 
 import com.pynapli.server.account.JdbcAccountDataExportArchiver
 import com.pynapli.server.account.JdbcAccountLifecycleRepository
+import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.messaging.JdbcMessagingRepository
 import com.pynapli.server.messaging.MessagingException
 import com.pynapli.server.messaging.MessagingService
@@ -47,7 +48,7 @@ class MetInPersonIntegrationTest {
     private val service = MetInPersonService(dataSource, tokens, clock)
     private val batch = MetInPersonBadgeBatch(dataSource, tokens, clock, Random(42), chunkSize = 3)
     private val profiles = JdbcProfileRepository(dataSource)
-    private val messaging = MessagingService(JdbcMessagingRepository(dataSource))
+    private val messaging = MessagingService(JdbcMessagingRepository(dataSource, ContactBlockTokens.localDevelopment()))
     private val json = Json { encodeDefaults = true }
 
     @BeforeTest
@@ -218,7 +219,7 @@ class MetInPersonIntegrationTest {
             val subject = fx.member("Sam")
             val stranger = fx.member("Stranger")
             fx.optIn(subject)
-            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, MetInPersonAccountData(tokens))
+            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, ContactBlockTokens.localDevelopment(), MetInPersonAccountData(tokens))
             confirmedBy(subject, 2)
             settle()
 
@@ -657,7 +658,7 @@ class MetInPersonIntegrationTest {
     fun deletingAnAccountRemovesWhatItGaveAndReceived() {
         runBlocking {
             val accountData = MetInPersonAccountData(tokens)
-            val lifecycle = JdbcAccountLifecycleRepository(dataSource, metInPersonAccountData = accountData)
+            val lifecycle = JdbcAccountLifecycleRepository(dataSource, ContactBlockTokens.localDevelopment(), metInPersonAccountData = accountData)
             val subject = fx.member("Sam")
             val vouchers = confirmedBy(subject, 3).map { it.first }
             val other = fx.member("Other")
@@ -677,7 +678,7 @@ class MetInPersonIntegrationTest {
     @Test
     fun theExportListsWhatTheVoucherGaveAndOnlyTheSubjectsPublishedBadge() {
         runBlocking {
-            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, MetInPersonAccountData(tokens))
+            val archiver = JdbcAccountDataExportArchiver(dataSource, clock, ContactBlockTokens.localDevelopment(), MetInPersonAccountData(tokens))
             val subject = fx.member("Sam")
             fx.optIn(subject)
             val vouchers = confirmedBy(subject, 3).map { it.first }

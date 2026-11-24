@@ -66,6 +66,9 @@ internal class MessagingConversationActions(
                 targetUserId = targetUserId,
                 origin = origin,
             ) ?: throw MessagingException("MESSAGING_NOT_ALLOWED")
+        // No noteActToward here: an empty conversation is invisible to the target until the opener
+        // writes (the inbox lists it only for its creator), so opening is neither an interaction at
+        // resolution nor a flip. The first message is (MessagingMessageActions).
 
         val detail =
             repository.getConversationDetail(
@@ -98,6 +101,7 @@ internal class MessagingConversationActions(
         conversationIdText: String,
     ): ConversationDto {
         val conversationId = conversationIdText.toMessagingUuidOrThrow()
+        conversationGuard.requireNotHiddenConversation(repository, userId, conversationId)
         val conversation =
             repository.markConversationRead(userId, conversationId)
                 ?: throw MessagingException("CONVERSATION_NOT_FOUND")
@@ -107,6 +111,7 @@ internal class MessagingConversationActions(
                 conversationId = conversationId,
                 participants = conversation.participants,
                 statuses = MessagingParticipantStatuses.active,
+                actorUserId = userId,
             )
         }
         // Every client open and refresh of a thread ends with this read mark, whose conversation replaces
@@ -166,6 +171,7 @@ internal class MessagingConversationActions(
         if (!featureAccess.messageExpiryAllowed(userId)) {
             throw MessagingException("ENTITLEMENT_REQUIRED")
         }
+        conversationGuard.requireNotHiddenConversation(repository, userId, conversationId)
 
         val result =
             repository.setConversationExpiry(
@@ -181,12 +187,14 @@ internal class MessagingConversationActions(
             participants = result.conversation.participants,
             messageId = result.systemMessage.messageId,
             statuses = MessagingParticipantStatuses.active,
+            actorUserId = userId,
         )
         realtimePublisher.publishDelta(
             type = MessageDeltaType.CONVERSATION_UPDATED,
             conversationId = conversationId,
             participants = result.conversation.participants,
             statuses = MessagingParticipantStatuses.active,
+            actorUserId = userId,
         )
         return dtoMapper.toDto(result.conversation, userId)
     }

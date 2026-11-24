@@ -50,7 +50,7 @@ internal fun Connection.acceptOpenPartnerInvite(
         recordInvitedPartnerResponse(conversationId, userId)
     }
 
-    markConversationGroup(conversationId)
+    markConversationGroup(conversationId, causedByUserId = invite.invitedPartnerUserId)
 }
 
 internal fun Connection.declineOpenPartnerInvite(
@@ -92,7 +92,7 @@ internal fun Connection.declineOpenPartnerInvite(
         statement.setObject(2, invite.invitedPartnerUserId)
         statement.executeUpdate()
     }
-    touchConversation(conversationId)
+    touchConversation(conversationId, causedByUserId = invite.invitedPartnerUserId)
 }
 
 private fun Connection.activateInvitedPartner(

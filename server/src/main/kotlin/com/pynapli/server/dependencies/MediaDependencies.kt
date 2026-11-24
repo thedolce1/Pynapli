@@ -61,6 +61,7 @@ internal fun buildMediaDependencies(
     riskService: RiskService,
     rateLimitService: RateLimitService,
     dataSource: DataSource,
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ): MediaDependencies {
     if (
         config.mediaStorageProvider.equals("local", ignoreCase = true) &&
@@ -169,6 +170,7 @@ internal fun buildMediaDependencies(
                     riskSignalPublisher = riskService,
                 ),
             rateLimitService = rateLimitService,
+            contactBlockVisibility = contactBlockVisibility,
         )
     // Chat photo media reuses the same signer/asset/scanner/resolver as album media.
     val messageMediaGateway =

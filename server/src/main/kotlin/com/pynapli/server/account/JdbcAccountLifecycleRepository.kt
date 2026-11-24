@@ -8,10 +8,13 @@ import javax.sql.DataSource
 
 class JdbcAccountLifecycleRepository(
     dataSource: DataSource,
+    // The server's contact block keys. Required on purpose: built without the configured keys,
+    // deletion would release nothing (CoreDependencies passes them; tests pass the local ones).
+    contactBlockTokens: com.pynapli.server.contactblocks.ContactBlockTokens,
     metInPersonAccountData: MetInPersonAccountData? = null,
 ) : AccountLifecycleRepository {
     private val exportActions = JdbcAccountDataExportActions(dataSource)
-    private val deletionActions = JdbcAccountDeletionActions(dataSource, metInPersonAccountData)
+    private val deletionActions = JdbcAccountDeletionActions(dataSource, contactBlockTokens, metInPersonAccountData)
 
     override suspend fun latestDataExportRequest(userId: UUID): AccountDataExportRecord? = exportActions.latestDataExportRequest(userId)
 

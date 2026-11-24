@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliLayout
+import com.pynapli.app.design.icons.Icons
+import com.pynapli.app.design.icons.filled.VisibilityOff
 
 @Composable
 internal fun ActivityControlsContent(
@@ -137,6 +139,8 @@ internal fun PrivacyDiscoveryContent(
     onSave: () -> Unit,
     onShowMetInPersonBadgeChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
+    // "Hide from people you know"; null hides the entry (shells that don't wire it).
+    onOpenHideFromPeopleYouKnow: (() -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -227,6 +231,19 @@ internal fun PrivacyDiscoveryContent(
                         checked = state.privacyDraft.showDistance,
                         onCheckedChange = onShowDistanceChanged,
                     )
+                }
+            }
+
+            onOpenHideFromPeopleYouKnow?.let { open ->
+                item {
+                    ProfileHubSection("People you know") {
+                        ProfileHubRow(
+                            icon = Icons.Filled.VisibilityOff,
+                            label = "Hide from people you know",
+                            value = "Add their email so you never show up for them",
+                            onClick = open,
+                        )
+                    }
                 }
             }
         }

@@ -20,6 +20,9 @@ class MediaService(
     moderationScanner: MediaModerationScanner = ManualReviewMediaModerationScanner(),
     moderationEscalationPublisher: MediaModerationEscalationPublisher = NoOpMediaModerationEscalationPublisher,
     rateLimitService: RateLimitService? = null,
+    // "Hide from people you know": a viewer can't open or request the private album of someone hiding
+    // from them (the same answers as for a missing album or a blocked owner).
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     private val uploadActions =
         MediaUploadActions(
@@ -40,6 +43,7 @@ class MediaService(
             repository = repository,
             blockRepository = blockRepository,
             mediaAssetUrlResolver = mediaAssetUrlResolver,
+            contactBlockVisibility = contactBlockVisibility,
         )
 
     suspend fun createUploadSlot(

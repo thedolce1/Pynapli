@@ -40,6 +40,8 @@ class PsyncSessionService(
             .SwipeDeckTokenCodec(),
     clock: Clock = Clock.systemUTC(),
     json: Json = Json,
+    // "Hide from people you know": anyone hiding from EITHER partner is left out of the shared deck.
+    contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     private val events = PsyncSessionEvents(activityService, notificationPublisher, broadcaster, clock)
     private val pineappleRefunds = PsyncPineappleRefunds(repository, pineappleInventory)
@@ -53,6 +55,7 @@ class PsyncSessionService(
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             deckTokenCodec = deckTokenCodec,
             clock = clock,
+            contactBlockVisibility = contactBlockVisibility,
         )
     private val activeSessions =
         PsyncActiveSessionActions(
@@ -93,18 +96,18 @@ class PsyncSessionService(
     suspend fun accept(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = lifecycle.accept(sessionId, userId)
+    ): PsyncSessionDto = lifecycle.accept(sessionId, userId).forViewer(userId)
 
     suspend fun deny(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = lifecycle.deny(sessionId, userId)
+    ): PsyncSessionDto = lifecycle.deny(sessionId, userId).forViewer(userId)
 
     suspend fun suggestFilters(
         sessionId: UUID,
         userId: UUID,
         request: SuggestPsyncFiltersRequestDto,
-    ): PsyncSessionDto = lifecycle.suggestFilters(sessionId, userId, request)
+    ): PsyncSessionDto = lifecycle.suggestFilters(sessionId, userId, request).forViewer(userId)
 
     suspend fun leave(
         sessionId: UUID,
@@ -115,13 +118,13 @@ class PsyncSessionService(
         // session" -> complete).
         val session = repository.findById(sessionId, withDisplayNames = false)
         val started = session != null && session.status in PSYNC_STARTED_STATUSES && session.participants.any { it.userId == userId }
-        return if (started) activeSessions.endStarted(sessionId, userId) else lifecycle.leave(sessionId, userId)
+        return (if (started) activeSessions.endStarted(sessionId, userId) else lifecycle.leave(sessionId, userId)).forViewer(userId)
     }
 
     suspend fun start(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = activeSessions.start(sessionId, userId)
+    ): PsyncSessionDto = activeSessions.start(sessionId, userId).forViewer(userId)
 
     suspend fun getDeck(
         sessionId: UUID,
@@ -147,12 +150,12 @@ class PsyncSessionService(
     suspend fun pause(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = activeSessions.pause(sessionId, userId)
+    ): PsyncSessionDto = activeSessions.pause(sessionId, userId).forViewer(userId)
 
     suspend fun resume(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = activeSessions.resume(sessionId, userId)
+    ): PsyncSessionDto = activeSessions.resume(sessionId, userId).forViewer(userId)
 
     suspend fun nudge(
         sessionId: UUID,
@@ -162,11 +165,21 @@ class PsyncSessionService(
     suspend fun get(
         sessionId: UUID,
         userId: UUID,
-    ): PsyncSessionDto = lifecycle.get(sessionId, userId)
+    ): PsyncSessionDto = lifecycle.get(sessionId, userId).forViewer(userId)
 
-    suspend fun current(userId: UUID): CurrentPsyncSessionDto = lifecycle.current(userId)
+    suspend fun current(userId: UUID): CurrentPsyncSessionDto = lifecycle.current(userId).let { it.copy(session = it.session?.forViewer(userId)) }
 
     suspend fun expireStale(): Int = lifecycle.expireStale()
+
+    /**
+     * "Hide from people you know": the deck size this person sees is their own deck's (one less per
+     * unanswered card of someone hiding from them), so no count anywhere says a profile was left out.
+     */
+    private suspend fun PsyncSessionDto.forViewer(userId: UUID): PsyncSessionDto {
+        val sessionId = runCatching { UUID.fromString(id) }.getOrNull() ?: return this
+        val hidden = deckCoordinator.hiddenCardCount(sessionId, userId)
+        return if (hidden == 0) this else copy(deckSize = (deckSize - hidden).coerceAtLeast(0))
+    }
 }
 
 class PsyncException(

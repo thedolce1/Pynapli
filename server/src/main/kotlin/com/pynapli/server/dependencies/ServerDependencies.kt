@@ -164,6 +164,9 @@ class ServerDependencies(
     val adminMetInPersonService: com.pynapli.server.metinperson.AdminMetInPersonService? = null,
     val metInPersonBadgeWorker: com.pynapli.server.metinperson.MetInPersonBadgeWorker? = null,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
+    val contactBlockService: com.pynapli.server.contactblocks.ContactBlockService? = null,
+    val contactBlockResolverWorker: com.pynapli.server.contactblocks.ContactBlockResolverWorker? = null,
+    val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
     private val profileActivityScope: CoroutineScope,
     private val probes: List<DependencyProbe>,
 ) : AutoCloseable {
@@ -184,6 +187,7 @@ class ServerDependencies(
         runCatching { psyncPresenceWatcher?.close() }
         runCatching { travelTripWorker?.close() }
         runCatching { notificationDispatchWorker?.close() }
+        runCatching { contactBlockResolverWorker?.close() }
         runCatching { profileActivityScope.cancel() }
         probes.asReversed().forEach { probe ->
             runCatching { probe.close() }
@@ -228,6 +232,7 @@ class ServerDependencies(
                     authService = core.authService,
                     rateLimitService = core.rateLimitService,
                     backgroundScope = profileActivityScope,
+                    onAccountVerified = core.contactBlockSettling::atVerify,
                 )
             val media =
                 buildMediaDependencies(
@@ -236,6 +241,7 @@ class ServerDependencies(
                     riskService = core.riskService,
                     rateLimitService = core.rateLimitService,
                     dataSource = database.dataSource,
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             val commerceTravel =
                 buildCommerceTravelDependencies(
@@ -249,7 +255,7 @@ class ServerDependencies(
                 )
             val activityService =
                 ActivityService(
-                    repository = JdbcActivityRepository(database.dataSource),
+                    repository = JdbcActivityRepository(database.dataSource, contactBlockTokens = core.contactBlockTokens),
                     mediaService = media.mediaService,
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     blockRepository = core.blockRepository,
@@ -259,6 +265,7 @@ class ServerDependencies(
                     subscriptionService = commerceTravel.subscriptionService,
                     activityBroadcaster = core.activityBroadcaster,
                     cursorCodec = ActivityCursorCodec(config.activityCursorSecret),
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             val activityRetentionWorker =
                 if (config.activityRetentionEnabled) {
@@ -309,6 +316,7 @@ class ServerDependencies(
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     blockRepository = core.blockRepository,
                     rateLimitService = core.rateLimitService,
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             val profileService =
                 ProfileService(
@@ -326,6 +334,7 @@ class ServerDependencies(
                     rateLimitService = core.rateLimitService,
                     profileViewRecordScope = profileActivityScope,
                     profileViewRecordConcurrency = 4,
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             val profileLinkService =
                 ProfileLinkService(
@@ -334,13 +343,14 @@ class ServerDependencies(
                     blockRepository = core.blockRepository,
                     notificationPublisher = core.notificationService,
                     riskPolicyService = core.riskPolicyService,
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             val adminUserLookupService =
                 AdminUserLookupService(
                     profileRepository = JdbcProfileRepository(database.dataSource),
                     repository = JdbcAdminUserLookupRepository(database.dataSource),
                     entitlementLookup = { userId -> commerceTravel.subscriptionService.getEntitlement(userId) },
-                    partnerLinkLookup = { userId -> profileLinkService.getSummary(userId) },
+                    partnerLinkLookup = { userId -> profileLinkService.getSummaryForAdmin(userId) },
                 )
             val adminPartnerLinkReviewService =
                 AdminPartnerLinkReviewService(
@@ -375,6 +385,7 @@ class ServerDependencies(
                     hiddenProfileRepository = core.hiddenProfileRepository,
                     subscriptionService = commerceTravel.subscriptionService,
                     rateLimitService = core.rateLimitService,
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             val tonight =
                 buildTonightDependencies(
@@ -386,6 +397,7 @@ class ServerDependencies(
                     blockRepository = core.blockRepository,
                     hiddenProfileRepository = core.hiddenProfileRepository,
                     riskPolicyService = core.riskPolicyService,
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             // Provider-hosted age verification is opt-in: built only when both the provider name and
             // its redirect base URL are configured. Otherwise the service keeps manual-review-only
@@ -446,6 +458,8 @@ class ServerDependencies(
                     messageMediaGateway = media.messageMediaGateway,
                     productMetrics = core.productMetrics,
                     travelLocationRepository = core.travelLocationRepository,
+                    contactBlockTokens = core.contactBlockTokens,
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             val swipe =
                 buildSwipeDependencies(
@@ -464,6 +478,7 @@ class ServerDependencies(
                     psyncBroadcaster = core.psyncBroadcaster,
                     productMetrics = core.productMetrics,
                     matchConversationOpener = messaging.messagingService.matchConversationOpener,
+                    contactBlockVisibility = core.contactBlockVisibility,
                 )
             return ServerDependencies(
                 config = config,
@@ -547,6 +562,9 @@ class ServerDependencies(
                 adminMetInPersonService = metInPerson.adminService,
                 metInPersonBadgeWorker = metInPerson.badgeWorker,
                 requestProfilerFactory = requestProfilerFactory,
+                contactBlockService = core.contactBlockService,
+                contactBlockResolverWorker = core.contactBlockResolverWorker,
+                contactBlockVisibility = core.contactBlockVisibility,
                 profileActivityScope = profileActivityScope,
                 probes = listOf(postgres, redis),
             )

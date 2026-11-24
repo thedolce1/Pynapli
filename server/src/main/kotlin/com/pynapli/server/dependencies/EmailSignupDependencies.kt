@@ -30,6 +30,8 @@ internal fun buildEmailSignupDependencies(
     authService: AuthService,
     rateLimitService: RateLimitService,
     backgroundScope: CoroutineScope,
+    // "Hide from people you know": binds rows naming the address before the first session exists.
+    onAccountVerified: (suspend (userId: java.util.UUID, normalisedEmail: String) -> Unit)? = null,
 ): EmailSignupDependencies {
     val localMailer = if (config.usesLocalFileMailer()) LocalFileSignupMailer() else null
     val service =
@@ -41,6 +43,7 @@ internal fun buildEmailSignupDependencies(
             // Bounded: a flood of sign-ups can't take the whole database pool; a dropped job only
             // means no email, and the request answers the same either way.
             launchSignupWork = BoundedWorkLauncher(backgroundScope)::launch,
+            onAccountVerified = onAccountVerified,
         )
     val devMailbox = localMailer?.takeIf { config.devSignupShortcutsAllowed() }
     return EmailSignupDependencies(service = service, devMailbox = devMailbox)

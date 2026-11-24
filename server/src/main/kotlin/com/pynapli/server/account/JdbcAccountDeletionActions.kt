@@ -1,6 +1,7 @@
 package com.pynapli.server.account
 
 import com.pynapli.server.auth.CLEAR_REFRESH_REPLAY_SQL
+import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
 import com.pynapli.server.metinperson.MetInPersonAccountData
@@ -10,6 +11,7 @@ import javax.sql.DataSource
 
 internal class JdbcAccountDeletionActions(
     private val dataSource: DataSource,
+    private val contactBlockTokens: ContactBlockTokens,
     private val metInPersonAccountData: MetInPersonAccountData? = null,
 ) {
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult? =
@@ -30,6 +32,7 @@ internal class JdbcAccountDeletionActions(
                 anonymizeProfile(connection, userId)
                 val purgedLocationCount = purgeExactLocation(connection, userId)
                 purgeFavoritesAndLastActive(connection, userId)
+                releaseContactBlocks(connection, userId)
                 // Met in person: confirmations given (by token) and received, and the badge.
                 metInPersonAccountData?.erase(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
@@ -285,6 +288,42 @@ internal class JdbcAccountDeletionActions(
             statement.executeUpdate()
         }
         connection.prepareStatement("DELETE FROM user_last_active WHERE user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
+    }
+
+    /**
+     * "Hide from people you know" (TRUST_AND_SAFETY_SPEC, "Contact blocks"): the addresses this person
+     * added go with the account; rows other people added that point at this person (hidden or exempt)
+     * go back to pending, so they bind again only if the address re-registers and is verified, and
+     * tombstones pointing at this person are deleted (there is nobody left to hide anything from); and
+     * the account's own contact token is cleared (users is anonymised, not deleted, so each is explicit).
+     * The blocker's own rows, tombstones included, are deleted.
+     */
+    private fun releaseContactBlocks(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection.prepareStatement("DELETE FROM contact_blocks WHERE blocker_user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
+        connection
+            .prepareStatement("DELETE FROM contact_blocks WHERE target_token IN (?, ?) AND released_at IS NOT NULL")
+            .use { statement ->
+                statement.setString(1, contactBlockTokens.targetToken(userId))
+                statement.setString(2, contactBlockTokens.exemptToken(userId))
+                statement.executeUpdate()
+            }
+        connection
+            .prepareStatement("UPDATE contact_blocks SET target_token = NULL WHERE target_token IN (?, ?)")
+            .use { statement ->
+                statement.setString(1, contactBlockTokens.targetToken(userId))
+                statement.setString(2, contactBlockTokens.exemptToken(userId))
+                statement.executeUpdate()
+            }
+        connection.prepareStatement("UPDATE users SET contact_token = NULL WHERE id = ?").use { statement ->
             statement.setObject(1, userId)
             statement.executeUpdate()
         }

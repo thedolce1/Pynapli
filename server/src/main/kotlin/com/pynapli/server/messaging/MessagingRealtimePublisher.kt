@@ -7,19 +7,32 @@ import java.util.UUID
 internal class MessagingRealtimePublisher(
     private val broadcaster: MessageBroadcaster?,
     private val clock: Clock,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
+    /**
+     * [actorUserId] is whoever caused the change: no hint goes to a participant the actor hides from
+     * ("Hide from people you know"), since that participant is never shown the change.
+     */
     suspend fun publishDelta(
         type: String,
         conversationId: UUID,
         participants: List<ConversationParticipantRecord>,
         messageId: UUID? = null,
         statuses: Set<String>,
+        actorUserId: UUID? = null,
+        // People the change is about, besides the actor: no hint to a recipient any of them hides from.
+        subjectUserIds: Collection<UUID> = emptyList(),
     ) {
         val activeBroadcaster = broadcaster ?: return
-        participants
-            .asSequence()
-            .filter { participant -> participant.status in statuses }
-            .distinctBy { participant -> participant.userId }
+        val causes = (listOfNotNull(actorUserId) + subjectUserIds).distinct()
+        val recipients =
+            participants
+                .filter { participant -> participant.status in statuses }
+                .distinctBy { participant -> participant.userId }
+                .filterNot { participant ->
+                    causes.any { cause -> cause != participant.userId && actorHidesFrom(cause, participant.userId) }
+                }
+        recipients
             .forEach { participant ->
                 activeBroadcaster.emit(
                     MessageRealtimeDelta(
@@ -50,7 +63,7 @@ internal class MessagingRealtimePublisher(
                 null
             }
 
-        recipientIds.forEach { recipientId ->
+        recipientIds.filterNot { actorHidesFrom(actor.userId, it) }.forEach { recipientId ->
             activeBroadcaster.emit(
                 MessageRealtimeDelta(
                     recipientUserId = recipientId,
@@ -64,4 +77,9 @@ internal class MessagingRealtimePublisher(
             )
         }
     }
+
+    private suspend fun actorHidesFrom(
+        actorUserId: UUID,
+        recipientUserId: UUID,
+    ): Boolean = contactBlockVisibility?.isHiddenFrom(viewerUserId = recipientUserId, otherUserId = actorUserId) == true
 }

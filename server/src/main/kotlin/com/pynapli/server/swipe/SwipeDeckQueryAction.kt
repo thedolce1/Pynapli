@@ -19,10 +19,13 @@ internal class SwipeDeckQueryAction(
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val deckPageBuilder: SwipeDeckPageBuilder,
     private val clock: Clock,
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     suspend fun queryDeck(
         viewerUserId: UUID,
         request: SwipeDeckRequestDto,
+        // False only for a Psync deck: that deck is shared by two partners and filtered per person when shown.
+        applyContactBlocks: Boolean = true,
     ): SwipeDeckResponseDto {
         val deckRequest =
             SwipeDeckRequestParser.parse(
@@ -96,9 +99,15 @@ internal class SwipeDeckQueryAction(
             profile("swipe.deck.blocks") {
                 blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
             }
+        // "Hide from people you know": people hiding from this viewer, excluded with the blocks (after
+        // the shared ranked window, which stays free of per-viewer exclusions).
+        val hiddenFromViewerIds =
+            profile("swipe.deck.contactBlocks") {
+                if (applyContactBlocks) contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty() else emptySet()
+            }
         // Blocked people are excluded before ranking, not only from the finished page: a Boost lifts
         // candidates onto the page, and a blocked one must never take a slot.
-        val excludedTargetUserIds = existingSessionState?.targetUserIds.orEmpty() + blockedRelatedIds
+        val excludedTargetUserIds = existingSessionState?.targetUserIds.orEmpty() + blockedRelatedIds + hiddenFromViewerIds
         val startPosition = cursor?.nextPosition ?: 0
 
         val firstPass =
@@ -153,10 +162,15 @@ internal class SwipeDeckQueryAction(
 
         // Backstop for a repository that does not apply the exclusion set.
         val visible =
-            if (blockedRelatedIds.isEmpty()) {
+            if (blockedRelatedIds.isEmpty() && hiddenFromViewerIds.isEmpty()) {
                 result.cards
             } else {
-                result.cards.filterNot { it.userId in blockedRelatedIds }
+                result.cards
+                    .filterNot { it.userId in blockedRelatedIds || it.userId in hiddenFromViewerIds }
+                    // "Verified couples only" means the badge this viewer sees, which a stripped
+                    // partner takes away.
+                    .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenFromViewerIds }
+                    .map { it.withoutPartnerIn(hiddenFromViewerIds) }
             }
         val pageCards = visible.take(limit)
         val presenceLookupIds =

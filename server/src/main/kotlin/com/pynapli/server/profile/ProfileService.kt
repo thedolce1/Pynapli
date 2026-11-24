@@ -34,6 +34,9 @@ class ProfileService(
     profileViewRecordConcurrency: Int = 4,
     private val lastActiveRepository: LastActiveRepository? = null,
     private val favoriteService: FavoriteService? = null,
+    // "Hide from people you know": someone hiding from the viewer is PROFILE_NOT_FOUND (as a deleted
+    // or hidden profile is), and never shows as the partner on someone else's profile.
+    private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
 ) {
     private val profileViewRecorder =
         ProfileViewActivityRecorder(
@@ -54,11 +57,19 @@ class ProfileService(
         if (profile("profile.riskCheck") { riskPolicyService?.shouldHideFromDiscovery(targetUserId) } == true) {
             throw ProfileException("PROFILE_NOT_FOUND")
         }
-        val profile =
+        val hiddenFromViewer = profile("profile.contactBlocks") { contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty() }
+        if (targetUserId in hiddenFromViewer) throw ProfileException("PROFILE_NOT_FOUND")
+        val fetched =
             profile("profile.repository") {
                 repository.getPublicProfile(viewerUserId, targetUserId)?.toDto(mediaAssetUrlResolver)
             }
                 ?: throw ProfileException("PROFILE_NOT_FOUND")
+        val profile =
+            if (fetched.linkedPartner?.userId?.let { runCatching { UUID.fromString(it) }.getOrNull() } in hiddenFromViewer) {
+                fetched.copy(linkedPartner = null, coupleVerified = false)
+            } else {
+                fetched
+            }
         profile("profile.activityRecord") {
             profileViewRecorder.record(viewerUserId, targetUserId)
         }

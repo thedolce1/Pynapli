@@ -122,7 +122,12 @@ class PsyncSessionServiceIntegrationTest :
                     com.pynapli.server.activity.ActivityService(
                         repository =
                             com.pynapli.server.activity
-                                .JdbcActivityRepository(dataSource),
+                                .JdbcActivityRepository(
+                                    dataSource,
+                                    contactBlockTokens =
+                                        com.pynapli.server.contactblocks.ContactBlockTokens
+                                            .localDevelopment(),
+                                ),
                     ),
                 clock = clock,
             )
@@ -371,7 +376,12 @@ class PsyncSessionServiceIntegrationTest :
                     com.pynapli.server.activity.ActivityService(
                         repository =
                             com.pynapli.server.activity
-                                .JdbcActivityRepository(dataSource),
+                                .JdbcActivityRepository(
+                                    dataSource,
+                                    contactBlockTokens =
+                                        com.pynapli.server.contactblocks.ContactBlockTokens
+                                            .localDevelopment(),
+                                ),
                     )
                 val svc =
                     PsyncSessionService(
@@ -475,7 +485,12 @@ class PsyncSessionServiceIntegrationTest :
                 val messaging =
                     com.pynapli.server.messaging.MessagingService(
                         com.pynapli.server.messaging
-                            .JdbcMessagingRepository(dataSource),
+                            .JdbcMessagingRepository(
+                                dataSource,
+                                contactBlockTokens =
+                                    com.pynapli.server.contactblocks.ContactBlockTokens
+                                        .localDevelopment(),
+                            ),
                     )
                 val svc =
                     PsyncSessionService(
@@ -495,7 +510,12 @@ class PsyncSessionServiceIntegrationTest :
                             com.pynapli.server.activity.ActivityService(
                                 repository =
                                     com.pynapli.server.activity
-                                        .JdbcActivityRepository(dataSource),
+                                        .JdbcActivityRepository(
+                                            dataSource,
+                                            contactBlockTokens =
+                                                com.pynapli.server.contactblocks.ContactBlockTokens
+                                                    .localDevelopment(),
+                                        ),
                             ),
                         matchConversationOpener = messaging.matchConversationOpener,
                     )
@@ -520,13 +540,23 @@ class PsyncSessionServiceIntegrationTest :
                 val messaging =
                     com.pynapli.server.messaging.MessagingService(
                         com.pynapli.server.messaging
-                            .JdbcMessagingRepository(dataSource),
+                            .JdbcMessagingRepository(
+                                dataSource,
+                                contactBlockTokens =
+                                    com.pynapli.server.contactblocks.ContactBlockTokens
+                                        .localDevelopment(),
+                            ),
                     )
                 val activity =
                     com.pynapli.server.activity.ActivityService(
                         repository =
                             com.pynapli.server.activity
-                                .JdbcActivityRepository(dataSource),
+                                .JdbcActivityRepository(
+                                    dataSource,
+                                    contactBlockTokens =
+                                        com.pynapli.server.contactblocks.ContactBlockTokens
+                                            .localDevelopment(),
+                                ),
                     )
                 val repository = JdbcPsyncSessionRepository(dataSource)
                 val svc =

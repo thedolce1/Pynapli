@@ -81,6 +81,7 @@ internal suspend fun AuthService.signUpVerified(
     confirmedAdult: Boolean = true,
     acceptedTerms: Boolean = true,
     acceptedPrivacy: Boolean = true,
+    onAccountVerified: (suspend (userId: UUID, normalisedEmail: String) -> Unit)? = null,
 ): AuthSessionDto {
     val mailer = CapturingSignupMailer()
     val work = QueuedSignupWork()
@@ -92,6 +93,7 @@ internal suspend fun AuthService.signUpVerified(
             passwordHasher = passwordHasher,
             rateLimitService = rateLimitService,
             launchSignupWork = work::launch,
+            onAccountVerified = onAccountVerified,
         )
     val started =
         signup.startSignup(
