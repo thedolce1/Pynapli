@@ -4,6 +4,12 @@
         <item name="android:windowActionBar">false</item>
         <item name="android:windowLightStatusBar">false</item>
         <!--
+            The window's own background, drawn before the first Compose frame (and behind the
+            Android 12+ system splash icon). Without it Theme.Material paints its grey
+            (#303030) first and the boot splash then snaps to the app background.
+        -->
+        <item name="android:windowBackground">@color/pynapli_window_background</item>
+        <!--
             No android:windowLightNavigationBar here: it is API 27+ and minSdk is 23, so declaring
             it in the base theme fails lint (NewApi) and breaks the release build. The value we
             want is `false` (dark nav bar, light icons — the app is dark-first), which is already
@@ -11,4 +17,3 @@
         -->
     </style>
 </resources>
-

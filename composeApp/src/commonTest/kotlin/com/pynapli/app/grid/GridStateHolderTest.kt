@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -816,10 +815,8 @@ class GridStateHolderTest {
             assertEquals(listOf("fresh"), snapshotStore.saved.last().map { it.id })
         }
 
-    // Section 0 repro (onboarding + first grid plan). Fails today; the Section 1 slice that fixes it
-    // removes the @Ignore.
-    // Section 0 repro: B4 the grid load started at the Location step is discarded when GridScreen composes — fixed in Section 1
-    @Ignore
+    // Section 0 repro B4 (onboarding + first grid plan), fixed in Section 1: the compose-time prime
+    // joins the load already on the wire instead of superseding it.
     @Test
     fun theGridScreenReusesTheLoadTheLocationStepStarted() =
         runTest {
@@ -837,8 +834,8 @@ class GridStateHolderTest {
             runCurrent()
             assertTrue(repository.parkedAtGate, "the Location step's load must be in flight")
 
-            // The member reaches the grid before it answers: GridScreen composes and primes. Today
-            // that starts a second request and bumps the generation, so the first answer is dropped.
+            // The member reaches the grid before it answers: GridScreen composes and primes. That
+            // used to start a second request and bump the generation, dropping the first answer.
             val priming = async { stateHolder.primeFromCacheThenLoad() }
             runCurrent()
             gate.complete(Unit)
@@ -851,6 +848,62 @@ class GridStateHolderTest {
                 stateHolder.state.value.cards
                     .map { it.id },
             )
+        }
+
+    @Test
+    fun aFilterChangeStillSupersedesTheLoadTheGridJoined() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                GatedGridFeedRepository(
+                    feeds = listOf(GridFeedUi(cards = listOf(card("unfiltered"))), GridFeedUi(cards = listOf(card("online")))),
+                    gateBeforeIndex = 0,
+                    gate = gate,
+                )
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore(initial = emptyList()))
+
+            val prefetch = async { stateHolder.load() }
+            runCurrent()
+            val priming = async { stateHolder.primeFromCacheThenLoad() }
+            runCurrent()
+            // The member taps Online before the first answer: the old request must lose.
+            val filtered = async { stateHolder.toggleQuickFilter(QuickFilterId.Online) }
+            runCurrent()
+            gate.complete(Unit)
+            prefetch.await()
+            priming.await()
+            filtered.await()
+
+            assertEquals(2, repository.loadCount, "the prime starts no request of its own")
+            assertEquals(listOf("online"), stateHolder.state.value.cards.map { it.id })
+            assertTrue(stateHolder.state.value.filters.online)
+            assertFalse(stateHolder.state.value.isRefreshing)
+        }
+
+    @Test
+    fun theGridLoadsItselfWhenTheLoadItJoinedIsCancelled() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                GatedGridFeedRepository(
+                    feeds = listOf(GridFeedUi(cards = listOf(card("nearby")))),
+                    gateBeforeIndex = 0,
+                    gate = gate,
+                )
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore(initial = emptyList()))
+
+            val prefetch = async { stateHolder.load() }
+            runCurrent()
+            val priming = async { stateHolder.primeFromCacheThenLoad() }
+            runCurrent()
+            prefetch.cancel()
+            runCurrent()
+            gate.complete(Unit)
+            priming.await()
+
+            assertEquals(2, repository.loadCount)
+            assertEquals(listOf("nearby"), stateHolder.state.value.cards.map { it.id })
+            assertFalse(stateHolder.state.value.isRefreshing)
         }
 }
 

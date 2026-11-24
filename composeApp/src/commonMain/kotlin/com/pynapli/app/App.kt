@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -19,7 +18,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import com.pynapli.app.activity.likeBackEventIdOrNull
 import com.pynapli.app.activity.toActivityProfileCardUi
 import com.pynapli.app.auth.AuthScreen
@@ -93,6 +91,8 @@ fun PynapliApp(
             if (!authState.isCheckingSession && authState.session == null) {
                 graph.gridStateHolder.clearForSignOut()
                 graph.favoritesStateHolder?.clear()
+                // And its location: the next account sends its own first fix (Section 1, B2).
+                graph.locationStateHolder.reset()
             }
         }
         PynapliAppEffects(
@@ -183,20 +183,8 @@ fun PynapliApp(
         }
 
         if (authState.isCheckingSession) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Pynapli",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
+            // The same splash the boot stage drew, so nothing moves at the swap (Section 1, B5).
+            PynapliSplashContent()
             return@PynapliTheme
         }
 

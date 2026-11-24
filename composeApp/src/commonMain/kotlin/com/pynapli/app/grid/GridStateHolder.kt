@@ -5,6 +5,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.PresenceDeltaDto
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,20 +40,50 @@ class GridStateHolder(
         if (_state.value.cards.isNotEmpty()) {
             // Returning to the Grid tab: the cards are still here, so keep them (and their order and
             // scroll) and only refresh quietly once they have expired, as the app-resume path does.
-            if (resultsOlderThan(RESULTS_EXPIRE_AFTER)) load(quiet = true)
+            if (resultsOlderThan(RESULTS_EXPIRE_AFTER) && !joinInFlightLoad()) load(quiet = true)
             return
         }
-        if (_state.value.cards.isEmpty()) {
-            val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }
-            if (cached.isNotEmpty() && _state.value.cards.isEmpty()) {
-                // Show cached cards instantly; a quiet refresh swaps in the live feed atomically
-                // (no blank, no scroll reset) per the spec's instant-render rule.
-                _state.update { current -> current.copy(cards = cached, isRefreshing = true, cacheChecked = true) }
-                load(quiet = true)
-                return
-            }
+        val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }
+        val paintedCache = cached.isNotEmpty() && _state.value.cards.isEmpty()
+        if (paintedCache) {
+            // Show cached cards instantly; a quiet refresh swaps in the live feed atomically
+            // (no blank, no scroll reset) per the spec's instant-render rule.
+            _state.update { current -> current.copy(cards = cached, isRefreshing = true, cacheChecked = true) }
         }
-        load()
+        // A load already on the wire for these filters (the Location step's first grid, or a
+        // location refresh on resume) answers this screen too: wait for it instead of starting a
+        // second request that would supersede it. Checked after the cache read, which suspends.
+        if (joinInFlightLoad()) return
+        load(quiet = paintedCache)
+    }
+
+    /** The [load] currently on the wire: its generation, the filters it asked with, and its outcome. */
+    private class InFlightLoad(
+        val generation: Int,
+        val filters: GridFilters,
+        /** Completes true when this load's answer (cards or error) was applied, false otherwise. */
+        val applied: CompletableDeferred<Boolean> = CompletableDeferred(),
+    )
+
+    private var inFlightLoad: InFlightLoad? = null
+
+    /** The generation whose first-page answer was last applied; -1 until one is. */
+    private var appliedGeneration = -1
+
+    /**
+     * Waits for the load already in flight when it is still current (same generation, same filters)
+     * and returns true once a current answer has been applied. Returns false when there is none to
+     * join, so the caller starts its own. Only the compose-time path joins: a filter change, refresh or
+     * location move always calls [load], which bumps the generation and supersedes the old request.
+     */
+    private suspend fun joinInFlightLoad(): Boolean {
+        val flight = inFlightLoad ?: return false
+        if (flight.generation != feedGeneration || flight.filters != _state.value.filters) return false
+        if (flight.applied.await()) return true
+        // Superseded (a filter change, say) or cancelled before it answered. A newer load may already
+        // have answered, or still be on the wire: either way this screen needs no request of its own.
+        if (appliedGeneration == feedGeneration) return true
+        return joinInFlightLoad()
     }
 
     private var loadedAt: TimeMark? = null
@@ -74,7 +105,29 @@ class GridStateHolder(
             )
         }
         val generation = feedGeneration
-        runCatchingCancellable { repository.loadGrid(_state.value.filters) }
+        val filters = _state.value.filters
+        val flight = InFlightLoad(generation, filters)
+        inFlightLoad = flight
+        var answered = false
+        try {
+            fetchFirstPage(filters, generation, keepCardsVisible)
+            answered = true
+        } finally {
+            // Always released, cancellation included, so a joiner never waits on a dead request.
+            if (inFlightLoad === flight) inFlightLoad = null
+            val applied = answered && generation == feedGeneration
+            if (applied) appliedGeneration = generation
+            flight.applied.complete(applied)
+        }
+    }
+
+    /** One first-page request; its answer (cards or error) is applied only while [generation] is current. */
+    private suspend fun fetchFirstPage(
+        filters: GridFilters,
+        generation: Int,
+        keepCardsVisible: Boolean,
+    ) {
+        runCatchingCancellable { repository.loadGrid(filters) }
             .onSuccess { feed ->
                 // Signed out (or reloaded) while this was in flight: never resurrect old cards.
                 if (generation != feedGeneration) return@onSuccess
@@ -248,6 +301,15 @@ class GridStateHolder(
      * Swipe meanwhile; the Grid then reloads on return instead of keeping another place's cards.
      */
     var travelKeyWhenLeft: String? = null
+
+    private val _onScreen = MutableStateFlow(false)
+
+    /** True while the Grid screen is composed (its tab is showing); feeds the notification ask timing. */
+    val onScreen: StateFlow<Boolean> = _onScreen.asStateFlow()
+
+    fun setOnScreen(visible: Boolean) {
+        _onScreen.value = visible
+    }
 
     /** Marks the cards as expired, so the next return to the Grid refetches them quietly. */
     fun invalidate() {

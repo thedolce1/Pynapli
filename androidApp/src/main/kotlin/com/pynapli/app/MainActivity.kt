@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.os.SystemClock
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -24,6 +25,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.edit
 import com.pynapli.app.location.DeviceLocation
+import com.pynapli.app.location.LocationSettingsAccess
+import com.pynapli.app.location.ProvideLocationSettingsAccess
+import com.pynapli.app.location.refreshInBackground
 import com.pynapli.app.location.submitAndRefresh
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaPickTarget
@@ -35,6 +39,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -58,9 +63,19 @@ class MainActivity : ComponentActivity() {
             if (permissions.values.any { granted -> granted }) {
                 submitCurrentLocation()
             } else {
-                appGraph?.pynapliAppGraph?.locationStateHolder?.markPermissionDenied()
+                // Read after the dialog: no rationale to show for either permission now means Android
+                // will not ask again ("Don't allow" twice, or the dialog was skipped entirely because
+                // it already refused), so the screen offers Settings instead of a dead button. It is
+                // also false before the first ask, which is why it is never read up front.
+                val blockedForGood =
+                    !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) &&
+                        !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_COARSE_LOCATION)
+                appGraph?.pynapliAppGraph?.locationStateHolder?.markPermissionDenied(permanently = blockedForGood)
             }
         }
+    private val locationSettingsAccess by lazy {
+        LocationSettingsAccess(opener = AndroidLocationSettingsOpener(this))
+    }
     private val mediaPickerLauncher =
         registerForActivityResult(
             ActivityResultContracts.PickVisualMedia(),
@@ -110,19 +125,21 @@ class MainActivity : ComponentActivity() {
             when (val graph = appGraphState.value) {
                 null -> PynapliBootSplash()
                 else ->
-                    PynapliApp(
-                        graph = graph.pynapliAppGraph,
-                        platform =
-                            PynapliPlatform(
-                                onUseCurrentLocation = ::requestCurrentLocation,
-                                onPickMediaForAlbum = ::pickMediaForAlbum,
-                                onPickConversationPhoto = ::pickConversationPhoto,
-                                onPickVerificationSelfie = ::pickVerificationSelfie,
-                                onSetDiscreetIcon = ::applyLauncherIcon,
-                                devLoginCredentials = graph.devLoginCredentials,
-                                testerDiagnosticLabel = graph.testerDiagnosticLabel,
-                            ),
-                    )
+                    ProvideLocationSettingsAccess(locationSettingsAccess) {
+                        PynapliApp(
+                            graph = graph.pynapliAppGraph,
+                            platform =
+                                PynapliPlatform(
+                                    onUseCurrentLocation = ::requestCurrentLocation,
+                                    onPickMediaForAlbum = ::pickMediaForAlbum,
+                                    onPickConversationPhoto = ::pickConversationPhoto,
+                                    onPickVerificationSelfie = ::pickVerificationSelfie,
+                                    onSetDiscreetIcon = ::applyLauncherIcon,
+                                    devLoginCredentials = graph.devLoginCredentials,
+                                    testerDiagnosticLabel = graph.testerDiagnosticLabel,
+                                ),
+                        )
+                    }
             }
         }
     }
@@ -131,6 +148,10 @@ class MainActivity : ComponentActivity() {
         appGraph = graph
         graph.attachBillingActivity(this)
         activityScope.launch { graph.pushRegistrationSync.followSessionAndSettings() }
+        // The notification ask waits for the first Grid (a short dwell) or the first conversation,
+        // so it never lands on the sign-up Location step; Grid time counts only while started.
+        graph.appInForeground.value = isStarted
+        activityScope.launch { graph.notificationAskTiming.run() }
         activityScope.launch {
             graph.pushRegistrationSync.notificationPermissionWanted.collectLatest { wanted ->
                 if (wanted) requestNotificationPermissionIfUseful()
@@ -139,6 +160,12 @@ class MainActivity : ComponentActivity() {
         pendingDeepLinkIntent?.let { handleNotificationDeepLink(it, graph) }
         pendingDeepLinkIntent = null
         if (isStarted) startRealtimeStreams(graph)
+        // Cold start counts as a return: onStart ran before the graph existed, so once the stored
+        // session has settled, send a fresh fix the same silent way (only if it changed cell).
+        activityScope.launch {
+            graph.authStateHolder.state.first { !it.isCheckingSession }
+            refreshLocationOnResume()
+        }
         // Swap the boot splash for the real app last, once the graph's collaborators are wired.
         appGraphState.value = graph
     }
@@ -157,6 +184,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         isStarted = true
+        appGraph?.appInForeground?.value = true
         appGraph?.let { startRealtimeStreams(it) }
         // Re-sync push on every foreground so a rotated FCM token is re-registered (see
         // PushRegistrationSync.syncNow); fingerprint-guarded, so a no-op when nothing changed.
@@ -164,6 +192,9 @@ class MainActivity : ComponentActivity() {
         // The sockets were closed while stopped, so nothing that happened meanwhile arrived:
         // refetch the inbox, open chat, Activity, links, hub and an open Tonight feed.
         activityScope.launch { appGraph?.onAppForegrounded() }
+        // Moved while away? A fresh fix, sent only when its cell changed (also how coming back from
+        // the Settings screen the Location step opened picks up a newly granted permission).
+        refreshLocationOnResume()
     }
 
     // runCatchingCancellable, not runCatching: onStop() cancels all three of these jobs, and plain
@@ -179,6 +210,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        isStarted = false
+        appGraph?.appInForeground?.value = false
         pendingLocationSignal?.cancel()
         pendingLocationSignal = null
         realtimeJobs.forEach { it.cancel() }
@@ -312,7 +345,8 @@ class MainActivity : ComponentActivity() {
         val providers = locationManager.enabledLocationProviders()
 
         if (providers.isEmpty()) {
-            locationStateHolder.markUnavailable()
+            // Neither network nor GPS is enabled: location services are off for the whole device.
+            locationStateHolder.markServicesOff()
             return
         }
 
@@ -361,6 +395,59 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Resume refresh (GRID_IMPLEMENTATION_SPEC, Location Strategy): signed in, permission already
+     * granted, location services on, and no fix already pending, or it does nothing. Never prompts,
+     * never shows progress or errors, never logs the fix. A recent last-known fix is used as is;
+     * otherwise one cancellable one-shot request (onStop cancels it, like the foreground one).
+     */
+    @SuppressLint("MissingPermission")
+    private fun refreshLocationOnResume() {
+        val graph = appGraph ?: return
+        if (!isStarted || pendingLocationSignal != null) return
+        if (!graph.authStateHolder.state.value.authenticated || !hasLocationPermission()) return
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val providers = locationManager.enabledLocationProviders()
+        if (providers.isEmpty()) return
+
+        val lastKnownLocation =
+            providers
+                .mapNotNull { provider ->
+                    runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+                }.newestOrNull()
+        val lastKnownAgeNanos = lastKnownLocation?.let { SystemClock.elapsedRealtimeNanos() - it.elapsedRealtimeNanos }
+        if (lastKnownLocation != null && lastKnownAgeNanos != null && lastKnownAgeNanos < RESUME_FIX_MAX_AGE_NANOS) {
+            refreshDeviceLocationSilently(lastKnownLocation)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val signal = CancellationSignal()
+            pendingLocationSignal = signal
+            locationManager.getCurrentLocation(providers.first(), signal, mainExecutor) { currentLocation ->
+                if (pendingLocationSignal == signal) {
+                    pendingLocationSignal = null
+                }
+                currentLocation?.let(::refreshDeviceLocationSilently)
+            }
+            return
+        }
+        lastKnownLocation?.let(::refreshDeviceLocationSilently)
+    }
+
+    private fun refreshDeviceLocationSilently(currentLocation: Location) {
+        val graph = appGraph ?: return
+        activityScope.launch {
+            graph.pynapliAppGraph.locationStateHolder.refreshInBackground(
+                DeviceLocation(
+                    latitude = currentLocation.latitude,
+                    longitude = currentLocation.longitude,
+                    accuracyMeters = currentLocation.accuracyMetersOrNull(),
+                ),
+                graph.pynapliAppGraph.gridStateHolder,
+            )
+        }
+    }
+
     private fun LocationManager.enabledLocationProviders(): List<String> =
         listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
             .filter { provider ->
@@ -397,3 +484,6 @@ class MainActivity : ComponentActivity() {
 private const val NOTIFICATION_PERMISSION_PREFERENCES = "pynapli_notification_permission"
 private const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "requested"
 private const val TAG = "MainActivity"
+
+// A last-known fix younger than this is fresh enough for the resume refresh (no new GPS work).
+private const val RESUME_FIX_MAX_AGE_NANOS = 2L * 60 * 1_000_000_000

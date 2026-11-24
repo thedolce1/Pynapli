@@ -247,6 +247,7 @@ function Get-ActivitySeenCount {
 
 function Start-App {
     $component = "$PackageName/$LaunchActivity"
+    Grant-QaNotificationPermission -PackageName $PackageName
     Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
     Write-Host "[step] Launched $component"
 }

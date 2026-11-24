@@ -153,7 +153,8 @@ if (-not $KeepAppData) {
 
 Invoke-AdbBestEffort @("shell", "pm", "grant", $PackageName, "android.permission.ACCESS_FINE_LOCATION")
 Invoke-AdbBestEffort @("shell", "pm", "grant", $PackageName, "android.permission.ACCESS_COARSE_LOCATION")
-Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, "android.permission.POST_NOTIFICATIONS")
+# The notification ask now waits for ~20 s of Grid; pre-grant so its dialog never covers the profile run.
+Grant-QaNotificationPermission -PackageName $PackageName
 
 Write-Host "[step] Resetting battery stats"
 Invoke-AdbBestEffort @("shell", "dumpsys", "batterystats", "--reset")

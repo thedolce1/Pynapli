@@ -18,6 +18,8 @@ import com.pynapli.app.PynapliRoutes
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.design.pynapliTextScaleForBrowserFont
+import com.pynapli.app.location.LocationSettingsAccess
+import com.pynapli.app.location.ProvideLocationSettingsAccess
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.web.platform.browserDefaultFontSizePx
@@ -77,6 +79,13 @@ fun main() {
     // their own backoff).
     onDocumentVisible {
         appScope.launch { graph.onAppForegrounded() }
+        // Moved while the tab was hidden? Silent, granted-only, sent only on a new cell.
+        if (graph.authStateHolder.state.value.authenticated) locationAdapter.refreshIfAlreadyGranted()
+    }
+    // A page load signed in counts as a return too (the same silent, granted-only refresh).
+    appScope.launch {
+        val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
+        if (settled.authenticated) locationAdapter.refreshIfAlreadyGranted()
     }
 
     // A direct /signup link starts the create-account stepper — but only once the
@@ -153,20 +162,30 @@ private fun WebAppContent(
     locationAdapter: WebLocationAdapter,
     mediaPicker: WebMediaPicker,
 ) {
-    PynapliApp(
-        graph = graph.pynapliAppGraph,
-        platform =
-            PynapliPlatform(
-                onUseCurrentLocation = locationAdapter::requestCurrentLocation,
-                onPickMediaForAlbum = mediaPicker::pickForAlbum,
-                onPickConversationPhoto = mediaPicker::pickConversationPhoto,
-                onPickVerificationSelfie = mediaPicker::pickVerificationSelfie,
-                // Founder-locked web behavior: Store is read-only; browsers have no launcher icon.
-                storePurchasesAvailable = false,
-                discreetIconSupported = false,
-                devLoginCredentials = graph.devLoginCredentials,
-                testerDiagnosticLabel = graph.testerDiagnosticLabel,
-                onNavigationRouteChanged = router::onRouteChanged,
-            ),
-    )
+    // A page cannot open the browser's site settings, so a blocked location gets directions instead.
+    ProvideLocationSettingsAccess(WebLocationSettingsAccess) {
+        PynapliApp(
+            graph = graph.pynapliAppGraph,
+            platform =
+                PynapliPlatform(
+                    onUseCurrentLocation = locationAdapter::requestCurrentLocation,
+                    onPickMediaForAlbum = mediaPicker::pickForAlbum,
+                    onPickConversationPhoto = mediaPicker::pickConversationPhoto,
+                    onPickVerificationSelfie = mediaPicker::pickVerificationSelfie,
+                    // Founder-locked web behavior: Store is read-only; browsers have no launcher icon.
+                    storePurchasesAvailable = false,
+                    discreetIconSupported = false,
+                    devLoginCredentials = graph.devLoginCredentials,
+                    testerDiagnosticLabel = graph.testerDiagnosticLabel,
+                    onNavigationRouteChanged = router::onRouteChanged,
+                ),
+        )
+    }
 }
+
+private val WebLocationSettingsAccess =
+    LocationSettingsAccess(
+        blockedHint =
+            "Your browser is blocking location for this site. Allow it in the site settings " +
+                "(the icon beside the address), then tap Share my location again.",
+    )

@@ -112,8 +112,7 @@ hardware keyboard does the same, and each step's first field takes focus.
 
 Gender/orientation basics, lifestyle tags, and looking-for are deferred entirely to
 profile edit — the stepper collects only what the first grid needs. Notifications
-permission is requested post-signup by the existing authenticated prompt flow, not
-inside the stepper.
+permission is requested after the first grid (see Permissions), never inside the stepper.
 
 ## Email Sign-up (Membership Privacy)
 
@@ -323,11 +322,29 @@ Location:
 
 - Ask after value is explained.
 - Use while-in-use.
-- If denied, show useful empty state and Settings link.
+- Say what skipping costs, neutrally, next to Skip and on the grid's location-required state:
+  "Without your location, you won't appear to anyone nearby." (`LOCATION_SKIP_COST_COPY`).
+- If denied, show useful empty state and Settings link. Implemented (2026-11-24, Section 1):
+  `LocationUiState.blockedReason` is set when asking again cannot help, and `LocationAccessHelp`
+  (Location step and grid empty state) shows the way back:
+  - Android: "Open Settings". A refusal after which neither location permission has a rationale
+    to show opens app details; no enabled provider (services off) opens location source settings
+    (`AndroidLocationSettingsOpener`, behind the shared `LocationSettingsOpener` interface).
+  - Web: a browser refusal is treated as blocked (browsers remember it per site), and the screen
+    explains where the site setting is; a page cannot open it.
+  - Desktop and iOS: nothing extra yet.
+  - Coming back from Settings fires the resume refresh (GRID_IMPLEMENTATION_SPEC, Location
+    Strategy), which sends a fix once the permission is granted.
+- A plain first refusal keeps the existing copy and the share button, which can ask again.
 
 Notifications:
 
 - Ask after explaining messages/matches/invites.
+- Ask after the first grid, not during sign-up (the session already exists on the Location step,
+  which is where the prompt used to land). `NotificationAskTiming` gates the Android prompt: it
+  opens once, after about 20 s of Grid on screen while the app is in the foreground (added up
+  across tab switches) or when the first conversation opens, whichever comes first. The
+  device-local "already asked" preference still limits it to one OS prompt per install.
 - If denied, app still works.
 
 ## Post-Signup Nudges
@@ -344,6 +361,18 @@ Rules:
 - Dismissible.
 - Stop after a small number of sessions.
 - Deep-link to relevant edit section.
+- System permission asks follow the same spirit: the notification prompt waits for the first grid
+  (Permissions above), so the sign-up session never ends on an OS dialog.
+
+Returning members (2026-11-24, Section 1, plan G1): with a stored session, launch goes straight to
+the shell and paints the cached grid; `GET /v1/me` checks the session in the background
+(`AuthStateHolder.restoreSession`). A terminal answer (revoked, refresh rejected, account not
+active) signs out with "Your session ended. Please sign in again."; a network error keeps the member
+in with what is cached. A session stored without an access token is still checked before anything
+shows. The resume decision for an interrupted sign-up is unchanged: it reads the device-local
+progress store in `OnboardingStateHolder.onSessionReady`, which App.kt calls once the session has
+settled, now simply sooner. Signing out also resets the location holder, so the next account on the
+device gets its own Location step and its first fix is always sent.
 
 ## Profile Completeness
 
@@ -377,6 +406,7 @@ Do not:
 
 - [x] Acceptance harness that proves faces (2026-11-24, onboarding + first grid plan Section 0): `scripts/android-onboarding-qa.ps1 -LocationPath both|denied|allowed` adds a location-allowed path (permission granted, emulator fix in the seeded area) that fails on "Use current location" and passes only when real grid cards render (seeded names, or at least 6 card text nodes when earlier QA accounts in the cell outrank them); `scripts/web-qa.ps1 -AuthWalk on|only|off` walks sign-up (emailed code from the dev mailer, granted geolocation) to a grid of real members, Log out, and sign-in back to the grid. `PynapliPerfMarks` logs `create_account_tap`, `account_submit` and `first_grid_card` once per process (Android logcat tag `PynapliPerf`, web `performance.mark('pynapli:*')`, no member data). **Baseline (scripted, includes typing and the code lookup; compare only against the same script):** Android API 36 emulator: landing tap to first card 89.8 s, Account step to first card 33.2 s. Web (phone viewport): 52.4 s and 18.7 s. Bugs B1 to B4 and the photo-nudge race are reproduced as ignored failing tests in `OnboardingStateHolderTest`, `LocationStateHolderTest` and `GridStateHolderTest`, and B1 as a KNOWN web QA check; each fix removes its `@Ignore`. B5 (splash jump) and B6 (back closes the app mid-sign-up) are emulator-only.
 - [x] Section 1, part A (2026-11-24, smooth sign-up and sign-in; client plus the password rule): welcome landing with the legacy create-account form removed (B1 at the root; auth mode resets on sign-out and on leaving the stepper; both B1 repros un-ignored, the web QA B1 check is now a real check); the stepper holds the screen while a resume decides and the shell holds the grid until `onSessionReady` has decided the session (B3, un-ignored); the add-a-photo nudge reads an in-memory flag set before the session exists, so it can't arm in the sign-up session (un-ignored); back steps through the stepper on Android and per-step browser history on the web (B6, `PynapliHistoryPlanner`); phone birthday wheel with typed fallback; autofill content types, Next/Done/Enter, first-field focus, backspace through the typed birthday, code auto-submit, resend countdown, Sign in on the code step, the reset code shown in the clear, photo preview and Done on Profile, policy links in a tab; password minimum 10 with the shared common-password list (`PasswordRules`; `PASSWORD_TOO_COMMON`, never on sign-in). Part B (location reset, grid prefetch reuse, splash, Location copy and Settings link, notification timing, non-blocking `/me`, location refresh on resume) is tracked separately. Open: iOS policy links still open Safari (SFSafariViewController needs a Mac); backspace-to-previous on Android soft keyboards depends on the IME sending the key for an empty field.
+- [x] Section 1 part B (2026-11-24, client only): location reset on sign-out (B2) and the grid joining the Location step's load (B4), both Section 0 repros un-ignored; one centred splash on both Android boot stages (B5, emulator check); skip-cost copy and the Settings way back on the Location step and empty grid; the notification ask moved after the first grid; returning members straight to the shell with `/me` in the background (G1); silent resume location refresh, sent only on a new cell (G7). Tests: `LocationStateHolderTest`, `GridStateHolderTest`, `AuthStateHolderTest`, `NotificationAskTimingTest`.
 
 ## Do Not Implement
 

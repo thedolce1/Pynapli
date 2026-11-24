@@ -3,9 +3,11 @@ package com.pynapli.web
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.location.DeviceLocation
 import com.pynapli.app.location.LocationStateHolder
+import com.pynapli.app.location.refreshInBackground
 import com.pynapli.app.location.submitAndRefresh
 import com.pynapli.web.platform.geolocationAvailable
 import com.pynapli.web.platform.requestBrowserGeolocation
+import com.pynapli.web.platform.whenGeolocationAlreadyGranted
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -41,8 +43,37 @@ class WebLocationAdapter(
                     )
                 }
             },
-            onPermissionDenied = { locationStateHolder.markPermissionDenied() },
+            // A browser remembers a refusal for the site and will not prompt again from a click, so
+            // the screen explains where its switch is (LocationSettingsAccess.blockedHint).
+            onPermissionDenied = { locationStateHolder.markPermissionDenied(permanently = true) },
             onUnavailable = { locationStateHolder.markUnavailable() },
         )
+    }
+
+    /**
+     * Tab visible again (or the page just loaded signed in): when the site already holds the
+     * permission, take a fresh fix and send it silently, only if its cell changed. Never prompts,
+     * never shows progress or errors; a refused or failed fix is simply dropped.
+     */
+    fun refreshIfAlreadyGranted() {
+        if (!geolocationAvailable()) return
+        whenGeolocationAlreadyGranted {
+            requestBrowserGeolocation(
+                onSuccess = { latitude, longitude, accuracyMeters ->
+                    scope.launch {
+                        locationStateHolder.refreshInBackground(
+                            DeviceLocation(
+                                latitude = latitude,
+                                longitude = longitude,
+                                accuracyMeters = accuracyMeters.toInt(),
+                            ),
+                            gridStateHolder,
+                        )
+                    }
+                },
+                onPermissionDenied = {},
+                onUnavailable = {},
+            )
+        }
     }
 }
