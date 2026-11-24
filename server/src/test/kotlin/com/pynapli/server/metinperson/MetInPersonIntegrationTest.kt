@@ -45,7 +45,7 @@ class MetInPersonIntegrationTest {
     private val clock = MetInPersonTestClock(Instant.parse("2026-11-18T12:00:00Z"))
     private val tokens = MetInPersonTokens("met-in-person-integration-key-0123456789")
     private val fx = MetInPersonFixtures(dataSource, clock)
-    private val service = MetInPersonService(dataSource, tokens, clock)
+    private val service = MetInPersonService(dataSource, tokens, com.pynapli.server.contactblocks.JdbcContactBlockVisibility(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()), clock)
     private val batch = MetInPersonBadgeBatch(dataSource, tokens, clock, Random(42), chunkSize = 3)
     private val profiles = JdbcProfileRepository(dataSource)
     private val messaging = MessagingService(JdbcMessagingRepository(dataSource, ContactBlockTokens.localDevelopment()))
@@ -628,7 +628,7 @@ class MetInPersonIntegrationTest {
             val chat = fx.talked(voucher, subject)
             confirm(voucher, chat, subject)
             val wrong = MetInPersonTokens("a-different-met-in-person-key-0123456789")
-            val wrongService = MetInPersonService(dataSource, wrong, clock)
+            val wrongService = MetInPersonService(dataSource, wrong, com.pynapli.server.contactblocks.JdbcContactBlockVisibility(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()), clock)
             assertEquals(
                 MetInPersonService.NOT_AVAILABLE,
                 assertFailsWith<MessagingException> { wrongService.offers(voucher, chat.toString()) }.code,

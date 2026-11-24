@@ -66,6 +66,7 @@ class AccountDataExportContentsIntegrationTest {
                     contactBlockTokens =
                         com.pynapli.server.contactblocks.ContactBlockTokens
                             .localDevelopment(),
+                    metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment(),
                 ).buildArchive(myId)
             val text = archive.bytes.decodeToString()
             val document = Json.parseToJsonElement(text).jsonObject

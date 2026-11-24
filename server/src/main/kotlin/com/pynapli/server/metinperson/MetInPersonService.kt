@@ -1,9 +1,11 @@
 package com.pynapli.server.metinperson
 
+import com.pynapli.server.contactblocks.ContactBlockVisibility
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.lockForTransaction
 import com.pynapli.server.db.withConnection
 import com.pynapli.server.messaging.MessagingException
+import com.pynapli.server.messaging.isConversationHiddenFor
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartners
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.countGivenSince
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.keyMatches
@@ -35,10 +37,16 @@ import javax.sql.DataSource
  *   their pair tokens over everyone they have shared a conversation with.
  * - The menu asks for offers on its own request (`GET .../met-in-person`), never on the read mark, so a
  *   failure here can never stop a conversation from opening.
+ * - "Hide from people you know" (viewer side, the messaging rule): a conversation whose every current
+ *   co-participant hides from the viewer answers exactly like an unknown conversation, and anyone
+ *   hiding from the viewer is left out of every answer (never offered, never confirmable, never named
+ *   as a partner). Exempt pairs carry no active row, so they are unaffected.
  */
 class MetInPersonService(
     private val dataSource: DataSource,
     private val tokens: MetInPersonTokens,
+    // Required, so a dropped wiring fails the build instead of showing hidden people.
+    private val contactBlockVisibility: ContactBlockVisibility,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun offers(
@@ -46,10 +54,11 @@ class MetInPersonService(
         conversationIdText: String,
     ): MetInPersonOffersDto {
         val conversationId = conversationIdText.toUuidOrRefuse()
+        val hidden = contactBlockVisibility.hiddenFrom(viewerUserId)
         return dataSource.withConnection { connection ->
             val now = clock.instant()
             if (!connection.keyMatches(tokens, now)) refuse()
-            val snapshot = connection.snapshot(viewerUserId, conversationId, now) ?: refuse()
+            val snapshot = connection.snapshot(viewerUserId, conversationId, now, hidden) ?: refuse()
             MetInPersonOffersDto(offers = snapshot.states.filter(MetInPersonRules::actionable))
         }
     }
@@ -61,6 +70,7 @@ class MetInPersonService(
     ): MetInPersonOfferDto {
         val conversationId = conversationIdText.toUuidOrRefuse()
         val subjectUserId = request.subjectUserId.toUuidOrRefuse()
+        val hidden = contactBlockVisibility.hiddenFrom(viewerUserId)
         return dataSource.withConnection { connection ->
             connection.inTransaction {
                 val now = clock.instant()
@@ -68,7 +78,7 @@ class MetInPersonService(
                 // Serialises one voucher's writes so the monthly cap cannot be raced past. The lock key
                 // is a token, so no user id is handed to the database here.
                 lockForTransaction(LOCK_NAMESPACE, tokens.auditVoucher(viewerUserId))
-                val snapshot = snapshot(viewerUserId, conversationId, now) ?: refuse()
+                val snapshot = snapshot(viewerUserId, conversationId, now, hidden) ?: refuse()
                 val state = snapshot.stateFor(subjectUserId) ?: refuse()
                 if (state.given) {
                     // A repeat (or a retry after a lost response) changes nothing, not even the date.
@@ -99,7 +109,7 @@ class MetInPersonService(
                         expiryCutoff = MetInPersonRules.expiryCutoff(now),
                     )
                 }
-                snapshot(viewerUserId, conversationId, now)?.stateFor(subjectUserId) ?: refuse()
+                snapshot(viewerUserId, conversationId, now, hidden)?.stateFor(subjectUserId) ?: refuse()
             }
         }
     }
@@ -112,12 +122,13 @@ class MetInPersonService(
     ): MetInPersonOfferDto {
         val conversationId = conversationIdText.toUuidOrRefuse()
         val subjectUserId = request.subjectUserId.toUuidOrRefuse()
+        val hidden = contactBlockVisibility.hiddenFrom(viewerUserId)
         return dataSource.withConnection { connection ->
             connection.inTransaction {
                 val now = clock.instant()
                 if (!keyMatches(tokens, now)) refuse()
                 lockForTransaction(LOCK_NAMESPACE, tokens.auditVoucher(viewerUserId))
-                val snapshot = snapshot(viewerUserId, conversationId, now) ?: refuse()
+                val snapshot = snapshot(viewerUserId, conversationId, now, hidden) ?: refuse()
                 snapshot.stateFor(subjectUserId) ?: refuse()
                 val row = snapshot.rows[subjectUserId]
                 if (row != null && MetInPersonRules.canWithdraw(row, now)) {
@@ -140,7 +151,7 @@ class MetInPersonService(
                             }
                     }
                 }
-                snapshot(viewerUserId, conversationId, now)?.stateFor(subjectUserId) ?: refuse()
+                snapshot(viewerUserId, conversationId, now, hidden)?.stateFor(subjectUserId) ?: refuse()
             }
         }
     }
@@ -158,10 +169,18 @@ class MetInPersonService(
         viewerUserId: UUID,
         conversationId: UUID,
         now: Instant,
+        // Everyone hiding from the viewer (ContactBlockVisibility.hiddenFrom, read before the transaction).
+        hiddenFromViewer: Set<UUID>,
     ): Snapshot? {
         val viewer = viewerFacts(viewerUserId, conversationId) ?: return null
         if (!viewer.participant) return null
-        val subjects = subjectFacts(viewerUserId, conversationId)
+        val allSubjects = subjectFacts(viewerUserId, conversationId)
+        // Messaging's rule: nobody but people hiding from the viewer here means the conversation isn't theirs.
+        val currentOthers = allSubjects.filter { it.currentParticipant }.map { it.subjectUserId }
+        if (isConversationHiddenFor(currentOthers, hiddenFromViewer)) return null
+        // Like the participants messaging shows: people hiding from the viewer are left out (so they are
+        // never offered, confirmable, or named as someone's partner).
+        val subjects = allSubjects.filterNot { it.subjectUserId in hiddenFromViewer }
         val partners = conversationPartners(viewerUserId)
         val subjectByToken = subjects.associate { tokens.pair(viewerUserId, it.subjectUserId) to it.subjectUserId }
         val stored = pairRows(subjectByToken.keys)

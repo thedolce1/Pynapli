@@ -331,7 +331,7 @@ private suspend fun exportActivityRowsFrom(
     exporter: UUID,
     actor: UUID,
 ): Int {
-    val archive = JdbcAccountDataExportArchiver(dataSource, contactBlockTokens = graph.tokens).buildArchive(exporter)
+    val archive = JdbcAccountDataExportArchiver(dataSource, contactBlockTokens = graph.tokens, metInPersonAccountData = com.pynapli.server.metinperson.MetInPersonAccountData.localDevelopment()).buildArchive(exporter)
     val document = Json.parseToJsonElement(archive.bytes.decodeToString()).jsonObject
     return (document["activity"] as JsonArray).count { row -> row.jsonObject["actor_user_id"]?.jsonPrimitive?.content == actor.toString() }
 }

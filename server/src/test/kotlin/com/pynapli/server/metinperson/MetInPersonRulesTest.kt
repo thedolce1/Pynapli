@@ -34,6 +34,7 @@ class MetInPersonRulesTest {
         subjectUserId = id,
         displayName = name,
         activeParticipant = true,
+        currentParticipant = true,
         verified = true,
         viewerSent = true,
         subjectSent = true,

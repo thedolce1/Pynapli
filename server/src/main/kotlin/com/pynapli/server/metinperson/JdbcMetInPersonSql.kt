@@ -1,5 +1,6 @@
 package com.pynapli.server.metinperson
 
+import com.pynapli.server.contactblocks.ContactBlockSql
 import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import org.slf4j.LoggerFactory
 import java.sql.Connection
@@ -101,6 +102,8 @@ internal object JdbcMetInPersonSql {
         SELECT cp.user_id AS subject_user_id,
                COALESCE(NULLIF(sp.display_name, ''), 'Pynapli User') AS display_name,
                (cp.invitation_status = 'active' AND cp.left_at IS NULL) AS active_participant,
+               -- The rows messaging's conversation load holds (contact-block conversation rule).
+               (cp.invitation_status IN ('active', 'invited') AND cp.left_at IS NULL) AS current_participant,
                (sp.verified_at IS NOT NULL) AS subject_verified,
                pair_messages.first_at,
                pair_messages.last_at,
@@ -204,6 +207,7 @@ internal object JdbcMetInPersonSql {
                                 subjectUserId = rs.getObject("subject_user_id", UUID::class.java),
                                 displayName = rs.getString("display_name"),
                                 activeParticipant = rs.getBoolean("active_participant"),
+                                currentParticipant = rs.getBoolean("current_participant"),
                                 verified = rs.getBoolean("subject_verified"),
                                 viewerSent = rs.getBoolean("viewer_sent"),
                                 subjectSent = rs.getBoolean("subject_sent"),
@@ -219,6 +223,32 @@ internal object JdbcMetInPersonSql {
                     }
                 }
             }
+        }
+
+    /**
+     * Everyone [userId] has ever shared a conversation with (left or not; participant rows are never deleted)
+     * and who is not hiding from them ("Hide from people you know", active rows): main's person-level
+     * fragment [ContactBlockSql.notHiddenFromViewer], bound to [viewerContactToken]. For what the person
+     * is shown (their export); deletion and the cap use [conversationPartners], which must see everyone.
+     */
+    fun Connection.conversationPartnersVisibleTo(
+        userId: UUID,
+        viewerContactToken: String,
+    ): Set<UUID> =
+        prepareStatement(
+            """
+            SELECT DISTINCT b.user_id
+            FROM conversation_participants a
+            JOIN conversation_participants b
+              ON b.conversation_id = a.conversation_id
+             AND b.user_id <> a.user_id
+            WHERE a.user_id = ?
+              AND ${ContactBlockSql.notHiddenFromViewer("b.user_id")}
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setObject(1, userId)
+            statement.setString(2, viewerContactToken)
+            statement.executeQuery().use { rs -> buildSet { while (rs.next()) add(rs.getObject(1, UUID::class.java)) } }
         }
 
     /** Everyone [userId] has ever shared a conversation with (left or not; participant rows are never deleted). */

@@ -11,7 +11,8 @@ class JdbcAccountLifecycleRepository(
     // The server's contact block keys. Required on purpose: built without the configured keys,
     // deletion would release nothing (CoreDependencies passes them; tests pass the local ones).
     contactBlockTokens: com.pynapli.server.contactblocks.ContactBlockTokens,
-    metInPersonAccountData: MetInPersonAccountData? = null,
+    // K3-dependent: required for the same reason.
+    metInPersonAccountData: MetInPersonAccountData,
 ) : AccountLifecycleRepository {
     private val exportActions = JdbcAccountDataExportActions(dataSource)
     private val deletionActions = JdbcAccountDeletionActions(dataSource, contactBlockTokens, metInPersonAccountData)

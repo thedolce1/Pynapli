@@ -160,9 +160,10 @@ class ServerDependencies(
     val photoVerificationService: PhotoVerificationService,
     val photoVerificationRetentionWorker: PhotoVerificationRetentionWorker? = null,
     val accountLifecycleService: AccountLifecycleService,
-    val metInPersonService: com.pynapli.server.metinperson.MetInPersonService? = null,
-    val adminMetInPersonService: com.pynapli.server.metinperson.AdminMetInPersonService? = null,
-    val metInPersonBadgeWorker: com.pynapli.server.metinperson.MetInPersonBadgeWorker? = null,
+    // K3-dependent: required, so a dropped wiring fails the build.
+    val metInPersonService: com.pynapli.server.metinperson.MetInPersonService,
+    val adminMetInPersonService: com.pynapli.server.metinperson.AdminMetInPersonService,
+    val metInPersonBadgeWorker: com.pynapli.server.metinperson.MetInPersonBadgeWorker,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     val contactBlockService: com.pynapli.server.contactblocks.ContactBlockService? = null,
     val contactBlockResolverWorker: com.pynapli.server.contactblocks.ContactBlockResolverWorker? = null,
@@ -179,7 +180,7 @@ class ServerDependencies(
         runCatching { dataRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
         runCatching { photoVerificationRetentionWorker?.close() }
-        runCatching { metInPersonBadgeWorker?.close() }
+        runCatching { metInPersonBadgeWorker.close() }
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
         runCatching { psyncSessionExpiryWorker?.close() }
@@ -443,7 +444,7 @@ class ServerDependencies(
                 } else {
                     null
                 }
-            val metInPerson = buildMetInPersonDependencies(config, database.dataSource)
+            val metInPerson = buildMetInPersonDependencies(config, database.dataSource, core.contactBlockVisibility)
             val messaging =
                 buildMessagingDependencies(
                     dataSource = database.dataSource,

@@ -1,6 +1,7 @@
 package com.pynapli.server.dependencies
 
 import com.pynapli.server.config.ServerConfig
+import com.pynapli.server.contactblocks.ContactBlockVisibility
 import com.pynapli.server.db.PostgresJobLock
 import com.pynapli.server.metinperson.AdminMetInPersonService
 import com.pynapli.server.metinperson.MetInPersonAccountData
@@ -24,10 +25,12 @@ internal fun metInPersonAccountData(config: ServerConfig): MetInPersonAccountDat
 internal fun buildMetInPersonDependencies(
     config: ServerConfig,
     dataSource: DataSource,
+    // "Hide from people you know": the viewer-side rule every Met in person answer applies.
+    contactBlockVisibility: ContactBlockVisibility,
 ): MetInPersonDependencies {
     val tokens = metInPersonTokens(config)
     return MetInPersonDependencies(
-        service = MetInPersonService(dataSource = dataSource, tokens = tokens),
+        service = MetInPersonService(dataSource = dataSource, tokens = tokens, contactBlockVisibility = contactBlockVisibility),
         adminService = AdminMetInPersonService(dataSource = dataSource, tokens = tokens),
         // Weekly at a random time; ticks are cheap until it is due. One replica per tick (JobLock),
         // and the schedule row makes it once per week even across replicas.

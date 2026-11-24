@@ -157,6 +157,8 @@ data class MetInPersonSubjectFacts(
     val subjectUserId: UUID,
     val displayName: String,
     val activeParticipant: Boolean,
+    /** Active or invited and not left: a row messaging's conversation load holds. */
+    val currentParticipant: Boolean,
     val verified: Boolean,
     val viewerSent: Boolean,
     val subjectSent: Boolean,

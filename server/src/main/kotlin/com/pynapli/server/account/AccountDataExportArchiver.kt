@@ -36,7 +36,8 @@ class JdbcAccountDataExportArchiver(
     private val clock: Clock = Clock.systemUTC(),
     // The server's contact block keys (ServerDependencies passes the configured ones).
     private val contactBlockTokens: ContactBlockTokens,
-    private val metInPersonAccountData: MetInPersonAccountData? = null,
+    // K3-dependent: required, so a dropped wiring fails the build instead of exporting nothing.
+    private val metInPersonAccountData: MetInPersonAccountData,
 ) : AccountDataExportArchiver {
     override suspend fun buildArchive(userId: UUID): ExportArchive =
         dataSource.withConnection { connection ->
@@ -57,7 +58,7 @@ class JdbcAccountDataExportArchiver(
                     val hiddenToken = contactBlockTokens.targetToken(userId)
                     VIEWER_FILTERED_SECTIONS.forEach { (name, sql) -> put(name, connection.queryRowsForViewer(sql, userId, hiddenToken)) }
                     // Confirmations the person gave (by token); as a subject, only their badge state.
-                    metInPersonAccountData?.let { put("metInPerson", it.exportSection(connection, userId)) }
+                    put("metInPerson", metInPersonAccountData.exportSection(connection, userId, hiddenToken))
                 }
             ExportArchive(
                 filename = "pynapli-data-export-$userId.json",

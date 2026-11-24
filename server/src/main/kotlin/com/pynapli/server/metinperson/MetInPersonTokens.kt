@@ -56,5 +56,10 @@ class MetInPersonTokens(
         const val KEY_VERSION: Short = 1
         private const val ALGORITHM = "HmacSHA256"
         private const val HEX = "0123456789abcdef"
+
+        /** The fixed local development key (ServerConfig's default), for local runs and tests. */
+        const val LOCAL_DEV_KEY = "pynapli-local-dev-met-in-person-token-secret"
+
+        fun localDevelopment(): MetInPersonTokens = MetInPersonTokens(LOCAL_DEV_KEY)
     }
 }

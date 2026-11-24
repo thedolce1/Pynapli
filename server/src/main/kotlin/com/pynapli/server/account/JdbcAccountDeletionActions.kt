@@ -12,7 +12,8 @@ import javax.sql.DataSource
 internal class JdbcAccountDeletionActions(
     private val dataSource: DataSource,
     private val contactBlockTokens: ContactBlockTokens,
-    private val metInPersonAccountData: MetInPersonAccountData? = null,
+    // K3-dependent: required, so a dropped wiring fails the build instead of erasing nothing.
+    private val metInPersonAccountData: MetInPersonAccountData,
 ) {
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult? =
         dataSource.withConnection { connection ->
@@ -34,7 +35,7 @@ internal class JdbcAccountDeletionActions(
                 purgeFavoritesAndLastActive(connection, userId)
                 releaseContactBlocks(connection, userId)
                 // Met in person: confirmations given (by token) and received, and the badge.
-                metInPersonAccountData?.erase(connection, userId)
+                metInPersonAccountData.erase(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)

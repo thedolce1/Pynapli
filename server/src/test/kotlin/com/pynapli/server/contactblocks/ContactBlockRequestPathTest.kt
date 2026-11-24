@@ -128,6 +128,7 @@ class ContactBlockRequestPathTest {
             "contactBlockTokens = core.contactBlockTokens,",
             "onAccountVerified = core.contactBlockSettling::atVerify",
             "contactBlockVisibility = core.contactBlockVisibility,",
+            "buildMetInPersonDependencies(config, database.dataSource, core.contactBlockVisibility)",
         ).forEach { wiring -> assertTrue(wiring.compact() in server, "ServerDependencies must pass: $wiring") }
         // Activity, favorites, profile, profile links, media, grid, tonight, messaging, swipe, the field.
         assertTrue(

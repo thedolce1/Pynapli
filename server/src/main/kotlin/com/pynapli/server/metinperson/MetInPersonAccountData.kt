@@ -1,6 +1,7 @@
 package com.pynapli.server.metinperson
 
 import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartners
+import com.pynapli.server.metinperson.JdbcMetInPersonSql.conversationPartnersVisibleTo
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -18,6 +19,11 @@ import java.util.UUID
 class MetInPersonAccountData(
     private val tokens: MetInPersonTokens,
 ) {
+    companion object {
+        /** With the local development key (tests and local runs). */
+        fun localDevelopment(): MetInPersonAccountData = MetInPersonAccountData(MetInPersonTokens.localDevelopment())
+    }
+
     fun erase(
         connection: Connection,
         userId: UUID,
@@ -64,12 +70,16 @@ class MetInPersonAccountData(
      * The person's own part: the confirmations they gave (the subject's display name at export time and
      * the day), and, as a subject, only their published badge state and setting, exactly what everyone
      * else sees, at the same moment. Never who confirmed them, never a count, never anything pending.
+     * Confirmations of someone now hiding from the person ("Hide from people you know") are left out,
+     * as the export's other viewer-filtered sections leave out people hiding from them:
+     * [viewerContactToken] is the person's contact block target token.
      */
     fun exportSection(
         connection: Connection,
         userId: UUID,
+        viewerContactToken: String,
     ): JsonObject {
-        val partners = connection.conversationPartners(userId).toList()
+        val partners = connection.conversationPartnersVisibleTo(userId, viewerContactToken).toList()
         val subjectByToken = partners.associateBy { tokens.pair(userId, it) }
         val given =
             if (subjectByToken.isEmpty()) {
