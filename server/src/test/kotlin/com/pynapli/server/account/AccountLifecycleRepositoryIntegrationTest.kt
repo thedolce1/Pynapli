@@ -27,7 +27,12 @@ class AccountLifecycleRepositoryIntegrationTest {
         runBlocking {
             val userId = UUID.fromString("00000000-0000-0000-0000-000000000911")
             dataSource.insertUserWithProfile(userId, "Maya")
-            val repository = JdbcAccountLifecycleRepository(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
+            val repository =
+                JdbcAccountLifecycleRepository(
+                    dataSource,
+                    com.pynapli.server.contactblocks.ContactBlockTokens
+                        .localDevelopment(),
+                )
 
             val created = repository.createDataExportRequest(userId)
             val latest = repository.latestDataExportRequest(userId)
@@ -42,8 +47,19 @@ class AccountLifecycleRepositoryIntegrationTest {
         runBlocking {
             val userId = UUID.fromString("00000000-0000-0000-0000-000000000912")
             dataSource.insertUserWithProfile(userId, "Rae")
-            val repository = JdbcAccountLifecycleRepository(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
-            val archiver = JdbcAccountDataExportArchiver(dataSource, contactBlockTokens = com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
+            val repository =
+                JdbcAccountLifecycleRepository(
+                    dataSource,
+                    com.pynapli.server.contactblocks.ContactBlockTokens
+                        .localDevelopment(),
+                )
+            val archiver =
+                JdbcAccountDataExportArchiver(
+                    dataSource,
+                    contactBlockTokens =
+                        com.pynapli.server.contactblocks.ContactBlockTokens
+                            .localDevelopment(),
+                )
 
             repository.createDataExportRequest(userId)
             val claimed = repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS)
@@ -75,7 +91,12 @@ class AccountLifecycleRepositoryIntegrationTest {
         runBlocking {
             val userId = UUID.fromString("00000000-0000-0000-0000-000000000913")
             dataSource.insertUserWithProfile(userId, "Ilse")
-            val repository = JdbcAccountLifecycleRepository(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
+            val repository =
+                JdbcAccountLifecycleRepository(
+                    dataSource,
+                    com.pynapli.server.contactblocks.ContactBlockTokens
+                        .localDevelopment(),
+                )
             val request = repository.createDataExportRequest(userId)
 
             val first = assertNotNull(repository.claimNextPendingExport(STALE_AFTER, MAX_ATTEMPTS))
@@ -95,7 +116,12 @@ class AccountLifecycleRepositoryIntegrationTest {
         runBlocking {
             val userId = UUID.fromString("00000000-0000-0000-0000-000000000914")
             dataSource.insertUserWithProfile(userId, "Oren")
-            val repository = JdbcAccountLifecycleRepository(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
+            val repository =
+                JdbcAccountLifecycleRepository(
+                    dataSource,
+                    com.pynapli.server.contactblocks.ContactBlockTokens
+                        .localDevelopment(),
+                )
             val request = repository.createDataExportRequest(userId)
 
             repeat(MAX_ATTEMPTS) {
@@ -123,7 +149,12 @@ class AccountLifecycleRepositoryIntegrationTest {
             dataSource.insertMediaAsset(userId)
             dataSource.insertActivePartnerLink(subscriberId = userId, beneficiaryId = reporterId)
             dataSource.insertSafetyReport(reporterId, userId)
-            val repository = JdbcAccountLifecycleRepository(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment())
+            val repository =
+                JdbcAccountLifecycleRepository(
+                    dataSource,
+                    com.pynapli.server.contactblocks.ContactBlockTokens
+                        .localDevelopment(),
+                )
 
             val result = repository.deleteAccount(userId)
 
@@ -411,7 +442,11 @@ class AccountLifecycleRepositoryIntegrationTest {
                 friendId,
             )
 
-            JdbcAccountLifecycleRepository(dataSource, com.pynapli.server.contactblocks.ContactBlockTokens.localDevelopment()).deleteAccount(userId)
+            JdbcAccountLifecycleRepository(
+                dataSource,
+                com.pynapli.server.contactblocks.ContactBlockTokens
+                    .localDevelopment(),
+            ).deleteAccount(userId)
 
             assertEquals("ended", dataSource.stringValue("SELECT status FROM tonight_sessions WHERE id = ?", sessionId))
             assertEquals("skipped", dataSource.stringValue("SELECT status FROM notification_outbox WHERE id = ?", aboutThem))

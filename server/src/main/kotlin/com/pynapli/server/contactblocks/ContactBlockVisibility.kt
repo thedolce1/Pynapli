@@ -183,8 +183,7 @@ object ContactBlockSql {
      * "[userColumn] is not hiding from the viewer" (an active row; a person-level rule). Binds exactly
      * ONE parameter: the viewer's token ([ContactBlockVisibility.viewerToken], or [NO_VIEWER_TOKEN]).
      */
-    fun notHiddenFromViewer(userColumn: String): String =
-        "NOT EXISTS (SELECT 1 FROM contact_blocks hidden_cb WHERE hidden_cb.target_token = ? AND hidden_cb.blocker_user_id = $userColumn AND hidden_cb.released_at IS NULL)"
+    fun notHiddenFromViewer(userColumn: String): String = "NOT EXISTS (SELECT 1 FROM contact_blocks hidden_cb WHERE hidden_cb.target_token = ? AND hidden_cb.blocker_user_id = $userColumn AND hidden_cb.released_at IS NULL)"
 
     /**
      * "An act by [userColumn] dated [atColumn] may be shown to the viewer": not while an active row

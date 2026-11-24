@@ -50,8 +50,7 @@ class ContactBlockResolver(
     suspend fun resolveAllPending(): Int = resolveSince(Instant.EPOCH)
 
     /** The daily full sweep, when no replica has run it in the last [FULL_SWEEP_EVERY]; else the recent pass. */
-    suspend fun resolveScheduled(): Int =
-        if (repository.claimFullSweep(clock.instant(), FULL_SWEEP_EVERY)) resolveAllPending() else resolveRecent()
+    suspend fun resolveScheduled(): Int = if (repository.claimFullSweep(clock.instant(), FULL_SWEEP_EVERY)) resolveAllPending() else resolveRecent()
 
     private suspend fun resolveSince(createdSince: Instant): Int {
         var settled = 0

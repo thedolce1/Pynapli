@@ -74,7 +74,12 @@ class ContactBlockConversationsIntegrationTest :
                     X,
                 )
                 graph.messaging.matchConversationOpener.openForMatch(P, X)
-                val conversationId = graph.messaging.listConversations(X, null).items.single().conversationId
+                val conversationId =
+                    graph.messaging
+                        .listConversations(X, null)
+                        .items
+                        .single()
+                        .conversationId
                 val before = graph.messaging.markConversationRead(X, conversationId).partnerOffers
                 assertTrue(before?.participantPartners.orEmpty().isNotEmpty(), "unbound, X is told P is linked with A")
 
@@ -142,13 +147,22 @@ private fun groupWorld(
         seen["approve"] = snap(ConversationDetailDto.serializer(), graph.messaging.acceptPartnerInvite(A, conversationId))
         graph.messaging.acceptPartnerInvite(X, conversationId)
         graph.messaging.sendMessage(X, conversationId, SendMessageRequestDto(body = "Hello all"))
-        val xSortBefore = graph.messaging.listConversations(X, null).items.single().updatedAt
+        val xSortBefore =
+            graph.messaging
+                .listConversations(X, null)
+                .items
+                .single()
+                .updatedAt
         graph.messaging.sendMessage(A, conversationId, SendMessageRequestDto(body = "Welcome Riley"))
 
         seen["inbox"] = snap(ConversationListResponseDto.serializer(), graph.messaging.listConversations(A, null))
         seen["thread"] = snap(ConversationDetailDto.serializer(), graph.messaging.getConversationDetail(A, conversationId))
         seen["activity"] = snap(ActivitySummaryDto.serializer(), graph.activity.getActivitySummary(A))
-        seen["count"] = graph.contactBlocks.summary(A).count.toString()
+        seen["count"] =
+            graph.contactBlocks
+                .summary(A)
+                .count
+                .toString()
 
         GroupWorld(
             blocker = seen,

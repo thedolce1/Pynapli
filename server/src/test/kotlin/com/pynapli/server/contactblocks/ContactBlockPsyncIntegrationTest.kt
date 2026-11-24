@@ -125,7 +125,12 @@ class ContactBlockPsyncIntegrationTest :
                 assertNull(moments.single().pairUserId)
                 val inbox = graph.messaging.listConversations(X, null).items
                 assertTrue(inbox.none { conversation -> conversation.participants.any { it.userId == A.toString() } }, "no conversation with A for X")
-                assertTrue(graph.activity.listActivity(X).items.none { it.actorUserId == A.toString() })
+                assertTrue(
+                    graph.activity
+                        .listActivity(X)
+                        .items
+                        .none { it.actorUserId == A.toString() },
+                )
                 assertTrue(graph.messageDeltas.none { it.recipientUserId == X && it.conversationId in conversationsWith(graph, A, X) }, "no hint about the A-X conversation")
                 assertEquals(0, graph.outboxCount(recipient = X, actor = A))
                 val export = JdbcAccountDataExportArchiver(dataSource, contactBlockTokens = graph.tokens).buildArchive(X)

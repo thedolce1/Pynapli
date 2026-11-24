@@ -121,7 +121,9 @@ internal fun buildCoreDependencies(
             jobLock = PostgresJobLock(database.dataSource),
         )
     // Verify- and sign-in-time settling that can never fail the member's request (it retries on the worker).
-    val contactBlockSettling = com.pynapli.server.contactblocks.ContactBlockSettling(contactBlockResolver, contactBlockResolverWorker)
+    val contactBlockSettling =
+        com.pynapli.server.contactblocks
+            .ContactBlockSettling(contactBlockResolver, contactBlockResolverWorker)
     val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)
     val accountExportStorage = buildAccountExportStorage(config)
     val accountLifecycleService =

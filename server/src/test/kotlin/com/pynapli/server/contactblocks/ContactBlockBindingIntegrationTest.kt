@@ -119,12 +119,23 @@ class ContactBlockBindingIntegrationTest :
                 seedPair(graph)
                 graph.verifyAddress(TARGET, TARGET_ADDRESS)
                 graph.profiles.getPublicProfile(BLOCKER, TARGET)
-                assertTrue(graph.activity.listActivity(TARGET).items.any { it.actorUserId == BLOCKER.toString() }, "the view is shown first")
+                assertTrue(
+                    graph.activity
+                        .listActivity(TARGET)
+                        .items
+                        .any { it.actorUserId == BLOCKER.toString() },
+                    "the view is shown first",
+                )
 
                 addAndResolve(graph)
 
                 assertEquals(setOf(BLOCKER), graph.visibility.hiddenFrom(TARGET))
-                assertTrue(graph.activity.listActivity(TARGET).items.none { it.actorUserId == BLOCKER.toString() })
+                assertTrue(
+                    graph.activity
+                        .listActivity(TARGET)
+                        .items
+                        .none { it.actorUserId == BLOCKER.toString() },
+                )
                 assertEquals(0, graph.activity.getActivitySummary(TARGET).profileViewCount)
             }
         }
@@ -365,9 +376,17 @@ class ContactBlockBindingIntegrationTest :
                 graph.activity.sendFlirt(BLOCKER, TARGET)
                 val conversationId =
                     graph.messaging
-                        .createDirectConversation(BLOCKER, com.pynapli.shared.network.dto.CreateDirectConversationRequestDto(targetUserId = TARGET.toString()))
-                        .conversation.conversationId
-                graph.messaging.sendMessage(BLOCKER, conversationId, com.pynapli.shared.network.dto.SendMessageRequestDto(body = "Sent while hidden"))
+                        .createDirectConversation(
+                            BLOCKER,
+                            com.pynapli.shared.network.dto
+                                .CreateDirectConversationRequestDto(targetUserId = TARGET.toString()),
+                        ).conversation.conversationId
+                graph.messaging.sendMessage(
+                    BLOCKER,
+                    conversationId,
+                    com.pynapli.shared.network.dto
+                        .SendMessageRequestDto(body = "Sent while hidden"),
+                )
                 // Everything A did is dated before the release.
                 graph.execute("UPDATE activity_events SET first_occurred_at = now() - interval '1 minute', occurred_at = now() - interval '1 minute' WHERE actor_user_id = ?", BLOCKER)
                 graph.execute("UPDATE messages SET created_at = now() - interval '1 minute' WHERE sender_user_id = ?", BLOCKER)
@@ -377,12 +396,29 @@ class ContactBlockBindingIntegrationTest :
                 assertEquals(0, graph.contactBlocks.summary(BLOCKER).count, "the count drops exactly as for a pending row")
                 assertEquals(1, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE released_at IS NOT NULL"))
                 assertTrue(graph.visibility.hiddenFrom(TARGET).isEmpty(), "A shows up again for X")
-                assertTrue(graph.activity.listActivity(TARGET).items.none { it.actorUserId == BLOCKER.toString() }, "no backlog in Activity")
+                assertTrue(
+                    graph.activity
+                        .listActivity(TARGET)
+                        .items
+                        .none { it.actorUserId == BLOCKER.toString() },
+                    "no backlog in Activity",
+                )
                 assertEquals(0, graph.activity.getActivitySummary(TARGET).flirtCount)
-                assertTrue(graph.messaging.listConversations(TARGET, null).items.isEmpty(), "no backlog in Messages")
+                assertTrue(
+                    graph.messaging
+                        .listConversations(TARGET, null)
+                        .items
+                        .isEmpty(),
+                    "no backlog in Messages",
+                )
 
                 // What A does after the release reaches X.
-                graph.messaging.sendMessage(BLOCKER, conversationId, com.pynapli.shared.network.dto.SendMessageRequestDto(body = "After the release"))
+                graph.messaging.sendMessage(
+                    BLOCKER,
+                    conversationId,
+                    com.pynapli.shared.network.dto
+                        .SendMessageRequestDto(body = "After the release"),
+                )
                 val thread = graph.messaging.getConversationDetail(TARGET, conversationId)
                 assertEquals(listOf("After the release"), thread.messages.map { it.body })
             }
