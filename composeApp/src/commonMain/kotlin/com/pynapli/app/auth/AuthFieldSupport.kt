@@ -14,7 +14,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
 
-/**
+/*
  * Small pieces shared by the sign-in form and the sign-up stepper (onboarding + first grid plan,
  * Section 1, "Friction"). Enter is not handled here: a single-line field already turns Enter into
  * its IME action (Compose's text key mapping), so every form wires `imeAction` + `keyboardActions`

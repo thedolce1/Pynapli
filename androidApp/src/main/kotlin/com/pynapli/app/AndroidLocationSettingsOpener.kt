@@ -23,8 +23,7 @@ class AndroidLocationSettingsOpener(
                 start(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) || start(appDetailsIntent())
         }
 
-    private fun appDetailsIntent(): Intent =
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", activity.packageName, null))
+    private fun appDetailsIntent(): Intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", activity.packageName, null))
 
     // ActivityNotFoundException (no such screen on this build) or a SecurityException from an OEM.
     private fun start(intent: Intent): Boolean = runCatching { activity.startActivity(intent) }.isSuccess

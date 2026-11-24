@@ -875,7 +875,11 @@ class GridStateHolderTest {
             filtered.await()
 
             assertEquals(2, repository.loadCount, "the prime starts no request of its own")
-            assertEquals(listOf("online"), stateHolder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("online"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
             assertTrue(stateHolder.state.value.filters.online)
             assertFalse(stateHolder.state.value.isRefreshing)
         }
@@ -902,7 +906,11 @@ class GridStateHolderTest {
             priming.await()
 
             assertEquals(2, repository.loadCount)
-            assertEquals(listOf("nearby"), stateHolder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("nearby"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
             assertFalse(stateHolder.state.value.isRefreshing)
         }
 }

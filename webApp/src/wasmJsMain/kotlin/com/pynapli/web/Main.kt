@@ -42,7 +42,9 @@ fun main() {
             // the resulting step right away; the store cleanup finishes on its own.
             signupStepBack = {
                 appScope.launch(start = CoroutineStart.UNDISPATCHED) { onboarding.stepBack() }
-                onboarding.state.value.takeIf { it.active }?.let { PynapliRoutes.signupPath(it.step) }
+                onboarding.state.value
+                    .takeIf { it.active }
+                    ?.let { PynapliRoutes.signupPath(it.step) }
             },
         )
     router.start()

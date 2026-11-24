@@ -881,14 +881,22 @@ class OnboardingStateHolderTest {
             untouched.onboarding.startCreateAccount()
             untouched.onboarding.showBirthdayWheel()
             untouched.onboarding.useTypedBirthday()
-            assertEquals(listOf("", "", ""), untouched.onboarding.state.value.let { listOf(it.dobDay, it.dobMonth, it.dobYear) })
+            assertEquals(
+                listOf("", "", ""),
+                untouched.onboarding.state.value
+                    .let { listOf(it.dobDay, it.dobMonth, it.dobYear) },
+            )
 
             val chosen = Fixture()
             chosen.onboarding.startCreateAccount()
             chosen.onboarding.showBirthdayWheel()
             chosen.onboarding.selectWheelDate(day = 3, month = 4, year = 1995)
             chosen.onboarding.useTypedBirthday()
-            assertEquals(listOf("03", "04", "1995"), chosen.onboarding.state.value.let { listOf(it.dobDay, it.dobMonth, it.dobYear) })
+            assertEquals(
+                listOf("03", "04", "1995"),
+                chosen.onboarding.state.value
+                    .let { listOf(it.dobDay, it.dobMonth, it.dobYear) },
+            )
         }
 
     @Test

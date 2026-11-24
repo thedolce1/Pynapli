@@ -192,7 +192,6 @@ class AndroidAppGraph(
         )
     }
 
-    /** Keeps the device's push registration in step with the session and settings. */
     /** Set by MainActivity's onStart/onStop, so Grid time only counts while the app is in front. */
     val appInForeground = MutableStateFlow(false)
 
@@ -204,6 +203,7 @@ class AndroidAppGraph(
             appInForeground = appInForeground,
         )
 
+    /** Keeps the device's push registration in step with the session and settings. */
     val pushRegistrationSync =
         PushRegistrationSync(
             pushRegistrationCoordinator,

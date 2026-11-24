@@ -73,7 +73,7 @@ class NotificationAskTimingTest {
             backgroundScope.launch { fixture.timing.run() }
             fixture.grid.value = true
             fixture.foreground.value = false
-            advanceTimeBy(5 * 60.seconds)
+            advanceTimeBy((5 * 60).seconds)
             runCurrent()
             assertFalse(fixture.timing.ready.value, "the OS dialog must not wait for a stopped activity")
 

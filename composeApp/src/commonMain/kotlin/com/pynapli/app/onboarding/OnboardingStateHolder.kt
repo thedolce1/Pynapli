@@ -541,7 +541,13 @@ class OnboardingStateHolder(
             evaluatePhotoNudge()
         } finally {
             // Fail open: whatever happened above, the shell may now draw the main surfaces.
-            _state.update { it.copy(sessionSettledFor = authStateHolder.state.value.session?.userId) }
+            _state.update {
+                it.copy(
+                    sessionSettledFor =
+                        authStateHolder.state.value.session
+                            ?.userId,
+                )
+            }
         }
     }
 
@@ -759,7 +765,11 @@ class OnboardingStateHolder(
             state: OnboardingUiState,
             years: IntRange,
         ): LocalDate? {
-            val year = state.dobYear.takeIf { it.length == 4 }?.toIntOrNull()?.takeIf { it in years } ?: return null
+            val year =
+                state.dobYear
+                    .takeIf { it.length == 4 }
+                    ?.toIntOrNull()
+                    ?.takeIf { it in years } ?: return null
             val month = state.dobMonth.toIntOrNull()?.takeIf { it in 1..12 } ?: return null
             val day = state.dobDay.toIntOrNull()?.takeIf { it in 1..daysInMonth(year, month) } ?: return null
             return LocalDate(year, month, day)
