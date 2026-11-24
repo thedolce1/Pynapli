@@ -80,19 +80,42 @@ class OnboardingStateHolder(
         }
     }
 
-    /** Back to sign-in; a sign-up still waiting for its code is dropped so the next launch doesn't reopen it. */
+    /**
+     * The stepper's "Sign in" links: straight to the sign-in form. A sign-up still waiting for its
+     * code is dropped so the next launch doesn't reopen it. An address typed in this session is
+     * carried over to the sign-in form; a resumed (masked) one never is.
+     */
     suspend fun cancelToSignIn() {
+        val current = _state.value
+        val typedEmail = current.email.trim().takeIf { it.isNotEmpty() && !current.emailShownMasked }
+        leaveStepper()
+        authStateHolder.showSignIn(prefillEmail = typedEmail)
+        clearPendingSignup()
+    }
+
+    /** Back from the first step: to the welcome landing, dropping any waiting sign-up. */
+    suspend fun cancelToWelcome() {
+        leaveStepper()
+        authStateHolder.showWelcome()
+        clearPendingSignup()
+    }
+
+    // State first, store second: the web router reads the step synchronously after a back press.
+    private fun leaveStepper() {
         pendingSignupToken = null
         failedCodeSubmissions = 0
-        clearPendingSignup()
         _state.update {
             it.copy(
                 active = false,
                 step = OnboardingStep.Dob,
+                email = if (it.emailShownMasked) "" else it.email,
+                emailShownMasked = false,
+                password = "",
                 signupCode = "",
                 signupAttemptsSpent = false,
                 signupNotice = null,
                 accountNotice = null,
+                isSubmitting = false,
                 errorMessage = null,
             )
         }

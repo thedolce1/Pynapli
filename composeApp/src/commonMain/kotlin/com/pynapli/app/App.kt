@@ -249,12 +249,11 @@ fun PynapliApp(
                 state = authState,
                 onEmailChanged = graph.authStateHolder::updateEmail,
                 onPasswordChanged = graph.authStateHolder::updatePassword,
-                onBirthdateChanged = graph.authStateHolder::updateBirthdate,
-                onAcceptedAgeAndTermsChanged = graph.authStateHolder::updateAcceptedAgeAndTerms,
                 onModeSelected = graph.authStateHolder::switchMode,
                 onSubmit = {
                     scope.launch { graph.authStateHolder.submit() }
                 },
+                onShowWelcome = graph.authStateHolder::showWelcome,
                 onResetCodeChanged = graph.authStateHolder::updateResetCode,
                 onResendResetCode = { scope.launch { graph.authStateHolder.requestPasswordReset() } },
                 onAppealReasonChanged = graph.authStateHolder::updateAppealReason,

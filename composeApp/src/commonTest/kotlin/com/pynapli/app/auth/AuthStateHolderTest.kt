@@ -192,32 +192,112 @@ class AuthStateHolderTest {
         }
 
     @Test
-    fun theLegacyInlineCreateAccountFormNeverStartsASignUp() =
+    fun aSignedOutVisitorStartsOnTheWelcomeLandingInSignInMode() =
+        runTest {
+            val holder = holder(FakeAuthApi())
+
+            assertTrue(holder.state.value.showWelcome)
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+
+            // "Sign in" on the landing opens the form; back returns to the landing.
+            holder.switchMode(AuthMode.SignIn)
+            assertFalse(holder.state.value.showWelcome)
+            holder.showWelcome()
+            assertTrue(holder.state.value.showWelcome)
+        }
+
+    @Test
+    fun theSignInScreenNeverStartsASignUp() =
         runTest {
             val api = FakeAuthApi()
-            val holder =
-                AuthStateHolder(
-                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
-                    platform = "test",
-                    appVersion = "0.0.0",
-                )
-            holder.switchMode(AuthMode.CreateAccount)
+            val holder = holder(api)
+            holder.switchMode(AuthMode.SignIn)
             holder.updateEmail("new@pynapli.local")
             holder.updatePassword("a-long-password-1")
-            holder.updateBirthdate("1990-01-01")
-            holder.updateAcceptedAgeAndTerms(true)
 
             holder.submit()
 
-            // It has no code step, so it must not send anyone a code it can't take back.
+            // Creating an account is the stepper's job (it has the birthday gate and the code step).
             assertEquals(0, api.signups)
-            assertFalse(holder.state.value.authenticated)
-            assertTrue(
-                holder.state.value.errorMessage
-                    .orEmpty()
-                    .isNotEmpty(),
-            )
+            assertEquals(1, api.logins.size)
         }
+
+    @Test
+    fun logOutReturnsToTheWelcomeLandingWithNothingLeftOver() =
+        runTest {
+            val holder = holder(FakeAuthApi(loginResult = AppResult.Success(session())))
+            holder.switchMode(AuthMode.ResetPassword)
+            holder.updateEmail("maya@pynapli.local")
+            holder.submit()
+            holder.switchMode(AuthMode.SignIn)
+            holder.updatePassword("a-long-password-1")
+            holder.submit()
+            assertTrue(holder.state.value.authenticated)
+
+            holder.logout()
+
+            val state = holder.state.value
+            assertFalse(state.authenticated)
+            assertTrue(state.showWelcome)
+            assertEquals(AuthMode.SignIn, state.mode)
+            assertEquals("", state.password)
+            assertFalse(state.resetCodeSent)
+            assertEquals(null, state.errorMessage)
+        }
+
+    @Test
+    fun showSignInOpensTheFormWithTheGivenAddressAndClearsOldErrors() =
+        runTest {
+            val holder = holder(FakeAuthApi(loginResult = AppResult.Failure(AppError("INVALID_CREDENTIALS", "Invalid email or password."))))
+            holder.switchMode(AuthMode.SignIn)
+            holder.updateEmail("old@pynapli.local")
+            holder.updatePassword("wrong-password-123")
+            holder.submit()
+            assertEquals("Invalid email or password.", holder.state.value.errorMessage)
+
+            holder.showSignIn(prefillEmail = "typed@pynapli.local")
+
+            val state = holder.state.value
+            assertFalse(state.showWelcome)
+            assertEquals("typed@pynapli.local", state.email)
+            assertEquals("", state.password)
+            assertEquals(null, state.errorMessage)
+        }
+
+    @Test
+    fun aSessionThatDiesLandsOnTheSignInFormNotTheWelcome() =
+        runTest {
+            val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            val holder =
+                AuthStateHolder(
+                    authRepository =
+                        AuthRepository(
+                            authApi = FakeAuthApi(loginResult = AppResult.Success(session())),
+                            profileApi = FakeProfileApi(),
+                            sessionStore = InMemoryStore(),
+                        ),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                    sessionInvalidations = invalidations,
+                )
+            val observer = launch(start = CoroutineStart.UNDISPATCHED) { holder.observeSessionInvalidations() }
+            holder.submitDevLogin(DevLoginCredentials("dev@pynapli.local", "PynapliDevPass123!"))
+
+            invalidations.emit(Unit)
+            runCurrent()
+
+            // The reason ("Your session ended") must be visible, so not behind the landing.
+            assertFalse(holder.state.value.showWelcome)
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+            observer.cancel()
+        }
+
+    private fun holder(api: FakeAuthApi): AuthStateHolder =
+        AuthStateHolder(
+            authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+            platform = "test",
+            appVersion = "0.0.0",
+        )
 
     private fun session(): AuthSessionDto =
         AuthSessionDto(

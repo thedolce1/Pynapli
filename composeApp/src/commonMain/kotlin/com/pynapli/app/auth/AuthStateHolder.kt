@@ -1,7 +1,6 @@
 package com.pynapli.app.auth
 
 import com.pynapli.shared.auth.AuthRepository
-import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.dto.APPEAL_REASON_MAX_LENGTH
@@ -43,9 +42,13 @@ class AuthStateHolder(
                 if (current.session == null) {
                     current
                 } else {
+                    // Straight to the sign-in form (not the welcome landing) so the reason is visible.
                     current.copy(
+                        mode = AuthMode.SignIn,
+                        showWelcome = false,
                         session = null,
                         password = "",
+                        isSubmitting = false,
                         errorMessage = "Your session ended. Please sign in again.",
                     )
                 }
@@ -69,14 +72,6 @@ class AuthStateHolder(
 
     fun updatePassword(value: String) {
         _state.update { current -> current.copy(password = value, errorMessage = null, accountSuspended = false, appealSent = false) }
-    }
-
-    fun updateBirthdate(value: String) {
-        _state.update { current -> current.copy(birthdate = value, errorMessage = null) }
-    }
-
-    fun updateAcceptedAgeAndTerms(value: Boolean) {
-        _state.update { current -> current.copy(acceptedAgeAndTerms = value, errorMessage = null) }
     }
 
     fun updateAppealReason(value: String) {
@@ -178,19 +173,46 @@ class AuthStateHolder(
     }
 
     fun switchMode(mode: AuthMode) {
+        _state.update { current -> current.clearedForm(mode = mode, showWelcome = false) }
+    }
+
+    /**
+     * Back to the welcome landing in sign-in mode: after sign-out, after leaving the sign-up stepper
+     * from its first step, and on back from the sign-in form. Clears whatever a sign-up or an
+     * earlier attempt left behind (an error, a half-typed password, a reset in progress).
+     */
+    fun showWelcome() {
+        _state.update { current -> current.clearedForm(mode = AuthMode.SignIn, showWelcome = true) }
+    }
+
+    /**
+     * Straight to the sign-in form, e.g. from the stepper's "Sign in" links. [prefillEmail] carries
+     * an address the person typed in the stepper; callers never pass a masked (resumed) one.
+     */
+    fun showSignIn(prefillEmail: String? = null) {
         _state.update { current ->
-            current.copy(
-                mode = mode,
-                resetCodeSent = false,
-                resetCode = "",
-                resetNotice = null,
-                password = "",
-                birthdate = if (mode == AuthMode.SignIn) "" else current.birthdate,
-                acceptedAgeAndTerms = if (mode == AuthMode.SignIn) false else current.acceptedAgeAndTerms,
-                errorMessage = null,
-            )
+            val cleared = current.clearedForm(mode = AuthMode.SignIn, showWelcome = false)
+            if (prefillEmail != null) cleared.copy(email = prefillEmail) else cleared
         }
     }
+
+    private fun AuthUiState.clearedForm(
+        mode: AuthMode,
+        showWelcome: Boolean,
+    ): AuthUiState =
+        copy(
+            mode = mode,
+            showWelcome = showWelcome,
+            resetCodeSent = false,
+            resetCode = "",
+            resetNotice = null,
+            password = "",
+            isSubmitting = false,
+            errorMessage = null,
+            accountSuspended = false,
+            appealReason = "",
+            appealSent = false,
+        )
 
     suspend fun submit() {
         val current = state.value
@@ -200,13 +222,7 @@ class AuthStateHolder(
             return
         }
 
-        submitCredentials(
-            email = current.email,
-            password = current.password,
-            birthdate = current.birthdate,
-            acceptedAgeAndTerms = current.acceptedAgeAndTerms,
-            mode = current.mode,
-        )
+        submitCredentials(email = current.email, password = current.password)
     }
 
     /**
@@ -226,7 +242,8 @@ class AuthStateHolder(
     ): EmailSignupStartedDto? {
         if (state.value.isSubmitting) return null
         val normalizedEmail = email.trim()
-        _state.update { it.copy(isSubmitting = true, errorMessage = null, mode = AuthMode.CreateAccount) }
+        // Auth mode is left alone: the stepper owns the screen, and leaving it lands on sign-in.
+        _state.update { it.copy(isSubmitting = true, errorMessage = null) }
         val result =
             authRepository.signupEmail(
                 email = normalizedEmail,
@@ -318,24 +335,15 @@ class AuthStateHolder(
     suspend fun submitDevLogin(credentials: DevLoginCredentials) {
         if (state.value.isSubmitting) return
 
-        submitCredentials(
-            email = credentials.email,
-            password = credentials.password,
-            birthdate = "",
-            acceptedAgeAndTerms = false,
-            mode = AuthMode.SignIn,
-        )
+        submitCredentials(email = credentials.email, password = credentials.password)
     }
 
+    /** Email sign-in. Creating an account is the onboarding stepper's job, never this screen's. */
     private suspend fun submitCredentials(
         email: String,
         password: String,
-        birthdate: String,
-        acceptedAgeAndTerms: Boolean,
-        mode: AuthMode,
     ) {
         val normalizedEmail = email.trim()
-        val cleanBirthdate = birthdate.trim()
         if (!normalizedEmail.contains("@")) {
             _state.update { it.copy(errorMessage = "Enter a valid email address.") }
             return
@@ -344,31 +352,15 @@ class AuthStateHolder(
             _state.update { it.copy(errorMessage = "Password must be at least 12 characters.") }
             return
         }
-        if (mode == AuthMode.CreateAccount && !birthdatePattern.matches(cleanBirthdate)) {
-            _state.update { it.copy(errorMessage = "Birthdate must use YYYY-MM-DD.") }
-            return
-        }
-        if (mode == AuthMode.CreateAccount && !acceptedAgeAndTerms) {
-            _state.update { it.copy(errorMessage = "Confirm you are 18+ and accept the terms.") }
-            return
-        }
-
         _state.update {
             it.copy(
-                mode = mode,
+                mode = AuthMode.SignIn,
                 email = normalizedEmail,
-                birthdate = cleanBirthdate.takeIf { _ -> mode == AuthMode.CreateAccount } ?: it.birthdate,
                 isSubmitting = true,
                 errorMessage = null,
             )
         }
-        val result =
-            when (mode) {
-                AuthMode.SignIn, AuthMode.ResetPassword -> authRepository.loginEmail(normalizedEmail, password, platform, appVersion, deviceIdOrNull)
-                // The legacy inline form has no code step, and every shell builds the onboarding
-                // stepper (which has one), so this form never starts a sign-up itself any more.
-                AuthMode.CreateAccount -> AppResult.Failure(AppError(code = "SIGNUP_NEEDS_STEPPER", message = LEGACY_SIGNUP_MESSAGE))
-            }
+        val result = authRepository.loginEmail(normalizedEmail, password, platform, appVersion, deviceIdOrNull)
 
         when (result) {
             is AppResult.Success -> {
@@ -387,7 +379,7 @@ class AuthStateHolder(
                     it.copy(
                         isSubmitting = false,
                         errorMessage = result.error.message,
-                        accountSuspended = mode == AuthMode.SignIn && result.error.code == "ACCOUNT_NOT_ACTIVE",
+                        accountSuspended = result.error.code == "ACCOUNT_NOT_ACTIVE",
                     )
                 }
             }
@@ -397,21 +389,12 @@ class AuthStateHolder(
     suspend fun logout() {
         runCatchingCancellable { beforeLogout() }
         authRepository.logout()
-        _state.update { current ->
-            current.copy(
-                session = null,
-                password = "",
-                birthdate = "",
-                acceptedAgeAndTerms = false,
-                errorMessage = null,
-            )
-        }
+        // Back to the welcome landing in sign-in mode, whatever the session was doing before.
+        _state.update { current -> current.clearedForm(mode = AuthMode.SignIn, showWelcome = true).copy(session = null) }
     }
 
     private companion object {
         private const val RESET_CODE_LENGTH = 6
         private const val MIN_APPEAL_REASON = 10
-        private const val LEGACY_SIGNUP_MESSAGE = "Creating an account isn't available from this screen. Restart the app and choose Create account."
-        private val birthdatePattern = Regex("""\d{4}-\d{2}-\d{2}""")
     }
 }

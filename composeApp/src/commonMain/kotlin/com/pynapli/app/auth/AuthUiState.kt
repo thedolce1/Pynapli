@@ -6,10 +6,12 @@ import com.pynapli.shared.auth.StoredSession
 @Immutable
 data class AuthUiState(
     val mode: AuthMode = AuthMode.SignIn,
+    // The welcome landing (value line, Create account, Sign in) covers the sign-in form until the
+    // person picks Sign in. Creating an account always goes through the onboarding stepper; this
+    // screen has no create-account form of its own.
+    val showWelcome: Boolean = true,
     val email: String = "",
     val password: String = "",
-    val birthdate: String = "",
-    val acceptedAgeAndTerms: Boolean = false,
     val isCheckingSession: Boolean = true,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
@@ -30,7 +32,6 @@ data class AuthUiState(
 
 enum class AuthMode {
     SignIn,
-    CreateAccount,
     ResetPassword,
 }
 

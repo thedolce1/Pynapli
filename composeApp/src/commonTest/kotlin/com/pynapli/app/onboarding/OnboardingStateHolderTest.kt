@@ -642,22 +642,20 @@ class OnboardingStateHolderTest {
     // stay green; the Section 1 slice that fixes the bug removes its @Ignore.
 
     // Section 0 repro: B1 auth mode not reset after sign-out — fixed in Section 1
-    @Ignore
     @Test
     fun signingOutAfterASignUpLeavesTheAuthScreenInSignInMode() =
         runTest {
             val fixture = Fixture()
             fixture.completeSignupToGrid()
-            // signupWithDetails flipped the auth mode to CreateAccount; nothing flips it back.
+            // signupWithDetails used to flip the auth mode to a legacy create-account form (now
+            // removed); nothing flipped it back after sign-out.
             fixture.auth.logout()
 
-            // Left at CreateAccount, AuthScreen draws the legacy create-account form: its submit answers
-            // SIGNUP_NEEDS_STEPPER and its bottom link reads "Sign in" instead of opening the stepper.
             assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
+            assertTrue(fixture.auth.state.value.showWelcome)
         }
 
     // Section 0 repro: B1 auth mode not reset after cancelling a sign-up — fixed in Section 1
-    @Ignore
     @Test
     fun cancellingASignUpLeavesTheAuthScreenInSignInMode() =
         runTest {
@@ -667,6 +665,58 @@ class OnboardingStateHolderTest {
             fixture.onboarding.cancelToSignIn()
 
             assertFalse(fixture.onboarding.state.value.active)
+            assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
+        }
+
+    @Test
+    fun signInFromTheStepperOpensTheFormWithTheTypedAddressAndNoStaleError() =
+        runTest {
+            val fixture =
+                Fixture(
+                    authApi = FakeAuthApi(verifyResult = { AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right.")) }),
+                )
+            fixture.startSignup()
+            fixture.onboarding.updateSignupCode("000000")
+            fixture.onboarding.verifySignupCode()
+            // The failed verify left its message in the auth state too.
+            assertNotNull(fixture.auth.state.value.errorMessage)
+
+            fixture.onboarding.cancelToSignIn()
+
+            val auth = fixture.auth.state.value
+            assertFalse(auth.showWelcome)
+            assertEquals("new@pynapli.local", auth.email)
+            assertNull(auth.errorMessage)
+        }
+
+    @Test
+    fun aResumedAddressIsNeverCarriedIntoTheSignInForm() =
+        runTest {
+            val fixture =
+                Fixture(
+                    pendingStore = InMemoryPendingSignupStore(PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS)),
+                )
+            fixture.onboarding.resumePendingSignupIfNeeded()
+            assertTrue(fixture.onboarding.state.value.emailShownMasked)
+
+            fixture.onboarding.cancelToSignIn()
+
+            // Whoever opened the app may not be the person who started: the address stays hidden.
+            assertEquals("", fixture.auth.state.value.email)
+            assertEquals("", fixture.onboarding.state.value.email)
+            assertNull(fixture.pendingStore.load())
+        }
+
+    @Test
+    fun cancellingFromTheFirstStepReturnsToTheWelcomeLanding() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+
+            fixture.onboarding.cancelToWelcome()
+
+            assertFalse(fixture.onboarding.state.value.active)
+            assertTrue(fixture.auth.state.value.showWelcome)
             assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
         }
 

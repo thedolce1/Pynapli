@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -37,26 +36,43 @@ import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliPasswordVisibilityToggle
 import com.pynapli.app.design.handCursor
 
+/**
+ * Signed-out surface: the welcome landing ([WelcomeScreen]) until the person picks Sign in, then
+ * the sign-in form, or the reset-password form behind "Forgot password?". There is no
+ * create-account form here: Create account always opens the onboarding stepper
+ * ([onStartCreateAccount]), which has the birthday gate and the emailed code.
+ */
 @Composable
 fun AuthScreen(
     state: AuthUiState,
     onEmailChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
-    onBirthdateChanged: (String) -> Unit,
-    onAcceptedAgeAndTermsChanged: (Boolean) -> Unit,
     onModeSelected: (AuthMode) -> Unit,
     onSubmit: () -> Unit,
+    onShowWelcome: () -> Unit = {},
     onResetCodeChanged: (String) -> Unit = {},
     onResendResetCode: () -> Unit = {},
     onAppealReasonChanged: (String) -> Unit = {},
     onSubmitAppeal: () -> Unit = {},
     onDevLogin: (() -> Unit)? = null,
-    // When provided, "Create account" leaves this screen for the onboarding stepper
-    // instead of switching to the legacy inline signup form.
+    // Opens the onboarding stepper. Null hides Create account (no stepper in this shell).
     onStartCreateAccount: (() -> Unit)? = null,
     testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
+    if (state.showWelcome && state.mode == AuthMode.SignIn) {
+        WelcomeScreen(
+            onCreateAccount = onStartCreateAccount,
+            onSignIn = { onModeSelected(AuthMode.SignIn) },
+            onDevLogin = onDevLogin,
+            isSubmitting = state.isSubmitting,
+            errorMessage = state.errorMessage,
+            testerDiagnosticLabel = testerDiagnosticLabel,
+            modifier = modifier,
+        )
+        return
+    }
+
     PynapliMaxWidthColumn(
         maxWidth = PynapliContentWidth.Form,
         modifier = modifier,
@@ -77,12 +93,7 @@ fun AuthScreen(
         Spacer(modifier = Modifier.height(8.dp))
         val resetting = state.mode == AuthMode.ResetPassword
         Text(
-            text =
-                when (state.mode) {
-                    AuthMode.SignIn -> "Sign in"
-                    AuthMode.CreateAccount -> "Create account"
-                    AuthMode.ResetPassword -> "Reset password"
-                },
+            text = if (resetting) "Reset password" else "Sign in",
             color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Medium,
@@ -154,53 +165,13 @@ fun AuthScreen(
             )
         }
 
-        if (state.mode == AuthMode.SignIn) {
+        if (!resetting) {
             TextButton(
                 onClick = { onModeSelected(AuthMode.ResetPassword) },
                 enabled = !state.isSubmitting,
                 modifier = Modifier.align(Alignment.End).handCursor(enabled = !state.isSubmitting),
             ) {
                 Text("Forgot password?")
-            }
-        }
-
-        if (state.mode == AuthMode.CreateAccount) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = state.birthdate,
-                onValueChange = onBirthdateChanged,
-                label = { Text("Birthdate") },
-                placeholder = { Text("YYYY-MM-DD") },
-                singleLine = true,
-                enabled = !state.isSubmitting,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                colors = authTextFieldColors(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Checkbox(
-                    checked = state.acceptedAgeAndTerms,
-                    onCheckedChange = onAcceptedAgeAndTermsChanged,
-                    enabled = !state.isSubmitting,
-                    modifier = Modifier.handCursor(enabled = !state.isSubmitting),
-                )
-                Text(
-                    text = "I confirm I am 18 or older and accept the Terms and Privacy Policy.",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .padding(top = 12.dp),
-                )
             }
         }
 
@@ -215,7 +186,7 @@ fun AuthScreen(
             )
         }
 
-        if (state.accountSuspended && state.mode == AuthMode.SignIn) {
+        if (state.accountSuspended && !resetting) {
             Spacer(modifier = Modifier.height(16.dp))
             if (state.appealSent) {
                 Text(
@@ -262,8 +233,7 @@ fun AuthScreen(
             } else {
                 Text(
                     when {
-                        state.mode == AuthMode.SignIn -> "Sign in"
-                        state.mode == AuthMode.CreateAccount -> "Create account"
+                        !resetting -> "Sign in"
                         state.resetCodeSent -> "Set new password"
                         else -> "Send code"
                     },
@@ -288,28 +258,24 @@ fun AuthScreen(
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            TextButton(
-                onClick = {
-                    if (resetting) {
-                        onModeSelected(AuthMode.SignIn)
-                    } else if (state.mode == AuthMode.SignIn && onStartCreateAccount != null) {
-                        onStartCreateAccount()
-                    } else {
-                        onModeSelected(
-                            if (state.mode == AuthMode.SignIn) AuthMode.CreateAccount else AuthMode.SignIn,
-                        )
+            if (resetting) {
+                TextButton(
+                    onClick = { onModeSelected(AuthMode.SignIn) },
+                    enabled = !state.isSubmitting,
+                    modifier = Modifier.handCursor(enabled = !state.isSubmitting),
+                ) {
+                    Text("Back to sign in")
+                }
+            } else {
+                onStartCreateAccount?.let { create ->
+                    TextButton(
+                        onClick = create,
+                        enabled = !state.isSubmitting,
+                        modifier = Modifier.handCursor(enabled = !state.isSubmitting),
+                    ) {
+                        Text("New here? Create account")
                     }
-                },
-                enabled = !state.isSubmitting,
-                modifier = Modifier.handCursor(enabled = !state.isSubmitting),
-            ) {
-                Text(
-                    when (state.mode) {
-                        AuthMode.SignIn -> "Create account"
-                        AuthMode.CreateAccount -> "Sign in"
-                        AuthMode.ResetPassword -> "Back to sign in"
-                    },
-                )
+                }
             }
         }
 
