@@ -1,6 +1,6 @@
 # Pynapli Onboarding And Auth Spec
 
-Last updated: 2026-11-19
+Last updated: 2026-11-24
 
 ## Purpose
 
@@ -73,20 +73,42 @@ Shipped ordering (founder Grindr-reference capture 2026-06-10, refining the
 2026-06-09 DOB-first decision — an underage visitor is stopped before any account
 data is collected):
 
-1. Date of birth: typed DD/MM/YYYY numeric fields (DD/MM/YYYY ordering
-   founder-confirmed for the future Europe launch); calendar-strict validation;
-   underage stop screen on failure.
+0. Welcome landing (2026-11-24): the value line, **Create account** (primary, opens this
+   stepper) and **Sign in** (secondary, opens the sign-in form), with a slot reserved above
+   them for Continue with Google / Apple. The screen takes no email. There is no other
+   create-account form: sign-out and leaving the stepper land on sign-in mode.
+1. Date of birth: on phones (compact width) a day / month / year scroll wheel that starts on a
+   neutral date (1 January, 25 years back, never "exactly 18 years ago"); the start is not an
+   answer, so Next stays off until a wheel moves. Wider windows (web, desktop, tablet) keep typed
+   DD/MM/YYYY numeric fields (DD/MM/YYYY ordering founder-confirmed for the future Europe
+   launch), and the wheel offers "Type your birthday instead" (also the screen-reader-friendly
+   path; each wheel is one adjustable semantics node). Both write the same fields, so validation
+   is calendar-strict either way; underage stop screen on failure. The age check stays
+   server-side (`validateSignupAgeGate`).
 2. Policies: dedicated "Review our policies" step — Terms of Service and Privacy
-   Policy rows each with a Read link to the canonical URLs, one Accept button
-   recording both acceptances.
-3. Create account with email/password. This only *starts* the sign-up: nothing is created and
-   no session exists yet (see Email Sign-up).
-4. "Check your email": the 6-digit code from the email. The account and the session are created
-   only when it checks out. "Send a new code" and "Use a different email" are always there.
+   Policy rows each with a Read link to the canonical URLs (an Android Custom Tab over the app, a
+   new browser tab on the web; iOS still opens Safari), one Accept button recording both
+   acceptances.
+3. Create account with email/password (10+ characters, not on the common-password list). This
+   only *starts* the sign-up: nothing is created and no session exists yet (see Email Sign-up).
+4. "Check your email": the 6-digit code from the email; it submits itself at the sixth digit. The
+   account and the session are created only when it checks out. "Send a new code" (after a 30 s
+   countdown, the same for every address), "Use a different email" and "Already have an account?
+   Sign in" are always there.
 5. Location permission, after value is explained; skippable.
-6. "Your profile": one consolidated, skippable step — photo (honest nudge copy)
-   plus display name (15-char cap), single Next.
+6. "Your profile": one consolidated step where every field is optional — photo (previewed once
+   chosen, honest nudge copy) plus display name (15-char cap); its button reads Done.
 7. First grid.
+
+Back (Android system back, Esc on desktop, browser back on the web, where every step has its own
+`/signup/...` history entry): one step back; from the birthday to the welcome landing; from the
+code step to email and password (dropping the started sign-up). After the code the account exists,
+so back is consumed on Location and Profile and never leaves the app mid-sign-up. The URL never
+moves the stepper forward: a `/signup/...` link always starts at the birthday.
+
+Keyboard and autofill: every field declares its autofill content type (email, new or current
+password, one-time code, birth date parts), Next/Done move through the fields, Enter on a
+hardware keyboard does the same, and each step's first field takes focus.
 
 Gender/orientation basics, lifestyle tags, and looking-for are deferred entirely to
 profile edit — the stepper collects only what the first grid needs. Notifications
@@ -216,7 +238,9 @@ submissions for the current sign-up, and after the fifth (the server's budget) t
 instead of Verify (no further guesses or resends go out). "No email? Start again" is also always on
 the code step, for a sign-up whose email work was dropped (then no pending row exists, and a resend
 can't deliver anything). Start again goes back to email and password with the same address kept;
-the person types the password again (it is never stored).
+the person types the password again (it is never stored). A resumed (masked) address is never put
+back in full: Start again, Use a different email, back and the Sign in link all leave the field
+empty for it (2026-11-24).
 
 ### Still distinguishable
 
@@ -346,12 +370,13 @@ Do not:
 - [x] Signup progress saved: signup arms a device-local resume flag pinned to the signing-up account (`OnboardingProgressStore`, deliberately separate from the server-synced `AppSettings` blob); next launch re-enters the stepper at the consolidated "Your profile" step with the saved display name prefilled. A different account signing in on the same device never inherits the stepper.
 - [x] Skippable photo (the consolidated "Your profile" step uploads to the profile album with moderation-pending honesty copy, or skips). Tags/looking-for are deferred entirely to profile edit by design — nothing to skip at signup.
 - [x] Membership-private, verified email sign-up (see Email Sign-up): same answer and request work for every address, emailed 6-digit code, token-bound verify, equalised failures and resend, silent per-address email caps, fail-closed without a mailer, `users.email_verified_at` for new accounts, resume at the code step, local-only dev shortcuts for seeds/QA. Needs a real email provider before anyone can sign up outside local development (PATH_TO_TESTERS).
-- [x] Age gate before access for email signup: typed DD/MM/YYYY birthday before any account data is collected (calendar-strict validation, underage stop screen), explicit 18+ confirmation, and Terms+Privacy acceptance on the dedicated Policies step required before the session is created.
+- [x] Age gate before access for email signup: birthday (phone wheel, or typed DD/MM/YYYY) before any account data is collected (calendar-strict validation, underage stop screen), explicit 18+ confirmation, and Terms+Privacy acceptance on the dedicated Policies step required before the session is created.
 - [x] Permission-denied onboarding QA: location step asks after value is explained, with denied/skip continuing to the grid's location-required empty state; notification permission unchanged (post-signup prompt + denied QA already covered). `scripts/android-onboarding-qa.ps1` covers signup happy path (typed DOB, policies Accept), denied location, force-stop resume, and nudge show/dismiss on the emulator.
 - [x] First grid uses signup data: the location submitted at the Location step feeds the distance-ordered first grid; DOB drives display age.
 - [x] Post-signup nudges are bounded: add-a-photo grid banner, dismissible, capped at 3 impression sessions, skipped in the signup session itself, deep-links to Media Albums. (Tags/complete-profile/partner-link nudges remain future work.)
 
 - [x] Acceptance harness that proves faces (2026-11-24, onboarding + first grid plan Section 0): `scripts/android-onboarding-qa.ps1 -LocationPath both|denied|allowed` adds a location-allowed path (permission granted, emulator fix in the seeded area) that fails on "Use current location" and passes only when real grid cards render (seeded names, or at least 6 card text nodes when earlier QA accounts in the cell outrank them); `scripts/web-qa.ps1 -AuthWalk on|only|off` walks sign-up (emailed code from the dev mailer, granted geolocation) to a grid of real members, Log out, and sign-in back to the grid. `PynapliPerfMarks` logs `create_account_tap`, `account_submit` and `first_grid_card` once per process (Android logcat tag `PynapliPerf`, web `performance.mark('pynapli:*')`, no member data). **Baseline (scripted, includes typing and the code lookup; compare only against the same script):** Android API 36 emulator: landing tap to first card 89.8 s, Account step to first card 33.2 s. Web (phone viewport): 52.4 s and 18.7 s. Bugs B1 to B4 and the photo-nudge race are reproduced as ignored failing tests in `OnboardingStateHolderTest`, `LocationStateHolderTest` and `GridStateHolderTest`, and B1 as a KNOWN web QA check; each fix removes its `@Ignore`. B5 (splash jump) and B6 (back closes the app mid-sign-up) are emulator-only.
+- [x] Section 1, part A (2026-11-24, smooth sign-up and sign-in; client plus the password rule): welcome landing with the legacy create-account form removed (B1 at the root; auth mode resets on sign-out and on leaving the stepper; both B1 repros un-ignored, the web QA B1 check is now a real check); the stepper holds the screen while a resume decides and the shell holds the grid until `onSessionReady` has decided the session (B3, un-ignored); the add-a-photo nudge reads an in-memory flag set before the session exists, so it can't arm in the sign-up session (un-ignored); back steps through the stepper on Android and per-step browser history on the web (B6, `PynapliHistoryPlanner`); phone birthday wheel with typed fallback; autofill content types, Next/Done/Enter, first-field focus, backspace through the typed birthday, code auto-submit, resend countdown, Sign in on the code step, the reset code shown in the clear, photo preview and Done on Profile, policy links in a tab; password minimum 10 with the shared common-password list (`PasswordRules`; `PASSWORD_TOO_COMMON`, never on sign-in). Part B (location reset, grid prefetch reuse, splash, Location copy and Settings link, notification timing, non-blocking `/me`, location refresh on resume) is tracked separately. Open: iOS policy links still open Safari (SFSafariViewController needs a Mac); backspace-to-previous on Android soft keyboards depends on the IME sending the key for an empty field.
 
 ## Do Not Implement
 
