@@ -34,6 +34,7 @@ data class GridQueryRequestDto(
     // "Verified couples only": only people whose couple-verified badge shows for this viewer (both
     // linked partners selfie-verified, partner visible). Independent of linkedOnly. Old clients omit it.
     val verifiedCouplesOnly: Boolean = false,
+    val freshOnly: Boolean = false,
 )
 
 @Serializable
@@ -69,6 +70,8 @@ data class GridCardDto(
     // This person and the linked partner shown in [linkedPartner] are both photo-verified.
     // Computed server-side; false whenever the partner mini is hidden from this viewer.
     val coupleVerified: Boolean = false,
+    val fresh: Boolean = false,
+    val activeAgo: String? = null,
 )
 
 /**
