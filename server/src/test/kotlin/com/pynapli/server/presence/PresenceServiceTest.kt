@@ -124,6 +124,7 @@ class PresenceServiceTest {
                     repository = InMemoryPresenceRepository(),
                     broadcaster = broadcaster,
                     broadcastAllowed = allowed,
+                    offlineJitterMillis = { 0 },
                 )
 
             coroutineScope {
