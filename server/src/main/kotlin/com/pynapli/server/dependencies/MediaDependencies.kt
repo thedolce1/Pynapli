@@ -1,5 +1,6 @@
 package com.pynapli.server.dependencies
 
+import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.media.AutoApproveMediaModerationScanner
@@ -20,6 +21,7 @@ import com.pynapli.server.media.ManualReviewMediaModerationScanner
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaModerationScanner
 import com.pynapli.server.media.MediaObjectDeleter
+import com.pynapli.server.media.MediaScanScope
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.MediaServiceMessageMediaGateway
 import com.pynapli.server.media.MediaVerificationSelfieGateway
@@ -160,6 +162,9 @@ internal fun buildMediaDependencies(
         }
     val mediaRepository = JdbcMediaRepository(dataSource)
     val moderationScanner = createMediaModerationScanner(config, mediaSigningCredentials)
+    // Founder decision: Vision sees public profile photos (and, via the face detector below,
+    // verification selfies) only, unless private-media scanning is switched on.
+    val scanScope = MediaScanScope(scanPrivateMedia = config.mediaModerationScanPrivateMedia)
     val mediaService =
         MediaService(
             repository = mediaRepository,
@@ -174,6 +179,7 @@ internal fun buildMediaDependencies(
                 ),
             rateLimitService = rateLimitService,
             contactBlockVisibility = contactBlockVisibility,
+            scanScope = scanScope,
         )
     // Chat photo media reuses the same signer/asset/scanner/resolver as album media.
     val messageMediaGateway =
@@ -183,6 +189,7 @@ internal fun buildMediaDependencies(
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             moderationScanner = moderationScanner,
             rateLimitService = rateLimitService,
+            scanScope = scanScope,
         )
     // Verification selfies ride the same signer/asset rows; unlike album media the app deletes their
     // objects itself after the retention window (PhotoVerificationService.purgeExpiredSelfies).
@@ -209,15 +216,7 @@ internal fun buildMediaDependencies(
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             objectDeleter = mediaObjectDeleter,
         )
-    val selfieFaceDetector =
-        if (config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) && mediaSigningCredentials != null) {
-            CloudVisionSelfieFaceDetector(
-                credentials = mediaSigningCredentials,
-                endpoint = config.mediaModerationVisionEndpoint,
-            )
-        } else {
-            null
-        }
+    val selfieFaceDetector = createSelfieFaceDetector(config, mediaSigningCredentials)
     return MediaDependencies(
         mediaAssetUrlResolver = mediaAssetUrlResolver,
         localMediaUploadStorage = localMediaUploadStorage,
@@ -270,6 +269,21 @@ internal fun createMediaModerationScanner(
             )
 
         else -> ManualReviewMediaModerationScanner()
+    }
+
+// Verification selfies go to Vision face counting whenever Cloud Vision is the provider; the
+// private-media scan flag has no say here (selfies are a deliberate verification submission).
+internal fun createSelfieFaceDetector(
+    config: ServerConfig,
+    credentials: GoogleCredentials?,
+): SelfieFaceDetector? =
+    if (config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) && credentials != null) {
+        CloudVisionSelfieFaceDetector(
+            credentials = credentials,
+            endpoint = config.mediaModerationVisionEndpoint,
+        )
+    } else {
+        null
     }
 
 /** The configured auto-approve ceilings; startup validation has already refused unknown names. */

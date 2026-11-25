@@ -170,7 +170,9 @@ internal fun parseSafeSearchResponse(body: String): SafeSearchAnnotation? {
  * - **PendingReview** for anything above a ceiling, and for an UNKNOWN or missing category (fail
  *   closed). Nothing is removed on these signals; a person decides.
  * - **Rejected(SEVERE)** only when violence >= [severeViolenceAtOrAbove] (default LIKELY). This keeps
- *   the shipped private-album safety path (remove + system report) and the chat-media refusal. For
+ *   the shipped private-album safety path (remove + system report) and the chat-media refusal, which
+ *   only run when `PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA=true` lets those uploads reach the
+ *   scanner at all ([MediaScanScope]). For
  *   a profile photo `MediaUploadActions` treats any Rejected as a hold for the human queue: no
  *   removal, no automatic report.
  *

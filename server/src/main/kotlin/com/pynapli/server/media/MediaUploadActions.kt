@@ -15,6 +15,7 @@ internal class MediaUploadActions(
     private val moderationScanner: MediaModerationScanner,
     private val moderationEscalationPublisher: MediaModerationEscalationPublisher,
     private val rateLimitService: RateLimitService?,
+    private val scanScope: MediaScanScope = MediaScanScope(),
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
@@ -123,8 +124,8 @@ internal class MediaUploadActions(
             repository.markAssetUploaded(ownerUserId, mediaAssetId)
                 ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
         // Moderation hook: a profile photo is approved or held for a person before discovery (never
-        // auto-removed); private albums remain consent-gated unless a scanner returns a severe
-        // safety/legal rejection.
+        // auto-removed); private albums remain consent-gated, are scanned only when the scan scope
+        // says so, and then change only on a severe safety/legal rejection.
         val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, uploadedAsset)
 
         return item.copy(mediaAsset = visibleAsset).toDto(mediaAssetUrlResolver)
@@ -136,6 +137,17 @@ internal class MediaUploadActions(
         albumKind: String,
         uploadedAsset: MediaAssetRecord,
     ): MediaAssetRecord {
+        val target =
+            when (albumKind) {
+                "profile" -> MediaModerationTarget.PROFILE_PHOTO
+                "private" -> MediaModerationTarget.PRIVATE_ALBUM
+                else -> throw MediaException("INVALID_MEDIA_ALBUM_KIND")
+            }
+        // Unscanned private-album photos (the default: no third-party scanner sees them) are approved
+        // on upload, which is what the manual and dev scanners always did for private albums.
+        if (!scanScope.scans(target)) {
+            return repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+        }
         val decision = moderationScanner.scan(uploadedAsset)
         return when (decision) {
             MediaModerationDecision.Approved ->

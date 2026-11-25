@@ -31,6 +31,10 @@ data class ServerConfig(
     // PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION: the explicit, written-down override that
     // lets production run with every profile photo waiting for a person (e.g. a Vision outage).
     val mediaModerationManualInProductionAllowed: Boolean = false,
+    // PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA: founder/legal decision, default off. Off, the
+    // scanner (Cloud Vision, a third-party processor) sees public profile photos only; on, private
+    // album and chat photos are scanned too, for the severe-violence removal/refusal only.
+    val mediaModerationScanPrivateMedia: Boolean = false,
     // SafeSearch auto-approve ceilings (Vision likelihood names). A profile photo is approved only
     // when adult/violence/racy are all at or below these; anything above waits for a person.
     // Defaults: TRUST_AND_SAFETY_SPEC "Photo pre-screening". Validated at startup.
@@ -233,6 +237,8 @@ data class ServerConfig(
                         ?: "https://vision.googleapis.com/v1/images:annotate",
                 mediaModerationManualInProductionAllowed =
                     System.getenv("PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION")?.toBooleanStrictOrNull() ?: false,
+                mediaModerationScanPrivateMedia =
+                    System.getenv("PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA")?.toBooleanStrictOrNull() ?: false,
                 mediaModerationMaxAdult = System.getenv("PYNAPLI_MEDIA_MODERATION_MAX_ADULT") ?: "UNLIKELY",
                 mediaModerationMaxViolence = System.getenv("PYNAPLI_MEDIA_MODERATION_MAX_VIOLENCE") ?: "POSSIBLE",
                 mediaModerationMaxRacy = System.getenv("PYNAPLI_MEDIA_MODERATION_MAX_RACY") ?: "LIKELY",

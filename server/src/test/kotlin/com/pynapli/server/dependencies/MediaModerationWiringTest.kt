@@ -1,14 +1,22 @@
 package com.pynapli.server.dependencies
 
+import com.google.auth.oauth2.AccessToken
+import com.google.auth.oauth2.GoogleCredentials
 import com.pynapli.server.media.AutoApproveMediaModerationScanner
 import com.pynapli.server.media.ManualReviewMediaModerationScanner
+import com.pynapli.server.media.MediaModerationTarget
+import com.pynapli.server.media.MediaScanScope
 import com.pynapli.server.media.SafeSearchLikelihood
 import com.pynapli.server.media.SafeSearchPolicy
 import com.pynapli.server.testsupport.testServerConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** The upload-complete scanner wiring: no silent fallback from cloud_vision to manual. */
 class MediaModerationWiringTest {
@@ -26,6 +34,28 @@ class MediaModerationWiringTest {
 
         assertIs<ManualReviewMediaModerationScanner>(createMediaModerationScanner(manual, null))
         assertIs<AutoApproveMediaModerationScanner>(createMediaModerationScanner(dev, null))
+    }
+
+    @Test
+    fun scanScopeSendsOnlyProfilePhotosToTheScannerByDefault() {
+        val default = MediaScanScope()
+        assertTrue(default.scans(MediaModerationTarget.PROFILE_PHOTO))
+        assertFalse(default.scans(MediaModerationTarget.PRIVATE_ALBUM))
+        assertFalse(default.scans(MediaModerationTarget.CHAT_MEDIA))
+        assertFalse(testServerConfig().mediaModerationScanPrivateMedia)
+
+        val optedIn = MediaScanScope(scanPrivateMedia = true)
+        assertTrue(optedIn.scans(MediaModerationTarget.PRIVATE_ALBUM))
+        assertTrue(optedIn.scans(MediaModerationTarget.CHAT_MEDIA))
+    }
+
+    @Test
+    fun verificationSelfiesAreFaceCheckedByVisionRegardlessOfThePrivateMediaFlag() {
+        val credentials = GoogleCredentials.create(AccessToken("test", null))
+        val cloudVision = testServerConfig().copy(mediaModerationProvider = "cloud_vision", mediaModerationScanPrivateMedia = false)
+
+        assertNotNull(createSelfieFaceDetector(cloudVision, credentials))
+        assertNull(createSelfieFaceDetector(cloudVision.copy(mediaModerationProvider = "manual"), credentials))
     }
 
     @Test

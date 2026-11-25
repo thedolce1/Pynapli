@@ -155,13 +155,23 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
     ceiling, an `UNKNOWN` or missing rating, any scanner error, a per-image error, a non-image, or a
     timeout. **Fail closed:** a scan we can't trust never approves.
   - **Never auto-rejected.** No SafeSearch result removes a profile photo or files a report or risk
-    points against its owner; a moderator approves or rejects it. Violence ≥ `LIKELY` is the one
-    severe signal, kept for the consent-gated zones as before: a private-album photo is removed and a
-    system safety report plus risk event is filed; a chat photo's send is refused (no report). Adult
-    and racy results never change private or chat media.
-  - **Every** album and chat photo is scanned (the scanner does not know the album), so private and
-    chat photos also reach Vision, and a chat send waits on the scan (up to 8 s). Founder/legal item:
-    the privacy policy must name Google Cloud Vision as a processor of uploaded photos.
+    points against its owner; a moderator approves or rejects it.
+- **What Vision sees (founder/legal decision, 2026-11-25):** only **public profile photos** (this
+  scanner) and **verification selfies** (the separate face-count check above). Private-album and
+  chat photos are intimate, consent-gated content and are **not** sent to Vision by default. The
+  upload path names the target (`MediaModerationTarget`: profile photo, private album, chat media)
+  and `MediaScanScope` decides; nothing is inferred from the asset.
+  - Unscanned (default), a private-album photo is approved on upload and a chat photo sends, exactly
+    what the manual and dev scanners always did for them: before this change, production ran
+    `manual`, which held only profile photos and approved private-album and chat photos on upload
+    with no scan.
+  - `PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA=true` (default `false`) sends private-album and chat
+    photos to Vision too, for the severe signal only: violence ≥ `LIKELY` removes a private-album
+    photo and files a system safety report plus risk event, and refuses a chat send (no report).
+    Adult and racy results never change private or chat media. A scanned chat send waits on the scan
+    (up to 8 s). Turning it on is a founder/legal call and needs the privacy policy updated first.
+  - The privacy policy must name Google Cloud Vision as a processor of profile photos and
+    verification selfies (PATH_TO_TESTERS A9).
 - **Decided defaults (founder deferred; the spec was silent on numbers):** the ceilings above. A
   lifestyle app's public photos are often racy, so racy is allowed up to `LIKELY`; adult content is
   held from `POSSIBLE`. They are config, validated at startup (a typo or `VERY_LIKELY` refuses to
@@ -919,7 +929,7 @@ Important:
 - [x] Held first-message review supports audited release/remove actions.
 - [x] Reports queue supports audited triage actions.
 - [x] Severe media scanner decisions create system safety reports and media-moderation risk events.
-- [x] Photo pre-screening (2026-11-25): Cloud Vision SafeSearch on by default in staging/prod, approve-or-hold only for profile photos (ceilings adult ≤ UNLIKELY, violence ≤ POSSIBLE, racy ≤ LIKELY, configurable), fail closed on error/timeout/unknown, production refuses manual without `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION`, owner-only "Being reviewed" label. Tested with Vision faked. Open: the founder's live run with real images and any threshold tuning (PATH_TO_TESTERS A9).
+- [x] Photo pre-screening (2026-11-25): Cloud Vision SafeSearch on by default in staging/prod, approve-or-hold only for profile photos (ceilings adult ≤ UNLIKELY, violence ≤ POSSIBLE, racy ≤ LIKELY, configurable), fail closed on error/timeout/unknown, production refuses manual without `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION`, owner-only "Being reviewed" label; Vision sees profile photos and selfies only unless `PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA=true`. Tested with Vision faked. Open: the founder's live run with real images and any threshold tuning (PATH_TO_TESTERS A9).
 - [x] Media reports support audited target-media removal.
 - [x] Risk review queue supports audited clear/set-tier/review actions.
 - [x] Appeal API supports user submission/status/withdraw and audited admin decisions.

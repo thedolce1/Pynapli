@@ -11,6 +11,8 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class MediaServiceTest {
     @Test
@@ -240,12 +242,116 @@ class MediaServiceTest {
                     InMemoryMediaRepository(),
                     FixedMediaUploadSigner(),
                     moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(adult = "VERY_LIKELY") }),
+                    scanScope = MediaScanScope(scanPrivateMedia = true),
                 )
 
             val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "private")
 
             assertEquals("approved", item.mediaAsset.moderationStatus)
         }
+
+    // ---- Which uploads reach Vision (founder decision: public profile photos only by default) ----
+
+    @Test
+    fun privateAlbumUploadMakesNoVisionCallByDefault() =
+        runBlocking {
+            val vision = CountingSafeSearchClient()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "private")
+
+            assertEquals(0, vision.calls)
+            // Unscanned private media is approved on upload, as the manual scanner always left it.
+            assertEquals("ready", item.mediaAsset.processingStatus)
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun privateAlbumUploadIsScannedWhenPrivateScanningIsOn() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(violence = "VERY_LIKELY")
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = vision),
+                    scanScope = MediaScanScope(scanPrivateMedia = true),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "private")
+
+            assertEquals(1, vision.calls)
+            assertEquals("removed", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun profilePhotoIsAlwaysScanned() =
+        runBlocking {
+            val vision = CountingSafeSearchClient()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+
+            service.uploadAndComplete(UUID.randomUUID(), albumKind = "profile")
+
+            assertEquals(1, vision.calls)
+        }
+
+    @Test
+    fun chatPhotoMakesNoVisionCallByDefaultAndStillSends() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(violence = "VERY_LIKELY")
+            val (gateway, ownerId, assetId) = chatGateway(vision, scanPrivateMedia = false)
+
+            val prepared = gateway.prepareOutboundMedia(ownerId, assetId)
+
+            assertEquals(0, vision.calls)
+            assertNotNull(prepared)
+        }
+
+    @Test
+    fun chatPhotoIsScannedWhenPrivateScanningIsOn() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(violence = "VERY_LIKELY")
+            val (gateway, ownerId, assetId) = chatGateway(vision, scanPrivateMedia = true)
+
+            val prepared = gateway.prepareOutboundMedia(ownerId, assetId)
+
+            assertEquals(1, vision.calls)
+            assertNull(prepared, "a severe hit refuses the send")
+        }
+
+    private suspend fun chatGateway(
+        vision: SafeSearchClient,
+        scanPrivateMedia: Boolean,
+    ): Triple<MediaServiceMessageMediaGateway, UUID, UUID> {
+        val ownerId = UUID.randomUUID()
+        val repository = InMemoryMediaRepository()
+        val asset =
+            repository.createAsset(
+                ownerUserId = ownerId,
+                create =
+                    MediaAssetCreate(
+                        mediaType = "image",
+                        storageProvider = "gcs",
+                        storageBucket = "pynapli-test-media",
+                        storageObjectKey = "users/$ownerId/message/chat.jpg",
+                        contentType = "image/jpeg",
+                        byteSize = 1_024,
+                        intendedAlbumKind = "message",
+                    ),
+                assetIdFactory = { UUID.randomUUID() },
+            )
+        val gateway =
+            MediaServiceMessageMediaGateway(
+                repository = repository,
+                uploadSigner = FixedMediaUploadSigner(),
+                mediaAssetUrlResolver = null,
+                moderationScanner = CloudVisionMediaModerationScanner(client = vision),
+                scanScope = MediaScanScope(scanPrivateMedia = scanPrivateMedia),
+            )
+        return Triple(gateway, ownerId, asset.mediaAssetId)
+    }
 
     private fun safeSearch(
         adult: String = "VERY_UNLIKELY",
@@ -261,7 +367,13 @@ class MediaServiceTest {
                 object : MediaModerationScanner {
                     override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = MediaModerationDecision.Rejected("policy")
                 }
-            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = scanner)
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = scanner,
+                    scanScope = MediaScanScope(scanPrivateMedia = true),
+                )
 
             val item = service.uploadAndComplete(ownerId, albumKind = "private")
 
@@ -289,6 +401,7 @@ class MediaServiceTest {
                     uploadSigner = FixedMediaUploadSigner(),
                     moderationScanner = scanner,
                     moderationEscalationPublisher = escalationPublisher,
+                    scanScope = MediaScanScope(scanPrivateMedia = true),
                 )
 
             val item = service.uploadAndComplete(ownerId, albumKind = "private")
@@ -846,6 +959,18 @@ private class FixedMediaUploadSigner : MediaUploadSigner {
             uploadHeaders = mapOf("Content-Type" to contentType),
             expiresAt = Instant.parse("2026-04-24T18:10:00Z"),
         )
+    }
+}
+
+/** A fake Vision client that counts calls and answers one fixed annotation. */
+private class CountingSafeSearchClient(
+    private val violence: String = "VERY_UNLIKELY",
+) : SafeSearchClient {
+    var calls = 0
+
+    override fun annotate(gcsUri: String): SafeSearchAnnotation {
+        calls += 1
+        return SafeSearchAnnotation(adult = "VERY_UNLIKELY", racy = "VERY_UNLIKELY", violence = violence)
     }
 }
 

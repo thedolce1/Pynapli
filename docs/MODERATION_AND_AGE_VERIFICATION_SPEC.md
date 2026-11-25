@@ -192,7 +192,7 @@ Avoid:
 - [x] Public/profile media moderation is enforced before discovery visibility.
 - [x] Public photo classifier before publish: Cloud Vision SafeSearch pre-screening, default in staging/prod; clean photos approved on upload, everything else held, never auto-rejected (thresholds and flow: TRUST_AND_SAFETY_SPEC "Photo pre-screening").
 - [x] Held profile photos (manual-review scanner, or a pre-screening result above a ceiling, unknown, failed or timed out) have an admin queue: `GET /v1/admin/media/pending` (oldest first, paged), approve (ready/approved) or reject with a reason (removed, owner notified by a system-safety push). Operator-level, audited.
-- [x] Private album grants and report flow exist; consent-gated private media stays hidden from non-grantees, removed media is filtered, and severe scanner decisions remove the asset before escalating.
+- [x] Private album grants and report flow exist; consent-gated private media stays hidden from non-grantees, removed media is filtered, and severe scanner decisions remove the asset before escalating. Private-album and chat media reach the scanner only when `PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA=true` (default off: Cloud Vision sees profile photos and selfies only; TRUST_AND_SAFETY_SPEC "Photo pre-screening").
 - [x] Report categories implemented.
 - [ ] Partial: reports/risk/message/appeal review queues and actions exist; full moderator console, roles, MFA, senior-review separation, and production admin separation are not complete.
 - [ ] Partial: severe scanner decisions create system reports and risk events; CSAM/hash-matching provider integration, legal retention policy, and live provider tuning remain.

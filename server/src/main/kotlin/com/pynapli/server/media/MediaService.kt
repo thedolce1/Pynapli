@@ -23,6 +23,8 @@ class MediaService(
     // "Hide from people you know": a viewer can't open or request the private album of someone hiding
     // from them (the same answers as for a missing album or a blocked owner).
     contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // Which uploads reach the scanner: profile photos always; private albums only when enabled.
+    scanScope: MediaScanScope = MediaScanScope(),
 ) {
     private val uploadActions =
         MediaUploadActions(
@@ -32,6 +34,7 @@ class MediaService(
             moderationScanner = moderationScanner,
             moderationEscalationPublisher = moderationEscalationPublisher,
             rateLimitService = rateLimitService,
+            scanScope = scanScope,
         )
     private val ownAlbumActions =
         MediaOwnAlbumActions(
