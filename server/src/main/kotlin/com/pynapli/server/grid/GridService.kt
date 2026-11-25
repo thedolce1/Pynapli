@@ -164,6 +164,12 @@ class GridService(
             )
         }
 
+        // Section 3 scraping guard: a page reaching into the locked window also spends the tighter
+        // locked-page budget (on top of GRID_QUERY), before any ranking work is done.
+        if (lockingApplies && seenBefore + limit > lockedFrom) {
+            profile("grid.lockedRateLimit") { requireLockedPageRateLimit(viewerUserId) }
+        }
+
         // Online-only pages under-fill because presence is filtered AFTER the SQL (presence lives in
         // Redis, not the DB): a page of `limit` ranked candidates can lose most rows to the online
         // filter. Over-fetch a bounded larger candidate window when onlineOnly so the page still fills
@@ -326,6 +332,11 @@ class GridService(
 
     private suspend fun requireGridQueryRateLimit(viewerUserId: UUID) {
         val decision = rateLimitService?.check(viewerUserId, RateLimitedAction.GRID_QUERY) ?: return
+        if (!decision.allowed) throw GridException("RATE_LIMITED")
+    }
+
+    private suspend fun requireLockedPageRateLimit(viewerUserId: UUID) {
+        val decision = rateLimitService?.check(viewerUserId, RateLimitedAction.GRID_LOCKED_PAGE) ?: return
         if (!decision.allowed) throw GridException("RATE_LIMITED")
     }
 
