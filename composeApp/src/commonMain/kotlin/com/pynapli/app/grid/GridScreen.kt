@@ -15,7 +15,7 @@ import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.location.TravelLocationUiState
-import com.pynapli.app.profile.ProfileDetailSheet
+import com.pynapli.app.profile.GridProfileBrowser
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.tonight.PlayingTonightStateHolder
@@ -46,6 +46,8 @@ fun GridScreen(
     onOpenTonight: () -> Unit = {},
     travelLocationStateHolder: TravelLocationStateHolder? = null,
     favoritesStateHolder: FavoritesStateHolder? = null,
+    // The profile's "Verify to message" opens the existing photo-verification flow.
+    onOpenPhotoVerification: (() -> Unit)? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     val favoritesState by favoritesStateHolder?.state?.collectAsState()
@@ -162,73 +164,38 @@ fun GridScreen(
         onLoadMoreFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.loadMore() } } },
     )
 
-    LaunchedEffect(profileState.blockedTargetUserId) {
-        val blockedId = profileDetailStateHolder.consumeBlockedTargetUserId() ?: return@LaunchedEffect
-        stateHolder.removeCardById(blockedId)
-        favoritesStateHolder?.removeCardById(blockedId)
-        profileDetailStateHolder.dismiss()
-    }
-
-    LaunchedEffect(profileState.hiddenTargetUserId) {
-        val hiddenId = profileDetailStateHolder.consumeHiddenTargetUserId() ?: return@LaunchedEffect
-        stateHolder.removeCardById(hiddenId)
-        favoritesStateHolder?.removeCardById(hiddenId)
-        profileDetailStateHolder.dismiss()
-    }
-
-    if (profileState.visible) {
-        ProfileDetailSheet(
-            state = profileState,
-            onDismiss = profileDetailStateHolder::dismiss,
-            onSpark = {
-                scope.launch { profileDetailStateHolder.sendSpark() }
-            },
-            onRequestAlbum = {
-                scope.launch { profileDetailStateHolder.requestAlbumAccess() }
-            },
-            onViewPrivateAlbum = {
-                scope.launch { profileDetailStateHolder.loadPrivateAlbum() }
-            },
-            onMessage = {
-                val card = profileState.selectedCard
-                if (card != null) {
-                    profileDetailStateHolder.dismiss()
-                    scope.launch {
-                        conversationStateHolder.openDirect(
-                            card = card,
-                            viewerUserId = viewerUserId,
-                        )
-                    }
-                }
-            },
-            onBlock = { reason ->
-                scope.launch { profileDetailStateHolder.blockUser(reason) }
-            },
-            onHide = {
-                scope.launch { profileDetailStateHolder.hideProfile() }
-            },
-            onReportAlbum = { albumId, category -> scope.launch { profileDetailStateHolder.submitAlbumReport(albumId, category) } },
-            onReport = { category, note ->
-                scope.launch { profileDetailStateHolder.submitReport(category, note) }
-            },
-            profileLinkAction =
-                profileLinksState?.profileLinkActionFor(
-                    targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id,
-                    viewerUserId = viewerUserId,
-                ),
-            onInviteProfileLink = {
-                val targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id
-                if (targetUserId != null) {
-                    scope.launch { profileLinksStateHolder?.createInvitation(targetUserId) }
-                }
-            },
-            onOpenLinkedPartner = { partner ->
-                scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
-            },
-            distanceUnit = distanceUnit,
-            onToggleFavorite = { scope.launch { profileDetailStateHolder.toggleFavorite() } },
-        )
-    }
+    // Profile open (GRID_IMPLEMENTATION_SPEC "Profile open"): swipe through the list on show, in its
+    // order; block/hide drops the card here and the pager moves on.
+    val browsingFavorites = favoritesState?.showing == true && favoritesStateHolder != null
+    GridProfileBrowser(
+        profileState = profileState,
+        profileDetailStateHolder = profileDetailStateHolder,
+        conversationStateHolder = conversationStateHolder,
+        cards = if (browsingFavorites) favoritesState?.cards.orEmpty() else state.cards,
+        hasMore = if (browsingFavorites) favoritesState?.nextCursor != null else state.nextCursor != null,
+        isLoadingMore = if (browsingFavorites) favoritesState?.isLoadingMore == true else state.isLoadingMore,
+        onLoadMore = {
+            if (browsingFavorites) {
+                favoritesStateHolder?.let { holder -> scope.launch { holder.loadMore() } }
+            } else {
+                scope.launch { stateHolder.loadMore() }
+            }
+        },
+        onRemoveCard = { userId ->
+            stateHolder.removeCardById(userId)
+            favoritesStateHolder?.removeCardById(userId)
+        },
+        viewerUserId = viewerUserId,
+        profileLinkActionFor = { targetUserId ->
+            profileLinksState?.profileLinkActionFor(targetUserId = targetUserId, viewerUserId = viewerUserId)
+        },
+        onInviteProfileLink = { targetUserId ->
+            scope.launch { profileLinksStateHolder?.createInvitation(targetUserId) }
+        },
+        distanceUnit = distanceUnit,
+        onOpenPhotoVerification = onOpenPhotoVerification,
+        onOpenStore = onOpenStore,
+    )
 }
 
 private fun com.pynapli.shared.network.dto.TravelLocationDto?.travelKey(): String = this?.let { "${it.city}|${it.latitude}|${it.longitude}|${it.activeFrom}" } ?: "none"

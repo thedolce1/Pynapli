@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -63,7 +65,7 @@ import androidx.compose.ui.window.DialogProperties
 enum class PynapliWideSheetPresentation { CenteredDialog, SidePanel }
 
 /** The container a sheet body is actually mounted in; [PynapliSheetScaffold] adapts to it. */
-enum class PynapliSheetHost { BottomSheet, CenteredDialog, SidePanel }
+enum class PynapliSheetHost { BottomSheet, FullScreen, CenteredDialog, SidePanel }
 
 val LocalPynapliSheetHost = compositionLocalOf { PynapliSheetHost.BottomSheet }
 
@@ -83,6 +85,9 @@ fun PynapliBottomSheet(
     modifier: Modifier = Modifier,
     containerColor: Color = PynapliColors.Black,
     widePresentation: PynapliWideSheetPresentation = PynapliWideSheetPresentation.CenteredDialog,
+    // Phones only: the sheet fills the screen edge to edge with no drag handle (the Grid's profile
+    // pager, DESIGN_SPEC "Full-screen profile"). Back and a downward drag still close it.
+    compactFullScreen: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sizeClass = currentPynapliWindowSizeClass()
@@ -90,12 +95,14 @@ fun PynapliBottomSheet(
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            shape = PynapliShape.SheetShape,
+            shape = if (compactFullScreen) RectangleShape else PynapliShape.SheetShape,
             containerColor = containerColor,
             contentColor = MaterialTheme.colorScheme.onSurface,
+            dragHandle = if (compactFullScreen) null else ({ BottomSheetDefaults.DragHandle() }),
             modifier = modifier,
         ) {
-            CompositionLocalProvider(LocalPynapliSheetHost provides PynapliSheetHost.BottomSheet) {
+            val host = if (compactFullScreen) PynapliSheetHost.FullScreen else PynapliSheetHost.BottomSheet
+            CompositionLocalProvider(LocalPynapliSheetHost provides host) {
                 Column(modifier = Modifier.nestedScroll(SheetEndFlingGuard), content = content)
             }
         }
@@ -244,10 +251,13 @@ fun PynapliSheetScaffold(
     footer: (@Composable ColumnScope.() -> Unit)? = null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
-    // A side panel already fills the window edge-to-edge; the bottom-sheet height
-    // fraction would leave a dead strip at its foot, so the scaffold fills it fully.
+    // A side panel or a full-screen sheet already fills the window edge-to-edge; the bottom-sheet
+    // height fraction would leave a dead strip at its foot, so the scaffold fills it fully.
     val effectiveHeightFraction =
-        if (LocalPynapliSheetHost.current == PynapliSheetHost.SidePanel) 1f else heightFraction
+        when (LocalPynapliSheetHost.current) {
+            PynapliSheetHost.SidePanel, PynapliSheetHost.FullScreen -> 1f
+            else -> heightFraction
+        }
     Column(
         modifier =
             modifier

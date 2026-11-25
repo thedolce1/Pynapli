@@ -31,6 +31,9 @@ class ProfileDetailStateHolder(
         isOwnProfile: Boolean = false,
         likeBackEventId: String? = null,
     ) {
+        // Moving on from someone reported in this sheet (the Grid profile pager swipes to the next
+        // person without closing) hands them to the same removal path closing would.
+        val reportedBefore = _state.value.reportedTargetUserId?.takeIf { it != card.id }
         _state.update {
             ProfileDetailUiState(
                 selectedCard = card,
@@ -40,8 +43,13 @@ class ProfileDetailStateHolder(
                 likeBackEventId = likeBackEventId,
             )
         }
+        reportedBefore?.let { _removedProfiles.tryEmit(it) }
 
-        when (val result = repository.loadProfile(card.id)) {
+        val result = repository.loadProfile(card.id)
+        // A newer open (a fast swipe to the next profile) owns the sheet now: drop this answer so
+        // one person's profile never shows under another person's card.
+        if (_state.value.selectedCard?.id != card.id) return
+        when (result) {
             is AppResult.Success -> {
                 _state.update { current ->
                     current.copy(

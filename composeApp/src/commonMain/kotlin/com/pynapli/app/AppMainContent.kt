@@ -174,6 +174,15 @@ internal fun ColumnScope.PynapliMainContent(
                         onUseCurrentLocation = onUseCurrentLocation,
                         travelLocationStateHolder = travelLocationStateHolder,
                         favoritesStateHolder = favoritesStateHolder,
+                        // "Verify to message" on a Grid profile: the Hub's photo-verification sheet.
+                        onOpenPhotoVerification =
+                            photoVerificationStateHolder?.let { holder ->
+                                {
+                                    onProfileSurface(ProfileSurface.Hub)
+                                    holder.open()
+                                    scope.launch { holder.load() }
+                                }
+                            },
                     )
                 PynapliTab.Messages ->
                     MessagesTabContent(
@@ -369,6 +378,7 @@ private fun ColumnScope.GridTabContent(
     onUseCurrentLocation: () -> Unit,
     travelLocationStateHolder: TravelLocationStateHolder? = null,
     favoritesStateHolder: com.pynapli.app.grid.FavoritesStateHolder? = null,
+    onOpenPhotoVerification: (() -> Unit)? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val locationState by locationStateHolder.state.collectAsState()
@@ -425,6 +435,7 @@ private fun ColumnScope.GridTabContent(
         onOpenTonight = onOpenTonight,
         travelLocationStateHolder = travelLocationStateHolder,
         favoritesStateHolder = favoritesStateHolder,
+        onOpenPhotoVerification = onOpenPhotoVerification,
     )
 }
 
