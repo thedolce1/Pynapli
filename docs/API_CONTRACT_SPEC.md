@@ -291,14 +291,16 @@ WebSockets are never the sole authority; clients refetch canonical state on reco
 full grid reorders or a partner's individual Psync swipes. Auth rules:
 [BACKEND_ARCHITECTURE_SPEC.md](BACKEND_ARCHITECTURE_SPEC.md#realtime).
 
-Presence (plan G2, 2026-11-24): any authenticated HTTP request and any open realtime socket (on open,
-then its 60 s re-auth tick) mark the caller online for 15 minutes. `POST /v1/presence/heartbeat`
-(re-added; bearer auth, no body, `204` with no body, echoes nobody's presence) covers a foregrounded app
-that is idle with no socket open: call it about every 60 s while in the foreground, never in the
-background. Calling it more often does no harm and no extra writes (one write per user a minute). The
-presence stream sends `PresenceDeltaDto(online = true)` when a subscribed person comes online and
-`online = false` when they go offline; `lastActiveAt` is cut to the minute; incognito members' changes
-are never sent.
+Presence (plan G2, 2026-11-24; privacy review 2026-11-25): any authenticated HTTP request and a
+realtime socket **opening** mark the caller online for 15 minutes; a socket's periodic re-auth does not.
+`POST /v1/presence/heartbeat` (re-added; bearer auth, no body, `204` with no body, echoes nobody's
+presence) keeps an idle foregrounded app online: call it about every 60 s while in the foreground, never
+in the background. Calling it more often does no harm and no extra writes (one write per user a minute).
+Logout and account deletion end presence at once. The presence stream sends
+`PresenceDeltaDto(online = true)` when a subscribed person comes online and `online = false`, after a
+random 0–60 s delay, when they go offline; only for members the Grid could show (never incognito,
+Grid-hidden, hidden while travelling, suspended or deleted). A subscribe frame keeps at most the first 200
+distinct valid ids; nothing is sent on subscribe. `lastActiveAt` is the emission minute.
 
 ### Admin
 

@@ -33,10 +33,12 @@ class AuthService(
     private val onEmailSignIn: (suspend (userId: UUID, normalisedEmail: String) -> Unit)? = null,
     /**
      * After every successful [authenticate] (each authenticated HTTP request and each realtime socket's
-     * open and 60 s re-auth tick). Presence hangs off this (plan G2). Must not suspend for long or
+     * open; never [authenticateWithoutActivity]). Presence hangs off this (plan G2). Must not suspend for long or
      * throw; a failure is swallowed so it never fails the request.
      */
     private val onAuthenticated: ((userId: UUID) -> Unit)? = null,
+    /** On logout and account deletion: the member's presence ends now ([endPresence]). */
+    private val onPresenceEnded: (suspend (userId: UUID) -> Unit)? = null,
 ) {
     private val validator = AuthRequestValidator(clock)
     private val rateLimitGuard = AuthRateLimitGuard(rateLimitService)
@@ -140,17 +142,39 @@ class AuthService(
         return sessionManager.refresh(refreshToken)
     }
 
+    /**
+     * Authenticates a real request by the member, which also counts as activity ([onAuthenticated]:
+     * presence). Use [authenticateWithoutActivity] where the call is not the member using the app.
+     */
     suspend fun authenticate(accessToken: String): UserRecord =
         sessionManager.authenticate(accessToken).also { user ->
             onAuthenticated?.let { hook -> runCatching { hook(user.id) } }
         }
+
+    /**
+     * The same check as [authenticate] without counting as activity (privacy review F3): realtime
+     * sockets' periodic re-auth ticks, the rate-limit plugin's token lookup, logout-adjacent session
+     * sign-outs and account deletion. None of these may keep someone looking online.
+     */
+    suspend fun authenticateWithoutActivity(accessToken: String): UserRecord = sessionManager.authenticate(accessToken)
+
+    /**
+     * Ends the member's presence now (logout, account deletion): their online key is deleted, so the dot
+     * goes at once and nothing about the sign-out is broadcast beyond the scanner's ordinary, jittered,
+     * eligibility-gated "went offline". Best-effort.
+     */
+    suspend fun endPresence(userId: UUID) {
+        onPresenceEnded?.let { hook -> runCatching { hook(userId) } }
+    }
 
     /** The session behind an access token (one lookup; used where a row must follow the session, e.g. push devices). */
     suspend fun sessionIdFor(accessToken: String): UUID? = repository.findSessionByAccessTokenHash(Sha256.hash(accessToken))?.id
 
     suspend fun logout(accessToken: String): Boolean {
         revocationRelay.publish(REVOCATION_CHANNEL, REVOKED_TOKEN_PREFIX + Sha256.hash(accessToken))
-        return sessionManager.logout(accessToken)
+        val signedOutUserId = sessionManager.logout(accessToken) ?: return false
+        endPresence(signedOutUserId)
+        return true
     }
 
     fun invalidateCachedSessionsForUser(userId: UUID) {

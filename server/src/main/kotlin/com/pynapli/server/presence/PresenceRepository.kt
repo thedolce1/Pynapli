@@ -6,6 +6,9 @@ interface PresenceRepository {
     suspend fun heartbeat(userId: UUID): PresenceState
 
     suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID>
+
+    /** Drops the online key at once (logout, account deletion). */
+    suspend fun clear(userId: UUID) {}
 }
 
 /**

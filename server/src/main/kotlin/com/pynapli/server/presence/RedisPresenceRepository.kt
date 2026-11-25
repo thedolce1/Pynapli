@@ -43,6 +43,12 @@ class RedisPresenceRepository(
             }
         }
 
+    override suspend fun clear(userId: UUID) {
+        withContext(Dispatchers.IO) {
+            profileBlocking("redis.presence.del") { redisCache.commands.del(keyFor(userId)) }
+        }
+    }
+
     private fun keyFor(userId: UUID): String = "presence:user:$userId"
 
     companion object {

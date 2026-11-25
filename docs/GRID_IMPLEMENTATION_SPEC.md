@@ -247,17 +247,28 @@ This keeps the grid feeling alive without feeling chaotic.
 What ships (plan G2/G4/G11, 2026-11-24):
 
 - **Online** (green dot): a Redis key `presence:user:{id}` with a **15-minute** TTL
-  (`RedisPresenceRepository.ONLINE_TTL_SECONDS = 900`), refreshed by any authenticated HTTP request
-  (`AuthService` `onAuthenticated` hook), by every open realtime socket (opened, then its 60 s re-auth
-  tick), and by `POST /v1/presence/heartbeat`, which a foregrounded app calls about every 60 s so an idle
-  screen keeps its dot. Writes are claimed per user at most once a minute per instance
-  (`PresenceService.claimRefresh`) and run off the request path (bounded launcher), so a request never
-  waits on Redis for presence. One refresh is one `SET … EX 900 GET` and, at most once a minute, one
-  `user_last_active` upsert.
-- **Came online / went offline:** a refresh whose `SET … GET` finds no previous key emits a "came
-  online" delta; `PresenceOfflineScanner` emits "went offline" when the key has expired. Both carry the
-  time cut to the minute. Neither is emitted for a member who hides their activity (incognito), and the
-  check fails closed.
+  (`RedisPresenceRepository.ONLINE_TTL_SECONDS = 900`), refreshed only by real use: an authenticated
+  HTTP request (`AuthService.authenticate`'s `onAuthenticated` hook), a realtime socket **opening**, and
+  `POST /v1/presence/heartbeat`, which a foregrounded app calls about every 60 s so an idle screen keeps
+  its dot. Not activity (`authenticateWithoutActivity`): a socket's 60 s re-auth tick (a forgotten socket
+  can't keep someone online), the rate-limit plugin's token lookup, signing sessions out and deleting the
+  account. Logout and account deletion delete the key at once (`PresenceService.endPresence`). Writes are
+  claimed per user at most once a minute per instance (`PresenceService.claimRefresh`) and run off the
+  request path (bounded launcher), so a request never waits on Redis for presence. One refresh is one
+  `SET … EX 900 GET` and, at most once a minute, one `user_last_active` upsert.
+- **Who is broadcast:** the presence stream accepts any subscribed id (at most 200 per socket, extras
+  dropped), so the gate is on the sending side: a transition goes out only for someone the Grid itself
+  could show (`JdbcPresenceVisibility`: active, not deleted, profile visible, Grid-visible, not incognito,
+  not hidden while travelling, not quarantined), checked per transition and failing closed. Blocks and
+  contact blocks are then applied per viewer by the stream route. Nothing is sent on subscribe.
+- **Came online / went offline:** a refresh whose `SET … GET` finds no previous key emits "came online"
+  in real time (a product choice). `PresenceOfflineScanner` finds lapsed keys every 30 s and sends each
+  "went offline" after its own random 0–60 s delay, dropped if the person is back by then. What the delay
+  protects: a subscriber can't read off, to the second, when the key lapsed and so when the app was last
+  used (last use + 15 minutes). What it doesn't: "came online" is exact, so a watcher still learns when
+  someone opens the app; last use is still known to within roughly 15–17 minutes; and a determined
+  watcher who polls profiles learns the same coarse facts. The `lastActiveAt` field is the emission time
+  cut to the minute, so it says nothing the arrival time doesn't.
 - **Last activity** (`GridActivitySql.lastActiveAt`): the later of `user_last_active` (V106, backfilled
   from sessions in V127) and account creation. Server-side only, never returned.
 - **Card activity key** (`GridCardDto.activeAgo`, `GridActiveAgo`): `online`, `15m`, `1h`, `3h`, `today`,
@@ -270,8 +281,13 @@ What ships (plan G2/G4/G11, 2026-11-24):
   active in the last 24 hours. Looser than Grindr's 1 hour because we are sparser. Replaces "Recently
   joined"; `recentlyJoinedOnly` from older clients and saved filters is read as `freshOnly`.
 - **Dormant:** no activity for 30 days: demoted in the rank (see "Ranking"), never hidden.
-- Profile detail keeps its own `lastActive` buckets (`LastActiveBucket`, which also reads session
-  activity).
+- Profile detail keeps its own `lastActive` buckets (`LastActiveBucket`). **Known inconsistency (privacy
+  review F4):** the card's `activeAgo` reads only `user_last_active` (plus account creation), while
+  profile `lastActive` also reads the newest live `user_sessions.last_seen_at`
+  (`JdbcLastActiveRepository.lookup`). Since every real request now writes `user_last_active` and V127
+  backfilled history, the two rarely disagree, but a session refresh with no other request can make the
+  profile read more recent than the card. Follow-up: point the profile lookup at the same
+  `GridActivitySql.lastActiveAt` source.
 
 ## Location Strategy
 
@@ -525,8 +541,9 @@ Use WebSocket deltas for:
 Do not use WebSockets to stream full grid reorders constantly.
 
 Presence deltas (`/v1/presence/stream`, `PresenceDeltaDto`) are sent for both transitions: `online =
-true` when someone comes online, `online = false` when their 15-minute key lapses. `lastActiveAt` is
-cut to the minute. Incognito members' transitions are never sent. Presence delta shape:
+true` when someone comes online, `online = false` (after a random 0–60 s delay) when their 15-minute
+key lapses. Only for members the Grid could show; at most 200 ids per socket (see "Presence States").
+Presence delta shape:
 
 ```kotlin
 @Serializable
@@ -675,9 +692,12 @@ updates when the app pauses, prefer event deltas over polling.
 - [x] Never-empty: with no filters the Grid is a plain proximity query, and a **first page** showing
   fewer than 12 people widens once to `MAX_RADIUS_METERS` and pages normally under a widened cursor
   scope (plan G10; `GridServiceTest`). Explicit filters still apply.
-- [x] Presence like Grindr's (plan G2): any authenticated request, open socket or
-  `POST /v1/presence/heartbeat` keeps the dot for 15 minutes; the stream sends came-online and
-  went-offline, never for incognito members (`PresenceServiceTest`). Grid load test presence run pending.
+- [x] Presence like Grindr's (plan G2): any authenticated request, a socket opening or
+  `POST /v1/presence/heartbeat` keeps the dot for 15 minutes (socket re-auth ticks, session sign-outs
+  and deletion don't count; logout and deletion drop it); the stream sends came-online and jittered
+  went-offline, only for Grid-eligible members, 200 ids per socket (`PresenceServiceTest`,
+  `PresenceOfflineScannerTest`, `PresenceVisibilityIntegrationTest`, `PresenceActivityGuardTest`,
+  `AuthServiceTest`). Grid load test presence run pending.
 - [x] Rank tier (plan G3): boosted, normal, then demoted (dormant 30 days or no approved photo), pinned
   in `GridRankOrderPinTest`.
 - [x] Fresh (plan G4): server-side rule for the card's `fresh` flag and the `freshOnly` chip, which

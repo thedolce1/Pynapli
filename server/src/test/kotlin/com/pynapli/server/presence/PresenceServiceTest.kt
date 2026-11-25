@@ -5,6 +5,7 @@ import com.pynapli.server.auth.SessionRecord
 import com.pynapli.server.auth.security.Sha256
 import com.pynapli.server.testsupport.SingleSessionAuthRepository
 import com.pynapli.shared.network.dto.PresenceDeltaDto
+import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
@@ -124,6 +125,7 @@ class PresenceServiceTest {
                     repository = InMemoryPresenceRepository(),
                     broadcaster = broadcaster,
                     broadcastAllowed = allowed,
+                    offlineJitterMillis = { 0 },
                 )
 
             coroutineScope {
@@ -164,6 +166,51 @@ class PresenceServiceTest {
                 job.cancel()
                 assertTrue(received.isEmpty())
             }
+        }
+
+    // Privacy review F3: logout and deletion drop the key at once and release the claim.
+    @Test
+    fun endPresenceDropsTheKeyAndTheClaim() =
+        runBlocking {
+            val repository = InMemoryPresenceRepository()
+            val service = PresenceService(repository)
+            val userId = UUID.randomUUID()
+
+            service.touch(userId)
+            assertEquals(setOf(userId), service.onlineUserIds(listOf(userId)))
+            service.endPresence(userId)
+            assertEquals(emptySet(), service.onlineUserIds(listOf(userId)))
+            // Signing straight back in marks them online again without waiting out the minute.
+            assertTrue(service.claimRefresh(userId))
+        }
+
+    // Privacy review F3: a socket marks you online when it opens, never on its re-auth tick.
+    @Test
+    fun aSocketReAuthTickIsNotActivity() =
+        testApplication {
+            val userId = UUID.randomUUID()
+            val opens = java.util.concurrent.atomic.AtomicInteger()
+            val authService = authServiceFor("token-1", userId, onAuthenticated = { opens.incrementAndGet() })
+            application {
+                configurePresenceStreamRoutes(
+                    authService = authService,
+                    broadcaster = PresenceBroadcaster(),
+                    blockRepository = NoopBlockRepository(),
+                )
+            }
+            val client = createClient { install(io.ktor.client.plugins.websocket.WebSockets) }
+
+            client.webSocket("/v1/presence/stream", request = { header(HttpHeaders.Authorization, "Bearer token-1") }) {
+                // Wait for the open's authenticate, then force several immediate re-auth ticks.
+                withTimeoutOrNull(2_000) { while (opens.get() == 0) delay(10) }
+                repeat(3) {
+                    authService.invalidateCachedSessionsForUser(userId)
+                    delay(100)
+                }
+                delay(200)
+            }
+
+            assertEquals(1, opens.get(), "only the socket open counts as activity")
         }
 
     @Test
@@ -250,4 +297,8 @@ private class InMemoryPresenceRepository : PresenceRepository {
     }
 
     override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = userIds.filterTo(mutableSetOf()) { it in onlineUserIds }
+
+    override suspend fun clear(userId: UUID) {
+        onlineUserIds -= userId
+    }
 }

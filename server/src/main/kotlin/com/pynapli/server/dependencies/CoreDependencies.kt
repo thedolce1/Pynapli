@@ -152,8 +152,12 @@ internal fun buildCoreDependencies(
     val lastActiveRepository =
         com.pynapli.server.presence
             .JdbcLastActiveRepository(database.dataSource)
-    // Incognito members' online/offline transitions never go out on the presence stream.
-    val presenceBroadcastAllowed: suspend (java.util.UUID) -> Boolean = { userId -> !lastActiveRepository.lookup(userId).hidden }
+    // Online/offline transitions go out on the presence stream only for people the Grid could show
+    // (active, visible, Grid-visible, not incognito, not hidden while travelling, not quarantined).
+    val presenceVisibility =
+        com.pynapli.server.presence
+            .JdbcPresenceVisibility(database.dataSource)
+    val presenceBroadcastAllowed: suspend (java.util.UUID) -> Boolean = presenceVisibility::broadcastable
     val presenceService =
         PresenceService(
             repository = presenceRepository,
@@ -164,7 +168,7 @@ internal fun buildCoreDependencies(
             broadcaster = presenceBroadcaster,
             broadcastAllowed = presenceBroadcastAllowed,
         )
-    // Plan G2: every authenticated request (and open socket tick) marks the caller online. The
+    // Plan G2: every authenticated request (and a socket opening) marks the caller online. The
     // in-memory claim keeps it to one Redis + one DB write per user a minute, and the write runs off
     // the request so a slow Redis never delays an unrelated call.
     val presenceRefreshLauncher =
@@ -220,6 +224,7 @@ internal fun buildCoreDependencies(
             revocationRelay = redisCache.realtimeRelay,
             onEmailSignIn = contactBlockSettling::atSignIn,
             onAuthenticated = markOnlineOnAuthenticated,
+            onPresenceEnded = presenceService::endPresence,
         )
     val contactBlockService =
         ContactBlockService(

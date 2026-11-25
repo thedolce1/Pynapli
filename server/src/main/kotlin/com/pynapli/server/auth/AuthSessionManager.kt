@@ -147,13 +147,14 @@ internal class AuthSessionManager(
         return user
     }
 
-    suspend fun logout(accessToken: String): Boolean {
+    /** Revokes the session; returns its user when this call revoked it, else null. */
+    suspend fun logout(accessToken: String): UUID? {
         val accessTokenHash = Sha256.hash(accessToken)
         cache.remove(accessTokenHash)
         val session =
             repository.findSessionByAccessTokenHash(accessTokenHash)
-                ?: return false
-        return repository.revokeSession(session.id)
+                ?: return null
+        return session.userId.takeIf { repository.revokeSession(session.id) }
     }
 
     fun forgetCachedAccessTokenHash(accessTokenHash: String) {

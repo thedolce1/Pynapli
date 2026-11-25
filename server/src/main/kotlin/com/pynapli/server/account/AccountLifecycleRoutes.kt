@@ -50,10 +50,12 @@ fun Application.configureAccountLifecycleRoutes(
 
         post("/v1/account/delete") {
             val token = call.requiredBearerToken()
-            val user = authService.authenticate(token)
+            // Deleting the account is not activity, and it ends presence at once (privacy review F3).
+            val user = authService.authenticateWithoutActivity(token)
             val request = call.receive<DeleteAccountRequestDto>()
             val response = accountLifecycleService.deleteAccount(user.id, request.confirmation)
             authService.invalidateCachedSessionsForUser(user.id)
+            authService.endPresence(user.id)
             call.respond(response)
         }
     }
