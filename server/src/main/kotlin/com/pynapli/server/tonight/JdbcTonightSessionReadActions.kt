@@ -22,6 +22,8 @@ internal suspend fun DataSource.isTonightPhotoOwnedBy(
                     WHERE id = ?
                       AND owner_user_id = ?
                       AND deleted_at IS NULL
+                      -- The session photo is public: only a profile photo may be chosen.
+                      AND intended_album_kind = 'profile'
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setObject(1, photoAssetId)

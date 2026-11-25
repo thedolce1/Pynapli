@@ -188,6 +188,19 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
   in the album manager, Edit profile, the onboarding photo step and their own profile preview. The
   server returns a pending photo only to its owner (owner album listing); every other viewer's query
   filters to ready+approved.
+- **Completion is once per asset** (review finding, 2026-11-25). An upload slot records the album
+  kind it was opened for (`intended_album_kind`). Upload-complete (`completeMediaAlbumUpload`, one
+  transaction with the asset row locked) refuses an album of another kind
+  (`MEDIA_UPLOAD_ALBUM_MISMATCH`), refuses an asset already in another album or already completed
+  (`MEDIA_UPLOAD_ALREADY_COMPLETED`, 409), returns the existing item for a retry into the same
+  album (only an asset no decision was ever applied to is moderated again), and inserts the item and
+  moves the asset pending_upload → uploaded together. Without this, a held profile photo could be
+  completed again into the unscanned private album, turn approved, and go public through its
+  profile-album item. Defence in depth: every public photo query (Grid, Swipe, profile, peek,
+  Activity, Messages, Playing Tonight incl. the session photo, match moment, partner link) also
+  requires `intended_album_kind = 'profile'`, a Playing Tonight session photo must be a profile
+  photo, and V128 makes the database hold one album per asset (unique index), backfills legacy
+  kinds, and sends any approved profile asset that also sat in a private album back to the queue.
 - **Logging:** asset id and error type only; never the object path, a signed URL or the response
   body.
 - **Not covered:** SafeSearch is not a CSAM detector (hash matching is a separate provider, still

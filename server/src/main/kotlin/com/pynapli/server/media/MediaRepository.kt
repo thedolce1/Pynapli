@@ -85,6 +85,19 @@ interface MediaRepository {
         sortOrder: Int,
     ): MediaAlbumItemRecord?
 
+    /**
+     * Upload-complete, once per asset, atomically: the album kind must match the kind the upload
+     * slot was opened for, an asset already in another album is refused, a repeat into the same
+     * album returns the existing item, and the item insert and pending_upload -> uploaded change
+     * commit together.
+     */
+    suspend fun completeAlbumUpload(
+        ownerUserId: UUID,
+        albumId: UUID,
+        mediaAssetId: UUID,
+        sortOrder: Int,
+    ): AlbumUploadCompletion
+
     suspend fun requestAlbumAccess(
         ownerUserId: UUID,
         requesterUserId: UUID,
@@ -145,6 +158,24 @@ data class MediaAssetCreate(
     /** Album kind this upload slot was opened for; used to count open slots against album caps. */
     val intendedAlbumKind: String? = null,
 )
+
+/** Outcome of [MediaRepository.completeAlbumUpload]. */
+sealed interface AlbumUploadCompletion {
+    /** First completion: the item exists and the asset is now `uploaded`; moderation runs next. */
+    data class Attached(
+        val item: MediaAlbumItemRecord,
+    ) : AlbumUploadCompletion
+
+    /** A retried completion into the same album: the existing item, nothing changed. */
+    data class AlreadyCompleted(
+        val item: MediaAlbumItemRecord,
+    ) : AlbumUploadCompletion
+
+    /** Refused with a media error code (not found, album mismatch, already completed elsewhere). */
+    data class Refused(
+        val code: String,
+    ) : AlbumUploadCompletion
+}
 
 data class MediaAssetRecord(
     val mediaAssetId: UUID,

@@ -112,21 +112,36 @@ internal class MediaUploadActions(
         if (activeCount >= album.kind.mediaAlbumPhotoCap()) {
             throw MediaException("MEDIA_ALBUM_PHOTO_CAP_EXCEEDED")
         }
+        // Once per asset, atomically, and only into the album kind the slot was opened for: a held
+        // profile photo can't be re-completed into the (unscanned) private album to get approved.
         val item =
-            repository.addAssetToAlbum(
-                ownerUserId = ownerUserId,
-                albumId = albumId,
-                mediaAssetId = mediaAssetId,
-                sortOrder = request.sortOrder,
-            ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+            when (
+                val completion =
+                    repository.completeAlbumUpload(
+                        ownerUserId = ownerUserId,
+                        albumId = albumId,
+                        mediaAssetId = mediaAssetId,
+                        sortOrder = request.sortOrder,
+                    )
+            ) {
+                is AlbumUploadCompletion.Refused -> throw MediaException(completion.code)
+                is AlbumUploadCompletion.AlreadyCompleted -> {
+                    // A retried complete into the same album. Only an asset no decision was ever
+                    // applied to (a crash between attach and moderation) is moderated again.
+                    val asset = completion.item.mediaAsset
+                    if (asset.processingStatus != "uploaded" || asset.moderationStatus != "pending") {
+                        return completion.item.toDto(mediaAssetUrlResolver)
+                    }
+                    completion.item
+                }
 
-        val uploadedAsset =
-            repository.markAssetUploaded(ownerUserId, mediaAssetId)
-                ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
+                is AlbumUploadCompletion.Attached -> completion.item
+            }
+
         // Moderation hook: a profile photo is approved or held for a person before discovery (never
         // auto-removed); private albums remain consent-gated, are scanned only when the scan scope
         // says so, and then change only on a severe safety/legal rejection.
-        val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, uploadedAsset)
+        val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, item.mediaAsset)
 
         return item.copy(mediaAsset = visibleAsset).toDto(mediaAssetUrlResolver)
     }

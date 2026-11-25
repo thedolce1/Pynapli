@@ -53,6 +53,7 @@ internal object GridActivitySql {
               AND ${tag}_m.media_type = 'image'
               AND ${tag}_m.processing_status = 'ready'
               AND ${tag}_m.moderation_status = 'approved'
+              AND ${tag}_m.intended_album_kind = 'profile'
               ${addedWithin?.let { "AND ${tag}_mai.added_at > now() - interval $it" }.orEmpty()}
         )
         """.trimIndent()

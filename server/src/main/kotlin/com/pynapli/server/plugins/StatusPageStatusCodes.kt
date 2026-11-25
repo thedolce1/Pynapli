@@ -359,6 +359,7 @@ internal fun verificationStatusFor(code: String): HttpStatusCode =
 internal fun mediaStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
+        "MEDIA_UPLOAD_ALREADY_COMPLETED" -> HttpStatusCode.Conflict
         "MEDIA_ASSET_NOT_FOUND",
         "MEDIA_ALBUM_NOT_FOUND",
         "MEDIA_GRANT_NOT_FOUND",

@@ -170,6 +170,8 @@ internal fun userSafeMessage(code: String): String =
         "MEDIA_ALBUM_ORDER_MISMATCH" -> "Photo order is out of date. Refresh and try again."
         "MEDIA_ASSET_NOT_FOUND" -> "Media item was not found."
         "MEDIA_ALBUM_NOT_FOUND" -> "Album was not found."
+        "MEDIA_UPLOAD_ALBUM_MISMATCH" -> "This photo was uploaded for a different album. Upload it again there."
+        "MEDIA_UPLOAD_ALREADY_COMPLETED" -> "This photo has already been added."
         "MEDIA_GRANT_NOT_FOUND" -> "Album access was not found."
         "INVALID_SWIPE_TARGET" -> "That profile could not be swiped."
         "LIKE_BACK_NOT_AVAILABLE" -> "That like is no longer active, so there's nothing to like back."

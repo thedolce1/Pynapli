@@ -118,6 +118,129 @@ internal suspend fun DataSource.findMediaAlbum(
         }
     }
 
+/**
+ * Upload-complete, once per asset (TRUST_AND_SAFETY_SPEC "Photo pre-screening", "Completion is once
+ * per asset"). In one transaction, with the asset row locked:
+ * - the asset must have been opened for this album's kind (`intended_album_kind = album.kind`), so a
+ *   profile upload can never be completed into the private album (which is not pre-screened) or the
+ *   other way round;
+ * - an asset already in any other album is refused;
+ * - a repeat into the same album returns the existing item (idempotent retry, no new item);
+ * - otherwise the item is inserted and the asset moves pending_upload -> uploaded together, so a
+ *   failed status change never leaves an item behind.
+ */
+internal suspend fun DataSource.completeMediaAlbumUpload(
+    ownerUserId: UUID,
+    albumId: UUID,
+    mediaAssetId: UUID,
+    sortOrder: Int,
+): AlbumUploadCompletion =
+    withContext(Dispatchers.IO) {
+        connection.use { connection ->
+            connection.inTransaction {
+                val asset =
+                    prepareStatement(
+                        """
+                        SELECT intended_album_kind, processing_status
+                        FROM media_assets
+                        WHERE id = ? AND owner_user_id = ? AND deleted_at IS NULL
+                        FOR UPDATE
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, mediaAssetId)
+                        statement.setObject(2, ownerUserId)
+                        statement.executeQuery().use { rs ->
+                            if (rs.next()) rs.getString("intended_album_kind") to rs.getString("processing_status") else null
+                        }
+                    } ?: return@inTransaction AlbumUploadCompletion.Refused("MEDIA_ASSET_NOT_FOUND")
+                val album =
+                    findActiveAlbum(ownerUserId, albumId)
+                        ?: return@inTransaction AlbumUploadCompletion.Refused("MEDIA_ALBUM_NOT_FOUND")
+                val intendedKind = asset.first
+                if (intendedKind == null || intendedKind !in ALBUM_UPLOAD_KINDS) {
+                    // A chat photo, a verification selfie or a legacy slot never joins an album; same
+                    // answer as before (no hint that the asset exists).
+                    return@inTransaction AlbumUploadCompletion.Refused("MEDIA_ALBUM_NOT_FOUND")
+                }
+                if (asset.first != album.kind) {
+                    return@inTransaction AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALBUM_MISMATCH")
+                }
+
+                // Every album this asset was ever attached to, removed or not.
+                val existing =
+                    prepareStatement(
+                        """
+                        SELECT album_id, media_asset_id, owner_user_id, sort_order, added_at, removed_at
+                        FROM media_album_items
+                        WHERE media_asset_id = ? AND owner_user_id = ?
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, mediaAssetId)
+                        statement.setObject(2, ownerUserId)
+                        statement.executeQuery().use { rs ->
+                            buildList { while (rs.next()) add(rs.toMediaAlbumItemRecord(this@inTransaction)) }
+                        }
+                    }
+                if (existing.any { it.albumId != albumId }) {
+                    return@inTransaction AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+                }
+                val sameAlbum = existing.firstOrNull()
+                if (sameAlbum != null) {
+                    return@inTransaction if (sameAlbum.removedAt == null) {
+                        AlbumUploadCompletion.AlreadyCompleted(sameAlbum)
+                    } else {
+                        AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+                    }
+                }
+                if (asset.second != "pending_upload") {
+                    return@inTransaction AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+                }
+
+                val inserted =
+                    prepareStatement(
+                        """
+                        INSERT INTO media_album_items (album_id, media_asset_id, owner_user_id, sort_order)
+                        VALUES (?, ?, ?, ?)
+                        RETURNING album_id, media_asset_id, owner_user_id, sort_order, added_at, removed_at
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, albumId)
+                        statement.setObject(2, mediaAssetId)
+                        statement.setObject(3, ownerUserId)
+                        statement.setInt(4, sortOrder)
+                        statement.executeQuery().use { rs ->
+                            rs.next()
+                            Triple(rs.getInt("sort_order"), rs.getTimestamp("added_at").toInstant(), rs.getTimestamp("removed_at")?.toInstant())
+                        }
+                    }
+                val updated =
+                    prepareStatement(
+                        """
+                        UPDATE media_assets
+                        SET processing_status = 'uploaded', updated_at = now()
+                        WHERE id = ? AND owner_user_id = ? AND processing_status = 'pending_upload'
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, mediaAssetId)
+                        statement.setObject(2, ownerUserId)
+                        statement.executeUpdate()
+                    }
+                check(updated == 1) { "asset status changed under the row lock" }
+                AlbumUploadCompletion.Attached(
+                    MediaAlbumItemRecord(
+                        albumId = albumId,
+                        mediaAsset = requireNotNull(loadAsset(mediaAssetId)),
+                        sortOrder = inserted.first,
+                        addedAt = inserted.second,
+                        removedAt = inserted.third,
+                    ),
+                )
+            }
+        }
+    }
+
+private val ALBUM_UPLOAD_KINDS = setOf("profile", "private")
+
 internal suspend fun DataSource.addMediaAssetToAlbum(
     ownerUserId: UUID,
     albumId: UUID,
@@ -136,11 +259,17 @@ internal suspend fun DataSource.addMediaAssetToAlbum(
                       ON m.id = ?
                      AND m.owner_user_id = a.owner_user_id
                      AND m.deleted_at IS NULL
-                     -- Only album uploads go into albums: never a chat photo or a verification selfie.
-                     AND (m.intended_album_kind IS NULL OR m.intended_album_kind IN ('profile', 'private'))
+                     -- Only album uploads go into albums: never a chat photo or a verification selfie,
+                     -- and only into the album kind the upload was opened for.
+                     AND (m.intended_album_kind IS NULL OR m.intended_album_kind = a.kind)
                     WHERE a.id = ?
                       AND a.owner_user_id = ?
                       AND a.deleted_at IS NULL
+                      -- An asset lives in one album only (see completeMediaAlbumUpload).
+                      AND NOT EXISTS (
+                          SELECT 1 FROM media_album_items other
+                          WHERE other.media_asset_id = m.id AND other.album_id <> a.id
+                      )
                     ON CONFLICT (album_id, media_asset_id) DO UPDATE
                     SET sort_order = EXCLUDED.sort_order,
                         removed_at = NULL,

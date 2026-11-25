@@ -73,6 +73,13 @@ class JdbcMediaRepository(
         sortOrder: Int,
     ): MediaAlbumItemRecord? = dataSource.addMediaAssetToAlbum(ownerUserId, albumId, mediaAssetId, sortOrder)
 
+    override suspend fun completeAlbumUpload(
+        ownerUserId: UUID,
+        albumId: UUID,
+        mediaAssetId: UUID,
+        sortOrder: Int,
+    ): AlbumUploadCompletion = dataSource.completeMediaAlbumUpload(ownerUserId, albumId, mediaAssetId, sortOrder)
+
     override suspend fun requestAlbumAccess(
         ownerUserId: UUID,
         requesterUserId: UUID,

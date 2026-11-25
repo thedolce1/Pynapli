@@ -164,6 +164,7 @@ $candidateSource
                         AND has_photo_m.media_type = 'image'
                         AND has_photo_m.processing_status = 'ready'
                         AND has_photo_m.moderation_status = 'approved'
+                        AND has_photo_m.intended_album_kind = 'profile'
                   )
               )
               -- FILTERS_SPEC "Has private album": a visible private album with an approved photo.

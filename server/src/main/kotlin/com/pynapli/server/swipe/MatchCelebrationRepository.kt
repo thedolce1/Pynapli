@@ -202,6 +202,7 @@ private const val FIRST_PROFILE_PHOTO_SQL =
       AND m.media_type = 'image'
       AND m.processing_status = 'ready'
       AND m.moderation_status = 'approved'
+      AND m.intended_album_kind = 'profile'
     ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
     LIMIT 1
     """

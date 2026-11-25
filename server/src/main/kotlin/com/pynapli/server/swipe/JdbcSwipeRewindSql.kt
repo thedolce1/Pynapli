@@ -84,6 +84,7 @@ internal fun Connection.findLatestRewindableAction(
                   AND m.media_type = 'image'
                   AND m.processing_status = 'ready'
                   AND m.moderation_status = 'approved'
+                  AND m.intended_album_kind = 'profile'
             ) ranked
             WHERE rn <= 5
         ) profile_photos ON true
@@ -118,6 +119,7 @@ internal fun Connection.findLatestRewindableAction(
                   AND m.media_type = 'image'
                   AND m.processing_status = 'ready'
                   AND m.moderation_status = 'approved'
+                  AND m.intended_album_kind = 'profile'
                 ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
                 LIMIT 1
             ) linked_partner_photo ON true

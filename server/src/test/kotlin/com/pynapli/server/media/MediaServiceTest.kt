@@ -1175,6 +1175,39 @@ private class InMemoryMediaRepository : MediaRepository {
         ).also { item -> items[albumId to mediaAssetId] = item }
     }
 
+    // Mirrors completeMediaAlbumUpload's rules (the JDBC one is covered by the integration tests).
+    override suspend fun completeAlbumUpload(
+        ownerUserId: UUID,
+        albumId: UUID,
+        mediaAssetId: UUID,
+        sortOrder: Int,
+    ): AlbumUploadCompletion {
+        val asset =
+            assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null }
+                ?: return AlbumUploadCompletion.Refused("MEDIA_ASSET_NOT_FOUND")
+        val album =
+            albums[albumId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null }
+                ?: return AlbumUploadCompletion.Refused("MEDIA_ALBUM_NOT_FOUND")
+        val intended = intendedAlbumKinds[mediaAssetId]
+        if (intended == null || intended !in setOf("profile", "private")) return AlbumUploadCompletion.Refused("MEDIA_ALBUM_NOT_FOUND")
+        if (intended != album.kind) return AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALBUM_MISMATCH")
+        val existing = items.values.filter { it.mediaAsset.mediaAssetId == mediaAssetId }
+        if (existing.any { it.albumId != albumId }) return AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+        existing.firstOrNull()?.let { same ->
+            return if (same.removedAt == null) {
+                AlbumUploadCompletion.AlreadyCompleted(same)
+            } else {
+                AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+            }
+        }
+        if (asset.processingStatus != "pending_upload") return AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+        val uploaded = asset.copy(processingStatus = "uploaded")
+        assets[mediaAssetId] = uploaded
+        val item = MediaAlbumItemRecord(albumId = albumId, mediaAsset = uploaded, sortOrder = sortOrder, addedAt = now, removedAt = null)
+        items[albumId to mediaAssetId] = item
+        return AlbumUploadCompletion.Attached(item)
+    }
+
     override suspend fun listAlbumItemsForViewer(
         viewerUserId: UUID,
         albumId: UUID,

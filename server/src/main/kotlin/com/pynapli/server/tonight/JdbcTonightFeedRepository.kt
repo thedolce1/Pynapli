@@ -112,6 +112,7 @@ class JdbcTonightFeedRepository(
               AND m.media_type = 'image'
               AND m.processing_status = 'ready'
               AND m.moderation_status = 'approved'
+              AND m.intended_album_kind = 'profile'
             ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
             LIMIT 1
             """.trimIndent()
@@ -145,6 +146,9 @@ class JdbcTonightFeedRepository(
                          AND m.deleted_at IS NULL
                          AND m.processing_status = 'ready'
                          AND m.moderation_status = 'approved'
+                         -- Public surface: only a profile photo (pre-screened), never a private-album,
+                         -- chat or verification asset the owner happens to own.
+                         AND m.intended_album_kind = 'profile'
                    ) AS photo_media_asset_id,
                    owner_user.id AS owner_user_id,
                    COALESCE(NULLIF(owner_profile.display_name, ''), 'New member') AS owner_display_name,
