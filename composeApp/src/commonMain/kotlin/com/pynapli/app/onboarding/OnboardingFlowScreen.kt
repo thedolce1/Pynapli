@@ -69,7 +69,9 @@ import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.app.location.LOCATION_SKIP_COST_COPY
 import com.pynapli.app.location.LocationAccessHelp
 import com.pynapli.app.location.LocationUiState
+import com.pynapli.app.media.BEING_REVIEWED_LABEL
 import com.pynapli.app.media.MediaAlbumsUiState
+import com.pynapli.app.media.ownPreviewPhotos
 import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.shared.core.config.LegalLinks
 import kotlinx.coroutines.delay
@@ -751,7 +753,13 @@ private fun ProfileStep(
     Spacer(modifier = Modifier.height(12.dp))
     if (hasPhoto) {
         Text(
-            text = "Photo added! It will appear once it's approved.",
+            // Pre-screening approves most photos within seconds; a held one waits for a person.
+            text =
+                if (mediaState.ownPreviewPhotos().firstOrNull()?.beingReviewed == true) {
+                    "Photo added. $BEING_REVIEWED_LABEL until it's approved."
+                } else {
+                    "Photo added."
+                },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,

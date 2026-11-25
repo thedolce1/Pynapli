@@ -3,6 +3,7 @@ package com.pynapli.app.profile
 import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.app.media.MediaAlbumItemUi
+import com.pynapli.app.media.OwnPreviewPhoto
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
@@ -104,10 +105,45 @@ class ProfileDetailStateHolderTest {
             val repository = RecordingPublicProfileRepository()
             val stateHolder = ProfileDetailStateHolder(repository)
 
-            stateHolder.openOwnPreview(userId = "me-1", displayName = "Seb", profilePhotoUrl = null)
+            stateHolder.openOwnPreview(
+                userId = "me-1",
+                displayName = "Seb",
+                profilePhotoUrl = null,
+                ownPhotos = listOf(OwnPreviewPhoto(url = "https://own/1", beingReviewed = true)),
+            )
             stateHolder.open(sampleCard("user-2"))
 
             assertEquals(false, stateHolder.state.value.isOwnProfile)
+            // The owner's pending photos never carry over to someone else's profile.
+            assertEquals(emptyList(), stateHolder.state.value.ownPreviewPhotos)
+        }
+
+    @Test
+    fun ownPreviewCarriesTheOwnersPhotosIncludingOnesBeingReviewed() =
+        runTest {
+            val stateHolder = ProfileDetailStateHolder(RecordingPublicProfileRepository())
+            val photos =
+                listOf(
+                    OwnPreviewPhoto(url = "https://own/approved", beingReviewed = false),
+                    OwnPreviewPhoto(url = "https://own/pending", beingReviewed = true),
+                )
+
+            stateHolder.openOwnPreview(userId = "me-1", displayName = "Seb", profilePhotoUrl = null, ownPhotos = photos)
+
+            assertEquals(photos, stateHolder.state.value.ownPreviewPhotos)
+        }
+
+    @Test
+    fun aNormalOpenIgnoresOwnPreviewPhotos() =
+        runTest {
+            val stateHolder = ProfileDetailStateHolder(RecordingPublicProfileRepository())
+
+            stateHolder.open(
+                sampleCard("user-2"),
+                ownPreviewPhotos = listOf(OwnPreviewPhoto(url = "https://own/1", beingReviewed = true)),
+            )
+
+            assertEquals(emptyList(), stateHolder.state.value.ownPreviewPhotos)
         }
 }
 

@@ -40,6 +40,7 @@ import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaAlbumsScreen
 import com.pynapli.app.media.MediaAlbumsStateHolder
+import com.pynapli.app.media.ownPreviewPhotos
 import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.app.messages.MessagesScreen
 import com.pynapli.app.messages.MessagesStateHolder
@@ -317,6 +318,7 @@ private fun ColumnScope.ProfileHubSurface(
                         userId = userId,
                         displayName = profileHubState.me?.profile?.displayName,
                         profilePhotoUrl = profileImageUrl,
+                        ownPhotos = mediaAlbumsState.ownPreviewPhotos(),
                     )
                 }
             }
