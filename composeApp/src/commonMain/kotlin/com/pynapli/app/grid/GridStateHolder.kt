@@ -129,7 +129,9 @@ class GridStateHolder(
         _state.update { if (it.newNearbyCount == 0) it else it.copy(newNearbyCount = 0) }
     }
 
-    suspend fun load(quiet: Boolean = false) = load(quiet = quiet, keepGatePrompt = false)
+    suspend fun load(quiet: Boolean = false) {
+        load(quiet = quiet, keepGatePrompt = false)
+    }
 
     /**
      * [keepGatePrompt]: this load re-asks with the paid (or age-gated) filters taken out, so the
@@ -156,12 +158,13 @@ class GridStateHolder(
         }
         val generation = feedGeneration
         val filters = _state.value.filters
-        persistFilters(filters)
         val flight = InFlightLoad(generation, filters)
         inFlightLoad = flight
         var answered = false
         var reaskWithout: GridFilters? = null
         try {
+            // Inside the try, so a cancellation here still releases the in-flight marker.
+            persistFilters(filters)
             reaskWithout = fetchFirstPage(filters, generation, keepCardsVisible, keepGatePrompt)
             answered = true
         } finally {

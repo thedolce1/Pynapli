@@ -102,6 +102,14 @@ private fun GridLocationPill(
     travelling: Boolean,
     onClick: (() -> Unit)?,
 ) {
+    val clickModifier =
+        if (onClick != null) {
+            Modifier
+                .handCursor()
+                .clickable(onClickLabel = "Travel mode", role = Role.Button, onClick = onClick)
+        } else {
+            Modifier
+        }
     Row(
         modifier =
             Modifier
@@ -109,15 +117,8 @@ private fun GridLocationPill(
                 .heightIn(min = 48.dp)
                 .clip(PynapliShape.PillShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .then(
-                    if (onClick != null) {
-                        Modifier
-                            .handCursor()
-                            .clickable(onClickLabel = "Travel mode", role = Role.Button, onClick = onClick)
-                    } else {
-                        Modifier
-                    },
-                ).padding(horizontal = 14.dp)
+                .then(clickModifier)
+                .padding(horizontal = 14.dp)
                 .testTag(GridHeaderTags.LOCATION_PILL),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
