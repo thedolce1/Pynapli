@@ -26,3 +26,10 @@ fun ApplicationCall.requiredBearerToken(): String = bearerTokenOrNull() ?: throw
 
 /** Authenticates the request's bearer token and returns the signed-in user, or throws `UNAUTHENTICATED`. */
 suspend fun ApplicationCall.authenticatedUser(authService: AuthService): UserRecord = authService.authenticate(requiredBearerToken())
+
+/**
+ * [authenticatedUser] that does not count as activity (no presence refresh): for routes that are not
+ * the member using the app, such as push-device registration (also sent from the background) and
+ * unregistration (sent at logout), session and device management, account export and deletion.
+ */
+suspend fun ApplicationCall.authenticatedUserWithoutActivity(authService: AuthService): UserRecord = authService.authenticateWithoutActivity(requiredBearerToken())

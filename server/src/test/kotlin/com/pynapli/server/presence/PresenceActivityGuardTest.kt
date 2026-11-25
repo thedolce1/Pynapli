@@ -41,6 +41,21 @@ class PresenceActivityGuardTest {
         val deletion = block(source("account/AccountLifecycleRoutes.kt"), "post(\"/v1/account/delete\")")
         assertTrue("authenticateWithoutActivity(" in deletion && "authService.authenticate(" !in deletion)
         assertTrue("authService.endPresence(" in deletion, "account deletion must end presence")
+
+        // Supplements PresenceLogoutRaceTest: push registration (background token refresh) and
+        // unregistration (first step of logout), session listing, password change and data export.
+        val notifications = source("notifications/NotificationRoutes.kt")
+        listOf("post(\"/devices\")", "post(\"/devices/unregister\")").forEach { marker ->
+            val route = block(notifications, marker)
+            assertTrue("WithoutActivity(" in route && "authService.authenticate(" !in route && "authenticatedUser(" !in route, marker)
+        }
+        listOf("get(\"/sessions\")", "post(\"/password/change\")").forEach { marker ->
+            assertTrue("authenticateWithoutActivity(" in block(auth, marker), marker)
+        }
+        val account = source("account/AccountLifecycleRoutes.kt")
+        listOf("get(\"/v1/account/data-export\")", "post(\"/v1/account/data-export\")").forEach { marker ->
+            assertTrue("authenticatedUserWithoutActivity(" in block(account, marker), marker)
+        }
     }
 
     @Test

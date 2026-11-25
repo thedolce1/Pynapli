@@ -250,9 +250,15 @@ What ships (plan G2/G4/G11, 2026-11-24):
   (`RedisPresenceRepository.ONLINE_TTL_SECONDS = 900`), refreshed only by real use: an authenticated
   HTTP request (`AuthService.authenticate`'s `onAuthenticated` hook), a realtime socket **opening**, and
   `POST /v1/presence/heartbeat`, which a foregrounded app calls about every 60 s so an idle screen keeps
-  its dot. Not activity (`authenticateWithoutActivity`): a socket's 60 s re-auth tick (a forgotten socket
-  can't keep someone online), the rate-limit plugin's token lookup, signing sessions out and deleting the
-  account. Logout and account deletion delete the key at once (`PresenceService.endPresence`). Writes are
+  its dot. Not activity (`authenticateWithoutActivity` / `authenticatedUserWithoutActivity`): a socket's
+  60 s re-auth tick (a forgotten socket can't keep someone online), the rate-limit plugin's token lookup,
+  push-device registration (also sent from the background) and unregistration (the first step of
+  logout), listing and signing out sessions, password change, data export and account deletion. Logout
+  and account deletion delete the key at once (`PresenceService.endPresence`) and leave a 2-minute
+  `presence:ended:{id}` tombstone holding the end time. A refresh carries the time its activity was
+  claimed on the request; if presence ended at or after that time it writes nothing and announces
+  nothing (checked before the write and again after it, deleting the key if a logout landed in between),
+  so a refresh still queued at logout can't bring the dot back. Signing in again counts at once. Writes are
   claimed per user at most once a minute per instance (`PresenceService.claimRefresh`) and run off the
   request path (bounded launcher), so a request never waits on Redis for presence. One refresh is one
   `SET … EX 900 GET` and, at most once a minute, one `user_last_active` upsert.
