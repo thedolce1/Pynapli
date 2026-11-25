@@ -62,6 +62,29 @@ class ConversationStateHolder(
         openWithResult(resultProvider = { repository.createDirectConversation(card.id) })
     }
 
+    /**
+     * The Grid profile's "Say something…" send (MESSAGING_SPEC "Starting from a profile"): gets or
+     * creates the Grid direct conversation (the same server gate as the Message button, so the
+     * recipient's first-message setting still decides) and posts [body] with the caller's
+     * [idempotencyKey]. Leaves the open-conversation state alone; the caller opens the returned
+     * conversation id afterwards, which refetches it over HTTP.
+     */
+    suspend fun sendFirstGridMessage(
+        targetUserId: String,
+        body: String,
+        idempotencyKey: String,
+    ): AppResult<String> {
+        val conversationId =
+            when (val opened = repository.createDirectConversation(targetUserId)) {
+                is AppResult.Success -> opened.value.conversation.conversationId
+                is AppResult.Failure -> return opened
+            }
+        return when (val sent = repository.sendMessage(conversationId, body, idempotencyKey)) {
+            is AppResult.Success -> AppResult.Success(conversationId)
+            is AppResult.Failure -> sent
+        }
+    }
+
     suspend fun openSwipeMatch(
         match: MatchDto,
         viewerUserId: String?,

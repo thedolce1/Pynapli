@@ -338,6 +338,38 @@ The profile should open as:
 
 Do not refetch/rebuild the grid when closing a profile unless the user explicitly refreshes or the grid state is expired.
 
+### Profile open (2026-11-24, Section 2, plan G5/G6)
+
+- A profile opened from the Grid (Nearby or Favorites) is one page of a horizontal pager over that
+  list, in grid order, starting at the tapped card (`profile/GridProfileBrowser.kt`, rules in
+  `ProfilePagerController`). Phones show it full screen (`PynapliBottomSheet(compactFullScreen)`:
+  back, the close button and a downward drag close it); Medium+ windows keep the right-hand panel
+  with Previous/Next and the Left/Right arrow keys (only while the panel itself has focus, so the
+  composer keeps its keys; Esc closes).
+- A page paints from its card at once. The full profile (`GET /v1/profiles/{id}`), and with it the
+  server's profile view, loads only when a page **settles**; pages passed through mid-swipe fetch
+  and record nothing, and the tapped card is not fetched twice. A slower answer for an earlier page
+  is dropped (`ProfileDetailStateHolder.open`).
+- Settling within 3 cards of the end calls the list's own `loadMore()` (the grid or Favorites state
+  holder), once per list size. The grid's scroll position is not moved by paging; closing returns
+  to where the viewer was.
+- Photos inside a pager page change by tapping the left/right half (pips stay); the horizontal
+  swipe belongs to the pager.
+- Block or hide removes the card from the Grid, Favorites and the cold-start cache and the pager
+  moves on to the next person (the previous one at the end; it closes when nobody is left).
+  Reporting then swiping on drops the reported person the same way closing does. A card leaving the
+  list for any other reason (un-starred in Favorites, a quiet refresh) stays on screen until the
+  viewer moves on.
+- A profile opened from outside the list (a linked partner's mini) keeps the single-profile sheet.
+- Actions (G6): when the profile allows grid messages, a "Say something…" composer is pinned at the
+  foot; sending opens or reuses the Grid conversation and posts the message (MESSAGING_SPEC
+  "Starting from a profile"), then lands in the thread. When the server returns
+  `messagingUnavailableReason = "VERIFY_TO_MESSAGE"`, the profile offers "Verify to message", which
+  opens the photo-verification sheet; any other refusal keeps the disabled Message button. Spark is
+  one tap. Favourite and hide/block/report stay in the top bar.
+- Locked cards (Section 3): `ProfilePagerController.isLocked` is the per-card seam; a locked page
+  shows the paywall and never fetches a profile. Nothing is locked yet.
+
 ### Launch path (2026-11-24, Section 1, plan G1)
 
 - A stored session goes straight to the shell; `GET /v1/me` runs in the background, and only a
@@ -594,6 +626,10 @@ updates when the app pauses, prefer event deltas over polling.
   (`GridInstantLoadTest`).
 - [x] A failed next page stops auto-paging and offers Retry; an unfiltered empty Grid shows an empty state
   (`GridPagingAndEmptyStateTest`).
+- [x] Swipe between profiles in grid order, full screen on phones, panel with Previous/Next and arrow keys
+  on wider windows; fetch on settle only; next page at the end; block/hide moves on; tap-to-change photos;
+  inline first-message composer and "Verify to message" (`ProfilePagerControllerTest`,
+  `ProfileComposerStateHolderTest`, `ProfileDetailPagingTest`). Emulator and browser walk still owed.
 ## Do Not Implement
 
 - Do not use offset pagination for live grid pages.

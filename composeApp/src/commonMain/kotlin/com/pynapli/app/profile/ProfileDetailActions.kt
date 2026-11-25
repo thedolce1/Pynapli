@@ -42,7 +42,14 @@ internal fun ProfileActions(
     onRequestAlbum: () -> Unit,
     onViewPrivateAlbum: () -> Unit,
     onInviteProfileLink: () -> Unit,
+    // Grid profile pager only: an inline first-message field replaces the Message button.
+    composer: ProfileComposerUi? = null,
+    messagingUnavailableReason: String? = null,
+    onVerifyToMessage: (() -> Unit)? = null,
 ) {
+    val showComposer = allowGridMessages && composer != null
+    val showVerify =
+        !allowGridMessages && messagingUnavailableReason == VERIFY_TO_MESSAGE_REASON && onVerifyToMessage != null
     Column(
         modifier =
             Modifier
@@ -50,21 +57,26 @@ internal fun ProfileActions(
                 .padding(bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Button(
-            onClick = onMessage,
-            enabled = allowGridMessages,
-            modifier = Modifier.fillMaxWidth().handCursor(enabled = allowGridMessages),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.ChatBubble,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = "Message",
-                modifier = Modifier.padding(start = 6.dp),
-                maxLines = 1,
-            )
+        when {
+            showComposer -> Unit // pinned at the foot, below the other actions
+            showVerify -> onVerifyToMessage?.let { VerifyToMessageButton(onVerify = it) }
+            else ->
+                Button(
+                    onClick = onMessage,
+                    enabled = allowGridMessages,
+                    modifier = Modifier.fillMaxWidth().handCursor(enabled = allowGridMessages),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ChatBubble,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = "Message",
+                        modifier = Modifier.padding(start = 6.dp),
+                        maxLines = 1,
+                    )
+                }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -172,6 +184,9 @@ internal fun ProfileActions(
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
             )
+        }
+        if (showComposer && composer != null) {
+            ProfileMessageComposer(composer = composer)
         }
     }
 }
