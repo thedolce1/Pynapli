@@ -141,7 +141,7 @@ internal suspend fun DataSource.completeMediaAlbumUpload(
                 val asset =
                     prepareStatement(
                         """
-                        SELECT intended_album_kind, processing_status
+                        SELECT intended_album_kind, processing_status, moderation_scanned_at IS NOT NULL AS scanned
                         FROM media_assets
                         WHERE id = ? AND owner_user_id = ? AND deleted_at IS NULL
                         FOR UPDATE
@@ -150,7 +150,7 @@ internal suspend fun DataSource.completeMediaAlbumUpload(
                         statement.setObject(1, mediaAssetId)
                         statement.setObject(2, ownerUserId)
                         statement.executeQuery().use { rs ->
-                            if (rs.next()) rs.getString("intended_album_kind") to rs.getString("processing_status") else null
+                            if (rs.next()) Triple(rs.getString("intended_album_kind"), rs.getString("processing_status"), rs.getBoolean("scanned")) else null
                         }
                     } ?: return@inTransaction AlbumUploadCompletion.Refused("MEDIA_ASSET_NOT_FOUND")
                 val album =
@@ -187,7 +187,7 @@ internal suspend fun DataSource.completeMediaAlbumUpload(
                 val sameAlbum = existing.firstOrNull()
                 if (sameAlbum != null) {
                     return@inTransaction if (sameAlbum.removedAt == null) {
-                        AlbumUploadCompletion.AlreadyCompleted(sameAlbum)
+                        AlbumUploadCompletion.AlreadyCompleted(sameAlbum, scanned = asset.third)
                     } else {
                         AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
                     }
@@ -240,6 +240,29 @@ internal suspend fun DataSource.completeMediaAlbumUpload(
     }
 
 private val ALBUM_UPLOAD_KINDS = setOf("profile", "private")
+
+/** First decision only: a retry never moves the timestamp. */
+internal suspend fun DataSource.markMediaModerationScanned(
+    ownerUserId: UUID,
+    mediaAssetId: UUID,
+) {
+    withContext(Dispatchers.IO) {
+        connection.use { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    UPDATE media_assets
+                    SET moderation_scanned_at = now()
+                    WHERE id = ? AND owner_user_id = ? AND moderation_scanned_at IS NULL
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setObject(1, mediaAssetId)
+                    statement.setObject(2, ownerUserId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+}
 
 internal suspend fun DataSource.addMediaAssetToAlbum(
     ownerUserId: UUID,

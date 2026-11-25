@@ -80,6 +80,11 @@ class JdbcMediaRepository(
         sortOrder: Int,
     ): AlbumUploadCompletion = dataSource.completeMediaAlbumUpload(ownerUserId, albumId, mediaAssetId, sortOrder)
 
+    override suspend fun markModerationScanned(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ) = dataSource.markMediaModerationScanned(ownerUserId, mediaAssetId)
+
     override suspend fun requestAlbumAccess(
         ownerUserId: UUID,
         requesterUserId: UUID,

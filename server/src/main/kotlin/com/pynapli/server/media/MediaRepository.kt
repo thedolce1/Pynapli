@@ -98,6 +98,12 @@ interface MediaRepository {
         sortOrder: Int,
     ): AlbumUploadCompletion
 
+    /** Records that an album upload's moderation decision was applied (`moderation_scanned_at`). */
+    suspend fun markModerationScanned(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    )
+
     suspend fun requestAlbumAccess(
         ownerUserId: UUID,
         requesterUserId: UUID,
@@ -166,9 +172,13 @@ sealed interface AlbumUploadCompletion {
         val item: MediaAlbumItemRecord,
     ) : AlbumUploadCompletion
 
-    /** A retried completion into the same album: the existing item, nothing changed. */
+    /**
+     * A retried completion into the same album: the existing item, nothing changed. [scanned] is
+     * false only when no moderation decision was ever recorded (a crash between attach and scan).
+     */
     data class AlreadyCompleted(
         val item: MediaAlbumItemRecord,
+        val scanned: Boolean = true,
     ) : AlbumUploadCompletion
 
     /** Refused with a media error code (not found, album mismatch, already completed elsewhere). */

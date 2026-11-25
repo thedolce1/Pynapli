@@ -197,8 +197,9 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
   kind it was opened for (`intended_album_kind`). Upload-complete (`completeMediaAlbumUpload`, one
   transaction with the asset row locked) refuses an album of another kind
   (`MEDIA_UPLOAD_ALBUM_MISMATCH`), refuses an asset already in another album or already completed
-  (`MEDIA_UPLOAD_ALREADY_COMPLETED`, 409), returns the existing item for a retry into the same
-  album (only an asset no decision was ever applied to is moderated again), and inserts the item and
+  (`MEDIA_UPLOAD_ALREADY_COMPLETED`, 409), returns the existing item and state for a retry into the
+  same album without calling Vision again (only an asset with no recorded decision,
+  `moderation_scanned_at IS NULL`, is moderated on a retry), and inserts the item and
   moves the asset pending_upload → uploaded together. Without this, a held profile photo could be
   completed again into the unscanned private album, turn approved, and go public through its
   profile-album item. Defence in depth: every public photo query (Grid, Swipe, profile, peek,

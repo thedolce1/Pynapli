@@ -126,10 +126,11 @@ internal class MediaUploadActions(
             ) {
                 is AlbumUploadCompletion.Refused -> throw MediaException(completion.code)
                 is AlbumUploadCompletion.AlreadyCompleted -> {
-                    // A retried complete into the same album. Only an asset no decision was ever
-                    // applied to (a crash between attach and moderation) is moderated again.
+                    // A retried complete into the same album returns the existing state: a held or
+                    // decided photo is never scanned again. Only an asset no decision was ever
+                    // recorded for (a crash between attach and moderation) is moderated now.
                     val asset = completion.item.mediaAsset
-                    if (asset.processingStatus != "uploaded" || asset.moderationStatus != "pending") {
+                    if (completion.scanned || asset.processingStatus != "uploaded" || asset.moderationStatus != "pending") {
                         return completion.item.toDto(mediaAssetUrlResolver)
                     }
                     completion.item
@@ -142,6 +143,8 @@ internal class MediaUploadActions(
         // auto-removed); private albums remain consent-gated, are scanned only when the scan scope
         // says so, and then change only on a severe safety/legal rejection.
         val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, item.mediaAsset)
+        // Recorded after the decision is applied, so a crash before it leaves the asset re-scannable.
+        repository.markModerationScanned(ownerUserId, mediaAssetId)
 
         return item.copy(mediaAsset = visibleAsset).toDto(mediaAssetUrlResolver)
     }

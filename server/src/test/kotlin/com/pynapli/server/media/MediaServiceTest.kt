@@ -297,6 +297,66 @@ class MediaServiceTest {
             assertEquals(1, vision.calls)
         }
 
+    // ---- A retried complete never re-scans a decided photo ----
+
+    @Test
+    fun retriedCompleteOfAHeldPhotoReturnsItWithoutCallingVisionAgain() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(adult = "POSSIBLE")
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+            val (ownerId, slot) = service.profileSlot()
+            val request = CompleteMediaUploadRequestDto(albumId = slot.album.albumId)
+
+            service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+            val retried = service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+
+            assertEquals(1, vision.calls)
+            assertEquals("pending", retried.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun retriedCompleteOfAnApprovedPhotoReturnsItWithoutCallingVisionAgain() =
+        runBlocking {
+            val vision = CountingSafeSearchClient()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+            val (ownerId, slot) = service.profileSlot()
+            val request = CompleteMediaUploadRequestDto(albumId = slot.album.albumId)
+
+            service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+            val retried = service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+
+            assertEquals(1, vision.calls)
+            assertEquals("approved", retried.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun retriedCompleteScansAnAssetThatWasNeverScanned() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(adult = "POSSIBLE")
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+            val (ownerId, slot) = service.profileSlot()
+            val request = CompleteMediaUploadRequestDto(albumId = slot.album.albumId)
+            service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+            // Crash between attach and moderation: no decision was recorded.
+            repository.forgetScan(UUID.fromString(slot.mediaAsset.mediaAssetId))
+
+            service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+
+            assertEquals(2, vision.calls)
+        }
+
+    private suspend fun MediaService.profileSlot(): Pair<UUID, com.pynapli.shared.network.dto.MediaUploadSlotDto> {
+        val ownerId = UUID.randomUUID()
+        return ownerId to
+            createUploadSlot(
+                ownerId,
+                CreateMediaUploadRequestDto(albumKind = "profile", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+            )
+    }
+
     @Test
     fun chatPhotoMakesNoVisionCallByDefaultAndStillSends() =
         runBlocking<Unit> {
@@ -965,12 +1025,13 @@ private class FixedMediaUploadSigner : MediaUploadSigner {
 /** A fake Vision client that counts calls and answers one fixed annotation. */
 private class CountingSafeSearchClient(
     private val violence: String = "VERY_UNLIKELY",
+    private val adult: String = "VERY_UNLIKELY",
 ) : SafeSearchClient {
     var calls = 0
 
     override fun annotate(gcsUri: String): SafeSearchAnnotation {
         calls += 1
-        return SafeSearchAnnotation(adult = "VERY_UNLIKELY", racy = "VERY_UNLIKELY", violence = violence)
+        return SafeSearchAnnotation(adult = adult, racy = "VERY_UNLIKELY", violence = violence)
     }
 }
 
@@ -1195,7 +1256,7 @@ private class InMemoryMediaRepository : MediaRepository {
         if (existing.any { it.albumId != albumId }) return AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
         existing.firstOrNull()?.let { same ->
             return if (same.removedAt == null) {
-                AlbumUploadCompletion.AlreadyCompleted(same)
+                AlbumUploadCompletion.AlreadyCompleted(same, scanned = mediaAssetId in scannedAssets)
             } else {
                 AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
             }
@@ -1356,6 +1417,19 @@ private class InMemoryMediaRepository : MediaRepository {
 
     private val displayNamesByUserId = mutableMapOf<UUID, String>()
     private val intendedAlbumKinds = mutableMapOf<UUID, String>()
+    private val scannedAssets = mutableSetOf<UUID>()
+
+    override suspend fun markModerationScanned(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ) {
+        scannedAssets += mediaAssetId
+    }
+
+    /** Simulates a crash between attach and moderation: the asset was never recorded as scanned. */
+    fun forgetScan(mediaAssetId: UUID) {
+        scannedAssets -= mediaAssetId
+    }
 
     private fun updateAlbumItems(asset: MediaAssetRecord) {
         items.keys
