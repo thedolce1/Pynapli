@@ -164,7 +164,7 @@ Assert-NoAppErrorText $loginXml "Login"
 $loginShot = Save-Screen "00_login"
 Tap-Text "Dev login"
 
-Wait-ForAnyText @("Allow Pynapli", "Don", "Current location", "Filters", "Grid Load", "Dense") 45 | Out-Null
+Wait-ForAnyText @("Allow Pynapli", "Don", "Nearby", "Filters", "Grid Load", "Dense") 45 | Out-Null
 Start-Sleep -Milliseconds 1200
 $afterLoginXml = Dump-Ui "after_login"
 if ($null -ne (Find-NodeByText $afterLoginXml "Don")) {
@@ -253,7 +253,7 @@ Wait-ForAnyText @("Spark") 45 | Out-Null
 $profileXml = Dump-Ui "06_profile_detail" -Keep
 Assert-NoAppErrorText $profileXml "Profile detail"
 Assert-TextPresent $profileXml $firstCardText "Profile detail"
-Assert-TextPresent $profileXml "Message" "Profile detail"
+Assert-TextPresent $profileXml "Send message" "Profile detail"
 $profileShot = Save-Screen "06_profile_detail"
 $profileSignature = Assert-GoldenStage "profileDetail" $profileXml $profileShot
 
