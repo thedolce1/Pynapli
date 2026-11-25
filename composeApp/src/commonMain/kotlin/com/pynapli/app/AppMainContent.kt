@@ -169,6 +169,8 @@ internal fun ColumnScope.PynapliMainContent(
                         onProfileSurface = onProfileSurface,
                         // Locked Grid filters and depth are plan perks.
                         onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
+                        // Travel mode (from the Grid header) is a Select perk.
+                        onOpenTravelStore = { onOpenStore(StorePaywallFocus.Select) },
                         onOpenAgeVerification = onOpenAgeVerification,
                         onOpenTonight = onOpenTonight,
                         onUseCurrentLocation = onUseCurrentLocation,
@@ -369,6 +371,7 @@ private fun ColumnScope.GridTabContent(
     onUseCurrentLocation: () -> Unit,
     travelLocationStateHolder: TravelLocationStateHolder? = null,
     favoritesStateHolder: com.pynapli.app.grid.FavoritesStateHolder? = null,
+    onOpenTravelStore: () -> Unit = onOpenStore,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val locationState by locationStateHolder.state.collectAsState()
@@ -425,6 +428,7 @@ private fun ColumnScope.GridTabContent(
         onOpenTonight = onOpenTonight,
         travelLocationStateHolder = travelLocationStateHolder,
         favoritesStateHolder = favoritesStateHolder,
+        onOpenTravelStore = onOpenTravelStore,
     )
 }
 

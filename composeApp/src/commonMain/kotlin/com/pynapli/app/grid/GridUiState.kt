@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
 
 @Immutable
 data class GridUiState(
-    val locationLabel: String = "Current location",
+    // The header pill: "Nearby", or the Travel city when Travel mode is on (never a precise place).
+    val locationLabel: String = "Nearby",
     val filters: GridFilters = GridFilters.defaults,
     val cards: List<GridProfileCardUi> = emptyList(),
     val isRefreshing: Boolean = false,
@@ -56,8 +57,9 @@ data class GridFilters(
     val tonightAvailable: Boolean = false,
     // FILTERS_SPEC "Active today" (Presence, grid-only): owner active in the last 24h.
     val activeToday: Boolean = false,
-    // FILTERS_SPEC "Recently joined" / "Traveling here" (Presence, grid-only).
-    val recentlyJoined: Boolean = false,
+    // Plan G4 "Fresh" (a quick chip; replaces "Recently joined"): the server's Fresh rule, new
+    // account or new photo and active lately. FILTERS_SPEC "Traveling here" (Presence, grid-only).
+    val fresh: Boolean = false,
     val travelingHere: Boolean = false,
     // People whose announced planned trip brings them here in the next two weeks.
     val visitingSoon: Boolean = false,
@@ -90,7 +92,7 @@ data class GridFilters(
             if (hasPrivateAlbum) count += 1
             if (tonightAvailable) count += 1
             if (activeToday) count += 1
-            if (recentlyJoined) count += 1
+            if (fresh) count += 1
             if (travelingHere) count += 1
             if (visitingSoon) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
@@ -129,7 +131,7 @@ data class GridFilters(
             logisticsTags = logisticsTags.map { it.serverValue },
             tonightAvailableOnly = tonightAvailable,
             activeTodayOnly = activeToday,
-            recentlyJoinedOnly = recentlyJoined,
+            freshOnly = fresh,
             travelingHereOnly = travelingHere,
             visitingSoonOnly = visitingSoon,
             withPhotosOnly = withPhotos,
@@ -183,7 +185,8 @@ data class GridFilters(
                 hasPrivateAlbum = request.hasPrivateAlbumOnly,
                 tonightAvailable = request.tonightAvailableOnly,
                 activeToday = request.activeTodayOnly,
-                recentlyJoined = request.recentlyJoinedOnly,
+                // A preset saved before Fresh replaced "Recently joined" keeps meaning "new people".
+                fresh = request.freshOnly || request.recentlyJoinedOnly,
                 travelingHere = request.travelingHereOnly,
                 visitingSoon = request.visitingSoonOnly,
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
@@ -196,9 +199,9 @@ data class GridFilters(
 }
 
 /**
- * Identifies a quick-toggle chip exposed in the grid header. Chips that require backing
- * features land in their own slices (Verified in F2, Together in F3, Tonight in F6) and
- * are not modeled here yet.
+ * A one-tap filter the Grid can toggle. The header row shows Online, Fresh, Tonight and Verified
+ * (plus the Favorites view chip, which is not a filter); Singles and Linked stay toggles in the
+ * filter sheet's Who section.
  */
 enum class QuickFilterId {
     Online,
@@ -206,6 +209,7 @@ enum class QuickFilterId {
     Linked,
     Verified,
     Tonight,
+    Fresh,
 }
 
 /**

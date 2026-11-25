@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,59 +23,12 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliEmptyState
 import com.pynapli.app.design.PynapliErrorState
 import com.pynapli.app.design.PynapliMotion
-import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.icons.Icons
-import com.pynapli.app.design.icons.filled.GridView
-import com.pynapli.app.design.icons.filled.Star
 import com.pynapli.app.design.icons.filled.StarBorder
 
 internal object GridFavoritesTags {
-    const val VIEW_NEARBY = "grid-view-nearby"
     const val VIEW_FAVORITES = "grid-view-favorites"
     const val EMPTY = "grid-favorites-empty"
-}
-
-/** Nearby / Favorites switch above the Grid (Grindr's "All" and "Favorites"). */
-@Composable
-internal fun GridViewSwitch(
-    showingFavorites: Boolean,
-    onShowNearby: () -> Unit,
-    onShowFavorites: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        PynapliPill(
-            text = "Nearby",
-            selected = !showingFavorites,
-            onClick = onShowNearby,
-            leading = {
-                Icon(
-                    imageVector = Icons.Filled.GridView,
-                    contentDescription = null,
-                    tint = PynapliColors.Accent,
-                    modifier = Modifier.size(16.dp),
-                )
-            },
-            modifier = Modifier.testTag(GridFavoritesTags.VIEW_NEARBY),
-        )
-        PynapliPill(
-            text = "Favorites",
-            selected = showingFavorites,
-            onClick = onShowFavorites,
-            leading = {
-                Icon(
-                    imageVector = if (showingFavorites) Icons.Filled.Star else Icons.Filled.StarBorder,
-                    contentDescription = null,
-                    tint = PynapliColors.Accent,
-                    modifier = Modifier.size(16.dp),
-                )
-            },
-            modifier = Modifier.testTag(GridFavoritesTags.VIEW_FAVORITES),
-        )
-    }
 }
 
 private enum class FavoritesPhase { Loading, Error, Empty, Content }

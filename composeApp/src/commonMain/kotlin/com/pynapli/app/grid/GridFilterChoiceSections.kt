@@ -78,12 +78,12 @@ internal fun PresenceSection(
     online: Boolean,
     tonightAvailable: Boolean,
     activeToday: Boolean,
-    recentlyJoined: Boolean,
+    fresh: Boolean,
     travelingHere: Boolean,
     onOnlineToggle: () -> Unit,
     onTonightToggle: () -> Unit,
     onActiveTodayToggle: () -> Unit,
-    onRecentlyJoinedToggle: () -> Unit,
+    onFreshToggle: () -> Unit,
     onTravelingHereToggle: () -> Unit,
     visitingSoon: Boolean = false,
     onVisitingSoonToggle: () -> Unit = {},
@@ -95,7 +95,7 @@ internal fun PresenceSection(
     ) {
         SheetToggleChip(label = "Online now", active = online, onClick = onOnlineToggle)
         SheetToggleChip(label = "Active today", active = activeToday, onClick = onActiveTodayToggle)
-        SheetToggleChip(label = "Recently joined", active = recentlyJoined, onClick = onRecentlyJoinedToggle)
+        SheetToggleChip(label = "Fresh", active = fresh, onClick = onFreshToggle)
         SheetToggleChip(label = "Traveling here", active = travelingHere, onClick = onTravelingHereToggle)
         SheetToggleChip(label = "Visiting soon", active = visitingSoon, onClick = onVisitingSoonToggle)
         SheetToggleChip(label = "Playing tonight", active = tonightAvailable, onClick = onTonightToggle)

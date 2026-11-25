@@ -70,14 +70,37 @@ class GridStateHolderTest {
     }
 
     @Test
-    fun recentlyJoinedAndTravelingHereFiltersSerializeAndRoundTrip() {
-        val request = GridFilters(recentlyJoined = true, travelingHere = true).toGridQueryRequest(cursor = null)
-        assertEquals(true, request.recentlyJoinedOnly)
+    fun freshAndTravelingHereFiltersSerializeAndRoundTrip() {
+        val request = GridFilters(fresh = true, travelingHere = true).toGridQueryRequest(cursor = null)
+        assertEquals(true, request.freshOnly)
+        assertEquals(false, request.recentlyJoinedOnly, "Fresh replaced Recently joined")
         assertEquals(true, request.travelingHereOnly)
         val restored = GridFilters.fromGridQueryRequest(request)
-        assertEquals(true, restored.recentlyJoined)
+        assertEquals(true, restored.fresh)
         assertEquals(true, restored.travelingHere)
+        assertEquals(2, restored.activeCount)
     }
+
+    @Test
+    fun aPresetSavedWithRecentlyJoinedRestoresAsFresh() {
+        val legacy =
+            com.pynapli.shared.network.dto
+                .GridQueryRequestDto(recentlyJoinedOnly = true)
+        assertTrue(GridFilters.fromGridQueryRequest(legacy).fresh)
+    }
+
+    @Test
+    fun togglingFreshSetsFreshOnlyOnRequest() =
+        runTest {
+            val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+            val stateHolder = GridStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.toggleQuickFilter(QuickFilterId.Fresh)
+
+            assertEquals(true, repository.lastFilters!!.toGridQueryRequest(cursor = null).freshOnly)
+            assertEquals(1, stateHolder.state.value.filters.activeCount)
+        }
 
     @Test
     fun hasPrivateAlbumFilterSerializesAndRoundTrips() {

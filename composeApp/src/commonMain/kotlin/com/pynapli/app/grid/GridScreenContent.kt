@@ -47,7 +47,7 @@ internal fun GridScreenContent(
     // Travel mode destination when it is on. The Grid is showing that city, not where the viewer is.
     travelCityName: String? = null,
     onTurnOffTravel: () -> Unit = {},
-    // Favorites view; null hides the Nearby / Favorites switch.
+    // Favorites view; null hides the Favorites chip.
     favoritesState: FavoritesUiState? = null,
     favoritesGridState: LazyGridState? = null,
     onShowNearby: () -> Unit = {},
@@ -56,6 +56,8 @@ internal fun GridScreenContent(
     onLoadMoreFavorites: () -> Unit = {},
     // The "N new nearby" pill: apply the held-back order and return to the top.
     onShowNewNearby: () -> Unit = {},
+    // The location pill opens Travel mode; null leaves it a plain label.
+    onOpenTravel: (() -> Unit)? = null,
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
     val showingFavorites = favoritesState?.showing == true && favoritesGridState != null
@@ -79,14 +81,21 @@ internal fun GridScreenContent(
                     showingFavorites -> onRefreshFavorites
                     else -> onRefresh
                 },
+            travelCityName = travelCityName,
+            onOpenTravel = onOpenTravel,
         )
-        if (favoritesState != null) {
-            GridViewSwitch(
-                showingFavorites = showingFavorites,
-                onShowNearby = onShowNearby,
-                onShowFavorites = onShowFavorites,
-            )
-        }
+        // One chip row for both views. Favorites is a view switch; a filter chip tapped while
+        // Favorites shows goes back to Nearby, since the filters describe Nearby only.
+        QuickFilterRow(
+            filters = state.filters,
+            onToggled = { id ->
+                if (showingFavorites) onShowNearby()
+                onQuickFilterToggled(id)
+            },
+            onOpenSheet = { sheetVisible = true },
+            showingFavorites = if (favoritesState != null) showingFavorites else null,
+            onToggleFavorites = { if (showingFavorites) onShowNearby() else onShowFavorites() },
+        )
         if (showingFavorites && favoritesState != null && favoritesGridState != null) {
             // The Grid's filters, paywall and context strip describe Nearby; Favorites is its own list.
             FavoritesBody(
@@ -104,8 +113,6 @@ internal fun GridScreenContent(
                 locationState = locationState,
                 distanceUnit = distanceUnit,
                 gridState = gridState,
-                onQuickFilterToggled = onQuickFilterToggled,
-                onOpenSheet = { sheetVisible = true },
                 travelCityName = travelCityName,
                 onTurnOffTravel = onTurnOffTravel,
                 onOpenStore = onOpenStore,
@@ -129,6 +136,7 @@ internal fun GridScreenContent(
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false
+                if (showingFavorites) onShowNearby()
                 onApplyFilters(applied)
             },
             onClearAll = {
@@ -152,15 +160,13 @@ internal fun GridScreenContent(
     }
 }
 
-/** The Nearby view: quick filters, travel and plan rows, and the ranked Grid. */
+/** The Nearby view: travel and plan rows, and the ranked Grid (the chip row sits above both views). */
 @Composable
 private fun ColumnScope.NearbyGridSections(
     state: GridUiState,
     locationState: LocationUiState,
     distanceUnit: String,
     gridState: LazyGridState,
-    onQuickFilterToggled: (QuickFilterId) -> Unit,
-    onOpenSheet: () -> Unit,
     travelCityName: String?,
     onTurnOffTravel: () -> Unit,
     onOpenStore: () -> Unit,
@@ -172,11 +178,6 @@ private fun ColumnScope.NearbyGridSections(
     onClearAllFilters: () -> Unit,
     onShowNewNearby: () -> Unit,
 ) {
-    QuickFilterRow(
-        filters = state.filters,
-        onToggled = onQuickFilterToggled,
-        onOpenSheet = onOpenSheet,
-    )
     // Without this, someone who forgot Travel mode was on sees another city's people and
     // distances with nothing on the Grid saying why (the Swipe header already shows it).
     travelCityName?.let { city ->
