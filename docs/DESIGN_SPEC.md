@@ -63,6 +63,13 @@ Never hand-roll a `ModalBottomSheet`. On Medium+ windows the same sheet presents
 `PynapliWideSheetPresentation`: a centered dialog by default, a right-anchored side panel for the
 profile peek.
 
+**Full-screen profile on phones (Grid only).** A profile opened from the Grid uses
+`PynapliBottomSheet(compactFullScreen = true)`: edge to edge, square corners, no drag handle, the
+scaffold at full height; back, the close button and a downward drag still close it. A horizontal
+swipe moves to the next or previous person, so photos on those pages change by tapping the left or
+right half, with the pips kept. On Medium+ windows it stays the side panel, with Previous/Next above
+the profile and the Left/Right arrow keys. Swipe, Activity and Messages keep the regular peek.
+
 ## Navigation
 
 - Bottom navigation (Compact) / navigation rail (Medium+) tabs: **Grid, Swipe, Activity, Messages**.
