@@ -96,6 +96,7 @@ the profile and the Left/Right arrow keys. Swipe, Activity and Messages keep the
 | Surface | Density | Rules |
 | --- | --- | --- |
 | Grid | Highest | Photo fills the tile; short functional bottom gradient; name, online dot, a small verified check after the name for photo-verified people, distance, linked-partner mini icon (with a small verified check on the mini when the couple is verified: both partners photo-verified). The only other marks allowed, each a product feature: the Playing Tonight moon and a small gold "New" tag (the server's Fresh rule) top-left, the Visiting pill in the caption row, and a one-line "Active 15m ago / 1h / 3h / today / this week" caption above the name for people not online now. **No other tags or chips on tiles**; filters carry the complexity. No photo: one neutral raised surface with a person silhouette, never a colour chosen by list position. Tight gap (~1dp, `GridTileGap`). Filter changes animate items in/out/around instead of blanking the grid. Loading is incremental. |
+| Grid locked tiles (Section 3) | Highest | Past the viewer's plan limit the server sends locked cards and the Grid keeps going (Grindr-style cascade: the faces are the upsell). A locked tile keeps the photo (or the silhouette), the online dot, distance and the visual badges (Tonight moon, New tag, verified check, Visiting pill); it has **no name, no active caption and no partner mini**. It takes a light dim (`Black` at 22%), **never a heavy blur**, and a small gold lock (`Accent` on the `OnPhotoBadgeFill` disc, 20dp) top-right where the partner mini would be. Screen readers hear "Locked profile, upgrade to see" and the click label "See plans"; nothing identifying. Tapping it opens the plans sheet on the plan that unlocks it, never a profile. **Boundary banner:** one full-width row inside the Grid just before the first locked tile, `CardShape` on `surfaceVariant`, a gold lock, "See everyone nearby with Social" (or Select, from the server's `unlockTier`) and a gold button naming the plan that opens the plans sheet on that plan's row. With locked cards in use the "Social unlocks more nearby profiles." row above the Grid is not shown (it stays only as the fallback when the server reports the cap without locked cards). The profile pager ends on one "See plans" page after the last person the viewer can see. |
 | Swipe | Low, high focus | One person at a time, photo-first, name/age/distance, linked partner shown as context (never a couple card), one short bio line, details on expand. Physical gesture feel. No messaging unless matched (Pineapple Like with an optional note is the paid exception; Intro Notes were merged into it). |
 | Activity | Medium-high | Newest first, compact rows: avatar, action, timestamp, partner icon. Gated rows tease without feeling scammy; blur and lock states stay readable. |
 | Messages | Medium | Scannable inbox, clear sent/received alignment, timestamp and state without clutter, neutral system messages. Partner invite-to-chat states are explicit; private album interactions are consent-based; safety/report actions reachable without clutter. |
@@ -128,7 +129,8 @@ reduced-motion settings where the platform exposes them.
 ## Do not
 
 - Make Profile a bottom tab.
-- Put tags or chips on grid tiles beyond the Tonight moon, New tag, Visiting pill and active caption.
+- Put tags or chips on grid tiles beyond the Tonight moon, New tag, Visiting pill and active caption
+  (and the gold lock on a locked tile).
 - Hardcode hex values or corner radii in feature code.
 - Use negative letter spacing or viewport-scaled type.
 - Use oversized radii, cards inside cards, heavy drop shadows, or generic rounded panels everywhere.
@@ -141,6 +143,7 @@ reduced-motion settings where the platform exposes them.
 
 - [x] Tokens exist and the token guard runs in CI and every verify gate.
 - [x] Grid tile follows the minimal tile rules; Swipe card follows the richer card rules.
+- [x] Locked Grid tile and boundary banner (Section 3): photo kept, light dim, gold lock, no name; banner names the unlocking plan.
 - [x] Activity rows support gating.
 - [x] Message bubbles support view-once media reveal (`POST /v1/messages/{id}/reveal`).
 - [x] Avatar opens the profile hub; unified header system (`PynapliScreenHeader.kt`).

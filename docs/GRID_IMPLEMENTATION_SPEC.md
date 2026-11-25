@@ -390,7 +390,8 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   opens the photo-verification sheet; any other refusal keeps the disabled Message button. Spark is
   one tap. Favourite and hide/block/report stay in the top bar.
 - Locked cards (Section 3): `ProfilePagerController.isLocked` is the per-card seam; a locked page
-  shows the paywall and never fetches a profile. Nothing is locked yet.
+  shows the paywall, never fetches a profile, and the pages end at the first locked card (see "Locked
+  cards" below).
 
 ### Launch path (2026-11-24, Section 1, plan G1)
 
@@ -457,6 +458,48 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   once on becoming eligible and about every 60 s while signed in, out of the sign-up stepper and
   visible; launched with the realtime jobs (stopped in the background on Android and iOS, paused on
   a hidden web tab); never retried (`PresenceHeartbeatTest`).
+
+### Locked cards (2026-11-25, Section 3, client)
+
+The server decides which cards are locked (Free: 60 unlocked then locked up to 600; Social: 600
+then locked up to 1200; Select: never). The client never computes entitlement; it renders what it
+is sent and keeps locked cards away from everything that needs a real person.
+
+- Opt-in: the live Grid query (`GridFilters.toGridFeedRequest`) sends `acceptLockedCards = true`.
+  Saved presets and the stored filters keep the plain `toGridQueryRequest` payload.
+- Contract: a locked `GridCardDto` has `locked = true`, a per-viewer opaque `userId` starting with
+  `locked_`, an empty `displayName`, `activeAgo = null`, and only the approved thumbnail, online
+  dot, distance bucket and visual badges. `GridQueryResponseDto.lockedFromIndex` (0-based overall
+  index) and `unlockTier` (`social` or `select`) describe the boundary. The client treats the flag
+  or the `locked_` prefix as locked (`isLockedCard`) and drops name, activity bucket and partner mini
+  from a locked card at mapping, so a server slip never reaches a tile, a cache or a screen reader.
+- Paging continues through locked pages; locked cards stay in the list in server order.
+- Never for locked cards: the presence subscription (`visibleUserIds`), the cold-start snapshot
+  (saved without them, and filtered on read), the "N new nearby" count, Favorites (dropped at
+  mapping; a `locked_` favourite change is ignored), or a profile fetch
+  (`ProfileDetailStateHolder.open` refuses a locked card, so block, hide, favourite and message have
+  no target). A quiet refresh may still update a locked tile in place when the server reuses its
+  token.
+- Boundary banner: one full-width row in the Grid just before the first locked card in the list
+  (`GridUiState.lockedBannerIndex`). It is anchored on the list, not on `lockedFromIndex`, because a
+  block, hide or page de-duplication shifts the list but not the server's index. Copy: "See everyone
+  nearby with Social|Select"; its button opens the plans sheet on that plan's row
+  (`StorePaywallFocus.Social` / `Select`, from `storePaywallFocusForUnlockTier`). The load-more
+  trigger and thumbnail prefetch count cards, not grid items, around it (`cardIndexForGridItem`).
+- The "Social unlocks more nearby profiles." row above the Grid is not shown once the list has a
+  lock boundary (`GridFeedUi.hasLockBoundary`, or locks already on screen when a later page reports
+  the cap). It stays only as the fallback when the server reports the cap without locked cards.
+- Tap: a locked tile opens the plans sheet on `unlockTier` (`routeGridTileTap`), never a profile.
+- Profile pager: `ProfilePagerController.isLocked = { it.isLockedCard }`. The pages end at the first
+  locked card, so swiping past the last visible person shows one "See plans" page (it closes the
+  pager and opens the plans) rather than hundreds of identical ones, and settling there loads no
+  more pages. A block or hide moves on to an unlocked person (the previous one at the boundary) and
+  closes the pager when none is left.
+- Plan change: `GridStateHolder.onPlanTierObserved` takes the plan from the Store (reloaded after a
+  purchase or restore) and from the Profile Hub (sign-in, resume: a lapse or a partner's benefit
+  ending). The first value is a baseline; a change marks the cards expired and resets the scroll
+  anchor, and while the Grid is on screen reloads quietly and scrolls to the top
+  (`GridEvent.ScrollToTop`). Off screen the next return reloads. The baseline resets on sign-out.
 
 ## Filter Application
 
@@ -594,6 +637,8 @@ This keeps the grid stable and dense.
 Grid volume is gated by tier (Free / Social / Select page size and depth, enforced server-side; see
 [MONETIZATION_SPEC.md](MONETIZATION_SPEC.md)). **Never gate** basic safety filters, basic
 singles/linked/intent clarity, block/report, or basic location privacy.
+Past the limit the server keeps paging with locked cards for clients that opt in (Section 3, see
+"Locked cards" under Grid State Retention); the client never decides what is locked.
 
 ## Boost
 
@@ -743,7 +788,13 @@ updates when the app pauses, prefer event deltas over polling.
 - [x] Web cached first paint in `sessionStorage` only (plan G12), bound to the signed-in account
   (`AccountBoundGridSnapshotStoreTest`).
 - [x] Free-cap row names the plan that lifts the cap (Social from Free, Select from Social;
-  `GridPaywallTierTest`). The row itself changes in Section 3.
+  `GridPaywallTierTest`). With locked cards in use (Section 3) it is replaced by the in-grid banner
+  and kept only as the fallback when the cap comes without locked cards.
+- [x] Section 3 client: locked tiles, boundary banner, tap to plans, pager end page, locks kept out of
+  presence, snapshot, New nearby and Favorites, reload on plan change (`GridLockedCardsTest`,
+  `ProfilePagerControllerTest`, `StorePaywallFocusTest`).
+- [ ] Section 3: emulator + browser QA with a Free and a paid account (more than 60 cards for Free,
+  tap a locked tile opens the plans, no lock for Select), and the server half of the contract.
 - [ ] Section 2: emulator + browser QA of the pill, chips, travel pill, locks and profile pager.
 - [x] Swipe between profiles in grid order, full screen on phones, panel with Previous/Next and arrow keys
   on wider windows; fetch on settle only; next page at the end; block/hide moves on; tap-to-change photos;
