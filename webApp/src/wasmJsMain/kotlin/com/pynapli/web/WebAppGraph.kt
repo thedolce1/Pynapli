@@ -9,7 +9,6 @@ import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
-import com.pynapli.app.grid.NoOpGridSnapshotStore
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.store.UnavailableStorePurchaseGateway
@@ -32,6 +31,7 @@ import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
 import com.pynapli.web.settings.SessionStoragePendingSignupStore
 import com.pynapli.web.settings.SessionStorageUnderageStopStore
 import com.pynapli.web.settings.localStorageGridFilterStore
+import com.pynapli.web.settings.sessionStorageGridSnapshotStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -43,8 +43,8 @@ import kotlin.random.Random
  * adapters. The web is a full companion to the phone app (many members use it on tablets and
  * desktops), so it ships every surface, Playing Tonight and Psync included. Deliberately absent
  * (WEB_PWA_GAMEPLAN.md): push registration (Web Push is post-v1), billing (Store is read-only),
- * and the swipe/grid local caches (NoOp stores until a localStorage snapshot store earns its
- * place in W2/W4). Realtime streams authenticate over WebSockets with a first frame since
+ * and the swipe action queue (a NoOp store). The Grid snapshot lives in `sessionStorage` only
+ * (plan G12: gone with the tab) and the Grid filters in `localStorage`. Realtime streams authenticate over WebSockets with a first frame since
  * browsers cannot set WS headers (W3); presence/activity/messages start from `Main.kt`, and the
  * Psync stream connects only while the Psync overlay is open.
  */
@@ -135,8 +135,8 @@ class WebAppGraph {
     private val common =
         PynapliCommonGraph(
             apiClient = apiClient,
-            // NoOp stores until a localStorage snapshot store earns its place (WEB_PWA_GAMEPLAN W2/W4).
-            gridSnapshotStore = NoOpGridSnapshotStore,
+            // Instant first paint on a reload, kept in sessionStorage only: gone when the tab closes.
+            gridSnapshotStore = sessionStorageGridSnapshotStore(),
             // Filter choices only, kept across browser sessions; sign-out clears them.
             gridFilterStore = localStorageGridFilterStore(),
             swipeQueueStore = NoOpSwipeActionQueueStore,

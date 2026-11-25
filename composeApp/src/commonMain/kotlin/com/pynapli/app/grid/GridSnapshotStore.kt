@@ -37,6 +37,30 @@ object NoOpGridSnapshotStore : GridSnapshotStore {
 }
 
 /**
+ * A snapshot kept as one named string blob, for shells without SQLDelight. The web passes
+ * `sessionStorage` (plan G12): the cards paint instantly on a reload, and are gone when the tab
+ * closes, so a shared computer never shows the next visitor someone's Grid.
+ */
+class KeyValueGridSnapshotStore(
+    private val read: () -> String?,
+    private val write: (String) -> Unit,
+    private val remove: () -> Unit,
+    private val json: Json = PynapliJson,
+    private val maxCards: Int = SqlDelightGridSnapshotStore.MAX_SNAPSHOT_CARDS,
+) : GridSnapshotStore {
+    private val cardListSerializer = ListSerializer(GridProfileCardUi.serializer())
+
+    override suspend fun load(): List<GridProfileCardUi> {
+        val value = read() ?: return emptyList()
+        return runCatching { json.decodeFromString(cardListSerializer, value) }.getOrElse { emptyList() }
+    }
+
+    override suspend fun save(cards: List<GridProfileCardUi>) = write(json.encodeToString(cardListSerializer, cards.take(maxCards)))
+
+    override suspend fun clear() = remove()
+}
+
+/**
  * SQLDelight-backed snapshot store. Reuses the generic `app_meta` key-value table (same pattern as
  * `SqlDelightAppSettingsStore`), so no schema migration is needed. The card list is stored as a JSON
  * blob; a decode failure falls back to an empty snapshot so a stale/corrupt blob never blocks load.
