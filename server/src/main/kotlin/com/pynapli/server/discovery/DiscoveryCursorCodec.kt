@@ -170,6 +170,10 @@ class DiscoveryCursorCodec(
             limit: Int,
             filters: DiscoveryFilters,
             onlineOnly: Boolean,
+            // Set on a sparse-area widened scope (GridService): [radiusMeters] is then the widened
+            // radius and this is the radius the viewer asked for, so a widened cursor only ever
+            // continues the exact request that produced it. Appended only when set.
+            widenedFromRadiusMeters: Int? = null,
         ): String {
             val normalized =
                 buildString {
@@ -213,6 +217,7 @@ class DiscoveryCursorCodec(
                     append(filters.orientations.sorted().joinToString(","))
                     // Appended only when set, so cursors issued without it keep their hash.
                     if (filters.verifiedCouplesOnly) append("|verifiedCouplesOnly=true")
+                    widenedFromRadiusMeters?.let { append("|widenedFrom=").append(it) }
                 }
             return sha256Base64Url(normalized)
         }

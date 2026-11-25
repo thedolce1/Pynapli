@@ -97,13 +97,37 @@ class GridService(
                     onlineOnly = request.onlineOnly,
                 )
             }
+        // Sparse-area widening (plan G10) pages under its own scope: the widened radius plus the radius
+        // the viewer asked for. The client keeps sending its own radius, so a follow-up cursor that does
+        // not decode under the normal scope is tried under the widened one. Both are sealed, so neither
+        // can be forged, and a widened cursor continues only the request that produced it.
+        val canWiden = !request.visitingSoonOnly && radiusMeters < MAX_RADIUS_METERS
+        val widenedScopeHash =
+            if (canWiden) {
+                DiscoveryCursorCodec.gridScopeHash(
+                    viewerUserId = viewerUserId,
+                    radiusMeters = MAX_RADIUS_METERS,
+                    limit = pageLimit,
+                    filters = filters,
+                    onlineOnly = request.onlineOnly,
+                    widenedFromRadiusMeters = radiusMeters,
+                )
+            } else {
+                null
+            }
+        var continuingWidened = false
         val cursor =
             profile("grid.cursorDecode") {
                 request.cursor?.let { token ->
                     try {
                         cursorCodec.decodeGridCursor(token, cursorScopeHash)
                     } catch (_: DiscoveryCursorException) {
-                        throw GridException("INVALID_GRID_CURSOR")
+                        val widenedScope = widenedScopeHash ?: throw GridException("INVALID_GRID_CURSOR")
+                        try {
+                            cursorCodec.decodeGridCursor(token, widenedScope).also { continuingWidened = true }
+                        } catch (_: DiscoveryCursorException) {
+                            throw GridException("INVALID_GRID_CURSOR")
+                        }
                     }
                 }
             }
@@ -131,44 +155,9 @@ class GridService(
                 limit
             }
 
-        val initial =
-            profile("grid.repository") {
-                if (request.visitingSoonOnly) {
-                    // One page, soonest trips first; blocks, hides and presence apply below as usual.
-                    repository.queryVisitingSoon(viewerUserId, radiusMeters, fetchLimit)
-                } else {
-                    repository.queryNearby(viewerUserId, radiusMeters, fetchLimit, filters, cursor)
-                }
-            }
-        if (!initial.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
-
-        // FILTERS_SPEC "Default deck / never-empty": when the first page at the requested
-        // radius returns no candidates, widen once to the maximum radius so a viewer with no
-        // (or sparse) matches still sees nearby-ish people rather than an empty grid. Mirrors
-        // the Swipe deck's radius relaxation (SwipeDeckRelaxation.relaxRadius). Edge-fill only:
-        // a widened page does not paginate (nextCursor stays null), so the wide radius never
-        // leaks into the narrow-radius cursor scope on a follow-up page request.
-        val widened = !request.visitingSoonOnly && cursor == null && initial.cards.isEmpty() && radiusMeters < MAX_RADIUS_METERS
-        val result =
-            if (widened) {
-                profile("grid.repositoryWiden") {
-                    repository.queryNearby(viewerUserId, MAX_RADIUS_METERS, fetchLimit, filters, cursor = null)
-                }
-            } else {
-                initial
-            }
-
         val blockedRelatedIds =
             profile("grid.blockList") {
                 blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
-            }
-        val visibleCards =
-            profile("grid.blockFilter") {
-                if (blockedRelatedIds.isEmpty()) {
-                    result.cards
-                } else {
-                    result.cards.filterNot { it.userId in blockedRelatedIds }
-                }
             }
         // Profiles the viewer hid, plus anyone hiding from the viewer (contact blocks): both drop the
         // card and strip the partner mini, the same way.
@@ -177,42 +166,86 @@ class GridService(
                 hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty() +
                     contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
             }
-        val discoverableCards =
-            profile("grid.hiddenFilter") {
-                if (hiddenProfileIds.isEmpty()) {
-                    visibleCards
-                } else {
-                    visibleCards
-                        .filterNot { it.userId in hiddenProfileIds }
-                        // "Verified couples only" means the badge this viewer sees: a couple whose
-                        // partner is stripped below no longer qualifies.
-                        .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenProfileIds }
-                        .map { card ->
-                            if (card.linkedPartnerUserId in hiddenProfileIds) {
-                                card.copy(
-                                    linkedPartnerUserId = null,
-                                    linkedPartnerDisplayName = null,
-                                    linkedPartnerThumbnailMediaAssetId = null,
-                                    // The badge needs a visible partner, as on Swipe cards.
-                                    coupleVerified = false,
-                                )
-                            } else {
-                                card
-                            }
-                        }
-                }
-            }
-
         profile("grid.presenceRefresh") { refreshViewerPresence(viewerUserId) }
-        val onlineUserIds = profile("grid.presenceLookup") { onlineUserIdsFor(discoverableCards) }
-        val filteredCards =
-            profile("grid.onlineFilter") {
-                if (request.onlineOnly) {
-                    discoverableCards.filter { it.userId in onlineUserIds }
-                } else {
-                    discoverableCards
+
+        // One ranked page at [queryRadius] with every per-viewer exclusion applied: what the viewer
+        // would actually see. Run once, or twice when a sparse first page widens.
+        suspend fun visiblePage(queryRadius: Int): VisiblePage {
+            val result =
+                profile("grid.repository") {
+                    if (request.visitingSoonOnly) {
+                        // One page, soonest trips first; blocks, hides and presence apply below as usual.
+                        repository.queryVisitingSoon(viewerUserId, queryRadius, fetchLimit)
+                    } else {
+                        repository.queryNearby(viewerUserId, queryRadius, fetchLimit, filters, cursor)
+                    }
                 }
+            if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
+            val visibleCards =
+                profile("grid.blockFilter") {
+                    if (blockedRelatedIds.isEmpty()) {
+                        result.cards
+                    } else {
+                        result.cards.filterNot { it.userId in blockedRelatedIds }
+                    }
+                }
+            val discoverableCards =
+                profile("grid.hiddenFilter") {
+                    if (hiddenProfileIds.isEmpty()) {
+                        visibleCards
+                    } else {
+                        visibleCards
+                            .filterNot { it.userId in hiddenProfileIds }
+                            // "Verified couples only" means the badge this viewer sees: a couple whose
+                            // partner is stripped below no longer qualifies.
+                            .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenProfileIds }
+                            .map { card ->
+                                if (card.linkedPartnerUserId in hiddenProfileIds) {
+                                    card.copy(
+                                        linkedPartnerUserId = null,
+                                        linkedPartnerDisplayName = null,
+                                        linkedPartnerThumbnailMediaAssetId = null,
+                                        // The badge needs a visible partner, as on Swipe cards.
+                                        coupleVerified = false,
+                                    )
+                                } else {
+                                    card
+                                }
+                            }
+                    }
+                }
+            val onlineUserIds = profile("grid.presenceLookup") { onlineUserIdsFor(discoverableCards) }
+            val filteredCards =
+                profile("grid.onlineFilter") {
+                    if (request.onlineOnly) {
+                        discoverableCards.filter { it.userId in onlineUserIds }
+                    } else {
+                        discoverableCards
+                    }
+                }
+            return VisiblePage(result = result, filteredCards = filteredCards, onlineUserIds = onlineUserIds)
+        }
+
+        // Plan G10 sparse areas (GRID_IMPLEMENTATION_SPEC "Default Deck / Never-Empty"): when the first
+        // page at the requested radius would show fewer than SPARSE_FIRST_PAGE people, rank again at
+        // the maximum radius and serve that instead. Distance-first ordering makes it a superset that
+        // starts with the same nearby people. The widened answer pages normally under its own cursor
+        // scope (above), and every filter still applies: only distance relaxes. Location privacy is
+        // unchanged: the wide query is the same cell-to-cell rank at a fixed radius step.
+        val queryRadius = if (continuingWidened) MAX_RADIUS_METERS else radiusMeters
+        val first = visiblePage(queryRadius)
+        val widenNow = canWiden && cursor == null && first.filteredCards.size < minOf(SPARSE_FIRST_PAGE, limit)
+        val page =
+            if (widenNow) {
+                profile("grid.repositoryWiden") { visiblePage(MAX_RADIUS_METERS) }
+            } else {
+                first
             }
+        val widened = widenNow || continuingWidened
+        val result = page.result
+        val filteredCards = page.filteredCards
+        val onlineUserIds = page.onlineUserIds
+
         // Over-fetch reconciliation: return exactly the requested page and rebuild the cursor from the
         // last KEPT card. When more matches remain in the fetched window, the next page resumes after
         // the last kept card; otherwise it resumes past the fetched window (the repository anchor).
@@ -220,11 +253,8 @@ class GridService(
         val moreInFetchedWindow = filteredCards.size > limit
         val dtoCards = profile("grid.dto") { pageCards.map { it.toGridCardDto(onlineUserIds, mediaAssetUrlResolver) } }
         val seenCount = (cursor?.seenCount ?: 0) + dtoCards.size
-        // A widened fallback page is edge-fill only: do not hand back a cursor scoped to the
-        // max radius, since the next request still carries the viewer's narrow radius.
         val effectiveNextAnchor =
             when {
-                widened -> null
                 moreInFetchedWindow -> pageCards.lastOrNull()?.toCursorAnchor()
                 else -> result.nextCursorAnchor
             }
@@ -232,13 +262,14 @@ class GridService(
             effectiveNextAnchor != null &&
                 policy.gridResultDepthLimit != Int.MAX_VALUE &&
                 seenCount >= policy.gridResultDepthLimit
+        val nextScopeHash = if (widened) widenedScopeHash ?: cursorScopeHash else cursorScopeHash
 
         return GridQueryResponseDto(
             items = dtoCards,
             nextCursor =
                 effectiveNextAnchor
                     ?.takeUnless { resultLimitReached }
-                    ?.let { cursorCodec.encodeGridCursor(cursorScopeHash, it.copy(seenCount = seenCount)) },
+                    ?.let { cursorCodec.encodeGridCursor(nextScopeHash, it.copy(seenCount = seenCount)) },
             advancedFiltersApplied = advancedFiltersApplied,
             resultLimitReached = resultLimitReached,
             resultLimitTier = policy.tier.takeIf { resultLimitReached },
@@ -275,12 +306,22 @@ class GridService(
         private const val MAX_LIMIT = 120
         const val MIN_PAGE_SIZE = 12
 
+        // Plan G10: a first page showing fewer people than this widens to MAX_RADIUS_METERS.
+        const val SPARSE_FIRST_PAGE = 12
+
         // Online-only over-fetch: presence is filtered after SQL, so fetch this many times the page
         // size (bounded) to fill the page from the online subset without unbounded DB work.
         private const val ONLINE_OVERFETCH_MULTIPLIER = 4
         private const val MAX_ONLINE_FETCH = 240
     }
 }
+
+/** One ranked page after block, hide and online filtering, plus the presence it was filtered with. */
+private class VisiblePage(
+    val result: GridQueryResult,
+    val filteredCards: List<GridCardRecord>,
+    val onlineUserIds: Set<UUID>,
+)
 
 class GridException(
     val code: String,
