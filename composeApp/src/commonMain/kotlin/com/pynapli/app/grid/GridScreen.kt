@@ -187,8 +187,12 @@ fun GridScreen(
                 }
             }
         },
+        // A locked tile sells the plan that unlocks it; it never opens (or fetches) a profile.
         onProfileSelected = { card ->
-            scope.launch { profileDetailStateHolder.open(card) }
+            when (val tap = routeGridTileTap(card, state.unlockTier)) {
+                is GridTileTap.OpenPaywall -> onOpenUnlockStore(tap.unlockTier)
+                is GridTileTap.OpenProfile -> scope.launch { profileDetailStateHolder.open(tap.card) }
+            }
         },
         onUseCurrentLocation = onUseCurrentLocation,
         onProfileIconClick = onProfileIconClick,
@@ -290,7 +294,8 @@ fun GridScreen(
         },
         distanceUnit = distanceUnit,
         onOpenPhotoVerification = onOpenPhotoVerification,
-        onOpenStore = onOpenStore,
+        // The pager's locked "See plans" page: the same plan the banner sells.
+        onOpenStore = { onOpenUnlockStore(state.unlockTier) },
     )
 }
 

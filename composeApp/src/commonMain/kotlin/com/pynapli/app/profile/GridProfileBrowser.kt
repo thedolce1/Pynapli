@@ -296,7 +296,14 @@ fun GridProfileBrowser(
             ) { index ->
                 val card = pages.getOrNull(index) ?: return@HorizontalPager
                 when {
-                    controller.isLocked(card) -> LockedProfilePage(onOpenStore = onOpenStore)
+                    // The plans sheet replaces the pager rather than stacking over it.
+                    controller.isLocked(card) ->
+                        LockedProfilePage(
+                            onOpenStore = {
+                                profileDetailStateHolder.dismiss()
+                                onOpenStore()
+                            },
+                        )
                     card.id == profileState.selectedCard?.id -> OpenProfile(profileState)
                     // Passing through: the card's own data, no fetch and no view recorded.
                     else -> OpenProfile(ProfileDetailUiState(selectedCard = card, isLoading = true))
@@ -337,7 +344,10 @@ private fun PagerNavRow(
     }
 }
 
-/** Section 3 seam: a locked card's page sells the plan instead of showing the profile. */
+/**
+ * Section 3: the pager's last page when the list reaches locked cards. It sells the plan instead of
+ * showing a profile; nothing is fetched for it.
+ */
 @Composable
 private fun LockedProfilePage(onOpenStore: () -> Unit) {
     Box(
