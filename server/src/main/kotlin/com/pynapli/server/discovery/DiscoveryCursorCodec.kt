@@ -174,6 +174,9 @@ class DiscoveryCursorCodec(
             // radius and this is the radius the viewer asked for, so a widened cursor only ever
             // continues the exact request that produced it. Appended only when set.
             widenedFromRadiusMeters: Int? = null,
+            // Section 3: the request opted in to locked cards. The request flag, never the tier, so an
+            // entitlement change mid-scroll keeps the cursor valid. Appended only when set.
+            acceptLockedCards: Boolean = false,
         ): String {
             val normalized =
                 buildString {
@@ -218,6 +221,7 @@ class DiscoveryCursorCodec(
                     // Appended only when set, so cursors issued without it keep their hash.
                     if (filters.verifiedCouplesOnly) append("|verifiedCouplesOnly=true")
                     widenedFromRadiusMeters?.let { append("|widenedFrom=").append(it) }
+                    if (acceptLockedCards) append("|lockedCards=true")
                 }
             return sha256Base64Url(normalized)
         }

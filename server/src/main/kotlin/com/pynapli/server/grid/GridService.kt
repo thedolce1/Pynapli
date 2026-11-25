@@ -42,6 +42,8 @@ class GridService(
     private val contactBlockVisibility: ContactBlockVisibility? = null,
     // Buckets the cards' activeAgo keys (plan G11).
     private val clock: Clock = Clock.systemUTC(),
+    // Section 3: opaque per-viewer ids for locked cards. Production derives it from the cursor secret.
+    private val lockedCardTokens: LockedGridCardTokens = LockedGridCardTokens("pynapli-local-dev-discovery-cursor-secret"),
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
@@ -92,6 +94,14 @@ class GridService(
         // L-07: never fewer than MIN_PAGE_SIZE cards per request (a one-card page lets a client probe
         // the ranking card by card). Only the tier depth cap below can make a final page shorter.
         val pageLimit = request.limit.coerceIn(MIN_PAGE_SIZE, maxOf(MIN_PAGE_SIZE, minOf(MAX_LIMIT, policy.gridPageLimit)))
+        // Section 3 paywall on tap. The tier depth is where locking starts; a client that accepts locked
+        // cards keeps paging past it, with locked cards (no identity), up to the next tier's depth.
+        // Everything here comes from the server-read entitlement and the sealed seen count, never from
+        // the client. A client that doesn't opt in stops at the depth exactly as before.
+        val lockedFrom = policy.gridResultDepthLimit
+        val lockingApplies = request.acceptLockedCards && policy.gridLockedPreviewDepth > lockedFrom
+        val servedDepth = if (lockingApplies) policy.gridLockedPreviewDepth else lockedFrom
+        val depthLimited = servedDepth != Int.MAX_VALUE
 
         val cursorScopeHash =
             profile("grid.cursorScope") {
@@ -101,6 +111,7 @@ class GridService(
                     limit = pageLimit,
                     filters = filters,
                     onlineOnly = request.onlineOnly,
+                    acceptLockedCards = request.acceptLockedCards,
                 )
             }
         // Sparse-area widening (plan G10) pages under its own scope: the widened radius plus the radius
@@ -117,6 +128,7 @@ class GridService(
                     filters = filters,
                     onlineOnly = request.onlineOnly,
                     widenedFromRadiusMeters = radiusMeters,
+                    acceptLockedCards = request.acceptLockedCards,
                 )
             } else {
                 null
@@ -137,16 +149,25 @@ class GridService(
                     }
                 }
             }
-        val remainingVisible = policy.remainingGridResults(cursor?.seenCount ?: 0)
+        val seenBefore = cursor?.seenCount ?: 0
+        val remainingVisible = remainingGridResults(servedDepth, seenBefore)
         val limit = pageLimit.coerceAtMost(remainingVisible)
         if (limit <= 0) {
             return GridQueryResponseDto(
                 items = emptyList(),
                 nextCursor = null,
                 advancedFiltersApplied = advancedFiltersApplied,
-                resultLimitReached = policy.gridResultDepthLimit != Int.MAX_VALUE,
-                resultLimitTier = policy.tier.takeIf { policy.gridResultDepthLimit != Int.MAX_VALUE },
+                resultLimitReached = depthLimited,
+                resultLimitTier = policy.tier.takeIf { depthLimited },
+                lockedFromIndex = lockedFrom.takeIf { lockingApplies },
+                unlockTier = policy.gridUnlockTier.takeIf { lockingApplies },
             )
+        }
+
+        // Section 3 scraping guard: a page reaching into the locked window also spends the tighter
+        // locked-page budget (on top of GRID_QUERY), before any ranking work is done.
+        if (lockingApplies && seenBefore + limit > lockedFrom) {
+            profile("grid.lockedRateLimit") { requireLockedPageRateLimit(viewerUserId) }
         }
 
         // Online-only pages under-fill because presence is filtered AFTER the SQL (presence lives in
@@ -258,34 +279,64 @@ class GridService(
         val pageCards = filteredCards.take(limit)
         val moreInFetchedWindow = filteredCards.size > limit
         val now = clock.instant()
-        val dtoCards = profile("grid.dto") { pageCards.map { it.toGridCardDto(onlineUserIds, mediaAssetUrlResolver, now) } }
-        val seenCount = (cursor?.seenCount ?: 0) + dtoCards.size
+        val dtoCards =
+            profile("grid.dto") {
+                pageCards.mapIndexed { index, card ->
+                    // Locked by overall position, so a page can straddle the boundary (Social's 600 is
+                    // not a multiple of every page size).
+                    if (lockingApplies && seenBefore + index >= lockedFrom) {
+                        card.toLockedGridCardDto(
+                            token = lockedCardTokens.tokenFor(viewerUserId, card.userId),
+                            onlineUserIds = onlineUserIds,
+                            mediaAssetUrlResolver = mediaAssetUrlResolver,
+                        )
+                    } else {
+                        card.toGridCardDto(onlineUserIds, mediaAssetUrlResolver, now)
+                    }
+                }
+            }
+        val seenCount = seenBefore + dtoCards.size
         val effectiveNextAnchor =
             when {
                 moreInFetchedWindow -> pageCards.lastOrNull()?.toCursorAnchor()
                 else -> result.nextCursorAnchor
             }
+        // For a client that doesn't opt in this is the tier depth, as before. For one that does, it is
+        // the end of the locked window (lockedFromIndex/unlockTier mark where the paywall starts).
         val resultLimitReached =
             effectiveNextAnchor != null &&
-                policy.gridResultDepthLimit != Int.MAX_VALUE &&
-                seenCount >= policy.gridResultDepthLimit
+                depthLimited &&
+                seenCount >= servedDepth
         val nextScopeHash = if (widened) widenedScopeHash ?: cursorScopeHash else cursorScopeHash
+        val nextCursor =
+            effectiveNextAnchor
+                ?.takeUnless { resultLimitReached }
+                ?.let { cursorCodec.encodeGridCursor(nextScopeHash, it.copy(seenCount = seenCount)) }
+        // Signalled on the page holding a locked card, every later page, and the page whose next page
+        // starts locked (an unlocked page ending exactly at the depth).
+        val lockSignal =
+            lockingApplies &&
+                (seenCount > lockedFrom || (seenCount >= lockedFrom && nextCursor != null))
 
         return GridQueryResponseDto(
             items = dtoCards,
-            nextCursor =
-                effectiveNextAnchor
-                    ?.takeUnless { resultLimitReached }
-                    ?.let { cursorCodec.encodeGridCursor(nextScopeHash, it.copy(seenCount = seenCount)) },
+            nextCursor = nextCursor,
             advancedFiltersApplied = advancedFiltersApplied,
             resultLimitReached = resultLimitReached,
             resultLimitTier = policy.tier.takeIf { resultLimitReached },
             widened = widened,
+            lockedFromIndex = lockedFrom.takeIf { lockSignal },
+            unlockTier = policy.gridUnlockTier.takeIf { lockSignal },
         )
     }
 
     private suspend fun requireGridQueryRateLimit(viewerUserId: UUID) {
         val decision = rateLimitService?.check(viewerUserId, RateLimitedAction.GRID_QUERY) ?: return
+        if (!decision.allowed) throw GridException("RATE_LIMITED")
+    }
+
+    private suspend fun requireLockedPageRateLimit(viewerUserId: UUID) {
+        val decision = rateLimitService?.check(viewerUserId, RateLimitedAction.GRID_LOCKED_PAGE) ?: return
         if (!decision.allowed) throw GridException("RATE_LIMITED")
     }
 
@@ -335,11 +386,14 @@ class GridException(
     val code: String,
 ) : RuntimeException(code)
 
-private fun EntitlementPolicy.remainingGridResults(seenCount: Int): Int =
-    if (gridResultDepthLimit == Int.MAX_VALUE) {
+private fun remainingGridResults(
+    depth: Int,
+    seenCount: Int,
+): Int =
+    if (depth == Int.MAX_VALUE) {
         Int.MAX_VALUE
     } else {
-        (gridResultDepthLimit - seenCount).coerceAtLeast(0)
+        (depth - seenCount).coerceAtLeast(0)
     }
 
 /**

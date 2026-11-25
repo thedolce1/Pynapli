@@ -141,6 +141,42 @@ unknown keys) and older requests mean what they meant.
   found). The send path is unchanged: a refused Grid open is still `403 MESSAGING_NOT_ALLOWED`.
 - Presence: see "Realtime" (`POST /v1/presence/heartbeat`).
 
+#### Section 3 contract (paywall on tap, 2026-11-25)
+
+Additive and defaulted, like Section 2. Rules: GRID_IMPLEMENTATION_SPEC "Locked cards past the tier
+depth".
+
+- `GridQueryRequestDto.acceptLockedCards: Boolean = false`. Send `true` only from a client that
+  renders locked cards as paywall tiles. Without it nothing changes: the Grid stops at the tier depth
+  with `resultLimitReached = true` and no `nextCursor`. A cursor from an opted-in request is
+  `INVALID_GRID_CURSOR` on a request without the flag, and the other way round.
+- With it, paging continues past the depth: Free positions 60–599 (0-based) and Social 600–1199
+  come back locked; Select is never locked. `resultLimitReached` then means the end of the locked
+  window (more people exist behind it), with `resultLimitTier` the viewer's tier.
+- `GridQueryResponseDto.lockedFromIndex: Int? = null`: the 0-based position in the whole result
+  where locking starts (60 for Free, 600 for Social). Set on the page holding the first locked card,
+  on every later page, and on an unlocked page whose next page starts locked. Null otherwise and
+  always null without the opt-in.
+- `GridQueryResponseDto.unlockTier: String? = null`: the plan that unlocks them, `"social"` (Free)
+  or `"select"` (Social); set whenever `lockedFromIndex` is.
+- `GridCardDto.locked: Boolean = false`. A locked card has no identity:
+  - `userId` and `rankToken`: the same opaque token, `"locked_"` + 22 base64url characters, stable
+    for this viewer and this member, different for every other viewer. Use it as a list key only. It
+    is never a user id: every route that takes one (profile detail, favourites, block, hide, report,
+    Spark, album request, private album, message, Swipe like and like-back, partner-link invite)
+    refuses it with that route's usual malformed-id answer (400 or 404), and the presence stream
+    ignores it.
+  - `displayName = ""`; `linkedPartner`, `activeAgo`, `visitingFrom`, `visitingUntil` are null.
+  - Kept: `thumbnailUrl` (the approved thumbnail, same URL rules), `online`, `distanceLabel` and
+    `distanceMeters` (null when the member hides distance), `visiting`, `tonightActive`, `verified`,
+    `coupleVerified`, `fresh`.
+  - Tapping a locked card opens the paywall; the client must never fetch a profile for it.
+- Locked pages are rate-limited more tightly: see SECURITY_ROUTE_MATRIX (`GRID_LOCKED_PAGE`, 60 an
+  hour, `429 RATE_LIMITED`).
+- The plan text said the targeted routes answer `ENTITLEMENT_REQUIRED` for a locked card. They don't:
+  a locked card carries no id to send, so the routes answer as for any malformed id. That way the
+  refusal does not tell the caller that the token belongs to a real, locked member.
+
 ### Swipe
 
 - Match creation is server-authoritative. Dealbreakers are hard; soft filters expand only when

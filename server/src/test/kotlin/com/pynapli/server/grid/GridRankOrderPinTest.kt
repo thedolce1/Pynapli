@@ -1,7 +1,10 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.StaticSubscriptionRepository
+import com.pynapli.shared.network.dto.GridQueryRequestDto
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
 import java.time.Duration
@@ -213,6 +216,36 @@ class GridRankOrderPinTest :
                 assertEquals(want, cached.queryNearby(viewer, radius, 120).cards.map { it.pinned() }, "cached")
                 assertEquals(want, uncached.walk(pageSize = 3), "uncached, paged 3 at a time")
                 assertEquals(want, cachedSmallWindow.walk(pageSize = 3), "cached window of 4, paged 3 at a time")
+            }
+        }
+
+        // Section 3 (2026-11-25), added deliberately; the pins above are unchanged because locking never
+        // touches the rank. A client's opt-in to locked cards must not move a single card: through the
+        // service, opted in or not, a Free viewer gets the repository's order (this sparse set widens to
+        // 100 km, so the reference is the 100 km rank), and nothing this shallow is locked. Locked-tail
+        // order across the depth is pinned on 1,300 people in GridLockedCardsIntegrationTest.
+        "the locked-card opt-in never changes the served order" {
+            runBlocking {
+                seed()
+                val reference =
+                    JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
+                        .queryNearby(viewer, 100_000, 120)
+                        .cards
+                        .map { it.userId.toString() }
+                val service =
+                    GridService(
+                        JdbcGridRepository(dataSource, rankCacheTtl = Duration.ofMinutes(5)),
+                        subscriptionService = SubscriptionService(StaticSubscriptionRepository()),
+                    )
+
+                val optedIn = service.queryGrid(viewer, GridQueryRequestDto(radiusMeters = radius, limit = 60, acceptLockedCards = true))
+                val old = service.queryGrid(viewer, GridQueryRequestDto(radiusMeters = radius, limit = 60))
+
+                assertTrue(optedIn.widened)
+                assertEquals(reference, optedIn.items.map { it.userId })
+                assertEquals(reference, old.items.map { it.userId })
+                assertFalse(optedIn.items.any { it.locked })
+                assertEquals(null, optedIn.lockedFromIndex)
             }
         }
     })

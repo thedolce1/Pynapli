@@ -125,6 +125,25 @@ class DiscoveryCursorCodecTest {
         )
     }
 
+    // Section 3: a cursor issued to a client that accepts locked cards only continues such a request,
+    // and the opt-in leaves an ordinary scope's hash unchanged (old cursors keep decoding).
+    @Test
+    fun lockedCardOptInIsInTheCursorScopeOnlyWhenSet() {
+        fun lockedScope(accept: Boolean) =
+            DiscoveryCursorCodec.gridScopeHash(
+                viewerUserId = viewer,
+                radiusMeters = 50_000,
+                limit = 30,
+                filters = DiscoveryFilters(),
+                onlineOnly = false,
+                acceptLockedCards = accept,
+            )
+        assertEquals(scope(), lockedScope(accept = false))
+        val token = codec.encodeGridCursor(lockedScope(accept = true), anchor)
+        assertFailsWith<DiscoveryCursorException> { codec.decodeGridCursor(token, scope()) }
+        assertEquals(40, codec.decodeGridCursor(token, lockedScope(accept = true)).seenCount)
+    }
+
     @Test
     fun verifiedCouplesOnlyIsInTheCursorScope() {
         val token = codec.encodeGridCursor(scope(filters = DiscoveryFilters()), anchor)
