@@ -36,6 +36,7 @@ class StorePaywallFocusTest {
     fun eachPaywallLandsOnItsSectionOfTheStoreList() {
         assertEquals(1, storeListIndexFor(StorePaywallFocus.Plans, state, purchasesAvailable = true))
         assertEquals(2, storeListIndexFor(StorePaywallFocus.Plans, state, purchasesAvailable = false))
+        assertEquals(4, storeListIndexFor(StorePaywallFocus.Social, state, purchasesAvailable = true))
         assertEquals(5, storeListIndexFor(StorePaywallFocus.Select, state, purchasesAvailable = true))
         assertEquals(8, storeListIndexFor(StorePaywallFocus.PineappleLikes, state, purchasesAvailable = true))
         assertEquals(9, storeListIndexFor(StorePaywallFocus.PineappleLikes, state, purchasesAvailable = false))
