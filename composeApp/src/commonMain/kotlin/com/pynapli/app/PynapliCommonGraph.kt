@@ -30,6 +30,7 @@ import com.pynapli.app.messages.ApiMessagesRepository
 import com.pynapli.app.messages.MessagesRealtimeCoordinator
 import com.pynapli.app.messages.MessagesStateHolder
 import com.pynapli.app.onboarding.OnboardingStateHolder
+import com.pynapli.app.presence.PresenceHeartbeat
 import com.pynapli.app.profile.ApiPublicProfileRepository
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilehub.ApiProfileHubRepository
@@ -60,6 +61,8 @@ import com.pynapli.shared.network.PynapliApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -234,8 +237,16 @@ class PynapliCommonGraph(
         deepLinkStateHolder: AppDeepLinkStateHolder? = null,
         onboardingStateHolder: OnboardingStateHolder? = null,
         psyncStreamClient: PsyncStreamClient,
-    ): PynapliAppGraph =
-        PynapliAppGraph(
+    ): PynapliAppGraph {
+        // The heartbeat needs the shell's auth and onboarding state, which only arrive here.
+        presenceHeartbeat =
+            PresenceHeartbeat(
+                send = heartbeatSender,
+                signedIn = authStateHolder.state.map { it.authenticated },
+                inSignupStepper = onboardingStateHolder?.state?.map { it.active } ?: flowOf(false),
+                appVisible = gridStateHolder.appVisible,
+            )
+        return PynapliAppGraph(
             authStateHolder = authStateHolder,
             appSettingsStateHolder = appSettingsStateHolder,
             gridStateHolder = gridStateHolder,
@@ -262,6 +273,12 @@ class PynapliCommonGraph(
             matchCelebrationStateHolder = matchCelebrationStateHolder,
             contactBlocksStateHolder = contactBlocksStateHolder,
         )
+    }
+
+    private val heartbeatSender = PresenceHeartbeat.sender(apiClient)
+
+    /** Built by [appGraph] (it needs the shell's auth and onboarding state); started with the realtime jobs. */
+    private var presenceHeartbeat: PresenceHeartbeat? = null
 
     /**
      * Starts the realtime coordinators (grid presence, activity, messages) in [scope] and returns their
@@ -269,13 +286,15 @@ class PynapliCommonGraph(
      * its own; a cancellation is never swallowed (runCatchingCancellable).
      *
      * The Grid's 60 s liveness refresh rides along: it is a foreground-only loop too, so the same
-     * background cancel on Android and iOS stops it (web gates it on tab visibility instead).
+     * background cancel on Android and iOS stops it (web gates it on tab visibility instead). So does
+     * the presence heartbeat (plan G2), for the same reason.
      */
     fun startRealtime(scope: CoroutineScope): List<Job> =
-        listOf(
+        listOfNotNull(
             scope.launch { runCatchingCancellable { gridPresenceStreamCoordinator.run() } },
             scope.launch { runCatchingCancellable { activityRealtimeCoordinator.run() } },
             scope.launch { runCatchingCancellable { messagesRealtimeCoordinator.run() } },
             scope.launch { runCatchingCancellable { gridStateHolder.runLiveRefresh() } },
+            presenceHeartbeat?.let { heartbeat -> scope.launch { runCatchingCancellable { heartbeat.run() } } },
         )
 }

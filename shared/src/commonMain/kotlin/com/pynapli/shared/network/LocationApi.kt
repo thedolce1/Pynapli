@@ -11,4 +11,10 @@ import com.pynapli.shared.network.dto.UpdateCurrentLocationRequestDto
  */
 interface LocationApi {
     suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto>
+
+    /**
+     * `POST /v1/presence/heartbeat` (204, no body): "this member has the app open" (plan G2). Sent
+     * about once a minute while the app is in front and signed in; never retried.
+     */
+    suspend fun sendPresenceHeartbeat(): AppResult<Unit>
 }

@@ -388,6 +388,9 @@ class GridStateHolder(
 
     private val _appVisible = MutableStateFlow(true)
 
+    /** The app (web: the tab) is visible; also gates the presence heartbeat. */
+    val appVisible: StateFlow<Boolean> = _appVisible.asStateFlow()
+
     /**
      * Web only: whether the browser tab is visible. Android and iOS cancel [runLiveRefresh] with the
      * realtime jobs in the background; a browser tab keeps its jobs, so the shell reports it here.

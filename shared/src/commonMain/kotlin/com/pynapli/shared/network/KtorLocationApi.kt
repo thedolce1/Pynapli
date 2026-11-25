@@ -10,4 +10,6 @@ internal class KtorLocationApi(
     private val support: KtorApiSupport,
 ) : LocationApi {
     override suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto> = support.authSend(HttpMethod.Post, "/v1/location/current", request)
+
+    override suspend fun sendPresenceHeartbeat(): AppResult<Unit> = support.authPost("/v1/presence/heartbeat")
 }
