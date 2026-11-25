@@ -39,6 +39,11 @@ data class GridQueryRequestDto(
     // "Verified couples only": only people whose couple-verified badge shows for this viewer (both
     // linked partners selfie-verified, partner visible). Independent of linkedOnly. Old clients omit it.
     val verifiedCouplesOnly: Boolean = false,
+    // Section 3 opt-in: this client renders locked cards (GridCardDto.locked) as paywall tiles, never
+    // as profiles. Without it the server keeps the old behaviour: the grid stops at the tier depth with
+    // resultLimitReached. With it the grid keeps paging past the depth with locked cards up to the next
+    // tier's depth. The server alone decides which cards are locked.
+    val acceptLockedCards: Boolean = false,
 )
 
 @Serializable
@@ -51,6 +56,12 @@ data class GridQueryResponseDto(
     // Plan G10: the first page was sparse at the requested radius, so this page (and every page that
     // continues its cursor) comes from the 100 km step. Drives "Showing people farther away".
     val widened: Boolean = false,
+    // Section 3 (only for requests with acceptLockedCards): the 0-based position in the whole result
+    // where locked cards start (the viewer's tier depth). Set on the page holding the first locked
+    // card, on every later page, and on the page whose next page starts locked. Null otherwise.
+    val lockedFromIndex: Int? = null,
+    // The plan that unlocks the locked cards ("social" or "select"), set whenever lockedFromIndex is.
+    val unlockTier: String? = null,
 )
 
 @Serializable
@@ -83,6 +94,12 @@ data class GridCardDto(
     // "1h", "3h", "today", "week" (each covers the window up to its bound after the previous one), or
     // null when older than 7 days, never seen, or the member hides their activity (incognito).
     val activeAgo: String? = null,
+    // Section 3 paywall tile: true when this card lies past the viewer's tier depth. A locked card
+    // carries no identity: [userId] is an opaque per-viewer token starting "locked_" that no route
+    // accepts as a user id, [rankToken] is the same token, [displayName] is "", and linkedPartner,
+    // activeAgo, visitingFrom and visitingUntil are null. It keeps only what the tile shows: thumbnail,
+    // online dot, distance (as the member allows) and the badges. Tapping it opens the paywall.
+    val locked: Boolean = false,
 )
 
 /**

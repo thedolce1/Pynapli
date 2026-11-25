@@ -38,7 +38,8 @@ class SavedGridFilterService(
             payloadSerializer = GridQueryRequestDto.serializer(),
             validate = ::validatePayload,
             // Cursor is request-time only; limit is server-controlled.
-            normalize = { payload -> payload.copy(cursor = null) },
+            // A saved filter is filters only: no position, and no client capability (Section 3 opt-in).
+            normalize = { payload -> payload.copy(cursor = null, acceptLockedCards = false) },
             subscriptionService = subscriptionService,
             viewerTrustRepository = viewerTrustRepository,
             json = json,
