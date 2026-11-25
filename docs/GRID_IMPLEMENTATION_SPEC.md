@@ -356,7 +356,12 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   a reload paints instantly, closing the tab forgets it, and any `localStorage` copy under the key is
   removed.
 - Empty: "No one nearby yet" only when there are no cards, no active filter and no error; the server
-  widens a sparse first page, the client only renders.
+  widens a sparse first page, the client only renders. When the server says it widened
+  (`GridQueryResponseDto.widened`), the context strip adds "Showing people farther away".
+- Presence heartbeat (plan G2, client): `PresenceHeartbeat` sends `POST /v1/presence/heartbeat`
+  once on becoming eligible and about every 60 s while signed in, out of the sign-up stepper and
+  visible; launched with the realtime jobs (stopped in the background on Android and iOS, paused on
+  a hidden web tab); never retried (`PresenceHeartbeatTest`).
 
 ## Filter Application
 
@@ -380,11 +385,14 @@ Paid filters and persistence (2026-11-24, Section 2, plan G9):
 - The paid set mirrors the server's `DiscoveryFilters.requiresAdvancedEntitlement` exactly: any
   Lifestyle tag, and every Logistics tag except "Public meet first". Choosing one clears only that
   filter (`GridFilters.withoutPaidFilters`), keeps the viewer's other choices, shows the paywall row
-  and opens the plans (`GridEvent.OpenPaywall`). When the client knows the viewer is on Free (the
-  profile hub's plan; `GridFilters.advancedFiltersAllowedFor`) it does this before asking; when the
-  plan is unknown it asks, and a server `ENTITLEMENT_REQUIRED` is handled the same way with one
-  re-ask for the remaining filters. `AGE_VERIFICATION_REQUIRED` takes out only the lifestyle tags.
-  The sheet shows a lock on paid chips before they are tapped. The server stays authoritative.
+  and opens the plans (`GridEvent.OpenPaywall`). The client always asks; a server
+  `ENTITLEMENT_REQUIRED` strips the paid filters and re-asks once for the rest (the client's view
+  of the plan can lag a purchase, so it never pre-strips). The plans open only for filters the
+  viewer just applied, never for a cold-start restore after a plan lapsed or a quiet refresh (those
+  still strip and show the row). A refusal superseded by a newer choice or sign-out changes
+  nothing. `AGE_VERIFICATION_REQUIRED` takes out only the lifestyle tags. The sheet shows a lock on
+  paid chips for Free viewers (the profile hub's plan, `GridFilters.advancedFiltersAllowedFor`;
+  display only, unknown shows none).
 - Filters persist across cold starts on the device only (`GridFilterStore`): SQLDelight `app_meta`
   on Android and iOS, a file on the dev desktop shell, `localStorage` on web. Stored in the saved
   preset shape (no cursor, no cards, no place), restored before the first query, cleared on sign-out.
@@ -562,8 +570,9 @@ updates when the app pauses, prefer event deltas over polling.
 - [x] Presence deltas over `/v1/presence/stream` flip online dots in place (no reorder, no refetch);
   per-delta block filter and explicit subscription scope; `PresenceOfflineScanner` emits offline
   deltas; client reconnects with backoff. Android WebSockets need the OkHttp engine.
-- [x] Pull-to-refresh (`GridPullToRefresh`) preserves filters and scroll; a Refresh button covers
-  pointer devices.
+- [x] Pull-to-refresh (`GridPullToRefresh`) preserves filters; a Refresh button covers pointer
+  devices. Since 2026-11-24 an explicit refresh applies the new order and returns to the top (plan
+  G7); background refreshes never move cards.
 - [x] Instant cached first render (`GridSnapshotStore`, last 60 cards) followed by a quiet refresh.
 - [x] Location updates are thresholded before submission; denied-location QA
   (`scripts/android-grid-denied-location-qa.ps1`).

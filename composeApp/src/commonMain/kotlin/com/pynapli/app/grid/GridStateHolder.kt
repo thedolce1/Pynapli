@@ -284,8 +284,8 @@ class GridStateHolder(
     /**
      * Explicit user-initiated refresh (pull-to-refresh). Always re-fetches the current filters and
      * surfaces the refresh indicator + any error, unlike a quiet location-movement refresh which
-     * keeps cards untouched. Scroll position and filters are preserved; stable card keys animate the
-     * diff so the grid is not visually nuked.
+     * keeps cards untouched. Filters are preserved and stable card keys animate the diff; the screen
+     * returns to the top afterwards, since the new order applies (plan G7).
      */
     suspend fun refresh() {
         load(quiet = false)
