@@ -33,7 +33,7 @@ class AuthService(
     private val onEmailSignIn: (suspend (userId: UUID, normalisedEmail: String) -> Unit)? = null,
     /**
      * After every successful [authenticate] (each authenticated HTTP request and each realtime socket's
-     * open and 60 s re-auth tick). Presence hangs off this (plan G2). Must not suspend for long or
+     * open; never [authenticateWithoutActivity]). Presence hangs off this (plan G2). Must not suspend for long or
      * throw; a failure is swallowed so it never fails the request.
      */
     private val onAuthenticated: ((userId: UUID) -> Unit)? = null,

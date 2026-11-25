@@ -10,8 +10,8 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Presence (GRID_IMPLEMENTATION_SPEC "Presence States", plan G2). Any authenticated HTTP request, the
- * 60 s re-auth tick of any open realtime socket, and `POST /v1/presence/heartbeat` call [touch]; at
+ * Presence (GRID_IMPLEMENTATION_SPEC "Presence States", plan G2). Any authenticated HTTP request, a
+ * realtime socket opening, and `POST /v1/presence/heartbeat` call [touch] (re-auth ticks don't); at
  * most one [refreshOnline] per user per [refreshInterval] per instance actually writes (a Redis
  * SET/GET with the 15-minute TTL, the in-memory tracker for the offline scanner, and the durable
  * last-active row). A refresh that finds the person offline emits a "came online" delta; the offline

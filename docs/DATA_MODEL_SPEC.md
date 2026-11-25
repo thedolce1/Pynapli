@@ -88,7 +88,7 @@ every change must keep.
   bump, so a hidden person's acts don't reorder a viewer's inbox) and
   `contact_block_job_state.last_success_at` (a failed sweep is retried within the hour).
 - **Last activity** (`user_last_active(user_id PK, last_active_at)`, V106): written at most once a
-  minute per user from every authenticated request, open realtime socket tick and presence heartbeat
+  minute per user from every authenticated request, realtime socket open and presence heartbeat
   (plan G2); read only server-side, never returned. V127 backfills it from each account's newest live
   `user_sessions.last_seen_at` (only where later), so the Grid's rank tier, Fresh rule and card
   `activeAgo` (GRID_IMPLEMENTATION_SPEC "Presence States") read this one primary-key row instead of

@@ -168,7 +168,7 @@ internal fun buildCoreDependencies(
             broadcaster = presenceBroadcaster,
             broadcastAllowed = presenceBroadcastAllowed,
         )
-    // Plan G2: every authenticated request (and open socket tick) marks the caller online. The
+    // Plan G2: every authenticated request (and a socket opening) marks the caller online. The
     // in-memory claim keeps it to one Redis + one DB write per user a minute, and the write runs off
     // the request so a slow Redis never delays an unrelated call.
     val presenceRefreshLauncher =
