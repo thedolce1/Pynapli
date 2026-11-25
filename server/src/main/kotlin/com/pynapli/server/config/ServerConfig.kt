@@ -561,8 +561,7 @@ data class ServerConfig(
  * Moderation provider when PYNAPLI_MEDIA_MODERATION_PROVIDER is unset: staging and production
  * pre-screen with Cloud Vision; local/test (and anything unrecognised) hold every upload for a person.
  */
-internal fun defaultMediaModerationProvider(environment: String): String =
-    if (environment.trim().lowercase() in setOf("staging", "prod", "production")) "cloud_vision" else "manual"
+internal fun defaultMediaModerationProvider(environment: String): String = if (environment.trim().lowercase() in setOf("staging", "prod", "production")) "cloud_vision" else "manual"
 
 internal fun serverPortFromEnvironment(environmentVariables: Map<String, String>): Int =
     environmentVariables["PYNAPLI_SERVER_PORT"]?.toIntOrNull()

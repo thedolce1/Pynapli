@@ -222,8 +222,7 @@ data class SafeSearchPolicy(
     }
 }
 
-private fun SafeSearchLikelihood.isKnownAtMost(ceiling: SafeSearchLikelihood): Boolean =
-    this != SafeSearchLikelihood.UNKNOWN && ordinal <= ceiling.ordinal
+private fun SafeSearchLikelihood.isKnownAtMost(ceiling: SafeSearchLikelihood): Boolean = this != SafeSearchLikelihood.UNKNOWN && ordinal <= ceiling.ordinal
 
 /** Vision likelihood scale, ordered weakest → strongest. */
 enum class SafeSearchLikelihood {

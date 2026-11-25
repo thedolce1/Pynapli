@@ -294,5 +294,4 @@ internal fun ServerConfig.safeSearchPolicy(): SafeSearchPolicy =
         maxRacy = mediaModerationMaxRacy.toCeiling(SafeSearchPolicy.DEFAULT_MAX_RACY),
     )
 
-private fun String.toCeiling(default: SafeSearchLikelihood): SafeSearchLikelihood =
-    toLikelihood().takeIf { it in SafeSearchPolicy.CONFIGURABLE_CEILINGS } ?: default
+private fun String.toCeiling(default: SafeSearchLikelihood): SafeSearchLikelihood = toLikelihood().takeIf { it in SafeSearchPolicy.CONFIGURABLE_CEILINGS } ?: default

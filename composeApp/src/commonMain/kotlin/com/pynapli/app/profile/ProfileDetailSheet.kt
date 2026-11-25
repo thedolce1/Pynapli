@@ -232,7 +232,11 @@ internal fun ProfileDetailContent(
             // Own preview shows the owner's own photos, including ones still being reviewed (labelled),
             // which the public profile leaves out until they are approved.
             photoUrls = state.ownPreviewPhotos.map { it.url }.ifEmpty { profile?.photoUrls.orEmpty() },
-            beingReviewedPhotoUrls = state.ownPreviewPhotos.filter { it.beingReviewed }.map { it.url }.toSet(),
+            beingReviewedPhotoUrls =
+                state.ownPreviewPhotos
+                    .filter { it.beingReviewed }
+                    .map { it.url }
+                    .toSet(),
             profilePhotoUrl = profilePhotoUrl,
             onDismiss = onDismiss,
             onHideClick = { showHideConfirm = true },
