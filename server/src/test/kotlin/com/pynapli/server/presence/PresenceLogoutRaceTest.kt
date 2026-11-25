@@ -115,7 +115,11 @@ class PresenceLogoutRaceTest {
             lateinit var service: PresenceService
             val userId = UUID.randomUUID()
             // The logout lands exactly while the refresh is writing the key.
-            val repository = TombstonePresence(onHeartbeat = { clock.now = clock.now.plusSeconds(1); service.endPresence(userId) })
+            val repository =
+                TombstonePresence(onHeartbeat = {
+                    clock.now = clock.now.plusSeconds(1)
+                    service.endPresence(userId)
+                })
             service = PresenceService(repository, broadcaster = broadcaster, clock = clock)
 
             coroutineScope {

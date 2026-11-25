@@ -89,7 +89,11 @@ class GridLivenessTest {
             val holder = GridStateHolder(repository, timeSource = testScheduler.timeSource)
             holder.load()
             holder.loadMore()
-            assertEquals(listOf("a", "b", "c"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("a", "b", "c"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
 
             // b went hidden while online: the next page-one answer no longer holds b.
             repository.firstPage = feed(greenA, cursor = "p2")
@@ -116,8 +120,14 @@ class GridLivenessTest {
             repository.feed = feed(card("a").copy(online = true))
             holder.refreshLive()
 
-            assertTrue(holder.state.value.cards[0].online)
-            assertFalse(holder.state.value.cards[1].online)
+            assertTrue(
+                holder.state.value.cards[0]
+                    .online,
+            )
+            assertFalse(
+                holder.state.value.cards[1]
+                    .online,
+            )
         }
 
     @Test
