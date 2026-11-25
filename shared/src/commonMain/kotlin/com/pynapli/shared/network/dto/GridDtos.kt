@@ -39,6 +39,7 @@ data class GridQueryRequestDto(
     // "Verified couples only": only people whose couple-verified badge shows for this viewer (both
     // linked partners selfie-verified, partner visible). Independent of linkedOnly. Old clients omit it.
     val verifiedCouplesOnly: Boolean = false,
+    val acceptLockedCards: Boolean = false,
 )
 
 @Serializable
@@ -51,6 +52,8 @@ data class GridQueryResponseDto(
     // Plan G10: the first page was sparse at the requested radius, so this page (and every page that
     // continues its cursor) comes from the 100 km step. Drives "Showing people farther away".
     val widened: Boolean = false,
+    val lockedFromIndex: Int? = null,
+    val unlockTier: String? = null,
 )
 
 @Serializable
@@ -83,6 +86,7 @@ data class GridCardDto(
     // "1h", "3h", "today", "week" (each covers the window up to its bound after the previous one), or
     // null when older than 7 days, never seen, or the member hides their activity (incognito).
     val activeAgo: String? = null,
+    val locked: Boolean = false,
 )
 
 /**

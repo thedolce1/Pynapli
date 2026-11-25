@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.CompletableDeferred
@@ -59,7 +60,8 @@ class GridStateHolder(
             refreshOnReturn()
             return
         }
-        val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }
+        // Locked cards are never saved; filtering again covers a cache written by an older build.
+        val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }.withoutLockedCards()
         val paintedCache = cached.isNotEmpty() && _state.value.cards.isEmpty()
         if (paintedCache) {
             // Show cached cards instantly; a quiet refresh swaps in the live feed atomically
@@ -217,6 +219,7 @@ class GridStateHolder(
                         cards = feed.cards,
                         nextCursor = feed.nextCursor,
                         widened = feed.widened,
+                        unlockTier = feed.unlockTier,
                         paywallMessage = feed.resultLimitPaywallMessage ?: current.paywallMessage.takeIf { keepGatePrompt },
                         paywallUpgradeTier = feed.resultLimitUpgradeTier ?: current.paywallUpgradeTier.takeIf { keepGatePrompt },
                         verificationMessage = current.verificationMessage.takeIf { keepGatePrompt },
@@ -227,7 +230,7 @@ class GridStateHolder(
                     )
                 }
                 // Persist the fresh cards for an instant first paint on next open (best-effort).
-                runCatchingCancellable { snapshotStore.save(feed.cards) }
+                saveSnapshot(feed.cards)
             }.onFailure { error ->
                 // Superseded (filter change, reload, sign-out) while on the wire: its refusal must not
                 // write old filters or prompts over the newer state, or into the next account's.
@@ -327,7 +330,7 @@ class GridStateHolder(
             liveAt = answeredAt
             _serverHasLocation.value = true
             val shownIds = _state.value.cards.mapTo(HashSet()) { it.id }
-            val newCount = feed.cards.count { it.id !in shownIds }
+            val newCount = newNearbyCount(feed, shownIds)
             val freshById = feed.cards.associateBy { it.id }
             // The shown cards this answer speaks for: all of them when it is the whole result (no next
             // page), otherwise the slots that came from page one. Cards from later pages are beyond
@@ -383,14 +386,33 @@ class GridStateHolder(
                 cards = feed.cards,
                 nextCursor = feed.nextCursor,
                 widened = feed.widened,
+                unlockTier = feed.unlockTier,
                 paywallMessage = feed.resultLimitPaywallMessage,
                 paywallUpgradeTier = feed.resultLimitUpgradeTier,
                 isLoadingMore = false,
                 newNearbyCount = 0,
             )
         }
-        runCatchingCancellable { snapshotStore.save(feed.cards) }
+        saveSnapshot(feed.cards)
         return true
+    }
+
+    /**
+     * People in [feed] not on screen yet: the "N new nearby" count. Only real people count; a locked
+     * card is a teaser for the plan, and its opaque token may differ between answers anyway.
+     */
+    private fun newNearbyCount(
+        feed: GridFeedUi,
+        shownIds: Set<String>,
+    ): Int = feed.cards.count { !it.isLockedCard && it.id !in shownIds }
+
+    /**
+     * The cold-start cache holds unlocked people only. Locked tokens are per viewer and may not
+     * outlive the answer, a cached lock would paint over a plan bought since, and a locked person's
+     * photo should not sit on the device beyond the live Grid.
+     */
+    private suspend fun saveSnapshot(cards: List<GridProfileCardUi>) {
+        runCatchingCancellable { snapshotStore.save(cards.withoutLockedCards()) }
     }
 
     /**
@@ -569,12 +591,17 @@ class GridStateHolder(
                 _state.update { existing ->
                     val existingIds = existing.cards.mapTo(mutableSetOf()) { it.id }
                     val appended = feed.cards.filterNot { it.id in existingIds }
+                    val cards = existing.cards + appended
+                    // Once the list has a lock boundary, its banner sells the rest: a later page that
+                    // reports the depth cap must not bring the old row back above the Grid.
+                    val lockBoundary = feed.hasLockBoundary || existing.unlockTier != null || cards.any { it.isLockedCard }
                     existing.copy(
-                        cards = existing.cards + appended,
+                        cards = cards,
                         nextCursor = feed.nextCursor,
                         widened = feed.widened,
-                        paywallMessage = feed.resultLimitPaywallMessage,
-                        paywallUpgradeTier = feed.resultLimitUpgradeTier,
+                        unlockTier = feed.unlockTier ?: existing.unlockTier,
+                        paywallMessage = if (lockBoundary) null else feed.resultLimitPaywallMessage,
+                        paywallUpgradeTier = if (lockBoundary) null else feed.resultLimitUpgradeTier,
                         isLoadingMore = false,
                         errorCode = null,
                         errorMessage = null,
@@ -602,13 +629,13 @@ class GridStateHolder(
         pendingFeed?.let { pending ->
             val kept = pending.copy(cards = pending.cards.filterNot { it.id == userId })
             val shownIds = _state.value.cards.mapTo(HashSet()) { it.id }
-            val newCount = kept.cards.count { it.id !in shownIds }
+            val newCount = newNearbyCount(kept, shownIds)
             pendingFeed = if (newCount > 0) kept else null
             if (newCount == 0) pendingAt = null
             _state.update { it.copy(newNearbyCount = newCount) }
         }
         // Keep the cold-start cache in step, so someone just blocked or hidden never paints again.
-        runCatchingCancellable { snapshotStore.save(_state.value.cards) }
+        saveSnapshot(_state.value.cards)
     }
 
     /**
@@ -693,9 +720,13 @@ class GridStateHolder(
         }
     }
 
+    /**
+     * The people on the Grid, for the presence subscription. Locked cards never subscribe: their
+     * "locked_" token names nobody, and following a locked person's presence would leak who they are.
+     */
     val visibleUserIds: kotlinx.coroutines.flow.Flow<Set<String>> =
         state
-            .map { ui -> ui.cards.mapTo(LinkedHashSet(ui.cards.size)) { it.id } }
+            .map { ui -> ui.cards.mapNotNullTo(LinkedHashSet(ui.cards.size)) { card -> card.id.takeUnless { card.isLockedCard } } }
             .distinctUntilChanged()
 
     private fun GridFilters.toggle(id: QuickFilterId): GridFilters =
@@ -758,19 +789,8 @@ class ApiGridFeedRepository(
         filters: GridFilters,
         cursor: String?,
     ): GridFeedUi =
-        when (val result = apiClient.queryGrid(filters.toGridQueryRequest(cursor))) {
-            is AppResult.Success ->
-                GridFeedUi(
-                    cards =
-                        result.value.items.mapIndexed { index, card ->
-                            card.toGridProfileCardUi(index)
-                        },
-                    nextCursor = result.value.nextCursor,
-                    advancedFiltersApplied = result.value.advancedFiltersApplied,
-                    resultLimitReached = result.value.resultLimitReached,
-                    resultLimitTier = result.value.resultLimitTier,
-                    widened = result.value.widened,
-                )
+        when (val result = apiClient.queryGrid(filters.toGridFeedRequest(cursor))) {
+            is AppResult.Success -> result.value.toGridFeedUi()
 
             is AppResult.Failure -> throw GridFeedException(
                 code = result.error.code,
@@ -778,6 +798,18 @@ class ApiGridFeedRepository(
             )
         }
 }
+
+internal fun GridQueryResponseDto.toGridFeedUi(): GridFeedUi =
+    GridFeedUi(
+        cards = items.mapIndexed { index, card -> card.toGridProfileCardUi(index) },
+        nextCursor = nextCursor,
+        advancedFiltersApplied = advancedFiltersApplied,
+        resultLimitReached = resultLimitReached,
+        resultLimitTier = resultLimitTier,
+        widened = widened,
+        lockedFromIndex = lockedFromIndex,
+        unlockTier = unlockTier,
+    )
 
 /**
  * [Immutable] because `cards` is a `List`, and `List` is only an interface — the compiler cannot
@@ -798,10 +830,21 @@ data class GridFeedUi(
     val resultLimitTier: String? = null,
     // The server widened a sparse first page (and every page continuing its cursor).
     val widened: Boolean = false,
+    // Section 3: the server's 0-based overall index where locking starts, and the plan that unlocks
+    // the locked cards. Null when nothing is locked for this viewer.
+    val lockedFromIndex: Int? = null,
+    val unlockTier: String? = null,
 ) {
+    /**
+     * This answer sells the rest of the Grid with locked cards and their in-grid banner, so the old
+     * "Social unlocks more nearby profiles." row above the Grid stays away. It remains the fallback
+     * for a server that reports the depth cap without sending locked cards.
+     */
+    val hasLockBoundary: Boolean get() = lockedFromIndex != null || cards.any { it.isLockedCard }
+
     val resultLimitPaywallMessage: String?
         get() =
-            if (!resultLimitReached) {
+            if (!resultLimitReached || hasLockBoundary) {
                 null
             } else {
                 when (resultLimitTier) {
@@ -814,7 +857,7 @@ data class GridFeedUi(
     /** The plan that lifts the depth cap the viewer hit: Social from Free, Select from Social. */
     val resultLimitUpgradeTier: String?
         get() =
-            if (!resultLimitReached) {
+            if (!resultLimitReached || hasLockBoundary) {
                 null
             } else {
                 when (resultLimitTier) {

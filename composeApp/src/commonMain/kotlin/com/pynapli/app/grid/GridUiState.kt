@@ -32,8 +32,14 @@ data class GridUiState(
     val newNearbyCount: Int = 0,
     // The server widened a sparse first page beyond the chosen distance: a quiet note says so.
     val widened: Boolean = false,
+    // Section 3: the plan that unlocks the locked cards ("social" or "select", the server's
+    // unlockTier); names the boundary banner and focuses the plans sheet. Null when nothing is locked.
+    val unlockTier: String? = null,
 ) {
     val verificationRequired: Boolean get() = verificationMessage != null
+
+    /** Where the boundary banner sits in [cards] (before the first locked card), or null. */
+    val lockedBannerIndex: Int? get() = firstLockedCardIndex(cards)
 }
 
 @Immutable
@@ -117,6 +123,13 @@ data class GridFilters(
      * never the viewer's other choices.
      */
     fun withoutPaidFilters(): GridFilters = copy(lifestyleTags = emptySet(), logisticsTags = logisticsTags.filterNot { it.paid }.toSet())
+
+    /**
+     * The live Grid query: [toGridQueryRequest] plus the Section 3 opt-in, so the server keeps paging
+     * past the plan limit with locked cards instead of stopping. Kept apart from [toGridQueryRequest],
+     * which also writes saved presets and the stored filters, where the opt-in has no meaning.
+     */
+    fun toGridFeedRequest(cursor: String?): GridQueryRequestDto = toGridQueryRequest(cursor).copy(acceptLockedCards = true)
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
         val contexts =
@@ -407,6 +420,9 @@ data class GridProfileCardUi(
     val fresh: Boolean = false,
     // Server presence bucket: one of [GridActiveAgo]'s values, or null when unknown/long ago.
     val activeAgo: String? = null,
+    // Section 3: past the viewer's plan limit (server-decided). [id] is then an opaque "locked_"
+    // token, [displayName] is empty, and the tile shows only photo, dot, distance and badges.
+    val locked: Boolean = false,
 )
 
 /**
@@ -472,16 +488,21 @@ enum class LinkedPartnerTone {
     Sun,
 }
 
-internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi =
-    GridProfileCardUi(
+internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi {
+    val isLocked = locked || userId.startsWith(LOCKED_CARD_ID_PREFIX)
+    // A locked card carries no identity. The server already strips it; dropping the name, the
+    // activity bucket and the partner mini (a real partner id) here too keeps a server slip from
+    // ever reaching a tile, a cache or a screen reader.
+    val partner = linkedPartner?.takeUnless { isLocked }
+    return GridProfileCardUi(
         id = userId,
-        displayName = displayName,
+        displayName = if (isLocked) "" else displayName,
         thumbnailUrl = thumbnailUrl,
         online = online,
         distanceLabel = distanceLabel,
         tone = GridCardTone.entries[index % GridCardTone.entries.size],
-        linkedPartner = linkedPartner?.toUi(),
-        linkedPartnerTone = linkedPartner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
+        linkedPartner = partner?.toUi(),
+        linkedPartnerTone = partner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
         distanceMeters = distanceMeters,
         visiting = visiting,
         tonightActive = tonightActive,
@@ -492,10 +513,12 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi =
             },
         verified = verified,
         // Server-computed; never drawn without a visible partner mini to attach it to.
-        coupleVerified = coupleVerified && linkedPartner != null,
+        coupleVerified = coupleVerified && partner != null,
         fresh = fresh,
-        activeAgo = activeAgo,
+        activeAgo = if (isLocked) null else activeAgo,
+        locked = isLocked,
     )
+}
 
 internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =
     GridLinkedPartnerUi(
