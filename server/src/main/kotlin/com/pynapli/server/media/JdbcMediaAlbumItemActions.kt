@@ -374,6 +374,8 @@ private fun java.sql.Connection.listAlbumItemsVisibleToViewer(
                   a.owner_user_id <> ?
                   AND m.processing_status = 'ready'
                   AND m.moderation_status = 'approved'
+                  -- Others only see an asset in the album kind it was uploaded (and screened) for.
+                  AND m.intended_album_kind = a.kind
               )
           )
         ORDER BY sort_order ASC, added_at DESC, media_asset_id ASC

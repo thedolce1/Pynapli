@@ -163,6 +163,12 @@ class PendingPhotoVisibilityIntegrationTest {
 
             val public = assertNotNull(JdbcProfileRepository(dataSource).getPublicProfile(viewer, owner))
             assertEquals(null, public.profilePhotoMediaAssetId)
+            // Nor through the album listing another member's view goes through.
+            val asViewer = JdbcMediaRepository(dataSource).listAlbumItemsForViewer(viewerUserId = viewer, albumId = profileAlbumId)
+            assertTrue(asViewer.orEmpty().none { it.mediaAsset.mediaAssetId == assetId })
+            // The owner still sees their own item wherever it sits.
+            val asOwner = JdbcMediaRepository(dataSource).listAlbumItemsForViewer(viewerUserId = owner, albumId = profileAlbumId)
+            assertTrue(asOwner.orEmpty().any { it.mediaAsset.mediaAssetId == assetId })
         }
 
     private fun DataSource.assetStatus(assetId: UUID): Pair<String, String> =
