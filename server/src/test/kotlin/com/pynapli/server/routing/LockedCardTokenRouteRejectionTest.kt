@@ -137,8 +137,8 @@ class LockedCardTokenRouteRejectionTest {
     fun everyPersonTargetedRouteRefusesALockedTokenLikeAnyMalformedId() =
         runRouteTest { client ->
             targets.forEach { target ->
-                val locked = client.send(target, lockedToken)
-                val malformed = client.send(target, control)
+                val locked = client.sendTo(target, lockedToken)
+                val malformed = client.sendTo(target, control)
                 val lockedBody = locked.bodyAsText()
                 val malformedBody = malformed.bodyAsText()
 
@@ -176,7 +176,7 @@ class LockedCardTokenRouteRejectionTest {
 
     // ---- harness ----
 
-    private suspend fun HttpClient.send(
+    private suspend fun HttpClient.sendTo(
         target: Target,
         id: String,
     ): HttpResponse {

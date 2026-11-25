@@ -42,14 +42,15 @@ class GridLockedCardsIntegrationTest :
         fun subscription(
             userId: UUID,
             tier: String,
-        ) = SubscriptionRecord(
-            subscriptionId = UUID.randomUUID(),
-            userId = userId,
-            tier = tier,
-            status = "active",
-            currentPeriodStart = Instant.now().minusSeconds(86_400),
-            currentPeriodEnd = Instant.now().plusSeconds(30 * 86_400L),
-        )
+        ): SubscriptionRecord =
+            SubscriptionRecord(
+                subscriptionId = UUID.randomUUID(),
+                userId = userId,
+                tier = tier,
+                status = "active",
+                currentPeriodStart = Instant.now().minusSeconds(86_400),
+                currentPeriodEnd = Instant.now().plusSeconds(30 * 86_400L),
+            )
 
         val subscriptions = mutableMapOf<UUID, SubscriptionRecord>()
 
