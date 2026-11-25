@@ -105,7 +105,9 @@ fun GridProfileBrowser(
     // closing (the single-profile sheet still closes, as before).
     suspend fun handleRemoval(userId: String) {
         onRemoveCard(userId)
-        val paging = currentModel != null && profileDetailStateHolder.state.value.selectedCard?.id == userId
+        val paging =
+            currentModel != null && profileDetailStateHolder.state.value.selectedCard
+                ?.id == userId
         if (paging) removed = removed + userId else profileDetailStateHolder.dismiss()
     }
     LaunchedEffect(profileState.blockedTargetUserId) {
@@ -239,6 +241,7 @@ fun GridProfileBrowser(
         LaunchedEffect(wide) {
             if (wide) runCatching { focus.requestFocus() }
         }
+
         fun step(delta: Int) {
             val target = pagerState.currentPage + delta
             if (target in pages.indices) scope.launch { pagerState.animateScrollToPage(target) }

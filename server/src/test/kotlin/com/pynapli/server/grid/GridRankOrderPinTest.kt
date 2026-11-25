@@ -55,7 +55,12 @@ class GridRankOrderPinTest :
             (inRange - hiddenTwo - boosted).forEach { dataSource.insertApprovedProfilePhoto(it) }
             dataSource.setUserCreatedDaysAgo(shownNear, days = 40)
             dataSource.setUserCreatedDaysAgo(shownMid, days = 40)
-            dataSource.setLastActive(shownMid, java.time.Instant.now().minus(Duration.ofDays(2)))
+            dataSource.setLastActive(
+                shownMid,
+                java.time.Instant
+                    .now()
+                    .minus(Duration.ofDays(2)),
+            )
         }
 
         fun seed() {

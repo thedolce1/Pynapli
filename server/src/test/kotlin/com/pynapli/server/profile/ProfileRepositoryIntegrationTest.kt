@@ -488,6 +488,7 @@ class ProfileRepositoryIntegrationTest {
             dataSource.insertUserWithProfile(viewer, "Viewer")
             dataSource.insertUserWithProfile(owner, "Owner")
             val repository = JdbcProfileRepository(dataSource)
+
             suspend fun seen() = requireNotNull(repository.getPublicProfile(viewer, owner)).toDto(null)
 
             // Default 'everyone': allowed, no reason.

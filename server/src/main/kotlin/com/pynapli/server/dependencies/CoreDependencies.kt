@@ -158,7 +158,9 @@ internal fun buildCoreDependencies(
         PresenceService(
             repository = presenceRepository,
             onlineTracker = onlinePresenceTracker,
-            lastActiveRecorder = com.pynapli.server.presence.LastActiveRecorder(lastActiveRepository),
+            lastActiveRecorder =
+                com.pynapli.server.presence
+                    .LastActiveRecorder(lastActiveRepository),
             broadcaster = presenceBroadcaster,
             broadcastAllowed = presenceBroadcastAllowed,
         )

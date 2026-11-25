@@ -39,8 +39,16 @@ class ProfileDetailPagingTest {
             gates.getValue("a").complete(Unit)
             runCurrent()
 
-            assertEquals("b", holder.state.value.selectedCard?.id)
-            assertEquals("b", holder.state.value.profile?.userId)
+            assertEquals(
+                "b",
+                holder.state.value.selectedCard
+                    ?.id,
+            )
+            assertEquals(
+                "b",
+                holder.state.value.profile
+                    ?.userId,
+            )
         }
 
     @Test

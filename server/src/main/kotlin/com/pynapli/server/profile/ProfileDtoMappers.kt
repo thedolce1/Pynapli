@@ -93,8 +93,7 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
  * matches-only / no-one / off settings) stays a plain [PublicProfileRecord.allowGridMessages] false.
  * Blocks and hides never reach here: the profile is not found at all.
  */
-internal fun PublicProfileRecord.messagingUnavailableReason(): String? =
-    if (!allowGridMessages && gridMessageVerifiedOnly) MESSAGING_UNAVAILABLE_VERIFY_TO_MESSAGE else null
+internal fun PublicProfileRecord.messagingUnavailableReason(): String? = if (!allowGridMessages && gridMessageVerifiedOnly) MESSAGING_UNAVAILABLE_VERIFY_TO_MESSAGE else null
 
 internal const val MESSAGING_UNAVAILABLE_VERIFY_TO_MESSAGE = "VERIFY_TO_MESSAGE"
 
