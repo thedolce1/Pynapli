@@ -187,7 +187,7 @@ private fun ColumnScope.NearbyGridSections(
         GridTravelRow(city = city, onTurnOff = onTurnOffTravel)
     }
     if (state.cards.isNotEmpty()) {
-        GridContextStrip(cards = state.cards, distanceUnit = distanceUnit)
+        GridContextStrip(cards = state.cards, distanceUnit = distanceUnit, widened = state.widened)
     }
     state.paywallMessage?.let { message ->
         GridPaywallRow(

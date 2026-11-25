@@ -208,6 +208,7 @@ class GridStateHolder(
                     current.copy(
                         cards = feed.cards,
                         nextCursor = feed.nextCursor,
+                        widened = feed.widened,
                         paywallMessage = feed.resultLimitPaywallMessage ?: current.paywallMessage.takeIf { keepGatePrompt },
                         paywallUpgradeTier = feed.resultLimitUpgradeTier ?: current.paywallUpgradeTier.takeIf { keepGatePrompt },
                         verificationMessage = current.verificationMessage.takeIf { keepGatePrompt },
@@ -357,6 +358,7 @@ class GridStateHolder(
             current.copy(
                 cards = feed.cards,
                 nextCursor = feed.nextCursor,
+                widened = feed.widened,
                 paywallMessage = feed.resultLimitPaywallMessage,
                 paywallUpgradeTier = feed.resultLimitUpgradeTier,
                 isLoadingMore = false,
@@ -528,6 +530,7 @@ class GridStateHolder(
                     existing.copy(
                         cards = existing.cards + appended,
                         nextCursor = feed.nextCursor,
+                        widened = feed.widened,
                         paywallMessage = feed.resultLimitPaywallMessage,
                         paywallUpgradeTier = feed.resultLimitUpgradeTier,
                         isLoadingMore = false,
@@ -719,6 +722,7 @@ class ApiGridFeedRepository(
                     advancedFiltersApplied = result.value.advancedFiltersApplied,
                     resultLimitReached = result.value.resultLimitReached,
                     resultLimitTier = result.value.resultLimitTier,
+                    widened = result.value.widened,
                 )
 
             is AppResult.Failure -> throw GridFeedException(
@@ -745,6 +749,8 @@ data class GridFeedUi(
     val advancedFiltersApplied: Boolean = false,
     val resultLimitReached: Boolean = false,
     val resultLimitTier: String? = null,
+    // The server widened a sparse first page (and every page continuing its cursor).
+    val widened: Boolean = false,
 ) {
     val resultLimitPaywallMessage: String?
         get() =

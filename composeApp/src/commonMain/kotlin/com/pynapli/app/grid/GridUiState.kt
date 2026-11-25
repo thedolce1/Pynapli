@@ -30,6 +30,8 @@ data class GridUiState(
     // People the last quiet refresh found who are not on screen yet: the "N new nearby" pill. The
     // shown order never changes under the finger; tapping the pill (or refreshing) applies it.
     val newNearbyCount: Int = 0,
+    // The server widened a sparse first page beyond the chosen distance: a quiet note says so.
+    val widened: Boolean = false,
 ) {
     val verificationRequired: Boolean get() = verificationMessage != null
 }

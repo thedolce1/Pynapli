@@ -44,6 +44,7 @@ data class GridQueryResponseDto(
     val advancedFiltersApplied: Boolean = false,
     val resultLimitReached: Boolean = false,
     val resultLimitTier: String? = null,
+    val widened: Boolean = false,
 )
 
 @Serializable
