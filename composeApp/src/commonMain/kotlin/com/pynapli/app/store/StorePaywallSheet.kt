@@ -66,7 +66,10 @@ private fun tierIndex(
  */
 fun storePaywallFocusForUnlockTier(unlockTier: String?): StorePaywallFocus =
     when (unlockTier) {
-        SubscriptionTier.SOCIAL -> StorePaywallFocus.Social
+        // A free viewer lands on the plan list, where "one subscription covers you both" is in view:
+        // the 2-for-1 benefit is the strongest reason a couple upgrades. Social members (who already
+        // have it) are sent straight to Select.
+        SubscriptionTier.SOCIAL -> StorePaywallFocus.Plans
         SubscriptionTier.SELECT -> StorePaywallFocus.Select
         else -> StorePaywallFocus.Plans
     }

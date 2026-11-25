@@ -163,7 +163,11 @@ class GridLockedCardsTest {
             val holder = GridStateHolder(NeverAnswers, snapshotStore = snapshots)
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { holder.primeFromCacheThenLoad() }
 
-            assertEquals(listOf("old"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("old"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
         }
 
     @Test
@@ -212,7 +216,7 @@ class GridLockedCardsTest {
         val open = assertIs<GridTileTap.OpenProfile>(routeGridTileTap(card("a"), unlockTier = SubscriptionTier.SELECT))
         assertEquals("a", open.card.id)
 
-        assertEquals(StorePaywallFocus.Social, storePaywallFocusForUnlockTier(SubscriptionTier.SOCIAL))
+        assertEquals(StorePaywallFocus.Plans, storePaywallFocusForUnlockTier(SubscriptionTier.SOCIAL))
         assertEquals(StorePaywallFocus.Select, storePaywallFocusForUnlockTier(SubscriptionTier.SELECT))
         assertEquals(StorePaywallFocus.Plans, storePaywallFocusForUnlockTier(null))
         assertEquals("See everyone nearby with Social", lockedBannerMessage(SubscriptionTier.SOCIAL))
@@ -273,7 +277,11 @@ class GridLockedCardsTest {
             repository.first = GridFeedUi(cards = listOf(card("a"), card("b")))
             holder.onPlanTierObserved(SubscriptionTier.SOCIAL)
             assertEquals(2, repository.firstPageRequests)
-            assertEquals(listOf("a", "b"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("a", "b"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
             assertNull(holder.state.value.lockedBannerIndex)
             assertEquals(listOf<GridEvent>(GridEvent.ScrollToTop), events)
 
