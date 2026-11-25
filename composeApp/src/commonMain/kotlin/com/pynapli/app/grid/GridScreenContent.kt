@@ -76,7 +76,6 @@ internal fun GridScreenContent(
             profileImageUrl = profileImageUrl,
             onProfileIconClick = onProfileIconClick,
             onOpenTonight = onOpenTonight,
-            onOpenFilters = { sheetVisible = true },
             onRefresh =
                 when {
                     sizeClass == PynapliWindowSizeClass.Compact -> null

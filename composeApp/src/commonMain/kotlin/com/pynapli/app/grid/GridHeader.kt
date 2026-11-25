@@ -27,7 +27,6 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.DarkMode
-import com.pynapli.app.design.icons.filled.FilterList
 import com.pynapli.app.design.icons.filled.LocationOn
 import com.pynapli.app.design.icons.filled.Place
 import com.pynapli.app.design.icons.filled.Refresh
@@ -42,7 +41,6 @@ internal fun GridHeader(
     profileImageUrl: String?,
     onProfileIconClick: () -> Unit,
     onOpenTonight: () -> Unit = {},
-    onOpenFilters: () -> Unit = {},
     // Pointer-device refresh (WEB_PWA_GAMEPLAN.md W2.1): a mouse wheel can't pull to
     // refresh, so wide windows surface an explicit button. Null (phones) hides it.
     onRefresh: (() -> Unit)? = null,
@@ -82,12 +80,7 @@ internal fun GridHeader(
                 modifier = Modifier.testTag("grid-open-tonight"),
                 tint = PynapliColors.Accent,
             )
-            PynapliHeaderActionButton(
-                icon = Icons.Filled.FilterList,
-                contentDescription = "Filters",
-                onClick = onOpenFilters,
-                modifier = Modifier.testTag(GridFilterTags.HEADER_OPEN_SHEET),
-            )
+            // No Filters icon here: the Filters chip (with its active count) leads the chip row below.
         },
     )
 }

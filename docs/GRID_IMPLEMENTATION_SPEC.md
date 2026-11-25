@@ -342,8 +342,8 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
 
 - Header: avatar, the location pill ("Nearby", or the Travel city while Travel mode is on; never a
   precise place) which opens the same `TravelModeSheet` and `TravelLocationStateHolder` Swipe uses
-  (Select paywall focus; every travel change reloads the Grid), then Refresh (wide windows),
-  Tonight and Filters. Below it one chip row for both views: Filters (with its active count),
+  (Select paywall focus; every travel change reloads the Grid and marks the Swipe deck stale), then
+  Refresh (wide windows) and Tonight; no header Filters icon. Below it one chip row for both views: Filters (with its active count),
   Online, Favorites (a view switch, not a filter; it replaced the Nearby/Favorites switch), Fresh,
   Tonight, Verified. Active chips carry a check as well as the accent outline. Singles and Linked
   live in the sheet's Who section; distance lives in the sheet. A filter chip tapped while Favorites
