@@ -204,8 +204,16 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
   profile-album item. Defence in depth: every public photo query (Grid, Swipe, profile, peek,
   Activity, Messages, Playing Tonight incl. the session photo, match moment, partner link) also
   requires `intended_album_kind = 'profile'`, a Playing Tonight session photo must be a profile
-  photo, and V128 makes the database hold one album per asset (unique index), backfills legacy
-  kinds, and sends any approved profile asset that also sat in a private album back to the queue.
+  photo, and V128 makes the database hold one live album placement per asset (partial unique
+  index on non-removed items). V128 never hard-deletes: a surplus placement is soft-removed
+  (`removed_at`, restorable by ops) and each step logs its row count. An asset in both a profile and
+  a private album keeps the album of its kind; a pre-V72 asset with no kind keeps the **profile**
+  placement (a member must not silently lose a profile photo) and, like any approved profile asset
+  that also sat in a private album, goes back to the human queue, so nothing from a private album
+  becomes public without a moderator. A single placement in the other kind's album takes that
+  album's kind; a duplicate across a deleted and a live album keeps the live one. Residual: if a
+  moderator rejects such a requeued photo it is gone from the private album too (its soft-removed
+  private placement can be restored by ops).
 - **Screened bytes can't be swapped** (review finding, 2026-11-25). The GCS upload URL lives 15
   minutes, so it is signed create-only: `x-goog-if-generation-match: 0` is a signed header (GCS
   requires every `x-goog-*` header a signed request uses to be in the canonical headers) and is in
