@@ -135,7 +135,7 @@ class ProfilePagerController(
     /** Everyone up to and including the first locked card: the pager's single "See plans" page. */
     private fun List<GridProfileCardUi>.endingAtFirstLocked(): List<GridProfileCardUi> {
         val firstLocked = indexOfFirst(isLocked)
-        return if (firstLocked < 0 || firstLocked == lastIndex) this else subList(0, firstLocked + 1).toList()
+        return if (firstLocked < 0) this else take(firstLocked + 1)
     }
 
     private fun reset() {

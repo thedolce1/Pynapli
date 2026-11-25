@@ -7,7 +7,9 @@ import com.pynapli.app.profile.SamplePublicProfileRepository
 import com.pynapli.app.store.StorePaywallFocus
 import com.pynapli.app.store.storePaywallFocusForUnlockTier
 import com.pynapli.shared.core.result.AppResult
+import com.pynapli.shared.network.PynapliJson
 import com.pynapli.shared.network.dto.GridCardDto
+import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.network.dto.PublicProfileDto
@@ -34,6 +36,26 @@ class GridLockedCardsTest {
         assertEquals("c1", filters.toGridFeedRequest(cursor = "c1").cursor)
         assertEquals(filters.toGridQueryRequest(cursor = "c1"), filters.toGridFeedRequest(cursor = "c1").copy(acceptLockedCards = false))
         assertFalse(filters.toGridQueryRequest(cursor = null).acceptLockedCards, "presets and the filter store keep the plain payload")
+
+        // On the wire, with the client's own JSON settings.
+        val json = PynapliJson.encodeToString(GridQueryRequestDto.serializer(), filters.toGridFeedRequest(cursor = null))
+        assertTrue(json.contains("\"acceptLockedCards\":true"), json)
+    }
+
+    @Test
+    fun aLockedServerResponseDecodesAndOldResponsesStillDo() {
+        val body =
+            """{"items":[{"userId":"u1","displayName":"Maya","online":true,"rankToken":"r1"},""" +
+                """{"userId":"locked_x","displayName":"","online":false,"rankToken":"r2","locked":true}],""" +
+                """"lockedFromIndex":1,"unlockTier":"social"}"""
+        val feed = PynapliJson.decodeFromString(GridQueryResponseDto.serializer(), body).toGridFeedUi()
+        assertEquals(listOf(false, true), feed.cards.map { it.locked })
+        assertEquals(1, feed.lockedFromIndex)
+        assertEquals(SubscriptionTier.SOCIAL, feed.unlockTier)
+
+        val old = PynapliJson.decodeFromString(GridQueryResponseDto.serializer(), """{"items":[{"userId":"u1","displayName":"Maya","online":true,"rankToken":"r1"}]}""")
+        assertNull(old.lockedFromIndex)
+        assertFalse(old.items.single().locked)
     }
 
     @Test
@@ -220,9 +242,11 @@ class GridLockedCardsTest {
     @Test
     fun aLockedTokenNeverJoinsFavorites() =
         runTest {
-            val favorites = FavoritesStateHolder(FixedFavorites(GridFeedUi(cards = listOf(card("a"), locked("locked_1")))))
+            // The Favorites mapping drops a locked card the server should never have sent.
+            assertEquals(listOf("u1"), listOf(dto("u1"), dto("locked_1", locked = true), dto("locked_2")).toFavoriteCards().map { it.id })
+
+            val favorites = FavoritesStateHolder(FixedFavorites(GridFeedUi(cards = listOf(card("a")))))
             favorites.show()
-            assertEquals(listOf("a"), favorites.state.value.cards.map { it.id })
 
             favorites.onFavoriteChanged(FavoriteChange("locked_2", favorite = true))
             assertFalse(favorites.state.value.stale, "a locked token is not a star to refetch for")
@@ -356,6 +380,5 @@ private class RecordingSnapshotStore(
 private class FixedFavorites(
     private val feed: GridFeedUi,
 ) : FavoritesRepository {
-    // The real repository drops locked cards at mapping; this fake mirrors that rule.
-    override suspend fun loadFavorites(cursor: String?): GridFeedUi = feed.copy(cards = feed.cards.withoutLockedCards())
+    override suspend fun loadFavorites(cursor: String?): GridFeedUi = feed
 }

@@ -5,6 +5,7 @@ import com.pynapli.app.profile.FavoriteChange
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.GridCardDto
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -158,6 +159,12 @@ data class FavoritesUiState(
     val errorMessage: String? = null,
 )
 
+/**
+ * Favourites are people the viewer starred, so never a locked card (Section 3); one is dropped here
+ * in case it ever came back from the server.
+ */
+internal fun List<GridCardDto>.toFavoriteCards(): List<GridProfileCardUi> = mapIndexed { index, card -> card.toGridProfileCardUi(index) }.withoutLockedCards()
+
 interface FavoritesRepository {
     suspend fun loadFavorites(cursor: String?): GridFeedUi
 }
@@ -169,9 +176,7 @@ class ApiFavoritesRepository(
         when (val result = apiClient.listFavorites(cursor)) {
             is AppResult.Success ->
                 GridFeedUi(
-                    // Favourites are people the viewer starred, so never a locked card (Section 3);
-                    // dropped here too in case one ever came back from the server.
-                    cards = result.value.items.mapIndexed { index, card -> card.toGridProfileCardUi(index) }.withoutLockedCards(),
+                    cards = result.value.items.toFavoriteCards(),
                     nextCursor = result.value.nextCursor,
                 )
             is AppResult.Failure -> throw GridFeedException(code = result.error.code, message = result.error.message)
