@@ -201,6 +201,18 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
   requires `intended_album_kind = 'profile'`, a Playing Tonight session photo must be a profile
   photo, and V128 makes the database hold one album per asset (unique index), backfills legacy
   kinds, and sends any approved profile asset that also sat in a private album back to the queue.
+- **Screened bytes can't be swapped** (review finding, 2026-11-25). The GCS upload URL lives 15
+  minutes, so it is signed create-only: `x-goog-if-generation-match: 0` is a signed header (GCS
+  requires every `x-goog-*` header a signed request uses to be in the canonical headers) and is in
+  the slot's `uploadHeaders`, which every client sends verbatim. A second PUT to the same URL gets
+  412, so the bytes Vision approved are the bytes served (GCS signed GETs and the CDN both read
+  `media/{assetId}`). The client treats a 412 on a create-only upload as "an earlier attempt already
+  stored it". Not done, by choice: pinning the object generation at complete time (an extra GCS
+  metadata call per upload) — overwriting now needs the service account itself. Local dev storage
+  still allows overwrite (local only). Web uploads need the bucket's CORS `responseHeader` list to
+  include `Content-Type` and `x-goog-if-generation-match` (PATH_TO_TESTERS A9).
+- **Object key:** Vision is given `gs://{bucket}/media/{assetId}`. Production keys carry no owner id
+  (`mediaObjectKey`); only the local/static dev signers use `users/{ownerId}/...`.
 - **Logging:** asset id and error type only; never the object path, a signed URL or the response
   body.
 - **Not covered:** SafeSearch is not a CSAM detector (hash matching is a separate provider, still
