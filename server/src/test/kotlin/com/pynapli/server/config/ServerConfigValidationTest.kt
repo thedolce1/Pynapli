@@ -230,6 +230,20 @@ class ServerConfigValidationTest {
     }
 
     @Test
+    fun anUnknownEnvironmentNameFailsStartup() {
+        // A typo'd production name must not silently skip the production-only guards.
+        assertEquals(
+            listOf("UNKNOWN_ENVIRONMENT"),
+            localConfig().copy(environment = "prodution").startupValidationIssues().map { it.code },
+        )
+        assertEquals(
+            listOf("UNKNOWN_ENVIRONMENT"),
+            localConfig().copy(environment = "").startupValidationIssues().map { it.code },
+        )
+        assertEquals(emptyList(), localConfig().copy(environment = " Local ").startupValidationIssues())
+    }
+
+    @Test
     fun moderationDefaultsToCloudVisionOnlyInStagingAndProduction() {
         assertEquals("cloud_vision", defaultMediaModerationProvider("staging"))
         assertEquals("cloud_vision", defaultMediaModerationProvider("prod"))

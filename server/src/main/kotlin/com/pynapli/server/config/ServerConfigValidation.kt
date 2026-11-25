@@ -51,6 +51,13 @@ internal fun ServerConfig.startupValidationIssues(): List<ServerConfigIssue> =
     }
 
 private fun MutableList<ServerConfigIssue>.validateCommonSettings(config: ServerConfig) {
+    // A typo ("prodution") would otherwise run as a non-production environment and skip every
+    // production-only guard.
+    require(
+        condition = config.environment.trim().lowercase() in KNOWN_ENVIRONMENTS,
+        code = "UNKNOWN_ENVIRONMENT",
+        message = "PYNAPLI_ENV must be one of local, test, staging, prod or production.",
+    )
     require(
         condition = config.port in 1..65_535,
         code = "INVALID_PORT",
@@ -412,6 +419,7 @@ private const val MINIMUM_RUNTIME_SECRET_LENGTH = 32
 
 private val PRODUCTION_LIKE_ENVIRONMENTS = setOf("staging", "prod", "production")
 private val PRODUCTION_ENVIRONMENTS = setOf("prod", "production")
+private val KNOWN_ENVIRONMENTS = setOf("local", "test") + PRODUCTION_LIKE_ENVIRONMENTS
 private val MEDIA_STORAGE_PROVIDERS = setOf("local", "gcs")
 private val MEDIA_MODERATION_PROVIDERS = setOf("manual", "cloud_vision")
 

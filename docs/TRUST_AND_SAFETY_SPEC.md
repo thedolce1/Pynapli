@@ -184,6 +184,11 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
   person). Cloud Vision without the media service account fails startup
   (`MEDIA_SIGNING_CREDENTIALS_REQUIRED`) rather than degrading to manual: ops should notice, and a
   silent fallback would leave new members photo-less with no alarm.
+- **Environment names are checked:** `PYNAPLI_ENV` must be `local`, `test`, `staging`, `prod` or
+  `production` (`UNKNOWN_ENVIRONMENT`), so a typo can't run production without its guards.
+- **Placeholder name:** a profile without a name reads "New member". Members can't choose it, or a
+  staff-looking name (Pynapli, Pynapli Support/Team/Admin/Moderator, Admin, Moderator, Support):
+  `DISPLAY_NAME_RESERVED`.
 - **What the member sees:** their own pending photo, labelled "Being reviewed · only you can see it",
   in the album manager, Edit profile, the onboarding photo step and their own profile preview. The
   server returns a pending photo only to its owner (owner album listing); every other viewer's query

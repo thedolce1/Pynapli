@@ -16,6 +16,7 @@ internal fun profileStatusFor(code: String): HttpStatusCode =
         "AGE_VERIFICATION_REQUIRED" -> HttpStatusCode.Forbidden
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_DISPLAY_NAME",
+        "DISPLAY_NAME_RESERVED",
         "INVALID_BIRTHDATE",
         "AGE_RESTRICTED",
         "INVALID_DISCOVERY_STYLE",

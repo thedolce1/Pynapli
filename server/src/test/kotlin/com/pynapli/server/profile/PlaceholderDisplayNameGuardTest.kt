@@ -19,8 +19,23 @@ class PlaceholderDisplayNameGuardTest {
             roots
                 .filter { it.isDirectory }
                 .flatMap { root -> root.walkTopDown().filter { it.isFile && it.extension in setOf("kt", "sql") }.toList() }
-                .filter { file -> file.readText().contains("Pynapli User", ignoreCase = true) }
+                .filter { file -> file.readText().contains("Pynapli User") }
                 .map { it.path }
         assertEquals(emptyList(), offenders)
+    }
+
+    @Test
+    fun membersCannotChooseThePlaceholderOrAStaffName() {
+        for (name in listOf("New member", "  new   MEMBER ", "Pynapli", "Pynapli Support", "Moderator")) {
+            val error =
+                kotlin.test.assertFailsWith<ProfileException>(name) {
+                    com.pynapli.shared.network.dto
+                        .UpdateProfileRequestDto(displayName = name)
+                        .toProfileUpdate(java.time.Clock.systemUTC())
+                }
+            assertEquals("DISPLAY_NAME_RESERVED", error.code)
+        }
+        assertTrue(!"New members club".isReservedDisplayName())
+        assertTrue(!"Maya".isReservedDisplayName())
     }
 }

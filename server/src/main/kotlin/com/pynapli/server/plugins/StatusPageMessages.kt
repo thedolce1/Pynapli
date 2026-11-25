@@ -40,6 +40,7 @@ internal fun userSafeMessage(code: String): String =
         "PASSWORD_TOO_COMMON" -> PasswordRules.TOO_COMMON_MESSAGE
         "PROFILE_NOT_FOUND" -> "Profile was not found."
         "INVALID_DISPLAY_NAME" -> "Display name must be 2 to 32 characters."
+        "DISPLAY_NAME_RESERVED" -> "That name is reserved. Choose another display name."
         "INVALID_BIRTHDATE" -> "Enter a valid birthdate."
         "AGE_RESTRICTED" -> "You must be 18 or older to use Pynapli."
         "BIRTHDATE_REQUIRED" -> "Add your birthdate before starting age verification."
