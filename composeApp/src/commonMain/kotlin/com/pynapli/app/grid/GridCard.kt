@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +34,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +51,7 @@ import com.pynapli.app.design.VerifiedBadge
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.DarkMode
+import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.shared.distance.formatDistanceForUnit
 
@@ -84,6 +87,7 @@ internal fun GridProfileTile(
         label = "gridTileHover",
     )
 
+    val locked = card.isLockedCard
     Box(
         modifier =
             modifier
@@ -92,10 +96,14 @@ internal fun GridProfileTile(
                 .clip(PynapliShape.SmallShape)
                 .hoverable(hoverInteractions)
                 .handCursor()
-                .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onClick)
+                // A locked tile opens the plans, never a profile (Section 3).
+                .clickable(onClickLabel = if (locked) "See plans" else "Open profile", role = Role.Button, onClick = onClick)
                 // Group the tile so a screen reader announces it as one item (name + presence +
-                // visiting + distance + partner/tonight badges) instead of several fragments.
-                .semantics(mergeDescendants = true) {}
+                // visiting + distance + partner/tonight badges) instead of several fragments. A
+                // locked tile leads with a neutral line and has no name to read.
+                .semantics(mergeDescendants = true) {
+                    if (locked) contentDescription = LOCKED_TILE_DESCRIPTION
+                }.then(if (locked) Modifier.testTag(GridCardTags.LOCKED_TILE) else Modifier)
                 // One neutral surface for every tile (plan G11): no colour chosen by list position,
                 // which made the same no-photo person change colour when the order changed.
                 .background(PynapliColors.SurfaceRaised),
@@ -122,9 +130,27 @@ internal fun GridProfileTile(
             )
         }
 
+        if (locked) {
+            // A light dim, not a blur: past the limit the faces are the upsell (Grindr-style cascade),
+            // the dim and the lock just say "not yet".
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(PynapliColors.Black.copy(alpha = 0.22f)),
+            )
+        }
+
         PhotoBottomScrim(heightFraction = 0.48f)
 
-        if (card.linkedPartner != null) {
+        if (locked) {
+            LockedTileBadge(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(7.dp),
+            )
+        } else if (card.linkedPartner != null) {
             LinkedPartnerBadge(
                 thumbnailUrl = card.linkedPartner.thumbnailUrl,
                 coupleVerified = card.coupleVerified,
@@ -196,16 +222,21 @@ private fun GridTileCaptionRow(
             OnlineDot(size = 7.dp, contentDescription = "Online")
         }
 
-        Text(
-            text = card.displayName,
-            color = PynapliColors.TextPrimary,
-            fontSize = GridTileTokens.NameTextSize,
-            fontWeight = FontWeight.SemiBold,
-            style = OnPhotoCaptionStyle,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
+        if (card.isLockedCard) {
+            // No name on a locked tile; the distance still sits at the end of the row.
+            Spacer(modifier = Modifier.weight(1f))
+        } else {
+            Text(
+                text = card.displayName,
+                color = PynapliColors.TextPrimary,
+                fontSize = GridTileTokens.NameTextSize,
+                fontWeight = FontWeight.SemiBold,
+                style = OnPhotoCaptionStyle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        }
 
         if (card.verified) {
             VerifiedBadge(size = 11.dp, modifier = Modifier.testTag(GridCardTags.verifiedTag(card.id)))
@@ -243,6 +274,9 @@ private fun GridTileCaptionRow(
 }
 
 internal object GridCardTags {
+    const val LOCKED_TILE: String = "grid-card-locked"
+    const val LOCKED_BADGE: String = "grid-card-locked-badge"
+
     fun visitingTag(cardId: String): String = "grid-card-visiting-$cardId"
 
     fun tonightTag(cardId: String): String = "grid-card-tonight-$cardId"
@@ -282,6 +316,31 @@ private fun NewMarker(modifier: Modifier = Modifier) {
                 .background(PynapliColors.Accent)
                 .padding(horizontal = 5.dp, vertical = 1.dp),
     )
+}
+
+/**
+ * The locked tile's mark (Section 3): a small gold lock on the dark on-photo disc, top-right where an
+ * unlocked tile would show the partner mini. Gold because it sells a plan (DESIGN_SPEC accent rule).
+ */
+@Composable
+private fun LockedTileBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier =
+            modifier
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(PynapliColors.OnPhotoBadgeFill)
+                .testTag(GridCardTags.LOCKED_BADGE),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            // The tile's own description already says it is locked.
+            contentDescription = null,
+            tint = PynapliColors.Accent,
+            modifier = Modifier.size(11.dp),
+        )
+    }
 }
 
 @Composable
