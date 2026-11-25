@@ -165,8 +165,8 @@ data class GridFilters(
 
         /**
          * Whether the viewer's plan unlocks paid Grid filters, from the client's view of the plan:
-         * Social and Select do, Free does not, null (not loaded yet) is unknown. The server's
-         * EntitlementPolicy stays authoritative; this only drives locks and skips a refused query.
+         * Social and Select do, Free does not, null (not loaded yet) is unknown. Display only (the
+         * sheet's locks): the server's EntitlementPolicy decides every query.
          */
         fun advancedFiltersAllowedFor(tier: String?): Boolean? =
             when (tier) {

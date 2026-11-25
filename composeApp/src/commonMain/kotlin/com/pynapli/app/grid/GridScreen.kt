@@ -52,8 +52,8 @@ fun GridScreen(
     favoritesStateHolder: FavoritesStateHolder? = null,
     // Travel mode is a Select perk, so its paywall opens on Select rather than the plan list.
     onOpenTravelStore: () -> Unit = onOpenStore,
-    // From the viewer's plan (Social/Select true, Free false, null until it loads); the server stays
-    // authoritative, this only shows locks and skips a refused round trip.
+    // From the viewer's plan (Social/Select true, Free false, null until it loads). Display only:
+    // it puts locks on paid chips; the server decides what a query may use.
     advancedFiltersAllowed: Boolean? = null,
 ) {
     var travelSheetVisible by remember { mutableStateOf(false) }
@@ -87,8 +87,6 @@ fun GridScreen(
         stateHolder.setOnScreen(true)
         onDispose { stateHolder.setOnScreen(false) }
     }
-
-    LaunchedEffect(stateHolder, advancedFiltersAllowed) { stateHolder.setAdvancedFiltersAllowed(advancedFiltersAllowed) }
 
     // A paid filter was taken out (only that one): show the plans.
     val openStore by rememberUpdatedState(onOpenStore)

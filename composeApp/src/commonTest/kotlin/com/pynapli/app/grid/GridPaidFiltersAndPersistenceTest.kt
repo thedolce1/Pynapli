@@ -2,9 +2,11 @@ package com.pynapli.app.grid
 
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,51 +37,87 @@ class GridPaidFiltersAndPersistenceTest {
     }
 
     @Test
-    fun aKnownFreeViewerChoosingAPaidFilterKeepsTheRestAndOpensThePaywall() =
-        runTest {
-            val repository = RecordingGridFeedRepository()
-            val holder = GridStateHolder(repository)
-            val events = mutableListOf<GridEvent>()
-            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { holder.events.toList(events) }
-            holder.setAdvancedFiltersAllowed(false)
-            holder.load()
-
-            holder.applyFilters(paidAndFree)
-
-            val asked = repository.requests.last()
-            assertTrue(asked.online, "the free choices still apply")
-            assertEquals(setOf(LogisticsTag.PublicMeetFirst), asked.logisticsTags)
-            assertTrue(asked.lifestyleTags.isEmpty(), "only the paid filter is cleared")
-            assertEquals(2, repository.requests.size, "no refused round trip")
-            val state = holder.state.value
-            assertEquals(asked, state.filters)
-            assertEquals(PAID_FILTER_PAYWALL_MESSAGE, state.paywallMessage, "the prompt stays after the answer")
-            assertEquals(SubscriptionTier.SOCIAL, state.paywallUpgradeTier)
-            assertEquals(listOf<GridEvent>(GridEvent.OpenPaywall), events)
-        }
-
-    @Test
-    fun aServerRefusalAlsoClearsOnlyThePaidFilterAndReasksForTheRest() =
+    fun aRefusedPaidFilterClearsOnlyItselfReasksForTheRestAndOpensThePaywall() =
         runTest {
             val repository = RecordingGridFeedRepository(refuseAdvanced = true)
             val holder = GridStateHolder(repository)
             val events = mutableListOf<GridEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { holder.events.toList(events) }
-            // Entitlement unknown (plan not loaded): the server decides.
             holder.load()
 
             holder.applyFilters(paidAndFree)
 
             assertEquals(3, repository.requests.size, "first load, the refused ask, the re-ask")
             val reasked = repository.requests.last()
-            assertTrue(reasked.online)
-            assertFalse(reasked.requiresAdvancedEntitlement)
+            assertTrue(reasked.online, "the free choices still apply")
+            assertEquals(setOf(LogisticsTag.PublicMeetFirst), reasked.logisticsTags)
+            assertTrue(reasked.lifestyleTags.isEmpty(), "only the paid filter is cleared")
             val state = holder.state.value
             assertEquals(reasked, state.filters, "not reset to defaults")
-            assertEquals(PAID_FILTER_PAYWALL_MESSAGE, state.paywallMessage)
+            assertEquals(PAID_FILTER_PAYWALL_MESSAGE, state.paywallMessage, "the prompt stays after the re-ask lands")
+            assertEquals(SubscriptionTier.SOCIAL, state.paywallUpgradeTier)
             assertNull(state.errorMessage)
             assertEquals(listOf("a"), state.cards.map { it.id })
             assertEquals(listOf<GridEvent>(GridEvent.OpenPaywall), events)
+        }
+
+    @Test
+    fun aRestoredPaidFilterAfterAPlanLapsedIsStrippedWithoutPoppingThePaywall() =
+        runTest {
+            val store = InMemoryGridFilterStore()
+            store.save(paidAndFree)
+            val repository = RecordingGridFeedRepository(refuseAdvanced = true)
+            val holder = GridStateHolder(repository, filterStore = store)
+            val events = mutableListOf<GridEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { holder.events.toList(events) }
+
+            holder.primeFromCacheThenLoad()
+
+            assertFalse(holder.state.value.filters.requiresAdvancedEntitlement)
+            assertTrue(holder.state.value.filters.online)
+            assertEquals(PAID_FILTER_PAYWALL_MESSAGE, holder.state.value.paywallMessage, "the row still says why")
+            assertTrue(events.isEmpty(), "nobody tapped anything: no paywall sheet")
+            assertFalse(store.saved!!.requiresAdvancedEntitlement, "the stripped set is what is remembered")
+        }
+
+    @Test
+    fun aRefusalThatArrivesAfterANewerChoiceChangesNothing() =
+        runTest {
+            val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val repository = RecordingGridFeedRepository(refuseAdvanced = true, gateRefusal = gate)
+            val holder = GridStateHolder(repository)
+            holder.load()
+
+            val refused = async { holder.applyFilters(paidAndFree) }
+            runCurrent()
+            // The viewer changes their mind before the refusal lands.
+            holder.applyFilters(GridFilters(verified = true))
+            gate.complete(Unit)
+            refused.await()
+
+            assertEquals(GridFilters(verified = true), holder.state.value.filters, "the old refusal never writes its filters")
+            assertNull(holder.state.value.paywallMessage)
+            assertNull(holder.state.value.errorCode)
+        }
+
+    @Test
+    fun aRefusalThatArrivesAfterSignOutNeverReachesTheNextAccount() =
+        runTest {
+            val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val store = InMemoryGridFilterStore()
+            val repository = RecordingGridFeedRepository(refuseAdvanced = true, gateRefusal = gate)
+            val holder = GridStateHolder(repository, filterStore = store)
+            holder.load()
+
+            val refused = async { holder.applyFilters(paidAndFree) }
+            runCurrent()
+            holder.clearForSignOut()
+            gate.complete(Unit)
+            refused.await()
+
+            assertEquals(GridFilters.defaults, holder.state.value.filters)
+            assertNull(holder.state.value.paywallMessage)
+            assertNull(store.saved)
         }
 
     @Test
@@ -126,6 +164,8 @@ class GridPaidFiltersAndPersistenceTest {
 /** Records the filters each first-page request asked with; optionally refuses paid filters like the server. */
 private class RecordingGridFeedRepository(
     private val refuseAdvanced: Boolean = false,
+    // When set, a refusal waits for it (so a test can act while the refused request is on the wire).
+    private val gateRefusal: kotlinx.coroutines.CompletableDeferred<Unit>? = null,
 ) : GridFeedRepository {
     val requests = mutableListOf<GridFilters>()
 
@@ -135,6 +175,7 @@ private class RecordingGridFeedRepository(
     ): GridFeedUi {
         requests += filters
         if (refuseAdvanced && filters.requiresAdvancedEntitlement) {
+            gateRefusal?.await()
             throw GridFeedException(code = "ENTITLEMENT_REQUIRED", message = "Upgrade required")
         }
         return GridFeedUi(cards = listOf(GridProfileCardUi(id = "a", displayName = "A", online = false, distanceLabel = null, tone = GridCardTone.Warm)))
