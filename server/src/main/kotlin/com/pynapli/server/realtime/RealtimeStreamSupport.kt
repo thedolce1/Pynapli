@@ -79,7 +79,9 @@ suspend fun DefaultWebSocketServerSession.authenticateStream(
         while (true) {
             withTimeoutOrNull(recheckEveryMillis) { recheckNow.receive() }
             try {
-                authService.authenticate(token)
+                // A session check, not activity (privacy review F3): an open socket marks you online
+                // when it opens, never on its re-auth tick, so a forgotten socket can't keep the dot.
+                authService.authenticateWithoutActivity(token)
             } catch (e: AuthException) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, e.code))
                 return@launch

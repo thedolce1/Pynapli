@@ -224,6 +224,7 @@ internal fun buildCoreDependencies(
             revocationRelay = redisCache.realtimeRelay,
             onEmailSignIn = contactBlockSettling::atSignIn,
             onAuthenticated = markOnlineOnAuthenticated,
+            onPresenceEnded = presenceService::endPresence,
         )
     val contactBlockService =
         ContactBlockService(

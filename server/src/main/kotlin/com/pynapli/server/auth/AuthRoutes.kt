@@ -57,16 +57,17 @@ fun Application.configureAuthRoutes(
                     call.respond(devices.list(user.id, token))
                 }
 
+                // Signing sessions out is not activity (privacy review F3): no presence refresh.
                 delete("/sessions/{sessionId}") {
                     val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
-                    val user = authService.authenticate(token)
+                    val user = authService.authenticateWithoutActivity(token)
                     devices.signOut(user.id, token, call.parameters["sessionId"].orEmpty())
                     call.respond(SignedOutDevicesDto(signedOut = 1))
                 }
 
                 post("/sessions/sign-out-others") {
                     val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
-                    val user = authService.authenticate(token)
+                    val user = authService.authenticateWithoutActivity(token)
                     call.respond(SignedOutDevicesDto(signedOut = devices.signOutOthers(user.id, token)))
                 }
             }

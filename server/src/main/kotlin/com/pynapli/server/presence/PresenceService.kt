@@ -79,6 +79,16 @@ class PresenceService(
         }
     }
 
+    /**
+     * Logout or account deletion (privacy review F3): delete the online key now and release the refresh
+     * claim. Broadcasts nothing itself; the offline scanner later sends its ordinary jittered,
+     * eligibility-gated "went offline" (nothing at all for a deleted account).
+     */
+    suspend fun endPresence(userId: UUID) {
+        lastRefreshed.remove(userId)
+        repository.clear(userId)
+    }
+
     suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = profile("presence.repository.onlineUserIds") { repository.onlineUserIds(userIds) }
 
     companion object {

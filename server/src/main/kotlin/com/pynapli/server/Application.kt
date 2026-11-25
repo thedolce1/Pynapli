@@ -118,7 +118,8 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
             trustedProxyHops = dependencies.config.trustedProxyHops,
             perIpLimits = dependencies.config.environment != "local",
             // Signed-in limits follow the account, so a fresh sign-in doesn't reset them.
-            resolveUserId = { token -> runCatching { dependencies.authService.authenticate(token).id }.getOrNull() },
+            // A budget lookup, not activity: it runs for logout and deletion too (privacy review F3).
+            resolveUserId = { token -> runCatching { dependencies.authService.authenticateWithoutActivity(token).id }.getOrNull() },
         )
     }
     configureRequestMediaBaseUrl()
