@@ -164,7 +164,7 @@ class MediaServiceTest {
         }
 
     @Test
-    fun severeSignalOnAProfilePhotoHoldsAndEscalatesWithoutRemoving() =
+    fun severeSignalOnAProfilePhotoOnlyHoldsIt() =
         runBlocking {
             val ownerId = UUID.randomUUID()
             val escalationPublisher = RecordingMediaModerationEscalationPublisher()
@@ -178,9 +178,10 @@ class MediaServiceTest {
 
             val item = service.uploadAndComplete(ownerId, albumKind = "profile")
 
+            assertEquals("uploaded", item.mediaAsset.processingStatus)
             assertEquals("pending", item.mediaAsset.moderationStatus)
-            assertEquals(item.mediaAsset.mediaAssetId, escalationPublisher.mediaAssetId.toString())
-            assertEquals("profile", escalationPublisher.albumKind)
+            // Approve or queue only: no automatic report or risk points on a profile photo.
+            assertEquals(null, escalationPublisher.mediaAssetId)
         }
 
     @Test

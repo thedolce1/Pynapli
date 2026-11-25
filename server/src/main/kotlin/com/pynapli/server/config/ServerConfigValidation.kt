@@ -68,14 +68,16 @@ private fun MutableList<ServerConfigIssue>.validateCommonSettings(config: Server
     )
     // A typo in a ceiling must fail startup, never fall back to a looser or stricter default.
     // VERY_LIKELY is refused: it would switch screening off for that category.
+    // Violence stops at POSSIBLE: LIKELY is always the severe signal, so a LIKELY ceiling would be inert.
     require(
         condition =
-            listOf(config.mediaModerationMaxAdult, config.mediaModerationMaxViolence, config.mediaModerationMaxRacy)
-                .all { it.trim().uppercase() in MEDIA_MODERATION_CEILINGS },
+            listOf(config.mediaModerationMaxAdult, config.mediaModerationMaxRacy)
+                .all { it.trim().uppercase() in MEDIA_MODERATION_CEILINGS } &&
+                config.mediaModerationMaxViolence.trim().uppercase() in MEDIA_MODERATION_CEILINGS - "LIKELY",
         code = "INVALID_MEDIA_MODERATION_THRESHOLD",
         message =
-            "PYNAPLI_MEDIA_MODERATION_MAX_ADULT/_MAX_VIOLENCE/_MAX_RACY must each be one of " +
-                "VERY_UNLIKELY, UNLIKELY, POSSIBLE or LIKELY.",
+            "PYNAPLI_MEDIA_MODERATION_MAX_ADULT/_MAX_RACY must each be VERY_UNLIKELY, UNLIKELY, POSSIBLE or LIKELY; " +
+                "PYNAPLI_MEDIA_MODERATION_MAX_VIOLENCE must be VERY_UNLIKELY, UNLIKELY or POSSIBLE.",
     )
     require(
         condition = config.mediaDeliveryProvider.lowercase() in MEDIA_DELIVERY_PROVIDERS,

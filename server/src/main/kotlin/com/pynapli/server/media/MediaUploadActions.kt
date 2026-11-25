@@ -150,13 +150,10 @@ internal class MediaUploadActions(
 
             is MediaModerationDecision.Rejected ->
                 when {
-                    // A profile photo is never removed by an automated decision (TRUST_AND_SAFETY_SPEC
-                    // "Photo pre-screening"): it stays hidden in the human queue (uploaded/pending), and
-                    // a severe signal still files the escalation report so a moderator sees it.
-                    albumKind == "profile" -> {
-                        if (decision.severity == MediaModerationSeverity.SEVERE) escalate(ownerUserId, mediaAssetId, albumKind, decision)
-                        uploadedAsset
-                    }
+                    // A profile photo is only ever approved or held (TRUST_AND_SAFETY_SPEC "Photo
+                    // pre-screening"): it stays hidden in the human queue (uploaded/pending). No removal,
+                    // no automatic report or risk points; the moderator's decision is the enforcement.
+                    albumKind == "profile" -> uploadedAsset
 
                     albumKind == "private" && decision.severity != MediaModerationSeverity.SEVERE ->
                         repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset

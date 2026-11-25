@@ -220,6 +220,7 @@ class ServerConfigValidationTest {
             listOf(
                 localConfig().copy(mediaModerationMaxAdult = "UNLIKLEY"),
                 localConfig().copy(mediaModerationMaxViolence = "VERY_LIKELY"),
+                localConfig().copy(mediaModerationMaxViolence = "LIKELY"),
                 localConfig().copy(mediaModerationMaxRacy = "UNKNOWN"),
                 validStagingConfig().copy(mediaModerationMaxRacy = ""),
             )

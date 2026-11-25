@@ -170,9 +170,9 @@ internal fun parseSafeSearchResponse(body: String): SafeSearchAnnotation? {
  * - **PendingReview** for anything above a ceiling, and for an UNKNOWN or missing category (fail
  *   closed). Nothing is removed on these signals; a person decides.
  * - **Rejected(SEVERE)** only when violence >= [severeViolenceAtOrAbove] (default LIKELY). This keeps
- *   the shipped private-album / chat-media safety path (remove + system report). For a profile photo
- *   `MediaUploadActions` never removes on a scanner decision: it holds the photo for the human queue
- *   and still files the escalation report.
+ *   the shipped private-album safety path (remove + system report) and the chat-media refusal. For
+ *   a profile photo `MediaUploadActions` treats any Rejected as a hold for the human queue: no
+ *   removal, no automatic report.
  *
  * `medical` and `spoof` are ignored.
  */
@@ -207,7 +207,8 @@ data class SafeSearchPolicy(
 
         /**
          * Ceilings an operator may configure. VERY_LIKELY would switch a category's screening off and
-         * UNKNOWN is not a level, so neither is accepted.
+         * UNKNOWN is not a level, so neither is accepted. Violence is further capped at POSSIBLE by
+         * startup validation: LIKELY is always the severe signal, so a LIKELY ceiling would do nothing.
          */
         val CONFIGURABLE_CEILINGS: Set<SafeSearchLikelihood> =
             setOf(

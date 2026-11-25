@@ -173,7 +173,7 @@ internal fun ProfileHero(
             }
         }
 
-        if (photos.getOrNull(pagerState.currentPage) in beingReviewedPhotoUrls) {
+        if (photos.getOrNull(pagerState.currentPage)?.let { it in beingReviewedPhotoUrls } == true) {
             Text(
                 text = BEING_REVIEWED_LABEL,
                 color = PynapliColors.OnPhotoPrimary,

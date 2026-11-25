@@ -154,16 +154,19 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
   - **Held for a person** (uploaded/pending, in `GET /v1/admin/media/pending`) for anything above a
     ceiling, an `UNKNOWN` or missing rating, any scanner error, a per-image error, a non-image, or a
     timeout. **Fail closed:** a scan we can't trust never approves.
-  - **Never auto-rejected.** No SafeSearch result removes a profile photo; a moderator approves or
-    rejects it. Violence ≥ `LIKELY` is the one severe signal: on a profile photo it is held *and*
-    files a system safety report and risk event (the existing escalation path), on a private-album or
-    chat photo it removes the photo and escalates, as before. Adult/racy results never change private
-    or chat media.
+  - **Never auto-rejected.** No SafeSearch result removes a profile photo or files a report or risk
+    points against its owner; a moderator approves or rejects it. Violence ≥ `LIKELY` is the one
+    severe signal, kept for the consent-gated zones as before: a private-album photo is removed and a
+    system safety report plus risk event is filed; a chat photo's send is refused (no report). Adult
+    and racy results never change private or chat media.
+  - **Every** album and chat photo is scanned (the scanner does not know the album), so private and
+    chat photos also reach Vision, and a chat send waits on the scan (up to 8 s). Founder/legal item:
+    the privacy policy must name Google Cloud Vision as a processor of uploaded photos.
 - **Decided defaults (founder deferred; the spec was silent on numbers):** the ceilings above. A
   lifestyle app's public photos are often racy, so racy is allowed up to `LIKELY`; adult content is
   held from `POSSIBLE`. They are config, validated at startup (a typo or `VERY_LIKELY` refuses to
-  start): `PYNAPLI_MEDIA_MODERATION_MAX_ADULT` (default `UNLIKELY`), `_MAX_VIOLENCE` (`POSSIBLE`),
-  `_MAX_RACY` (`LIKELY`). Tune only after the founder's live run on real images (PATH_TO_TESTERS A9).
+  start): `PYNAPLI_MEDIA_MODERATION_MAX_ADULT` (default `UNLIKELY`), `_MAX_VIOLENCE` (`POSSIBLE`, and
+  at most `POSSIBLE`, since `LIKELY` is the severe signal), `_MAX_RACY` (`LIKELY`). Tune only after the founder's live run on real images (PATH_TO_TESTERS A9).
 - **Environments:** staging and production default to `cloud_vision`; local/test default to `manual`
   (and local auto-approves uploads). Production refuses `manual` at startup
   (`MEDIA_MODERATION_MANUAL_FORBIDDEN`) unless `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true`
