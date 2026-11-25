@@ -179,8 +179,10 @@ internal fun buildCoreDependencies(
             label = "presence",
         )
     val markOnlineOnAuthenticated: (java.util.UUID) -> Unit = { userId ->
-        if (presenceService.claimRefresh(userId)) {
-            presenceRefreshLauncher.launch { runCatching { presenceService.refreshOnline(userId) } }
+        // The activity time is taken now, on the request, so a refresh still queued when the member
+        // logs out is recognised as older than the logout and writes nothing (privacy review F3).
+        presenceService.claimRefreshAt(userId)?.let { activityAt ->
+            presenceRefreshLauncher.launch { runCatching { presenceService.refreshOnline(userId, activityAt) } }
         }
     }
     val presenceOfflineScanner =

@@ -9,6 +9,18 @@ interface PresenceRepository {
 
     /** Drops the online key at once (logout, account deletion). */
     suspend fun clear(userId: UUID) {}
+
+    /**
+     * Short-lived "presence ended at" tombstone (logout, account deletion), so activity from before it
+     * that is still queued can't bring presence back (PresenceService.refreshOnline).
+     */
+    suspend fun markPresenceEnded(
+        userId: UUID,
+        at: java.time.Instant,
+    ) {}
+
+    /** The tombstone's time, or null when there is none (never set, or expired). */
+    suspend fun presenceEndedAt(userId: UUID): java.time.Instant? = null
 }
 
 /**

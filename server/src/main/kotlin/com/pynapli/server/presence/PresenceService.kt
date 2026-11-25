@@ -37,7 +37,13 @@ class PresenceService(
      * Claims this user's next refresh slot without suspending: true at most once per
      * [refreshInterval]. Lets the auth hook skip launching any work for the common case.
      */
-    fun claimRefresh(userId: UUID): Boolean {
+    fun claimRefresh(userId: UUID): Boolean = claimRefreshAt(userId) != null
+
+    /**
+     * [claimRefresh] that returns when the activity was claimed (null when not claimed). Pass it to
+     * [refreshOnline] as `activityAt`, so a refresh queued before a logout can be recognised as stale.
+     */
+    fun claimRefreshAt(userId: UUID): Instant? {
         val now = clock.instant()
         if (lastRefreshed.size > MAX_TRACKED_USERS) lastRefreshed.clear()
         var claimed = false
@@ -49,18 +55,33 @@ class PresenceService(
                 previous
             }
         }
-        return claimed
+        return now.takeIf { claimed }
     }
 
     /** Throttled mark-online for request paths. Best-effort: a presence failure never fails the caller. */
     suspend fun touch(userId: UUID) {
-        if (!claimRefresh(userId)) return
-        runCatching { refreshOnline(userId) }
+        val activityAt = claimRefreshAt(userId) ?: return
+        runCatching { refreshOnline(userId, activityAt) }
     }
 
-    /** Unthrottled mark-online. Prefer [touch] on request paths. */
-    suspend fun refreshOnline(userId: UUID) {
+    /**
+     * Unthrottled mark-online for activity at [activityAt]. Prefer [touch] on request paths.
+     *
+     * Privacy review F3: activity from before the member's last logout or account deletion (a refresh
+     * queued on the background launcher that runs after [endPresence]) must never bring presence back.
+     * The tombstone is checked before the write and again after it; if it appeared in between, the key
+     * just written is deleted again, and in either case nothing is recorded or broadcast.
+     */
+    suspend fun refreshOnline(
+        userId: UUID,
+        activityAt: Instant = clock.instant(),
+    ) {
+        if (endedSince(userId, activityAt)) return
         val state = profile("presence.repository.refresh") { repository.heartbeat(userId) }
+        if (endedSince(userId, activityAt)) {
+            repository.clear(userId)
+            return
+        }
         profile("presence.trackerRefresh") { onlineTracker?.markOnline(userId) }
         profile("presence.lastActive") { lastActiveRecorder?.record(userId) }
         // Fail closed: if the privacy check errors, say nothing.
@@ -86,7 +107,19 @@ class PresenceService(
      */
     suspend fun endPresence(userId: UUID) {
         lastRefreshed.remove(userId)
+        // Tombstone first, then the key: a refresh racing this sees one or the other (refreshOnline).
+        repository.markPresenceEnded(userId, clock.instant())
         repository.clear(userId)
+    }
+
+    /** True when presence ended (logout, deletion) at or after [activityAt]: the activity is stale. */
+    private suspend fun endedSince(
+        userId: UUID,
+        activityAt: Instant,
+    ): Boolean {
+        // Fails closed: if the tombstone can't be read, don't resurrect presence.
+        val endedAt = runCatching { repository.presenceEndedAt(userId) }.getOrElse { return true } ?: return false
+        return !activityAt.isAfter(endedAt)
     }
 
     suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = profile("presence.repository.onlineUserIds") { repository.onlineUserIds(userIds) }

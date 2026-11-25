@@ -53,7 +53,7 @@ fun Application.configureAuthRoutes(
             signedInDevicesService?.let { devices ->
                 get("/sessions") {
                     val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
-                    val user = authService.authenticate(token)
+                    val user = authService.authenticateWithoutActivity(token)
                     call.respond(devices.list(user.id, token))
                 }
 
@@ -88,7 +88,7 @@ fun Application.configureAuthRoutes(
 
                 post("/password/change") {
                     val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
-                    val user = authService.authenticate(token)
+                    val user = authService.authenticateWithoutActivity(token)
                     val request = call.receive<PasswordChangeDto>()
                     recovery.changePassword(user.id, token, request.currentPassword, request.newPassword)
                     call.respond(PasswordChangedDto(changed = true))

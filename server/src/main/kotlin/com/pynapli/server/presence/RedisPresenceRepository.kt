@@ -49,7 +49,26 @@ class RedisPresenceRepository(
         }
     }
 
+    override suspend fun markPresenceEnded(
+        userId: UUID,
+        at: java.time.Instant,
+    ) {
+        withContext(Dispatchers.IO) {
+            profileBlocking("redis.presence.endedSet") {
+                redisCache.commands.setex(endedKeyFor(userId), ENDED_TOMBSTONE_TTL_SECONDS, at.toString())
+            }
+        }
+    }
+
+    override suspend fun presenceEndedAt(userId: UUID): java.time.Instant? =
+        withContext(Dispatchers.IO) {
+            profileBlocking("redis.presence.endedGet") { redisCache.commands.get(endedKeyFor(userId)) }
+                ?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+        }
+
     private fun keyFor(userId: UUID): String = "presence:user:$userId"
+
+    private fun endedKeyFor(userId: UUID): String = "presence:ended:$userId"
 
     companion object {
         /**
@@ -57,5 +76,11 @@ class RedisPresenceRepository(
          * tick or heartbeat (GRID_IMPLEMENTATION_SPEC "Presence States"; plan G2: 15 minutes).
          */
         const val ONLINE_TTL_SECONDS = 900
+
+        /**
+         * How long a logout/deletion tombstone lives: longer than any refresh can sit on the bounded
+         * background launcher, short enough to leave no lasting trace.
+         */
+        const val ENDED_TOMBSTONE_TTL_SECONDS = 120L
     }
 }
