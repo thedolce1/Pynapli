@@ -37,6 +37,10 @@ internal data class GridHydration(
     val linkedPartnerVerified: Boolean = false,
     // Plan G4 Fresh rule (GridActivitySql.fresh): drives the card's "New" marker.
     val fresh: Boolean = false,
+    // Plan G11: last activity (GridActivitySql.lastActiveAt) for the server-side activeAgo bucket,
+    // and whether the member hides it. Never serialized.
+    val lastActiveAt: Instant? = null,
+    val activityHidden: Boolean = false,
 ) {
     /** Couple verified: both linked partners verified, and the partner is visible to this viewer. */
     val coupleVerified: Boolean get() = verified && linkedPartnerUserId != null && linkedPartnerVerified

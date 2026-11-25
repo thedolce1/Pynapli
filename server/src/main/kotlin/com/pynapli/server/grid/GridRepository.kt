@@ -66,6 +66,9 @@ data class GridCardRecord(
     val tonightActive: Boolean = false,
     /** Plan G4 Fresh rule, hydrated per page like [tonightActive]. */
     val fresh: Boolean = false,
+    /** Plan G11 inputs to the card's activeAgo key; the instant itself never leaves the server. */
+    val lastActiveAt: java.time.Instant? = null,
+    val activityHidden: Boolean = false,
 )
 
 /** Keyset position: (boostBucket, orderBucket, orderTiebreak, userId). Travels only inside a sealed cursor. */

@@ -41,9 +41,14 @@ internal fun Connection.hydrateGridCards(
                      AND ts.expires_at > now()
                ) AS tonight_active,
                -- Plan G4 "New" marker: the same Fresh rule as the freshOnly filter.
-               COALESCE(${GridActivitySql.fresh(user = "hu", tag = "hfresh")}, false) AS fresh
+               COALESCE(${GridActivitySql.fresh(user = "hu", tag = "hfresh")}, false) AS fresh,
+               -- Plan G11: only ever bucketed in Kotlin (GridActiveAgo); never returned as a time.
+               ${GridActivitySql.lastActiveAt(user = "hu", tag = "hlast")} AS last_active_at,
+               -- The member hides their activity (incognito, the only such setting today): no key.
+               COALESCE(hds.incognito, true) AS activity_hidden
         FROM unnest(?::uuid[]) AS pc(user_id)
         LEFT JOIN users hu ON hu.id = pc.user_id
+        LEFT JOIN discovery_settings hds ON hds.user_id = pc.user_id
         LEFT JOIN LATERAL (
             SELECT mai.media_asset_id
             FROM media_albums ma
@@ -168,6 +173,8 @@ internal fun Connection.hydrateGridCards(
                             verified = rs.getBoolean("verified"),
                             linkedPartnerVerified = rs.getBoolean("linked_partner_verified"),
                             fresh = rs.getBoolean("fresh"),
+                            lastActiveAt = rs.getTimestamp("last_active_at")?.toInstant(),
+                            activityHidden = rs.getBoolean("activity_hidden"),
                         ),
                     )
                 }

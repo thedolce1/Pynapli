@@ -76,6 +76,10 @@ data class GridCardDto(
     val coupleVerified: Boolean = false,
     // "New" marker (plan G4): server-computed Fresh rule, the same one behind the freshOnly filter.
     val fresh: Boolean = false,
+    // Coarse activity key (plan G11), server-computed, never a timestamp: one of "online", "15m",
+    // "1h", "3h", "today", "week" (each covers the window up to its bound after the previous one), or
+    // null when older than 7 days, never seen, or the member hides their activity (incognito).
+    val activeAgo: String? = null,
 )
 
 /**

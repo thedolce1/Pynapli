@@ -9,6 +9,7 @@ import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.presence.GridActiveAgo
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
@@ -21,6 +22,9 @@ import com.pynapli.shared.network.dto.GridCardDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 
 class GridService(
@@ -36,6 +40,8 @@ class GridService(
     // "Hide from people you know": people hiding from this viewer, applied with blocks and hides
     // after the shared ranked window (never inside it).
     private val contactBlockVisibility: ContactBlockVisibility? = null,
+    // Buckets the cards' activeAgo keys (plan G11).
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
@@ -251,7 +257,8 @@ class GridService(
         // the last kept card; otherwise it resumes past the fetched window (the repository anchor).
         val pageCards = filteredCards.take(limit)
         val moreInFetchedWindow = filteredCards.size > limit
-        val dtoCards = profile("grid.dto") { pageCards.map { it.toGridCardDto(onlineUserIds, mediaAssetUrlResolver) } }
+        val now = clock.instant()
+        val dtoCards = profile("grid.dto") { pageCards.map { it.toGridCardDto(onlineUserIds, mediaAssetUrlResolver, now) } }
         val seenCount = (cursor?.seenCount ?: 0) + dtoCards.size
         val effectiveNextAnchor =
             when {
@@ -341,6 +348,7 @@ private fun EntitlementPolicy.remainingGridResults(seenCount: Int): Int =
 internal fun GridCardRecord.toGridCardDto(
     onlineUserIds: Set<UUID>,
     mediaAssetUrlResolver: MediaAssetUrlResolver?,
+    now: Instant = Instant.now(),
 ): GridCardDto =
     GridCardDto(
         userId = userId.toString(),
@@ -367,4 +375,10 @@ internal fun GridCardRecord.toGridCardDto(
         verified = verified,
         coupleVerified = coupleVerified,
         fresh = fresh,
+        activeAgo =
+            GridActiveAgo.keyFor(
+                online = userId in onlineUserIds,
+                activityHidden = activityHidden,
+                sinceLastActive = lastActiveAt?.let { Duration.between(it, now) },
+            ),
     )
