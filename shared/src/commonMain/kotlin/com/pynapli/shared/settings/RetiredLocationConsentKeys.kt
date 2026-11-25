@@ -8,7 +8,7 @@ import com.pynapli.shared.storage.PynapliDatabase
  * these on launch so no account id lingers on the device.
  */
 object RetiredLocationConsentKeys {
-    /** SQLDelight `app_meta` keys (Android, iOS). */
+    /** SQLDelight `app_meta` keys (written only by Android; iOS never stored them). */
     val appMetaKeys: List<String> = listOf("location.sharing-consent.v1", "location.sharing-consent.v2")
 
     /** Browser `localStorage` keys (web). */

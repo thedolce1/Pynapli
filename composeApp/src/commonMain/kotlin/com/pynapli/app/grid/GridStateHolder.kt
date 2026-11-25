@@ -312,7 +312,7 @@ class GridStateHolder(
     /**
      * Whether the server holds a location for this account, as the last live first-page answer this
      * session showed it: true after a grid came back, false after `LOCATION_REQUIRED`, null before
-     * any live answer (cached cards say nothing). Read by the location sharing gate's rule (b); no
+     * any live answer (cached cards say nothing). Read by the silent location refresh rule (SilentLocationRefreshRule); no
      * location is echoed to the client for this.
      */
     val serverHasLocation: StateFlow<Boolean?> = _serverHasLocation.asStateFlow()

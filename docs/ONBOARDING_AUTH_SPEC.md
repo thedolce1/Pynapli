@@ -349,7 +349,10 @@ Location:
     "Skip for now" has no server location, so it never runs for them, even when another account on
     the device granted location. "Skip" after an accepted Share is not reachable in the stepper: a
     Share auto-continues from the Location step, back is consumed from Location and Profile, and a
-    resumed sign-up reopens on Profile.
+    resumed sign-up reopens on Profile. One exception: a Share that reached the server but whose reply
+    was lost (a timeout) leaves the member on Location with a server location; tapping Skip then still
+    leaves the silent refresh on. Accepted: the member did tap Share, and turning sharing off would need
+    a server-side "clear my location" that does not exist yet.
 - A plain first refusal keeps the existing copy and the share button, which can ask again.
 
 Notifications:
