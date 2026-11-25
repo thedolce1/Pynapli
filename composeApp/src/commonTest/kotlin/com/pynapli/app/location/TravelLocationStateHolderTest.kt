@@ -43,7 +43,11 @@ class TravelLocationStateHolderTest {
             val repository = FakeRepository(currentResult = AppResult.Success(activeInVegas))
             val stateHolder = TravelLocationStateHolder(repository)
             stateHolder.load()
-            assertEquals("Las Vegas", stateHolder.state.value.current?.city)
+            assertEquals(
+                "Las Vegas",
+                stateHolder.state.value.current
+                    ?.city,
+            )
 
             // Account A's refetch is on the wire when A signs out.
             repository.currentGate = gate

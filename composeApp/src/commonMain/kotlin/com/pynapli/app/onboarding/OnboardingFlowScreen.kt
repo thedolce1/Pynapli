@@ -39,10 +39,12 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -262,14 +264,19 @@ private fun DobStep(
                 onDateChange = onWheelDateChange,
             )
         }
-        if (state.dobWheelUntouched) {
+        // The hint keeps its space once a wheel moves (only the text goes), so nothing below it jumps.
+        if (state.wheelFirstYear > 0) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Scroll to your birthday.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .alpha(if (state.dobWheelUntouched) 1f else 0f)
+                        .then(if (state.dobWheelUntouched) Modifier else Modifier.clearAndSetSemantics {}),
             )
         }
         TextButton(
