@@ -95,8 +95,8 @@ internal fun GridProfileTile(
                 .aspectRatio(1f)
                 .clip(PynapliShape.SmallShape)
                 .hoverable(hoverInteractions)
-                .handCursor()
                 // A locked tile opens the plans, never a profile (Section 3).
+                .handCursor()
                 .clickable(onClickLabel = if (locked) "See plans" else "Open profile", role = Role.Button, onClick = onClick)
                 // Group the tile so a screen reader announces it as one item (name + presence +
                 // visiting + distance + partner/tonight badges) instead of several fragments. A
