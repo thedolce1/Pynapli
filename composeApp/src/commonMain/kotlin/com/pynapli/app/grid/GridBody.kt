@@ -26,9 +26,11 @@ import com.pynapli.app.location.LocationAccessHelp
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.perf.PynapliPerfMarks
 
-private enum class GridPhase { Loading, LocationRequired, Error, EmptyFiltered, Empty, Content }
+internal enum class GridPhase { Loading, LocationRequired, Error, EmptyFiltered, Empty, Content }
 
-private fun gridPhase(state: GridUiState): GridPhase =
+internal const val GRID_EMPTY_TITLE: String = "No one nearby yet"
+
+internal fun gridPhase(state: GridUiState): GridPhase =
     when {
         // Still reading the cold-start cache: the same skeleton as a first network load, as one
         // phase so the crossfade never runs skeleton-to-skeleton.
@@ -136,10 +138,12 @@ internal fun GridBody(
             }
 
             GridPhase.Empty -> {
+                // A true empty Grid: no filters, no error, and the server already widened the search
+                // as far as it goes (plan G10). The client only says so, honestly.
                 PynapliEmptyState(
                     icon = Icons.Filled.SearchOff,
-                    title = "No one nearby right now.",
-                    subtitle = "New people join all the time. Pull down or tap Refresh to look again.",
+                    title = GRID_EMPTY_TITLE,
+                    subtitle = "New people join every day. Pull down or tap Refresh to look again.",
                     actionLabel = "Refresh",
                     onAction = onRetry,
                     modifier = Modifier.fillMaxSize(),
