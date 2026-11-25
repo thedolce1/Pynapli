@@ -138,6 +138,48 @@ only" filters mean. Server-owned end to end (erification/PhotoVerificationServi
   Because replacing photos keeps verification here, Pynapli has no equivalent of Tinder's ongoing
   photo matching.
 
+## Photo pre-screening
+
+New members' profile photos are screened automatically on upload so clean ones go live within
+seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaModerationScanner.kt`,
+`media/MediaUploadActions.kt`).
+
+- **Rule it serves:** public photos (Grid, Swipe, profile) may be suggestive but not explicit
+  (COMMUNITY_GUIDELINES, MODERATION_AND_AGE_VERIFICATION_SPEC "Public zone"). Private albums and chat
+  media are consent-gated and may be explicit.
+- **Flow:** upload-complete calls Google Cloud Vision SafeSearch on the photo's `gs://` object inside
+  the request (8-second budget). The result decides the photo's state at once:
+  - **Approved** (ready/approved, public immediately) only when adult ≤ `UNLIKELY`, violence ≤
+    `POSSIBLE` and racy ≤ `LIKELY`, and all three are rated.
+  - **Held for a person** (uploaded/pending, in `GET /v1/admin/media/pending`) for anything above a
+    ceiling, an `UNKNOWN` or missing rating, any scanner error, a per-image error, a non-image, or a
+    timeout. **Fail closed:** a scan we can't trust never approves.
+  - **Never auto-rejected.** No SafeSearch result removes a profile photo; a moderator approves or
+    rejects it. Violence ≥ `LIKELY` is the one severe signal: on a profile photo it is held *and*
+    files a system safety report and risk event (the existing escalation path), on a private-album or
+    chat photo it removes the photo and escalates, as before. Adult/racy results never change private
+    or chat media.
+- **Decided defaults (founder deferred; the spec was silent on numbers):** the ceilings above. A
+  lifestyle app's public photos are often racy, so racy is allowed up to `LIKELY`; adult content is
+  held from `POSSIBLE`. They are config, validated at startup (a typo or `VERY_LIKELY` refuses to
+  start): `PYNAPLI_MEDIA_MODERATION_MAX_ADULT` (default `UNLIKELY`), `_MAX_VIOLENCE` (`POSSIBLE`),
+  `_MAX_RACY` (`LIKELY`). Tune only after the founder's live run on real images (PATH_TO_TESTERS A9).
+- **Environments:** staging and production default to `cloud_vision`; local/test default to `manual`
+  (and local auto-approves uploads). Production refuses `manual` at startup
+  (`MEDIA_MODERATION_MANUAL_FORBIDDEN`) unless `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true`
+  is set on purpose (for example during a Vision outage, accepting that every new photo waits for a
+  person). Cloud Vision without the media service account fails startup
+  (`MEDIA_SIGNING_CREDENTIALS_REQUIRED`) rather than degrading to manual: ops should notice, and a
+  silent fallback would leave new members photo-less with no alarm.
+- **What the member sees:** their own pending photo, labelled "Being reviewed · only you can see it",
+  in the album manager, Edit profile, the onboarding photo step and their own profile preview. The
+  server returns a pending photo only to its owner (owner album listing); every other viewer's query
+  filters to ready+approved.
+- **Logging:** asset id and error type only; never the object path, a signed URL or the response
+  body.
+- **Not covered:** SafeSearch is not a CSAM detector (hash matching is a separate provider, still
+  open) and does not read text in images.
+
 ## Suspicious Signals
 
 Signals that increase risk:
@@ -874,6 +916,7 @@ Important:
 - [x] Held first-message review supports audited release/remove actions.
 - [x] Reports queue supports audited triage actions.
 - [x] Severe media scanner decisions create system safety reports and media-moderation risk events.
+- [x] Photo pre-screening (2026-11-25): Cloud Vision SafeSearch on by default in staging/prod, approve-or-hold only for profile photos (ceilings adult ≤ UNLIKELY, violence ≤ POSSIBLE, racy ≤ LIKELY, configurable), fail closed on error/timeout/unknown, production refuses manual without `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION`, owner-only "Being reviewed" label. Tested with Vision faked. Open: the founder's live run with real images and any threshold tuning (PATH_TO_TESTERS A9).
 - [x] Media reports support audited target-media removal.
 - [x] Risk review queue supports audited clear/set-tier/review actions.
 - [x] Appeal API supports user submission/status/withdraw and audited admin decisions.

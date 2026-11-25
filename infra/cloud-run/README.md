@@ -182,14 +182,18 @@ Silent defaults to set on purpose:
 
 - [ ] `PYNAPLI_ACTIVITY_RETENTION_ENABLED` defaults ON for local and OFF elsewhere. Unset on
   staging/prod, the activity table grows without bound. Set `true`.
-- [ ] `PYNAPLI_MEDIA_MODERATION_PROVIDER` defaults to `manual` (no automated image scanning). For a
-  public launch, choose deliberately; `cloud_vision` (plus signing credentials) enables scanning.
+- [ ] `PYNAPLI_MEDIA_MODERATION_PROVIDER` defaults to `cloud_vision` on staging/prod (photo
+  pre-screening). Enable the Cloud Vision API with billing first (docs/PATH_TO_TESTERS.md A9), or
+  every new photo waits for a person. Production refuses `manual` unless
+  `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true`. The startup log line shows
+  `moderation=...`.
 - [ ] `PYNAPLI_DATABASE_MAX_POOL_SIZE` / `PYNAPLI_DATABASE_MIN_IDLE`: instance count multiplies
   connections against the Cloud SQL limit.
 
 Rejected outright in production: `PYNAPLI_DEV_STORE_PURCHASES_ENABLED`,
 `PYNAPLI_PLAY_STORE_SANDBOX_ENABLED`, `PYNAPLI_MEDIA_DEV_AUTO_APPROVE_UPLOADS`,
-`PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED`.
+`PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED`, and `PYNAPLI_MEDIA_MODERATION_PROVIDER=manual` without
+`PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true`.
 
 Email: with no email provider wired, nobody can create an account (sign-up answers
 `503 SIGNUP_UNAVAILABLE`) or reset a password. See docs/PATH_TO_TESTERS.md step A6.
