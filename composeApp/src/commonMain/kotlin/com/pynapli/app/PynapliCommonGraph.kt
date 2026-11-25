@@ -192,13 +192,10 @@ class PynapliCommonGraph(
                     launch { playingTonightStateHolder.refreshIfOnScreen() }
                     // A match made while away shows its moment now (once, across devices).
                     launch { matchCelebrationStateHolder.refresh() }
-                    // The Grid reorders only when the user asks or its results have expired, so a
-                    // quick app switch never reshuffles the cards (composeApp/CLAUDE.md).
-                    if (gridStateHolder.state.value.cards
-                            .isNotEmpty() && gridStateHolder.resultsOlderThan(GridStateHolder.RESULTS_EXPIRE_AFTER)
-                    ) {
-                        launch { gridStateHolder.load(quiet = true) }
-                    }
+                    // The Grid on screen refreshes presence in place after a minute away and
+                    // reorders only once its results expired (15 min), so a quick app switch never
+                    // reshuffles the cards (composeApp/CLAUDE.md). Off screen, the tab return does it.
+                    launch { gridStateHolder.refreshOnResume() }
                 }
             },
         )
@@ -265,11 +262,15 @@ class PynapliCommonGraph(
      * Starts the realtime coordinators (grid presence, activity, messages) in [scope] and returns their
      * jobs so the shell can cancel them when it goes to the background. Each coordinator reconnects on
      * its own; a cancellation is never swallowed (runCatchingCancellable).
+     *
+     * The Grid's 60 s liveness refresh rides along: it is a foreground-only loop too, so the same
+     * background cancel on Android and iOS stops it (web gates it on tab visibility instead).
      */
     fun startRealtime(scope: CoroutineScope): List<Job> =
         listOf(
             scope.launch { runCatchingCancellable { gridPresenceStreamCoordinator.run() } },
             scope.launch { runCatchingCancellable { activityRealtimeCoordinator.run() } },
             scope.launch { runCatchingCancellable { messagesRealtimeCoordinator.run() } },
+            scope.launch { runCatchingCancellable { gridStateHolder.runLiveRefresh() } },
         )
 }

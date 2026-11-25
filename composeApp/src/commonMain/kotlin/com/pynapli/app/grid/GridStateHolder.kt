@@ -6,20 +6,26 @@ import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 class GridStateHolder(
     private val repository: GridFeedRepository,
     private val snapshotStore: GridSnapshotStore = NoOpGridSnapshotStore,
+    /** Injected so the liveness rules (60 s quiet refresh, 15 min expiry) run on a virtual clock in tests. */
+    private val timeSource: TimeSource = TimeSource.Monotonic,
 ) {
     private val _state = MutableStateFlow(GridUiState(isRefreshing = true, cacheChecked = false))
     val state: StateFlow<GridUiState> = _state.asStateFlow()
@@ -39,16 +45,19 @@ class GridStateHolder(
     suspend fun primeFromCacheThenLoad() {
         if (_state.value.cards.isNotEmpty()) {
             // Returning to the Grid tab: the cards are still here, so keep them (and their order and
-            // scroll) and only refresh quietly once they have expired, as the app-resume path does.
-            if (resultsOlderThan(RESULTS_EXPIRE_AFTER) && !joinInFlightLoad()) load(quiet = true)
+            // scroll); presence refreshes in place after a minute, the order only once it expired.
+            refreshOnReturn()
             return
         }
         val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }
         val paintedCache = cached.isNotEmpty() && _state.value.cards.isEmpty()
         if (paintedCache) {
             // Show cached cards instantly; a quiet refresh swaps in the live feed atomically
-            // (no blank, no scroll reset) per the spec's instant-render rule.
-            _state.update { current -> current.copy(cards = cached, isRefreshing = true, cacheChecked = true) }
+            // (no blank, no scroll reset) per the spec's instant-render rule. Their presence is days
+            // old, so it shows as unknown until that live answer lands.
+            _state.update { current ->
+                current.copy(cards = cached.map { it.withPresenceUnknown() }, isRefreshing = true, cacheChecked = true)
+            }
         }
         // A load already on the wire for these filters (the Location step's first grid, or a
         // location refresh on resume) answers this screen too: wait for it instead of starting a
@@ -86,16 +95,39 @@ class GridStateHolder(
         return joinInFlightLoad()
     }
 
+    /** When the shown ORDER last came from the server (a full first-page apply); drives [RESULTS_EXPIRE_AFTER]. */
     private var loadedAt: TimeMark? = null
+
+    /** When the server last answered at all, quiet in-place refreshes included; drives [LIVE_REFRESH_INTERVAL]. */
+    private var liveAt: TimeMark? = null
+
+    /**
+     * The newer first page a quiet refresh found while it held people not on screen yet. Held back
+     * so cards never move under the finger; [applyNewNearby] (the pill) or a refresh applies it.
+     */
+    private var pendingFeed: GridFeedUi? = null
+    private var pendingAt: TimeMark? = null
+    private var liveRefreshInFlight = false
 
     /** True when the cards on screen came from the server longer than [age] ago (or never did). */
     fun resultsOlderThan(age: Duration): Boolean = loadedAt?.let { it.elapsedNow() >= age } ?: true
+
+    /** True when the server last answered (full or quiet in-place refresh) longer than [age] ago, or never. */
+    fun liveAnswerOlderThan(age: Duration): Boolean = liveAt?.let { it.elapsedNow() >= age } ?: true
+
+    private fun clearPendingNewNearby() {
+        pendingFeed = null
+        pendingAt = null
+        _state.update { if (it.newNearbyCount == 0) it else it.copy(newNearbyCount = 0) }
+    }
 
     suspend fun load(quiet: Boolean = false) {
         _state.update { if (it.cacheChecked) it else it.copy(cacheChecked = true) }
         val before = _state.value
         val keepCardsVisible = quiet && before.cards.isNotEmpty()
         feedGeneration += 1
+        // Whatever this load answers supersedes a held-back "new nearby" page.
+        clearPendingNewNearby()
 
         _state.update { current ->
             current.copy(
@@ -131,7 +163,8 @@ class GridStateHolder(
             .onSuccess { feed ->
                 // Signed out (or reloaded) while this was in flight: never resurrect old cards.
                 if (generation != feedGeneration) return@onSuccess
-                loadedAt = TimeSource.Monotonic.markNow()
+                loadedAt = timeSource.markNow()
+                liveAt = loadedAt
                 // The server ranked a grid for this account, so it holds a location for it.
                 _serverHasLocation.value = true
                 _state.update { current ->
@@ -198,6 +231,136 @@ class GridStateHolder(
      */
     suspend fun refresh() {
         load(quiet = false)
+    }
+
+    /**
+     * A quiet liveness refresh (plan G7) that never moves a card under the finger: it fetches the
+     * first page for the current filters, updates the cards already on screen in place (online dot,
+     * active-ago, New marker, photo) and, when the answer holds people not on screen, keeps that page
+     * aside and raises [GridUiState.newNearbyCount] for the "N new nearby" pill.
+     *
+     * Deliberately not a [load]: it never bumps the feed generation (a page being appended survives),
+     * never touches filters, the spinner or an error, and a failure is a silent no-op. A shown card
+     * missing from the fresh page is kept: it may simply sit on page two now. Skipped while any
+     * other request for the Grid is on the wire.
+     */
+    suspend fun refreshLive() {
+        val current = _state.value
+        if (current.cards.isEmpty() || current.isRefreshing || current.isLoadingMore) return
+        if (inFlightLoad != null || liveRefreshInFlight) return
+        val generation = feedGeneration
+        val filters = current.filters
+        liveRefreshInFlight = true
+        try {
+            val feed = runCatchingCancellable { repository.loadGrid(filters) }.getOrNull() ?: return
+            // A reload, filter change or sign-out happened meanwhile: this answer describes old cards.
+            if (generation != feedGeneration || _state.value.filters != filters) return
+            val answeredAt = timeSource.markNow()
+            liveAt = answeredAt
+            _serverHasLocation.value = true
+            val shownIds = _state.value.cards.mapTo(HashSet()) { it.id }
+            val newCount = feed.cards.count { it.id !in shownIds }
+            val freshById = feed.cards.associateBy { it.id }
+            _state.update { shownState ->
+                shownState.copy(
+                    cards =
+                        shownState.cards.map { shown ->
+                            // Same slot, newer facts; the tile colours stay put so nothing flickers.
+                            freshById[shown.id]?.copy(tone = shown.tone, linkedPartnerTone = shown.linkedPartnerTone) ?: shown
+                        },
+                    newNearbyCount = newCount,
+                )
+            }
+            pendingFeed = if (newCount > 0) feed else null
+            pendingAt = if (newCount > 0) answeredAt else null
+        } finally {
+            liveRefreshInFlight = false
+        }
+    }
+
+    /**
+     * The "N new nearby" pill: applies the held-back first page (new order, cursor and paywall
+     * together). Returns true when it replaced the cards, so the screen scrolls to the top. With a
+     * load already on the wire nothing is applied: that load answers instead.
+     */
+    suspend fun applyNewNearby(): Boolean {
+        val feed = pendingFeed ?: return false
+        val answeredAt = pendingAt
+        if (inFlightLoad != null) {
+            clearPendingNewNearby()
+            return false
+        }
+        // A page-two request started against the old order must not append onto the new one.
+        feedGeneration += 1
+        appliedGeneration = feedGeneration
+        pendingFeed = null
+        pendingAt = null
+        loadedAt = answeredAt ?: timeSource.markNow()
+        _state.update { current ->
+            current.copy(
+                cards = feed.cards,
+                nextCursor = feed.nextCursor,
+                paywallMessage = feed.resultLimitPaywallMessage,
+                isLoadingMore = false,
+                newNearbyCount = 0,
+            )
+        }
+        runCatchingCancellable { snapshotStore.save(feed.cards) }
+        return true
+    }
+
+    /**
+     * Tab return or app resume: an expired order (older than [RESULTS_EXPIRE_AFTER]) is replaced
+     * quietly; otherwise presence older than [LIVE_REFRESH_INTERVAL] refreshes in place through
+     * [refreshLive]. Fresh cards are left alone.
+     */
+    suspend fun refreshOnReturn() {
+        if (_state.value.cards.isEmpty()) return
+        if (resultsOlderThan(RESULTS_EXPIRE_AFTER)) {
+            if (!joinInFlightLoad()) load(quiet = true)
+        } else if (liveAnswerOlderThan(LIVE_REFRESH_INTERVAL)) {
+            refreshLive()
+        }
+    }
+
+    /** App resume: only while the Grid is the screen in front; a later tab return covers the rest. */
+    suspend fun refreshOnResume() {
+        if (_onScreen.value) refreshOnReturn()
+    }
+
+    private val _appVisible = MutableStateFlow(true)
+
+    /**
+     * Web only: whether the browser tab is visible. Android and iOS cancel [runLiveRefresh] with the
+     * realtime jobs in the background; a browser tab keeps its jobs, so the shell reports it here.
+     */
+    fun setAppVisible(visible: Boolean) {
+        _appVisible.value = visible
+    }
+
+    private val _nearbyShowing = MutableStateFlow(true)
+
+    /** False while the Favorites view covers Nearby: no liveness refresh for cards nobody sees. */
+    fun setNearbyShowing(showing: Boolean) {
+        _nearbyShowing.value = showing
+    }
+
+    /**
+     * Runs until cancelled: every [LIVE_REFRESH_INTERVAL] while the Grid is on screen, Nearby is
+     * showing and the app is visible, a [refreshLive]. Launched with the realtime jobs, which Android
+     * and iOS cancel in the background.
+     */
+    suspend fun runLiveRefresh() {
+        combine(_onScreen, _appVisible, _nearbyShowing) { onScreen, visible, nearby -> onScreen && visible && nearby }
+            .distinctUntilChanged()
+            .collectLatest { live ->
+                if (!live) return@collectLatest
+                while (true) {
+                    delay(LIVE_REFRESH_INTERVAL)
+                    // A pull-to-refresh or resume refresh answered moments ago: skip this tick.
+                    if (liveAnswerOlderThan(LIVE_REFRESH_INTERVAL / 2)) refreshLive()
+                }
+            }
     }
 
     suspend fun toggleQuickFilter(id: QuickFilterId) {
@@ -297,6 +460,15 @@ class GridStateHolder(
         _state.update { current ->
             current.copy(cards = current.cards.filterNot { it.id == userId })
         }
+        // Someone just blocked or hidden must not come back with the held-back "new nearby" page.
+        pendingFeed?.let { pending ->
+            val kept = pending.copy(cards = pending.cards.filterNot { it.id == userId })
+            val shownIds = _state.value.cards.mapTo(HashSet()) { it.id }
+            val newCount = kept.cards.count { it.id !in shownIds }
+            pendingFeed = if (newCount > 0) kept else null
+            if (newCount == 0) pendingAt = null
+            _state.update { it.copy(newNearbyCount = newCount) }
+        }
         // Keep the cold-start cache in step, so someone just blocked or hidden never paints again.
         runCatchingCancellable { snapshotStore.save(_state.value.cards) }
     }
@@ -329,6 +501,9 @@ class GridStateHolder(
     /** Marks the cards as expired, so the next return to the Grid refetches them quietly. */
     fun invalidate() {
         loadedAt = null
+        liveAt = null
+        // Another place's held-back page must never be applied over the new place's cards.
+        clearPendingNewNearby()
     }
 
     /** Where the Grid was scrolled when it last left the screen (tab switch), restored on return. */
@@ -349,6 +524,9 @@ class GridStateHolder(
     suspend fun clearForSignOut() {
         feedGeneration += 1
         loadedAt = null
+        liveAt = null
+        pendingFeed = null
+        pendingAt = null
         scrollAnchor = GridScrollAnchor()
         travelKeyWhenLeft = null
         _serverHasLocation.value = null
@@ -363,7 +541,9 @@ class GridStateHolder(
             val target = current.cards[targetIndex]
             if (target.online == delta.online) return@update current
             val updated = current.cards.toMutableList()
-            updated[targetIndex] = target.copy(online = delta.online)
+            // "Went offline" arrives once the server's online hold ends, so the newest bucket applies.
+            val activeAgo = if (delta.online) GridActiveAgo.ONLINE else GridActiveAgo.MINUTES_15
+            updated[targetIndex] = target.copy(online = delta.online, activeAgo = activeAgo)
             current.copy(cards = updated)
         }
     }
@@ -396,8 +576,11 @@ class GridStateHolder(
     }
 
     companion object {
-        /** Grid results older than this are refetched (quietly, keeping scroll) on return. */
+        /** A Grid order older than this is replaced (quietly, keeping scroll) on tab return or resume. */
         val RESULTS_EXPIRE_AFTER: Duration = 15.minutes
+
+        /** Quiet in-place presence refresh cadence while the Grid is visible, and the resume threshold. */
+        val LIVE_REFRESH_INTERVAL: Duration = 60.seconds
     }
 }
 

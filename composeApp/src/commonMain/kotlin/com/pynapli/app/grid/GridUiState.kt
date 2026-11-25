@@ -24,6 +24,9 @@ data class GridUiState(
     // False only from app start (or sign-out) until the cold-start cache has been read: the body stays
     // a plain background meanwhile, so a cached Grid paints without a skeleton flashing first.
     val cacheChecked: Boolean = true,
+    // People the last quiet refresh found who are not on screen yet: the "N new nearby" pill. The
+    // shown order never changes under the finger; tapping the pill (or refreshing) applies it.
+    val newNearbyCount: Int = 0,
 ) {
     val verificationRequired: Boolean get() = verificationMessage != null
 }
@@ -367,7 +370,41 @@ data class GridProfileCardUi(
     val verified: Boolean = false,
     // Both this person and the partner in the mini are verified: a check on the partner mini.
     val coupleVerified: Boolean = false,
+    // Server-owned Fresh rule (new account or new photo, and active lately): the tile's "New" marker.
+    val fresh: Boolean = false,
+    // Server presence bucket: one of [GridActiveAgo]'s values, or null when unknown/long ago.
+    val activeAgo: String? = null,
 )
+
+/**
+ * The server's coarse "last active" buckets on a Grid card. Coarse on purpose: a bucket never lets
+ * anyone time a member's comings and goings to the minute.
+ */
+object GridActiveAgo {
+    const val ONLINE: String = "online"
+    const val MINUTES_15: String = "15m"
+    const val HOUR_1: String = "1h"
+    const val HOURS_3: String = "3h"
+    const val TODAY: String = "today"
+    const val WEEK: String = "week"
+
+    /** The small tile caption for someone not online now, or null when there is nothing to say. */
+    fun label(activeAgo: String?): String? =
+        when (activeAgo) {
+            MINUTES_15 -> "Active 15m ago"
+            HOUR_1 -> "Active 1h ago"
+            HOURS_3 -> "Active 3h ago"
+            TODAY -> "Active today"
+            WEEK -> "Active this week"
+            else -> null
+        }
+}
+
+/**
+ * A card painted from the cold-start cache: its presence is days old, so it shows as unknown (no
+ * green dot, no "active" caption, no New marker) until the first live answer replaces it.
+ */
+internal fun GridProfileCardUi.withPresenceUnknown(): GridProfileCardUi = copy(online = false, activeAgo = null, fresh = false)
 
 @Immutable
 @Serializable
@@ -423,6 +460,8 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi =
         verified = verified,
         // Server-computed; never drawn without a visible partner mini to attach it to.
         coupleVerified = coupleVerified && linkedPartner != null,
+        fresh = fresh,
+        activeAgo = activeAgo,
     )
 
 internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =

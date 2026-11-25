@@ -71,11 +71,16 @@ fun GridScreen(
         stateHolder.primeFromCacheThenLoad()
     }
 
-    // On screen for as long as this is composed: the notification ask waits for some Grid time.
+    // On screen for as long as this is composed: the notification ask waits for some Grid time, and
+    // the 60 s liveness refresh runs only then.
     DisposableEffect(stateHolder) {
         stateHolder.setOnScreen(true)
         onDispose { stateHolder.setOnScreen(false) }
     }
+
+    // The Favorites view covers Nearby: pause Nearby's liveness refresh meanwhile.
+    val nearbyShowing = favoritesState?.showing != true
+    LaunchedEffect(stateHolder, nearbyShowing) { stateHolder.setNearbyShowing(nearbyShowing) }
 
     // Leaving the tab disposes this screen; keep both grids' scroll for the way back.
     DisposableEffect(gridState, favoritesGridState) {
@@ -135,7 +140,17 @@ fun GridScreen(
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.delete(id) } }
         },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
-        onRefresh = { scope.launch { stateHolder.refresh() } },
+        // An explicit refresh applies the new order, so it lands at the top (pull-to-refresh is
+        // already there; the wide-window Refresh button may not be).
+        onRefresh = {
+            scope.launch {
+                stateHolder.refresh()
+                gridState.scrollToItem(0)
+            }
+        },
+        onShowNewNearby = {
+            scope.launch { if (stateHolder.applyNewNearby()) gridState.scrollToItem(0) }
+        },
         travelCityName = travelState.current?.city,
         onTurnOffTravel = {
             travelLocationStateHolder?.let { holder ->

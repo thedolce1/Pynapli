@@ -1,6 +1,7 @@
 package com.pynapli.app.grid
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
@@ -52,6 +54,8 @@ internal fun GridScreenContent(
     onShowFavorites: () -> Unit = {},
     onRefreshFavorites: () -> Unit = {},
     onLoadMoreFavorites: () -> Unit = {},
+    // The "N new nearby" pill: apply the held-back order and return to the top.
+    onShowNewNearby: () -> Unit = {},
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
     val showingFavorites = favoritesState?.showing == true && favoritesGridState != null
@@ -111,6 +115,7 @@ internal fun GridScreenContent(
                 onLoadMore = onLoadMore,
                 onUseCurrentLocation = onUseCurrentLocation,
                 onClearAllFilters = onClearAllFilters,
+                onShowNewNearby = onShowNewNearby,
             )
         }
     }
@@ -165,6 +170,7 @@ private fun ColumnScope.NearbyGridSections(
     onLoadMore: () -> Unit,
     onUseCurrentLocation: () -> Unit,
     onClearAllFilters: () -> Unit,
+    onShowNewNearby: () -> Unit,
 ) {
     QuickFilterRow(
         filters = state.filters,
@@ -198,17 +204,25 @@ private fun ColumnScope.NearbyGridSections(
         onRefresh = onRefresh,
         modifier = Modifier.weight(1f),
     ) {
-        GridBody(
-            state = state,
-            locationState = locationState,
-            distanceUnit = distanceUnit,
-            gridState = gridState,
-            onProfileSelected = onProfileSelected,
-            onLoadMore = onLoadMore,
-            onUseCurrentLocation = onUseCurrentLocation,
-            onRetry = onRefresh,
-            onClearFilters = onClearAllFilters,
-            modifier = Modifier.fillMaxSize(),
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            GridBody(
+                state = state,
+                locationState = locationState,
+                distanceUnit = distanceUnit,
+                gridState = gridState,
+                onProfileSelected = onProfileSelected,
+                onLoadMore = onLoadMore,
+                onUseCurrentLocation = onUseCurrentLocation,
+                onRetry = onRefresh,
+                onClearFilters = onClearAllFilters,
+                modifier = Modifier.fillMaxSize(),
+            )
+            // Floats over the cards; they never move until it is tapped (or the Grid is refreshed).
+            GridNewNearbyPill(
+                count = state.newNearbyCount,
+                onClick = onShowNewNearby,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
     }
 }
