@@ -11,7 +11,7 @@ package com.pynapli.server.grid
 internal object GridActivitySql {
     /**
      * Last activity: the later of the durable last-active row (written by every authenticated request,
-     * at most once a minute; V106, backfilled from sessions in V122) and account creation, so a brand
+     * at most once a minute; V106, backfilled from sessions in V127) and account creation, so a brand
      * new account counts as active. Only ever compared or bucketed server-side; never returned.
      */
     fun lastActiveAt(

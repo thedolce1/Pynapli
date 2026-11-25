@@ -259,7 +259,7 @@ What ships (plan G2/G4/G11, 2026-11-24):
   time cut to the minute. Neither is emitted for a member who hides their activity (incognito), and the
   check fails closed.
 - **Last activity** (`GridActivitySql.lastActiveAt`): the later of `user_last_active` (V106, backfilled
-  from sessions in V122) and account creation. Server-side only, never returned.
+  from sessions in V127) and account creation. Server-side only, never returned.
 - **Card activity key** (`GridCardDto.activeAgo`, `GridActiveAgo`): `online`, `15m`, `1h`, `3h`, `today`,
   `week`, or null (older than 7 days, never seen, or incognito). Each key covers the window up to its bound
   after the previous one. Because the dot already holds 15 minutes, `15m` shows only when presence and
