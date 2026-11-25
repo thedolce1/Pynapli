@@ -109,6 +109,37 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   paid gate.
 - Open messaging from the Grid is allowed when the recipient's settings and risk policy allow.
 
+#### Section 2 contract (plan G2–G12, 2026-11-24)
+
+Every field below is additive with a default, so older clients still parse (`PynapliJson` ignores
+unknown keys) and older requests mean what they meant.
+
+- `GridCardDto.fresh: Boolean = false`: the "New" marker. Server rule: the account is under 72 hours
+  old or added an approved public photo in the last 24 hours, **and** was active in the last 24 hours.
+- `GridCardDto.activeAgo: String? = null`: a coarse server-computed key, never a timestamp. One of
+  `online`, `15m`, `1h`, `3h`, `today`, `week`; each covers the window up to its bound after the
+  previous one (`15m` ≤ 15 min, `1h` ≤ 1 h, `3h` ≤ 3 h, `today` ≤ 24 h, `week` ≤ 7 days). `online`
+  always agrees with `online = true`. Null when older than 7 days, never seen, or the member hides their
+  activity (incognito; such members' online dot follows today's rules). Clients should treat an unknown
+  key as null. Since the dot holds 15 minutes after the last activity, the first key after it is
+  normally `1h`. Favorites cards carry both fields too.
+- `GridQueryRequestDto.freshOnly: Boolean = false`: the Fresh quick chip; only cards whose `fresh`
+  would be true. Free. It replaces "Recently joined": `recentlyJoinedOnly = true` (older clients, saved
+  filters) is read as `freshOnly = true`. Send `freshOnly` from now on.
+- Sparse areas: a first page that would show fewer than 12 people is answered from the 100 km step
+  instead, and **pages normally**: send the returned `nextCursor` with the same request (same
+  `radiusMeters` as before; the cursor carries the widened scope). Nothing in the response marks a
+  widened page.
+- Order: boosted, then everyone else, then demoted (no activity in 30 days, or no approved photo), each
+  by distance. Online is a filter, never an order.
+- Grid messaging reason: `PublicProfileDto.messagingUnavailableReason: String? = null` (profile detail,
+  `GET /v1/profiles/{userId}`, where `allowGridMessages` already lives). `"VERIFY_TO_MESSAGE"` exactly when
+  `allowGridMessages` is false because the owner takes Grid messages from photo-verified members only and
+  the viewer is not verified: link to photo verification. Null in every other case, including the owner's
+  matches-only, no-one or off settings; blocks and hides never get a reason (the profile is simply not
+  found). The send path is unchanged: a refused Grid open is still `403 MESSAGING_NOT_ALLOWED`.
+- Presence: see "Realtime" (`POST /v1/presence/heartbeat`).
+
 ### Swipe
 
 - Match creation is server-authoritative. Dealbreakers are hard; soft filters expand only when
@@ -151,7 +182,9 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
 - `DiscoverySettingsDto.gridMessagePolicy` is one of `everyone`, `verified_only` (sender
   photo-verified), `matches_only`, `no_one`; `PATCH /v1/me/discovery-settings` rejects anything else
   with `INVALID_GRID_MESSAGE_POLICY`. A refused Grid open is `403 MESSAGING_NOT_ALLOWED` for every
-  option. `PublicProfileDto.allowGridMessages` is computed for the viewer under the same rule.
+  option. `PublicProfileDto.allowGridMessages` is computed for the viewer under the same rule, and
+  `PublicProfileDto.messagingUnavailableReason` says `"VERIFY_TO_MESSAGE"` when only the viewer's
+  missing photo verification stands in the way (see Grid, "Section 2 contract").
 - Risk policy can hold outbound first messages for review.
 - Partner invite requires an active link plus partner **and** third-party consent.
   `ConversationDto.partnerInvite` is present while unresolved, with each side's consent status.
@@ -255,8 +288,16 @@ separately.
 Streams: `/v1/presence/stream`, `/v1/activity/stream`, `/v1/messages/stream`, `/v1/psync/stream`.
 WebSockets are never the sole authority; clients refetch canonical state on reconnect. Don't stream
 full grid reorders or a partner's individual Psync swipes. Auth rules:
-[BACKEND_ARCHITECTURE_SPEC.md](BACKEND_ARCHITECTURE_SPEC.md#realtime). `POST /v1/presence/heartbeat`
-was removed.
+[BACKEND_ARCHITECTURE_SPEC.md](BACKEND_ARCHITECTURE_SPEC.md#realtime).
+
+Presence (plan G2, 2026-11-24): any authenticated HTTP request and any open realtime socket (on open,
+then its 60 s re-auth tick) mark the caller online for 15 minutes. `POST /v1/presence/heartbeat`
+(re-added; bearer auth, no body, `204` with no body, echoes nobody's presence) covers a foregrounded app
+that is idle with no socket open: call it about every 60 s while in the foreground, never in the
+background. Calling it more often does no harm and no extra writes (one write per user a minute). The
+presence stream sends `PresenceDeltaDto(online = true)` when a subscribed person comes online and
+`online = false` when they go offline; `lastActiveAt` is cut to the minute; incognito members' changes
+are never sent.
 
 ### Admin
 

@@ -7,8 +7,8 @@ import kotlin.time.Duration.Companion.minutes
 
 /**
  * Coarse "last seen" buckets (GRID_IMPLEMENTATION_SPEC "Presence States"). The server picks the bucket
- * and sends only its key, never a timestamp; clients turn the key into a label. Shown on profile
- * detail only, never on the Grid card face (the card keeps just the online dot).
+ * and sends only its key, never a timestamp; clients turn the key into a label. Profile detail only;
+ * the Grid card carries its own coarser key set, `GridCardDto.activeAgo` (plan G11).
  */
 enum class LastActiveBucket(
     val key: String,

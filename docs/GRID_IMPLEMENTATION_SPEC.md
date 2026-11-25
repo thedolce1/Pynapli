@@ -131,7 +131,11 @@ make offset pages unstable). The cursor carries the filter hash, rank position (
 bucket, order tiebreak), user-id tie-breaker and seen-count state for tier depth. It is **opaque**:
 AES-256-GCM under a key derived from the cursor secret, random nonce, `g2.` prefix; old `v1.`
 cursors are rejected as `INVALID_GRID_CURSOR`. Pages are at least 12 cards (`MIN_PAGE_SIZE`); only
-the tier depth cap can make a final page shorter.
+the tier depth cap can make a final page shorter. A sparse-area widened answer (see "Default Deck /
+Never-Empty") pages under its own scope: the 100 km step plus the radius the viewer asked for
+(`gridScopeHash(widenedFromRadiusMeters = ...)`). The client keeps sending its own radius; a cursor that
+does not decode under the normal scope is tried under the widened one, so a widened cursor only ever
+continues the request that produced it.
 
 ### Location privacy (load-bearing)
 
@@ -154,8 +158,9 @@ cell) only:
   same cells.
 - **Displayed distance:** cell to cell, then bucketed: under 2 km reads "1 km", whole km to 10 km,
   5 km steps to 50 km, 10 km steps beyond. Deterministic (no per-request noise to average out).
-- **Order:** boost first, then a whole-km bucket of the cell-to-cell distance, then a stable
-  pseudo-random tiebreak seeded by the viewer cell (V95). Someone who hides distance gets an order
+- **Order:** rank tier first (boosted, everyone else, demoted; see "Ranking"), then a whole-km bucket
+  of the cell-to-cell distance, then a stable pseudo-random tiebreak seeded by the viewer cell (V95).
+  The tier depends only on the candidate, never on where anyone is. Someone who hides distance gets an order
   bucket that does not depend on where they are (uniform over the first min(radius, 25 km)).
 - **Radius:** snapped up to 2, 5, 10, 25, 50 or 100 km; membership is cell-to-cell on the
   effective location (a traveller matches only where they travel, never by home). The GiST
@@ -169,6 +174,26 @@ card reads), and someone who hides distance gets a bucket that does not depend o
 (`FavoriteServiceIntegrationTest`).
 
 ## Ranking
+
+**What ships (plan G3, 2026-11-24): distance-first, like Grindr.** Grindr does not sort by online, so
+neither do we; Online is a one-tap filter. The keyset order is:
+
+1. **Rank tier** (`boost_bucket`, the first keyset column; the name is kept so older cursors and cached
+   windows still decode): `0` boosted (an active boost outranks everything, demotion included), `1`
+   everyone else, `2` demoted. Demoted (`GridActivitySql.demoted`) means no activity for 30 days (last
+   activity is the later of `user_last_active` and account creation) or no approved, ready, visible
+   public photo. A thin member base should show real, active, pictured people first; demoted people are
+   never removed, they come after everyone else.
+2. Whole-km distance bucket (or a location-independent bucket for people who hide distance).
+3. Stable tiebreak seeded by the viewer cell, then user id.
+
+The tier is a function of the candidate only, so the shared, cross-viewer rank window stays shareable and
+its cache key is unchanged. `GridRankOrderPinTest` pins it (re-pinned deliberately for G3).
+
+Not copied from Grindr: removing offline people after an hour or two (it would empty a sparse grid) and a
+map view (precise-looking pins work against location privacy).
+
+The rest of this section is the longer-term ranking intent, not shipped behaviour.
 
 Base ranking:
 
@@ -219,22 +244,34 @@ This keeps the grid feeling alive without feeling chaotic.
 
 ## Presence States
 
-Recommended states:
+What ships (plan G2/G4/G11, 2026-11-24):
 
-- Online: active foreground session or socket; expires quickly.
-- Recently active: active in last 60 minutes.
-- Active today: active in last 24 hours.
-- Visible in grid: eligible to appear based on privacy and filters.
-- Stale: deprioritized after 7-14 days.
-- Dormant: hidden or heavily deprioritized after 30+ days.
-
-Recommended TTLs:
-
-- Online: 2-5 minutes after last foreground heartbeat/socket event.
-- Recently active: 60 minutes.
-- Active today: 24 hours.
-- Stale: 7-14 days.
-- Dormant: 30+ days.
+- **Online** (green dot): a Redis key `presence:user:{id}` with a **15-minute** TTL
+  (`RedisPresenceRepository.ONLINE_TTL_SECONDS = 900`), refreshed by any authenticated HTTP request
+  (`AuthService` `onAuthenticated` hook), by every open realtime socket (opened, then its 60 s re-auth
+  tick), and by `POST /v1/presence/heartbeat`, which a foregrounded app calls about every 60 s so an idle
+  screen keeps its dot. Writes are claimed per user at most once a minute per instance
+  (`PresenceService.claimRefresh`) and run off the request path (bounded launcher), so a request never
+  waits on Redis for presence. One refresh is one `SET … EX 900 GET` and, at most once a minute, one
+  `user_last_active` upsert.
+- **Came online / went offline:** a refresh whose `SET … GET` finds no previous key emits a "came
+  online" delta; `PresenceOfflineScanner` emits "went offline" when the key has expired. Both carry the
+  time cut to the minute. Neither is emitted for a member who hides their activity (incognito), and the
+  check fails closed.
+- **Last activity** (`GridActivitySql.lastActiveAt`): the later of `user_last_active` (V106, backfilled
+  from sessions in V122) and account creation. Server-side only, never returned.
+- **Card activity key** (`GridCardDto.activeAgo`, `GridActiveAgo`): `online`, `15m`, `1h`, `3h`, `today`,
+  `week`, or null (older than 7 days, never seen, or incognito). Each key covers the window up to its bound
+  after the previous one. Because the dot already holds 15 minutes, `15m` shows only when presence and
+  last activity disagree (a Redis flush); the usual first offline key is `1h`. A hidden member keeps
+  today's online-dot rules but gets no key.
+- **Fresh** (`GridCardDto.fresh`, the `freshOnly` chip): the account is under 72 hours old or added an
+  approved public photo in the last 24 hours (album `added_at`; there is no approval timestamp), and was
+  active in the last 24 hours. Looser than Grindr's 1 hour because we are sparser. Replaces "Recently
+  joined"; `recentlyJoinedOnly` from older clients and saved filters is read as `freshOnly`.
+- **Dormant:** no activity for 30 days: demoted in the rank (see "Ranking"), never hidden.
+- Profile detail keeps its own `lastActive` buckets (`LastActiveBucket`, which also reads session
+  activity).
 
 ## Location Strategy
 
@@ -342,27 +379,32 @@ area. Two layers guarantee this:
    proximity → recency). No structured filter means no `WHERE` predicate is applied for that
    dimension — the cardinality gate (`cardinality(?::text[]) = 0 OR ...`) short-circuits an empty
    filter to "match everyone", so an empty filter set never narrows the result.
-2. **Widen-on-empty.** If the **first page** at the requested radius returns zero candidates and
-   the radius is below the maximum (`MAX_RADIUS_METERS = 100_000`), the server re-queries once at
-   the maximum radius and returns that page instead. This is server-side and transparent to the
-   client; the viewer simply sees nearby-ish people rather than an empty grid. It mirrors the Swipe
-   deck's radius relaxation (`SwipeDeckRelaxation.relaxRadius`).
+2. **Widen when sparse (plan G10, 2026-11-24; was widen-on-empty).** If the **first page** at the
+   requested radius would show fewer than 12 people (`SPARSE_FIRST_PAGE`) and the radius is below the
+   maximum (`MAX_RADIUS_METERS = 100_000`), the server ranks once more at the maximum radius and serves
+   that instead. Distance-first ordering makes it a superset that starts with the same nearby people.
+   Server-side and transparent to the client. It mirrors the Swipe deck's radius relaxation
+   (`SwipeDeckRelaxation.relaxRadius`).
 
-Rules for the widen-on-empty fallback (`GridService.queryGrid`):
+Rules for widening (`GridService.queryGrid`):
 
-- **First page only.** It fires when `cursor == null`. A later empty page is honest exhaustion of a
-  scrolled deck, not a broken-looking first impression — do not widen mid-pagination.
-- **Edge-fill, no pagination.** A widened page returns `nextCursor = null`. The wide radius is never
-  baked into a cursor scoped to the viewer's narrow radius (the follow-up request still carries the
-  narrow radius, so a wide-scoped cursor would be rejected as `INVALID_GRID_CURSOR`). One page of
-  wider results beats an empty grid; a viewer who wants more widens their own radius filter.
+- **First page only.** It fires when `cursor == null`. A later short page is honest exhaustion of a
+  scrolled grid — never widen mid-pagination.
+- **It pages normally.** The widened answer carries a cursor sealed to the widened scope (100 km plus
+  the radius asked for; see "Pagination"), and the follow-up pages are ranked at 100 km. (Before G10 a
+  widened page was edge-fill only with `nextCursor = null`.)
 - **Respects explicit filters.** Widening only relaxes *distance*. Any structured filters the viewer
-  did select (gender, orientation, intents, lifestyle, verified, online-only, etc.) still apply at
-  the wide radius — a filter is still a promise. Widening searches farther, it does not silently show
-  non-matching people.
-- **Honest empties remain.** Emptiness caused by a viewer-specific post-filter (block/hidden lists,
-  `onlineOnly` with nobody online nearby) is not "no candidates within radius", so it keeps its own
-  honest empty state rather than triggering a radius widen.
+  did select (gender, orientation, intents, lifestyle, verified, online-only, Fresh, etc.) still apply
+  at the wide radius — a filter is still a promise.
+- **Counts what the viewer would see.** The 12 are counted after blocks, hides, contact blocks and the
+  online filter. This deliberately replaces the earlier "honest empties" rule (viewer-specific empties
+  never widened): with a threshold rather than zero, the number that matters is the number of people on
+  screen, so "Online" in a quiet area now shows online people farther out instead of two tiles.
+- **Location privacy is unchanged:** the wide query is the same cell-to-cell rank at a fixed radius
+  step, so it reveals nothing a viewer could not get by choosing 100 km themselves.
+- **Cost:** a sparse first page costs two rank queries (the narrow one is small by definition; the
+  100 km one is the same query the load test measures), each served from the shared 5 s window when
+  another viewer in the cell asked first.
 
 ## Realtime Updates
 
@@ -377,7 +419,9 @@ Use WebSocket deltas for:
 
 Do not use WebSockets to stream full grid reorders constantly.
 
-Presence delta example:
+Presence deltas (`/v1/presence/stream`, `PresenceDeltaDto`) are sent for both transitions: `online =
+true` when someone comes online, `online = false` when their 15-minute key lapses. `lastActiveAt` is
+cut to the minute. Incognito members' transitions are never sent. Presence delta shape:
 
 ```kotlin
 @Serializable
@@ -479,6 +523,15 @@ Reward:
   past it or the window came back short (it holds everyone in range); otherwise that page is ranked
   for the viewer directly, so a cached walk equals an uncached one and never ends early.
   **The Redis path fails open** to direct queries on any Redis error.
+- Plan G3/G10 cost (2026-11-24, not yet measured): the rank tier adds, per in-radius candidate on a
+  cache miss, one `user_last_active` primary-key probe and the approved-photo `EXISTS` (one
+  `media_albums (owner_user_id, kind)` probe, which stops there for people with no album, else the album
+  item and asset probes), after the boost check. On the 5,000-candidate load seed (no photos) that is
+  about two extra index probes per candidate. Page hydration adds a `users`, `discovery_settings` and
+  `user_last_active` lookup plus the Fresh photo check per page card. The load test queries at 100 km,
+  so it never widens; a widened first page elsewhere costs at most one extra rank of that same size. The
+  500-concurrent Grid load test (including presence, now one `SET … GET` per user a minute) must be
+  rerun before this is called inside budget.
 
 Battery: no continuous exact GPS in the background, no tight polling loops, stop foreground location
 updates when the app pauses, prefer event deltas over polling.
@@ -513,9 +566,17 @@ updates when the app pauses, prefer event deltas over polling.
   review remain.
 - [x] Thumbnail prefetch of the next 12 cards into Coil's cache.
 - [x] Message rate limiting; ranking does not reward spam volume.
-- [x] Never-empty: with no filters the Grid is a plain proximity query, and an empty **first page**
-  widens once to `MAX_RADIUS_METERS` as edge-fill only (`nextCursor = null`). Explicit filters still
-  apply; viewer-specific empties (blocks, online-only with nobody online) stay honestly empty.
+- [x] Never-empty: with no filters the Grid is a plain proximity query, and a **first page** showing
+  fewer than 12 people widens once to `MAX_RADIUS_METERS` and pages normally under a widened cursor
+  scope (plan G10; `GridServiceTest`). Explicit filters still apply.
+- [x] Presence like Grindr's (plan G2): any authenticated request, open socket or
+  `POST /v1/presence/heartbeat` keeps the dot for 15 minutes; the stream sends came-online and
+  went-offline, never for incognito members (`PresenceServiceTest`). Grid load test presence run pending.
+- [x] Rank tier (plan G3): boosted, normal, then demoted (dormant 30 days or no approved photo), pinned
+  in `GridRankOrderPinTest`.
+- [x] Fresh (plan G4): server-side rule for the card's `fresh` flag and the `freshOnly` chip, which
+  replaced "Recently joined" (`GridFilterDiscoveryTest`).
+- [x] Card `activeAgo` key (plan G11; `GridActiveAgoIntegrationTest`).
 - [ ] Larger dense-metro and production-hardware load runs; Redis hit rate under multi-instance load.
 - [x] Favorites (V105): private star in profile detail; `PUT`/`DELETE /v1/favorites/{id}` (idempotent,
   no activity or notification, cap 500, free) and a paged `GET /v1/favorites` of Grid cards, online first
@@ -527,7 +588,7 @@ updates when the app pauses, prefer event deltas over polling.
   not built: one tap opens the profile, which holds the star and every other action.
 - [x] Last seen (V106): profile detail shows a server bucket (`online_now`, `active_15m`, `active_today`,
   `active_week`) from a throttled heartbeat and session activity; never a timestamp; none for incognito
-  (`LastActiveIntegrationTest`). Not on the card face.
+  (`LastActiveIntegrationTest`). The card face carries its own coarser key, `activeAgo` (plan G11, above).
 - [x] Tab return keeps the Grid's cards, order and scroll (quiet refetch only after 15 minutes); a block or
   hide also leaves the cold-start cache; sign-out or a dead session wipes the Grid and its cache
   (`GridInstantLoadTest`).
