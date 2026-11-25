@@ -332,6 +332,7 @@ private fun RowScope.PhotoTapZone(
             Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .handCursor(enabled = enabled)
                 .clickable(
                     interactionSource = interactions,
                     indication = null,
@@ -339,8 +340,7 @@ private fun RowScope.PhotoTapZone(
                     onClickLabel = label,
                     role = Role.Button,
                     onClick = onTap,
-                ).handCursor(enabled = enabled)
-                .semantics { contentDescription = label },
+                ).semantics { contentDescription = label },
     )
 }
 
