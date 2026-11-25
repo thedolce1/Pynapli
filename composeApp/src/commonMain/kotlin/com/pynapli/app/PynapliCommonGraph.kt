@@ -124,7 +124,15 @@ class PynapliCommonGraph(
 
     val savedSwipeFilterStateHolder = SavedSwipeFilterStateHolder(ApiSavedSwipeFilterRepository(apiClient))
 
-    val travelLocationStateHolder = TravelLocationStateHolder(ApiTravelLocationRepository(apiClient))
+    // Travel mode covers both surfaces: a change from either screen leaves the other's cards stale.
+    val travelLocationStateHolder =
+        TravelLocationStateHolder(
+            repository = ApiTravelLocationRepository(apiClient),
+            onTravelChanged = {
+                swipeStateHolder.markStale()
+                gridStateHolder.invalidate()
+            },
+        )
 
     val playingTonightStateHolder = PlayingTonightStateHolder(ApiTonightRepository(apiClient))
 
