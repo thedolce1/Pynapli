@@ -42,6 +42,7 @@ This document is enforced by `RouteSecurityMatrixTest`: every `*Routes.kt` file 
 | `AdminMediaReviewRoutes.kt` | Admin-authenticated | Disabled unless `PYNAPLI_ADMIN_API_TOKEN` is configured. Pending profile photo list/approve/reject via `requireAdminActor` (operator-level: no senior role or MFA, these are photos the owner asked to show publicly). Reject needs a reason; decisions write `media_review.approve/reject` audit rows and a rejection sends the owner a system-safety push. |
 | `NotificationRoutes.kt` | User-authenticated | Preferences and device tokens are token-derived. |
 | `PresenceStreamRoutes.kt` | User-authenticated | SSE stream authenticates bearer token and block-filters target updates. |
+| `PresenceHeartbeatRoutes.kt` | User-authenticated | `POST /v1/presence/heartbeat` (plan G2): no body in, 204 with no body out, marks only the token-derived caller online and echoes nobody's presence. Write-throttled to one Redis + one DB write per user a minute (`PresenceService.claimRefresh`), so call volume costs only the cached token check. |
 | `ProfileRoutes.kt` | User-authenticated | Profile reads/editing use token-derived viewer/owner and block checks. |
 | `ProfileLinkRoutes.kt` | User-authenticated | Invite/accept/decline/unlink are token-derived and self/block guarded. |
 | `PsyncSessionRoutes.kt` | User-authenticated | Session participant checks happen in service/repository layer. |

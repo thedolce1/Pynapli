@@ -31,6 +31,12 @@ class AuthService(
     private val revocationRelay: RealtimeRelay = LocalOnlyRealtimeRelay,
     /** After a successful email sign-in, with the account and the normalised typed address. */
     private val onEmailSignIn: (suspend (userId: UUID, normalisedEmail: String) -> Unit)? = null,
+    /**
+     * After every successful [authenticate] (each authenticated HTTP request and each realtime socket's
+     * open and 60 s re-auth tick). Presence hangs off this (plan G2). Must not suspend for long or
+     * throw; a failure is swallowed so it never fails the request.
+     */
+    private val onAuthenticated: ((userId: UUID) -> Unit)? = null,
 ) {
     private val validator = AuthRequestValidator(clock)
     private val rateLimitGuard = AuthRateLimitGuard(rateLimitService)
@@ -134,7 +140,10 @@ class AuthService(
         return sessionManager.refresh(refreshToken)
     }
 
-    suspend fun authenticate(accessToken: String): UserRecord = sessionManager.authenticate(accessToken)
+    suspend fun authenticate(accessToken: String): UserRecord =
+        sessionManager.authenticate(accessToken).also { user ->
+            onAuthenticated?.let { hook -> runCatching { hook(user.id) } }
+        }
 
     /** The session behind an access token (one lookup; used where a row must follow the session, e.g. push devices). */
     suspend fun sessionIdFor(accessToken: String): UUID? = repository.findSessionByAccessTokenHash(Sha256.hash(accessToken))?.id

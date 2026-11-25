@@ -41,6 +41,7 @@ import com.pynapli.server.plugins.configureSecurityHeaders
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.plugins.selectAppCheckVerifier
+import com.pynapli.server.presence.configurePresenceHeartbeatRoutes
 import com.pynapli.server.presence.configurePresenceStreamRoutes
 import com.pynapli.server.profile.configureProfileRoutes
 import com.pynapli.server.profilelink.configureProfileLinkRoutes
@@ -195,6 +196,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         blockRepository = dependencies.blockRepository,
         contactBlockVisibility = dependencies.contactBlockVisibility,
     )
+    configurePresenceHeartbeatRoutes(dependencies.authService, dependencies.presenceService)
     configureGridRoutes(dependencies.authService, dependencies.gridService, dependencies.requestProfilerFactory)
     dependencies.favoriteService?.let { service -> configureFavoriteRoutes(dependencies.authService, service) }
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)

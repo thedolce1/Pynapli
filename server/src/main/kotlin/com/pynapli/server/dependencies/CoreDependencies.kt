@@ -158,7 +158,23 @@ internal fun buildCoreDependencies(
                     com.pynapli.server.presence
                         .JdbcLastActiveRepository(database.dataSource),
                 ),
+            broadcaster = presenceBroadcaster,
         )
+    // Plan G2: every authenticated request (and open socket tick) marks the caller online. The
+    // in-memory claim keeps it to one Redis + one DB write per user a minute, and the write runs off
+    // the request so a slow Redis never delays an unrelated call.
+    val presenceRefreshLauncher =
+        com.pynapli.server.auth.BoundedWorkLauncher(
+            scope = backgroundScope,
+            maxConcurrent = PRESENCE_REFRESH_MAX_CONCURRENT,
+            maxPending = PRESENCE_REFRESH_MAX_PENDING,
+            label = "presence",
+        )
+    val markOnlineOnAuthenticated: (java.util.UUID) -> Unit = { userId ->
+        if (presenceService.claimRefresh(userId)) {
+            presenceRefreshLauncher.launch { runCatching { presenceService.refreshOnline(userId) } }
+        }
+    }
     val presenceOfflineScanner =
         PresenceOfflineScanner(
             tracker = onlinePresenceTracker,
@@ -198,6 +214,7 @@ internal fun buildCoreDependencies(
             productMetrics = productMetrics,
             revocationRelay = redisCache.realtimeRelay,
             onEmailSignIn = contactBlockSettling::atSignIn,
+            onAuthenticated = markOnlineOnAuthenticated,
         )
     val contactBlockService =
         ContactBlockService(
@@ -311,3 +328,8 @@ private fun createPushNotificationSender(config: ServerConfig): PushNotification
             "Unsupported notification push provider: ${config.notificationPushProvider}",
         )
     }
+
+// Presence refresh off the request path: a few concurrent Redis/DB writes, a bounded queue; past it a
+// refresh is dropped and the next request a minute later tries again.
+private const val PRESENCE_REFRESH_MAX_CONCURRENT = 8
+private const val PRESENCE_REFRESH_MAX_PENDING = 2_000

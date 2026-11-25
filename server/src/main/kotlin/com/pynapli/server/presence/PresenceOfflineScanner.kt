@@ -44,7 +44,12 @@ class PresenceOfflineScanner(
         val gone: Set<UUID> = tracked - stillOnline
         if (gone.isEmpty()) return
         tracker.removeAll(gone)
-        val now = clock.instant().toString()
+        // Cut to the minute, like the "came online" delta (PresenceService).
+        val now =
+            clock
+                .instant()
+                .truncatedTo(java.time.temporal.ChronoUnit.MINUTES)
+                .toString()
         gone.forEach { userId ->
             broadcaster.emit(
                 PresenceDeltaDto(

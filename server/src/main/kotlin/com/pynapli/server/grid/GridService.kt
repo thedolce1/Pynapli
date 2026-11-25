@@ -250,7 +250,8 @@ class GridService(
     }
 
     private suspend fun refreshViewerPresence(viewerUserId: UUID) {
-        runCatching { presenceService?.refreshOnline(viewerUserId) }
+        // Throttled (one write a minute); the auth hook usually claimed it already for this request.
+        runCatching { presenceService?.touch(viewerUserId) }
     }
 
     private suspend fun onlineUserIdsFor(cards: List<GridCardRecord>): Set<UUID> =
