@@ -149,16 +149,18 @@ internal fun buildCoreDependencies(
     val presenceRepository = RedisPresenceRepository(redisCache)
     val presenceBroadcaster = PresenceBroadcaster(relay = redisCache.realtimeRelay)
     val onlinePresenceTracker = OnlinePresenceTracker()
+    val lastActiveRepository =
+        com.pynapli.server.presence
+            .JdbcLastActiveRepository(database.dataSource)
+    // Incognito members' online/offline transitions never go out on the presence stream.
+    val presenceBroadcastAllowed: suspend (java.util.UUID) -> Boolean = { userId -> !lastActiveRepository.lookup(userId).hidden }
     val presenceService =
         PresenceService(
             repository = presenceRepository,
             onlineTracker = onlinePresenceTracker,
-            lastActiveRecorder =
-                com.pynapli.server.presence.LastActiveRecorder(
-                    com.pynapli.server.presence
-                        .JdbcLastActiveRepository(database.dataSource),
-                ),
+            lastActiveRecorder = com.pynapli.server.presence.LastActiveRecorder(lastActiveRepository),
             broadcaster = presenceBroadcaster,
+            broadcastAllowed = presenceBroadcastAllowed,
         )
     // Plan G2: every authenticated request (and open socket tick) marks the caller online. The
     // in-memory claim keeps it to one Redis + one DB write per user a minute, and the write runs off
@@ -180,6 +182,7 @@ internal fun buildCoreDependencies(
             tracker = onlinePresenceTracker,
             repository = presenceRepository,
             broadcaster = presenceBroadcaster,
+            broadcastAllowed = presenceBroadcastAllowed,
         )
     val blockRepository = JdbcBlockRepository(database.dataSource)
     val blockService = BlockService(blockRepository)

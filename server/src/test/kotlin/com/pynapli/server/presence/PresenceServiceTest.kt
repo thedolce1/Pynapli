@@ -109,6 +109,64 @@ class PresenceServiceTest {
         }
 
     @Test
+    fun anIncognitoMembersTransitionsNeverReachTheStream() =
+        runBlocking {
+            val incognito = UUID.randomUUID()
+            val visible = UUID.randomUUID()
+            val broadcaster = PresenceBroadcaster()
+            val tracker = OnlinePresenceTracker()
+            val allowed: suspend (UUID) -> Boolean = { it != incognito }
+            val repository = InMemoryPresenceRepository()
+            val service = PresenceService(repository, onlineTracker = tracker, broadcaster = broadcaster, broadcastAllowed = allowed)
+            val scanner =
+                PresenceOfflineScanner(
+                    tracker = tracker,
+                    repository = InMemoryPresenceRepository(),
+                    broadcaster = broadcaster,
+                    broadcastAllowed = allowed,
+                )
+
+            coroutineScope {
+                val received = mutableListOf<PresenceDeltaDto>()
+                val job = broadcaster.deltas.onEach { received += it }.launchIn(this)
+                withTimeoutOrNull(2_000) { broadcaster.subscriptionCount.first { it > 0 } }
+
+                service.refreshOnline(incognito)
+                service.refreshOnline(visible)
+                // The scanner's repository knows nobody, so both "went offline".
+                scanner.scanOnce()
+                withTimeoutOrNull(2_000) { while (received.size < 2) delay(5) }
+                delay(100)
+                job.cancel()
+
+                assertEquals(listOf(true to visible.toString(), false to visible.toString()), received.map { it.online to it.userId })
+            }
+            // Presence itself still works for them (the online dot keeps today's rules).
+            assertEquals(setOf(incognito), service.onlineUserIds(listOf(incognito)))
+        }
+
+    @Test
+    fun aFailingPrivacyCheckSaysNothing() =
+        runBlocking {
+            val broadcaster = PresenceBroadcaster()
+            val service =
+                PresenceService(
+                    InMemoryPresenceRepository(),
+                    broadcaster = broadcaster,
+                    broadcastAllowed = { error("db down") },
+                )
+            coroutineScope {
+                val received = mutableListOf<PresenceDeltaDto>()
+                val job = broadcaster.deltas.onEach { received += it }.launchIn(this)
+                withTimeoutOrNull(2_000) { broadcaster.subscriptionCount.first { it > 0 } }
+                service.refreshOnline(UUID.randomUUID())
+                delay(100)
+                job.cancel()
+                assertTrue(received.isEmpty())
+            }
+        }
+
+    @Test
     fun anAuthenticatedRequestRunsTheHookWithTheTokenUser() =
         runBlocking {
             val userId = UUID.randomUUID()

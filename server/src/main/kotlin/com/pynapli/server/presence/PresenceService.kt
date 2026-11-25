@@ -24,6 +24,12 @@ class PresenceService(
     private val broadcaster: PresenceBroadcaster? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val refreshInterval: Duration = DEFAULT_REFRESH_INTERVAL,
+    /**
+     * Whether [userId]'s online/offline transitions may go out on the presence stream: false for a
+     * member hiding their activity (incognito). The stream accepts any subscribed id, so this gate is
+     * what keeps an incognito member's comings and goings off it. Null (tests) allows everyone.
+     */
+    private val broadcastAllowed: (suspend (UUID) -> Boolean)? = null,
 ) {
     private val lastRefreshed = ConcurrentHashMap<UUID, Instant>()
 
@@ -57,7 +63,8 @@ class PresenceService(
         val state = profile("presence.repository.refresh") { repository.heartbeat(userId) }
         profile("presence.trackerRefresh") { onlineTracker?.markOnline(userId) }
         profile("presence.lastActive") { lastActiveRecorder?.record(userId) }
-        if (state.cameOnline) {
+        // Fail closed: if the privacy check errors, say nothing.
+        if (state.cameOnline && runCatching { broadcastAllowed?.invoke(userId) ?: true }.getOrDefault(false)) {
             // Same shape as the offline delta. The time is cut to the minute: the delta itself is the
             // live signal, so a finer timestamp would tell a subscriber nothing it needs.
             runCatching {
