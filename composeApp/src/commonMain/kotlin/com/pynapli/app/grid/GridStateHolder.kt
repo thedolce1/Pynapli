@@ -119,6 +119,9 @@ class GridStateHolder(
     private var pendingAt: TimeMark? = null
     private var liveRefreshInFlight = false
 
+    /** How many of the shown cards came from page one (the slots a page-one refresh speaks for). */
+    private var pageOneSize = 0
+
     /** True when the cards on screen came from the server longer than [age] ago (or never did). */
     fun resultsOlderThan(age: Duration): Boolean = loadedAt?.let { it.elapsedNow() >= age } ?: true
 
@@ -206,6 +209,7 @@ class GridStateHolder(
                 if (generation != feedGeneration) return@onSuccess
                 loadedAt = timeSource.markNow()
                 liveAt = loadedAt
+                pageOneSize = feed.cards.size
                 // The server ranked a grid for this account, so it holds a location for it.
                 _serverHasLocation.value = true
                 _state.update { current ->
@@ -303,7 +307,9 @@ class GridStateHolder(
      *
      * Deliberately not a [load]: it never bumps the feed generation (a page being appended survives),
      * never touches filters, the spinner or an error, and a failure is a silent no-op. A shown card
-     * missing from the fresh page is kept: it may simply sit on page two now. Skipped while any
+     * from page one that is missing from the fresh page is kept in its slot but loses its dot and
+     * caption (presence unknown): it may have gone hidden or incognito, or moved to page two. Cards
+     * from later pages are left as they were, since only page one is fetched. Skipped while any
      * other request for the Grid is on the wire.
      */
     suspend fun refreshLive() {
@@ -323,12 +329,25 @@ class GridStateHolder(
             val shownIds = _state.value.cards.mapTo(HashSet()) { it.id }
             val newCount = feed.cards.count { it.id !in shownIds }
             val freshById = feed.cards.associateBy { it.id }
+            // The shown cards this answer speaks for: all of them when it is the whole result (no next
+            // page), otherwise the slots that came from page one. Cards from later pages are beyond
+            // what a page-one refresh can see, so they keep their last known state until a reload or
+            // a presence delta (a known limitation of refreshing page one only).
+            val coveredSlots = if (feed.nextCursor == null) Int.MAX_VALUE else pageOneSize
             _state.update { shownState ->
                 shownState.copy(
                     cards =
-                        shownState.cards.map { shown ->
-                            // Same slot, newer facts; the tile colours stay put so nothing flickers.
-                            freshById[shown.id]?.copy(tone = shown.tone, linkedPartnerTone = shown.linkedPartnerTone) ?: shown
+                        shownState.cards.mapIndexed { index, shown ->
+                            val fresh = freshById[shown.id]
+                            when {
+                                // Same slot, newer facts; the tile colours stay put so nothing flickers.
+                                fresh != null -> fresh.copy(tone = shown.tone, linkedPartnerTone = shown.linkedPartnerTone)
+                                // Gone from the answer that covers this slot (hidden, incognito, moved
+                                // away): never keep a stale green dot. The card stays put (no reorder
+                                // under the finger) with its presence unknown until the order is applied.
+                                index < coveredSlots -> shown.withPresenceUnknown()
+                                else -> shown
+                            }
                         },
                     newNearbyCount = newCount,
                 )
@@ -358,6 +377,7 @@ class GridStateHolder(
         pendingFeed = null
         pendingAt = null
         loadedAt = answeredAt ?: timeSource.markNow()
+        pageOneSize = feed.cards.size
         _state.update { current ->
             current.copy(
                 cards = feed.cards,
@@ -573,6 +593,8 @@ class GridStateHolder(
     }
 
     suspend fun removeCardById(userId: String) {
+        val removedIndex = _state.value.cards.indexOfFirst { it.id == userId }
+        if (removedIndex in 0 until pageOneSize) pageOneSize -= 1
         _state.update { current ->
             current.copy(cards = current.cards.filterNot { it.id == userId })
         }
@@ -644,6 +666,7 @@ class GridStateHolder(
         liveAt = null
         pendingFeed = null
         pendingAt = null
+        pageOneSize = 0
         // The next account starts from its own stored filters (none on this device yet).
         filtersRestored = false
         persistedFilters = null

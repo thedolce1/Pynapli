@@ -76,6 +76,51 @@ class GridLivenessTest {
         }
 
     @Test
+    fun aPageOneCardThatVanishesLosesItsGreenDotInPlaceAndLaterPagesAreLeftAlone() =
+        runTest {
+            val greenA = card("a").copy(online = true, activeAgo = GridActiveAgo.ONLINE)
+            val greenB = card("b").copy(online = true, activeAgo = GridActiveAgo.ONLINE)
+            val greenC = card("c").copy(online = true, activeAgo = GridActiveAgo.ONLINE)
+            val repository =
+                CursorSwitchableGridFeedRepository(
+                    firstPage = feed(greenA, greenB, cursor = "p2"),
+                    pageTwo = feed(greenC),
+                )
+            val holder = GridStateHolder(repository, timeSource = testScheduler.timeSource)
+            holder.load()
+            holder.loadMore()
+            assertEquals(listOf("a", "b", "c"), holder.state.value.cards.map { it.id })
+
+            // b went hidden while online: the next page-one answer no longer holds b.
+            repository.firstPage = feed(greenA, cursor = "p2")
+            holder.setOnScreen(true)
+            backgroundScope.launch { holder.runLiveRefresh() }
+            runCurrent()
+            advanceTimeBy(61.seconds)
+
+            val cards = holder.state.value.cards
+            assertEquals(listOf("a", "b", "c"), cards.map { it.id }, "nothing moves under the finger")
+            assertTrue(cards[0].online)
+            assertFalse(cards[1].online, "no stale green dot for someone gone from page one")
+            assertNull(cards[1].activeAgo)
+            assertTrue(cards[2].online, "page two is beyond a page-one refresh: left as it was")
+        }
+
+    @Test
+    fun whenPageOneIsTheWholeResultEveryVanishedCardLosesItsDot() =
+        runTest {
+            val repository = SwitchableGridFeedRepository(feed(card("a").copy(online = true), card("b").copy(online = true)))
+            val holder = GridStateHolder(repository)
+            holder.load()
+
+            repository.feed = feed(card("a").copy(online = true))
+            holder.refreshLive()
+
+            assertTrue(holder.state.value.cards[0].online)
+            assertFalse(holder.state.value.cards[1].online)
+        }
+
+    @Test
     fun aFailedQuietRefreshIsSilent() =
         runTest {
             val repository = SwitchableGridFeedRepository(feed(card("a")))
@@ -351,6 +396,17 @@ private class SwitchableGridFeedRepository(
         failure?.let { throw it }
         return feed
     }
+}
+
+/** Cursor-less loads answer [firstPage] (switchable); a cursor load answers [pageTwo]. */
+private class CursorSwitchableGridFeedRepository(
+    var firstPage: GridFeedUi,
+    private val pageTwo: GridFeedUi,
+) : GridFeedRepository {
+    override suspend fun loadGrid(
+        filters: GridFilters,
+        cursor: String?,
+    ): GridFeedUi = if (cursor == null) firstPage else pageTwo
 }
 
 /** The first load parks on [gate]; later loads answer at once. */

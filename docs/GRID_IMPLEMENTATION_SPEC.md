@@ -405,7 +405,9 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
 - Cards never move under the finger. While the Grid is on screen, Nearby is showing and the app is
   in front, `GridStateHolder.runLiveRefresh` asks for the first page every 60 s
   (`LIVE_REFRESH_INTERVAL`) through `refreshLive`: cards already shown update in place (online dot,
-  `activeAgo`, New marker, photo), shown cards missing from page one stay (they may be on page two),
+  `activeAgo`, New marker, photo); a shown card from page one that the fresh page no longer holds
+  stays in its slot with presence unknown (no stale green dot for someone who went hidden), while
+  cards from later pages are left as they were (only page one is fetched),
   and people not on screen are held back behind an "N new nearby" pill (`GridNewNearbyPill`).
   Tapping the pill, pull-to-refresh or the wide-window Refresh button applies the held-back order and
   scrolls to the top.
