@@ -84,6 +84,9 @@ data class PublicProfileDto(
     val allowGridMessages: Boolean,
     val allowFlirts: Boolean,
     val allowAlbumRequests: Boolean,
+    // Why this viewer can't start a Grid conversation, when allowGridMessages is false and the viewer
+    // can fix it: "VERIFY_TO_MESSAGE" (photo-verify first). Null when allowed or not fixable.
+    val messagingUnavailableReason: String? = null,
 )
 
 @Serializable
