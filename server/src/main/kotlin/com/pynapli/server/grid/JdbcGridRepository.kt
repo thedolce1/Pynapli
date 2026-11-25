@@ -89,6 +89,7 @@ internal class JdbcGridRepository(
                             tonightActive = h?.tonightActive ?: false,
                             verified = h?.verified ?: false,
                             coupleVerified = h?.coupleVerified ?: false,
+                            fresh = h?.fresh ?: false,
                         )
                     }
 
@@ -150,6 +151,7 @@ internal class JdbcGridRepository(
                                 visitingUntil = until,
                                 verified = h?.verified ?: false,
                                 coupleVerified = h?.coupleVerified ?: false,
+                                fresh = h?.fresh ?: false,
                             )
                         },
                 )

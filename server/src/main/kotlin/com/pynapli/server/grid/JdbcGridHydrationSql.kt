@@ -39,8 +39,11 @@ internal fun Connection.hydrateGridCards(
                      AND ts.status = 'active'
                      AND ts.paused_at IS NULL
                      AND ts.expires_at > now()
-               ) AS tonight_active
+               ) AS tonight_active,
+               -- Plan G4 "New" marker: the same Fresh rule as the freshOnly filter.
+               COALESCE(${GridActivitySql.fresh(user = "hu", tag = "hfresh")}, false) AS fresh
         FROM unnest(?::uuid[]) AS pc(user_id)
+        LEFT JOIN users hu ON hu.id = pc.user_id
         LEFT JOIN LATERAL (
             SELECT mai.media_asset_id
             FROM media_albums ma
@@ -164,6 +167,7 @@ internal fun Connection.hydrateGridCards(
                             tonightActive = rs.getBoolean("tonight_active"),
                             verified = rs.getBoolean("verified"),
                             linkedPartnerVerified = rs.getBoolean("linked_partner_verified"),
+                            fresh = rs.getBoolean("fresh"),
                         ),
                     )
                 }

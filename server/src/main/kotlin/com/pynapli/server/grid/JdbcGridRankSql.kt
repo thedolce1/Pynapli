@@ -215,8 +215,9 @@ internal fun Connection.queryGridRank(
                         AND active_today_us.last_seen_at > now() - interval '24 hours'
                   )
               )
-              -- FILTERS_SPEC "Recently joined" (Grid Presence): account created within the last week.
-              AND (?::boolean = false OR u.created_at > now() - interval '7 days')
+              -- "Fresh" quick chip (plan G4; replaced "Recently joined"): GridActivitySql.fresh, the
+              -- same rule as the card's fresh flag. Only evaluated when the filter is on.
+              AND (?::boolean = false OR ${GridActivitySql.fresh(user = "u", tag = "fresh")})
               -- FILTERS_SPEC "Traveling here" (Grid Presence): the candidate is near the viewer via an
               -- active travel/passport location (the card's "visiting" state), not their home GPS.
               AND (?::boolean = false OR target_travel.id IS NOT NULL)
@@ -356,8 +357,8 @@ internal fun Connection.queryGridRank(
         statement.setBoolean(index++, filters.withPhotosOnly)
         // FILTERS_SPEC "Active today" gate.
         statement.setBoolean(index++, filters.activeTodayOnly)
-        // FILTERS_SPEC "Recently joined" / "Traveling here" gates.
-        statement.setBoolean(index++, filters.recentlyJoinedOnly)
+        // "Fresh" / "Traveling here" gates.
+        statement.setBoolean(index++, filters.freshOnly)
         statement.setBoolean(index++, filters.travelingHereOnly)
         // FILTERS_SPEC "Has private album" gate.
         statement.setBoolean(index++, filters.hasPrivateAlbumOnly)

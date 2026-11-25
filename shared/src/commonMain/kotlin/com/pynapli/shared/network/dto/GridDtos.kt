@@ -22,7 +22,12 @@ data class GridQueryRequestDto(
     val logisticsTags: List<String> = emptyList(),
     val tonightAvailableOnly: Boolean = false,
     val activeTodayOnly: Boolean = false,
+    // Superseded by [freshOnly] (plan G4): the server treats true here exactly as freshOnly = true, so
+    // old clients and saved filters keep working. New clients send freshOnly.
     val recentlyJoinedOnly: Boolean = false,
+    // "Fresh" quick chip: only cards whose [GridCardDto.fresh] is true (server rule: account under 72 h
+    // old or a new approved photo in the last 24 h, and active in the last 24 h). Free.
+    val freshOnly: Boolean = false,
     val travelingHereOnly: Boolean = false,
     // People whose announced planned trip brings them to the viewer's area in the next 14 days.
     val visitingSoonOnly: Boolean = false,
@@ -69,6 +74,8 @@ data class GridCardDto(
     // This person and the linked partner shown in [linkedPartner] are both photo-verified.
     // Computed server-side; false whenever the partner mini is hidden from this viewer.
     val coupleVerified: Boolean = false,
+    // "New" marker (plan G4): server-computed Fresh rule, the same one behind the freshOnly filter.
+    val fresh: Boolean = false,
 )
 
 /**

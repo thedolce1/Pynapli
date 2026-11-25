@@ -63,7 +63,8 @@ class GridService(
                     logisticsTags = request.logisticsTags,
                     tonightAvailableOnly = request.tonightAvailableOnly,
                     activeTodayOnly = request.activeTodayOnly,
-                    recentlyJoinedOnly = request.recentlyJoinedOnly,
+                    // Fresh replaced "Recently joined"; an old client's field means Fresh now.
+                    freshOnly = request.freshOnly || request.recentlyJoinedOnly,
                     travelingHereOnly = request.travelingHereOnly,
                     withPhotosOnly = request.withPhotosOnly,
                     hasPrivateAlbumOnly = request.hasPrivateAlbumOnly,
@@ -324,4 +325,5 @@ internal fun GridCardRecord.toGridCardDto(
         tonightActive = tonightActive,
         verified = verified,
         coupleVerified = coupleVerified,
+        fresh = fresh,
     )

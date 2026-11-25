@@ -111,6 +111,7 @@ class FavoriteService internal constructor(
                     tonightActive = h?.tonightActive ?: false,
                     verified = h?.verified ?: false,
                     coupleVerified = h?.coupleVerified ?: false,
+                    fresh = h?.fresh ?: false,
                 ).toGridCardDto(online, mediaAssetUrlResolver)
             }
         val nextCursor =

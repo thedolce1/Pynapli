@@ -24,10 +24,11 @@ data class DiscoveryFilters(
     // been active in the last 24h (a non-revoked session seen within the window). Swipe ignores it,
     // the way Grid ignores verifiedPreferred. A hard existence gate.
     val activeTodayOnly: Boolean = false,
-    // Grid-only Presence filters (FILTERS_SPEC "Recently joined" / "Traveling here"). recentlyJoined =
-    // the account was created within the last week; travelingHere = the candidate is near the viewer via
-    // an active travel/passport location (the card's "visiting" state). Hard gates; Swipe ignores them.
-    val recentlyJoinedOnly: Boolean = false,
+    // Grid-only Presence filters. freshOnly = the "Fresh" quick chip (plan G4, GridActivitySql.fresh:
+    // account under 72 h or a new approved photo in 24 h, and active in 24 h); it replaced "Recently
+    // joined", and the old request field maps onto it. travelingHere = the candidate is near the viewer
+    // via an active travel/passport location (the card's "visiting" state). Hard gates; Swipe ignores them.
+    val freshOnly: Boolean = false,
     val travelingHereOnly: Boolean = false,
     // FILTERS_SPEC L377 "Has photos": only surface profiles that have at least one approved,
     // visible public (profile-album) photo. Opt-in quality filter — default shows everyone,
@@ -71,7 +72,7 @@ data class DiscoveryFilters(
                 logisticsTags.isNotEmpty() ||
                 tonightAvailableOnly ||
                 activeTodayOnly ||
-                recentlyJoinedOnly ||
+                freshOnly ||
                 travelingHereOnly ||
                 withPhotosOnly ||
                 hasPrivateAlbumOnly ||
@@ -100,7 +101,7 @@ fun discoveryFiltersFrom(
     logisticsTags: List<String> = emptyList(),
     tonightAvailableOnly: Boolean = false,
     activeTodayOnly: Boolean = false,
-    recentlyJoinedOnly: Boolean = false,
+    freshOnly: Boolean = false,
     travelingHereOnly: Boolean = false,
     withPhotosOnly: Boolean = false,
     hasPrivateAlbumOnly: Boolean = false,
@@ -217,7 +218,7 @@ fun discoveryFiltersFrom(
         logisticsTags = logistics,
         tonightAvailableOnly = tonightAvailableOnly,
         activeTodayOnly = activeTodayOnly,
-        recentlyJoinedOnly = recentlyJoinedOnly,
+        freshOnly = freshOnly,
         travelingHereOnly = travelingHereOnly,
         withPhotosOnly = withPhotosOnly,
         hasPrivateAlbumOnly = hasPrivateAlbumOnly,

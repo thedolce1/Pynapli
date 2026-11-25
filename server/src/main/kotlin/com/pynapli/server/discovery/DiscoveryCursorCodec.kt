@@ -196,7 +196,9 @@ class DiscoveryCursorCodec(
                     append(filters.logisticsTags.sorted().joinToString(","))
                     append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
                     append("|activeTodayOnly=").append(filters.activeTodayOnly)
-                    append("|recentlyJoinedOnly=").append(filters.recentlyJoinedOnly)
+                    // Fresh replaced "Recently joined" in the same slot; the label is kept so cursors
+                    // issued before the change keep their hash.
+                    append("|recentlyJoinedOnly=").append(filters.freshOnly)
                     append("|travelingHereOnly=").append(filters.travelingHereOnly)
                     append("|withPhotosOnly=").append(filters.withPhotosOnly)
                     append("|hasPrivateAlbumOnly=").append(filters.hasPrivateAlbumOnly)

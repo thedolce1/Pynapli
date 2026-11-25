@@ -126,7 +126,7 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         append(';')
         append(activeTodayOnly)
         append(';')
-        append(recentlyJoinedOnly)
+        append(freshOnly)
         append(';')
         append(travelingHereOnly)
         append(';')

@@ -64,6 +64,8 @@ data class GridCardRecord(
      * so it stays fresh as sessions start/expire.
      */
     val tonightActive: Boolean = false,
+    /** Plan G4 Fresh rule, hydrated per page like [tonightActive]. */
+    val fresh: Boolean = false,
 )
 
 /** Keyset position: (boostBucket, orderBucket, orderTiebreak, userId). Travels only inside a sealed cursor. */
