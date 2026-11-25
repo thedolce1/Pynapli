@@ -149,10 +149,12 @@ class LockedCardTokenRouteRejectionTest {
                 assertEquals(malformed.status, locked.status, "${target.name}: same status as a malformed id")
                 assertEquals(malformedBody.errorField("code"), lockedBody.errorField("code"), "${target.name}: same code")
                 assertEquals(malformedBody.errorField("message"), lockedBody.errorField("message"), "${target.name}: same message")
+                // Word starts only: "blocked" (the block route's own copy) must not read as "locked".
                 listOf("locked", "subscri", "upgrade", "entitlement", "social", "select").forEach { word ->
+                    val mention = Regex("\\b$word", RegexOption.IGNORE_CASE)
                     assertTrue(
-                        !lockedBody.errorField("code").lowercase().contains(word) &&
-                            !lockedBody.errorField("message").lowercase().contains(word),
+                        !mention.containsMatchIn(lockedBody.errorField("code")) &&
+                            !mention.containsMatchIn(lockedBody.errorField("message")),
                         "${target.name}: the refusal must not mention '$word': $lockedBody",
                     )
                 }

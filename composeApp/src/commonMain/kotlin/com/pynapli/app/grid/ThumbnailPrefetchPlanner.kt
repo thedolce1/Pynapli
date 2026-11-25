@@ -13,6 +13,9 @@ internal fun planThumbnailPrefetch(
     val to = (from + windowSize).coerceAtMost(cards.size)
     val seen = LinkedHashSet<String>(to - from)
     for (index in from until to) {
+        // Locked cards are never prefetched: their photos load only if the viewer scrolls to them,
+        // and nothing about a locked person is cached ahead on the device (Section 3).
+        if (cards[index].isLockedCard) continue
         val url = cards[index].thumbnailUrl ?: continue
         seen += url
     }

@@ -174,9 +174,22 @@ A Grindr-style paywall on tap. Server side only so far; the client half is a sep
   reaches into the locked window also spends `GRID_LOCKED_PAGE` (60 per user per hour) before any
   ranking work; over it the page is `429 RATE_LIMITED`. A whole Free locked window is 9 pages of 60
   (Social: 7 of 90).
-- Residual: the thumbnail URL names the media asset (not the member), so someone who already sees
-  that member unlocked elsewhere (Swipe, Tonight) can match the photo. That is inherent in showing
-  the photo at all.
+- Accepted residual (privacy review, 2026-11-25): the thumbnail URL names the media asset (not the
+  member), and the same asset id appears on that member's unlocked surfaces (other Grid queries,
+  Swipe, profile detail). Matching it is an exact id match, not a look-alike guess, so a viewer who
+  already sees that member unlocked somewhere can tell for certain who a locked card is. This is not
+  a privacy breach: a locked card is someone this viewer is already allowed to see (blocks, hides,
+  contact blocks and visibility all apply first); the lock is a paywall on depth, not a privacy
+  control. A per-viewer proxied or separately stored locked thumbnail would close the id match if the
+  paywall ever needs to be harder; not built.
+- Accepted residual: the tier depth is counted per cursor (per query), not per viewer per day. A
+  free viewer can narrow the basic free filters (age, gender, orientation, verified, online) so a
+  given person falls inside the first 60 and shows unlocked. That predates Section 3; locked tiles
+  (photo, distance, badges, online) now show whom to narrow for. The paywall is therefore soft, like
+  Grindr's: it sells convenience and depth, not secrecy. A per-viewer daily seen-count would harden
+  it; not built.
+- Locked photos are dimmed (about 22%), not blurred, on purpose (Grindr-style cascade: the faces are
+  the upsell), and are never prefetched or cached in the cold-start snapshot on the device.
 
 ### Location privacy (load-bearing)
 

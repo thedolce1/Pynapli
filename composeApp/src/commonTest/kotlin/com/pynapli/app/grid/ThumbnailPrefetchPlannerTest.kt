@@ -77,6 +77,18 @@ class ThumbnailPrefetchPlannerTest {
         assertTrue(planThumbnailPrefetch(cards, lastVisibleIndex = 0, windowSize = -3).isEmpty())
     }
 
+    @Test
+    fun lockedCardsAreNeverPrefetched() {
+        val cards =
+            listOf(
+                card("id-0", thumbnail = "https://cdn/0.jpg"),
+                card("id-1", thumbnail = "https://cdn/1.jpg"),
+                card("locked_a", thumbnail = "https://cdn/locked-a.jpg"),
+                card("locked_b", thumbnail = "https://cdn/locked-b.jpg"),
+            )
+        assertEquals(listOf("https://cdn/1.jpg"), planThumbnailPrefetch(cards, lastVisibleIndex = 0))
+    }
+
     private fun card(
         id: String,
         thumbnail: String?,
