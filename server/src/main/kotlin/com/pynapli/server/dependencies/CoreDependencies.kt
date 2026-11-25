@@ -152,8 +152,12 @@ internal fun buildCoreDependencies(
     val lastActiveRepository =
         com.pynapli.server.presence
             .JdbcLastActiveRepository(database.dataSource)
-    // Incognito members' online/offline transitions never go out on the presence stream.
-    val presenceBroadcastAllowed: suspend (java.util.UUID) -> Boolean = { userId -> !lastActiveRepository.lookup(userId).hidden }
+    // Online/offline transitions go out on the presence stream only for people the Grid could show
+    // (active, visible, Grid-visible, not incognito, not hidden while travelling, not quarantined).
+    val presenceVisibility =
+        com.pynapli.server.presence
+            .JdbcPresenceVisibility(database.dataSource)
+    val presenceBroadcastAllowed: suspend (java.util.UUID) -> Boolean = presenceVisibility::broadcastable
     val presenceService =
         PresenceService(
             repository = presenceRepository,
