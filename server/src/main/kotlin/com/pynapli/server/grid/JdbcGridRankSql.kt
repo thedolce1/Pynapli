@@ -71,7 +71,7 @@ internal fun Connection.queryGridRank(
         ),
         base_candidates AS (
             SELECT u.id AS user_id,
-                   COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+                   COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
                    ds.show_distance,
                    -- Rank tier (plan G3), the first keyset column: 0 boosted, 1 everyone else,
                    -- 2 demoted (dormant 30+ days, or no approved public photo) so a thin member base

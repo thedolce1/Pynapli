@@ -52,7 +52,7 @@ internal object JdbcProfileSql {
     val PUBLIC_PROFILE_QUERY =
         """
         SELECT u.id AS user_id,
-               COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+               COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
                profile_photo.media_asset_id AS profile_photo_media_asset_id,
                profile_photo.media_asset_ids AS profile_photo_ids,
                linked_partner.linked_partner_user_id,
@@ -194,7 +194,7 @@ internal object JdbcProfileSql {
         ) profile_photo ON true
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
-                   COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
+                   COALESCE(NULLIF(linked_profile.display_name, ''), 'New member') AS linked_partner_display_name,
                    linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
                    (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified,
                    -- Partner preview: the partner's OWN declared orientation and lifestyle (each

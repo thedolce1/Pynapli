@@ -311,7 +311,7 @@ private val VISITING_SOON_QUERY =
     )
     SELECT DISTINCT ON (u.id)
            u.id AS user_id,
-           COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+           COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
            t.starts_on,
            t.ends_on
     FROM viewer_location v

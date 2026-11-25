@@ -660,7 +660,7 @@ private fun RecapPhase(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = match.displayName ?: "Pynapli User",
+                            text = match.displayName ?: "New member",
                             color = PynapliColors.TextPrimary,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),

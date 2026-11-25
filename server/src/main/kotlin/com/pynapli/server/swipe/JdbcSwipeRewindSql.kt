@@ -27,7 +27,7 @@ internal fun Connection.findLatestRewindableAction(
                sa.target_user_id,
                sa.action,
                sa.consumed_inventory_id,
-               COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+               COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
                p.display_age,
                p.bio,
                array_remove(ARRAY[p.experience_level], NULL) || COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,
@@ -89,7 +89,7 @@ internal fun Connection.findLatestRewindableAction(
         ) profile_photos ON true
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
-                   COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
+                   COALESCE(NULLIF(linked_profile.display_name, ''), 'New member') AS linked_partner_display_name,
                    linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
                    (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified
             FROM user_profile_links upl

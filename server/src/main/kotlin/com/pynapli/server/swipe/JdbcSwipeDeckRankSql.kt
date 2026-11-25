@@ -81,7 +81,7 @@ $candidateSource
         -- radius test, the output column and the order key, and so computed three times a candidate.
         candidates AS MATERIALIZED (
             SELECT u.id AS user_id,
-                   COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+                   COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
                    p.display_age,
                    p.bio,
                    array_remove(ARRAY[p.experience_level], NULL) || COALESCE(p.lifestyle_tags, '{}'::text[]) || COALESCE(p.logistics_tags, '{}'::text[]) AS profile_tags,

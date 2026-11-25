@@ -18,7 +18,7 @@ internal object JdbcActivityFeedSql {
         SELECT ae.id AS event_id,
                ae.event_type,
                ae.actor_user_id,
-               COALESCE(NULLIF(actor_profile.display_name, ''), 'Pynapli User') AS actor_display_name,
+               COALESCE(NULLIF(actor_profile.display_name, ''), 'New member') AS actor_display_name,
                actor_photo.media_asset_id AS actor_profile_photo_media_asset_id,
                ae.aggregate_count,
                ae.occurred_at,
