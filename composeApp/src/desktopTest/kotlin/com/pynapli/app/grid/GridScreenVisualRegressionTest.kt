@@ -119,7 +119,11 @@ private fun ImageBitmap.assertGridVisualSignature(label: String) {
     // subdued; the sum shrank only because the band overlap shrank. 0.52 still asserts a
     // majority-dark premium surface.
     assertTrue(signature.darkRatio + signature.sheetSurfaceRatio > 0.52f, "$label should remain predominantly dark/subdued: $signature")
-    assertTrue(signature.midToneRatio > 0.25f, "$label should contain visible Grid card tone blocks: $signature")
+    // Recalibrated 2026-11-24 (plan G11): no-photo tiles are one neutral raised surface with a
+    // silhouette instead of a coloured gradient picked by list position, so the old mid-tone
+    // "tone block" check (> 0.25) no longer applies. The tiles now register in the subdued-surface
+    // band (#16161C); their top halves (above the bottom scrim) must still cover a visible share.
+    assertTrue(signature.sheetSurfaceRatio > 0.15f, "$label should contain visible neutral Grid tiles: $signature")
     assertTrue(signature.brightRatio > 0.006f, "$label should contain legible light text/icons: $signature")
     // Threshold lowered 8 -> 4 (Grid handoff refinement): the per-tile online dot shrank from 8dp
     // to a compact, photo-first 7dp, so fewer green pixels register at this sample step. Lowered

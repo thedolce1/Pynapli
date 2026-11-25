@@ -88,7 +88,7 @@ profile peek.
 
 | Surface | Density | Rules |
 | --- | --- | --- |
-| Grid | Highest | Photo fills the tile; short functional bottom gradient; name, online dot, a small verified check after the name for photo-verified people, distance, linked-partner mini icon (with a small verified check on the mini when the couple is verified: both partners photo-verified). **No tags or chips on tiles**; filters carry the complexity. Tight gap (~2dp). Filter changes animate items in/out/around instead of blanking the grid. Loading is incremental. |
+| Grid | Highest | Photo fills the tile; short functional bottom gradient; name, online dot, a small verified check after the name for photo-verified people, distance, linked-partner mini icon (with a small verified check on the mini when the couple is verified: both partners photo-verified). The only other marks allowed, each a product feature: the Playing Tonight moon and a small gold "New" tag (the server's Fresh rule) top-left, the Visiting pill in the caption row, and a one-line "Active 15m ago / 1h / 3h / today / this week" caption above the name for people not online now. **No other tags or chips on tiles**; filters carry the complexity. No photo: one neutral raised surface with a person silhouette, never a colour chosen by list position. Tight gap (~1dp, `GridTileGap`). Filter changes animate items in/out/around instead of blanking the grid. Loading is incremental. |
 | Swipe | Low, high focus | One person at a time, photo-first, name/age/distance, linked partner shown as context (never a couple card), one short bio line, details on expand. Physical gesture feel. No messaging unless matched (Pineapple Like with an optional note is the paid exception; Intro Notes were merged into it). |
 | Activity | Medium-high | Newest first, compact rows: avatar, action, timestamp, partner icon. Gated rows tease without feeling scammy; blur and lock states stay readable. |
 | Messages | Medium | Scannable inbox, clear sent/received alignment, timestamp and state without clutter, neutral system messages. Partner invite-to-chat states are explicit; private album interactions are consent-based; safety/report actions reachable without clutter. |
@@ -111,15 +111,17 @@ reduced-motion settings where the platform exposes them.
   sizes; dynamic text size must not cause overlap.
 - Destructive actions require confirmation (`design/PynapliConfirmDialog.kt`). Important actions get
   haptic feedback where the platform supports it.
-- Pull-to-refresh and background refresh never jump the user to the top; no full-screen spinner over
-  cached content.
+- Background refresh never moves cards or jumps the user to the top: a quiet Grid refresh updates
+  presence in place and holds new people behind an "N new nearby" pill. Applying a new order (the
+  pill, pull-to-refresh, the wide-window Refresh button) returns to the top. No full-screen spinner
+  over cached content.
 - Every production screen has empty, loading, error, offline and gated states, and works with
   location and notification permissions denied.
 
 ## Do not
 
 - Make Profile a bottom tab.
-- Put tags or chips on grid tiles.
+- Put tags or chips on grid tiles beyond the Tonight moon, New tag, Visiting pill and active caption.
 - Hardcode hex values or corner radii in feature code.
 - Use negative letter spacing or viewport-scaled type.
 - Use oversized radii, cards inside cards, heavy drop shadows, or generic rounded panels everywhere.
