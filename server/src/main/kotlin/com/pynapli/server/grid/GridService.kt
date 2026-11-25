@@ -42,6 +42,8 @@ class GridService(
     private val contactBlockVisibility: ContactBlockVisibility? = null,
     // Buckets the cards' activeAgo keys (plan G11).
     private val clock: Clock = Clock.systemUTC(),
+    // Section 3: opaque per-viewer ids for locked cards. Production derives it from the cursor secret.
+    private val lockedCardTokens: LockedGridCardTokens = LockedGridCardTokens("pynapli-local-dev-discovery-cursor-secret"),
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,

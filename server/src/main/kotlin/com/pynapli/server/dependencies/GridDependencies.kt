@@ -5,6 +5,7 @@ import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.grid.GridService
 import com.pynapli.server.grid.JdbcGridRepository
 import com.pynapli.server.grid.JdbcGridViewerTrustRepository
+import com.pynapli.server.grid.LockedGridCardTokens
 import com.pynapli.server.grid.RedisGridCandidateRankCache
 import com.pynapli.server.grid.SavedGridFilterService
 import com.pynapli.server.media.MediaAssetUrlResolver
@@ -64,6 +65,7 @@ internal fun buildGridDependencies(
             viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
             rateLimitService = rateLimitService,
             contactBlockVisibility = contactBlockVisibility,
+            lockedCardTokens = LockedGridCardTokens(config.discoveryCursorSecret),
         )
     val savedGridFilterService =
         SavedGridFilterService(
