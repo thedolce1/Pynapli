@@ -12,7 +12,9 @@ import java.util.UUID
  * identity rows (user_id + the cheap ranking / keyset-cursor fields), ordered by
  * the SAME keyset order as the original single query
  * (boost_bucket ASC, order bucket ASC, order_tiebreak ASC, user_id ASC), with NO cursor
- * WHERE clause and LIMIT = [limit] (the caller passes the window size).
+ * WHERE clause and LIMIT = [limit] (the caller passes the window size). `boost_bucket` is the rank
+ * tier: 0 boosted, 1 normal, 2 demoted (GridActivitySql.demoted); the column keeps its name so
+ * cursors and cached windows issued before the tier existed still decode.
  *
  * When [userSpecificViewerId] is null the query is EXCLUSION-FREE: no viewer-self
  * filter and no per-viewer block subquery, so the window can be cached and shared
@@ -71,13 +73,21 @@ internal fun Connection.queryGridRank(
             SELECT u.id AS user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
                    ds.show_distance,
-                   CASE WHEN EXISTS (
-                       SELECT 1
-                       FROM boost_activations ba
-                       WHERE ba.user_id = u.id
-                         AND ba.status = 'active'
-                         AND ba.ends_at > now()
-                   ) THEN 0 ELSE 1 END AS boost_bucket,
+                   -- Rank tier (plan G3), the first keyset column: 0 boosted, 1 everyone else,
+                   -- 2 demoted (dormant 30+ days, or no approved public photo) so a thin member base
+                   -- shows real, active, pictured people first. A boost outranks demotion. It depends
+                   -- only on the candidate, never the viewer, so the shared window stays shareable.
+                   CASE
+                       WHEN EXISTS (
+                           SELECT 1
+                           FROM boost_activations ba
+                           WHERE ba.user_id = u.id
+                             AND ba.status = 'active'
+                             AND ba.ends_at > now()
+                       ) THEN 0
+                       WHEN ${GridActivitySql.demoted(user = "u", tag = "tier")} THEN 2
+                       ELSE 1
+                   END AS boost_bucket,
                    -- Cell-to-cell distance from the target's EFFECTIVE location (travel point when
                    -- travelling, else home): never a raw GPS distance, never a traveller's home.
                    pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,

@@ -140,6 +140,43 @@ internal fun DataSource.insertSession(
     }
 }
 
+/** Sets the durable last-active row (user_last_active) the Grid tier, Fresh and activeAgo read. */
+internal fun DataSource.setLastActive(
+    userId: UUID,
+    at: java.time.Instant,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO user_last_active (user_id, last_active_at) VALUES (?, ?)
+                ON CONFLICT (user_id) DO UPDATE SET last_active_at = EXCLUDED.last_active_at
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setTimestamp(2, java.sql.Timestamp.from(at))
+                statement.executeUpdate()
+            }
+    }
+}
+
+/** Backdates the newest profile-album item of [userId] by [hours] (for the Fresh photo rule). */
+internal fun DataSource.setProfilePhotosAddedHoursAgo(
+    userId: UUID,
+    hours: Int,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                "UPDATE media_album_items SET added_at = now() - make_interval(hours => ?) WHERE owner_user_id = ?",
+            ).use { statement ->
+                statement.setInt(1, hours)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+    }
+}
+
 internal fun DataSource.setUserCreatedDaysAgo(
     userId: UUID,
     days: Int,
