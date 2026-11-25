@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -44,7 +44,6 @@ import com.pynapli.app.design.OnlineDot
 import com.pynapli.app.design.PhotoBottomScrim
 import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliMotion
-import com.pynapli.app.design.PynapliPlaceholderGradients
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.VerifiedBadge
 import com.pynapli.app.design.handCursor
@@ -97,15 +96,20 @@ internal fun GridProfileTile(
                 // Group the tile so a screen reader announces it as one item (name + presence +
                 // visiting + distance + partner/tonight badges) instead of several fragments.
                 .semantics(mergeDescendants = true) {}
-                .background(card.tone.backgroundBrush()),
+                // One neutral surface for every tile (plan G11): no colour chosen by list position,
+                // which made the same no-photo person change colour when the order changed.
+                .background(PynapliColors.SurfaceRaised),
     ) {
-        card.thumbnailUrl?.let { thumbnailUrl ->
+        val thumbnailUrl = card.thumbnailUrl
+        if (thumbnailUrl != null) {
             AsyncImage(
                 model = thumbnailUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+        } else {
+            NoPhotoSilhouette(modifier = Modifier.align(Alignment.Center).testTag(GridCardTags.silhouetteTag(card.id)))
         }
 
         if (hoverAlpha > 0f) {
@@ -132,74 +136,108 @@ internal fun GridProfileTile(
             )
         }
 
-        if (card.tonightActive) {
-            // PLAYING_TONIGHT_SPEC: a subtle per-tile indicator that this individual
-            // has a live Playing Tonight session. Gold accent, never a couple card.
-            TonightIndicator(
+        if (card.tonightActive || card.fresh) {
+            Row(
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
-                        .padding(7.dp)
-                        .testTag(GridCardTags.tonightTag(card.id)),
-            )
+                        .padding(7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (card.tonightActive) {
+                    // PLAYING_TONIGHT_SPEC: a subtle per-tile indicator that this individual
+                    // has a live Playing Tonight session. Gold accent, never a couple card.
+                    TonightIndicator(modifier = Modifier.testTag(GridCardTags.tonightTag(card.id)))
+                }
+                if (card.fresh) {
+                    // Plan G4/G11: the server's Fresh rule (new here, or a new photo, and active).
+                    NewMarker(modifier = Modifier.testTag(GridCardTags.newTag(card.id)))
+                }
+            }
         }
 
-        Row(
+        val activeAgoLabel = if (card.online) null else GridActiveAgo.label(card.activeAgo)
+        Column(
             modifier =
                 Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
                     .padding(horizontal = 6.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (card.online) {
-                OnlineDot(size = 7.dp, contentDescription = "Online")
-            }
-
-            Text(
-                text = card.displayName,
-                color = PynapliColors.TextPrimary,
-                fontSize = GridTileTokens.NameTextSize,
-                fontWeight = FontWeight.SemiBold,
-                style = OnPhotoCaptionStyle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-
-            if (card.verified) {
-                VerifiedBadge(size = 11.dp, modifier = Modifier.testTag(GridCardTags.verifiedTag(card.id)))
-            }
-
-            if (card.visiting || card.visitingDates != null) {
-                // SWIPE_IMPLEMENTATION_SPEC L348: target is here via passport,
-                // not physically local. Same wording + tone as the Swipe pill.
+            if (activeAgoLabel != null) {
+                // Recently here but not online now: a coarse bucket, never a minute-exact time.
                 Text(
-                    text = card.visitingDates ?: "Visiting",
-                    color = PynapliColors.OnPhotoPrimary,
-                    fontSize = GridTileTokens.MetaTextSize,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    modifier =
-                        Modifier
-                            .testTag(GridCardTags.visitingTag(card.id))
-                            .clip(PynapliShape.PillShape)
-                            .background(PynapliColors.WarmBrown.copy(alpha = 0.8f))
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
-                )
-            }
-
-            distanceLabel?.let { distance ->
-                Text(
-                    text = distance,
+                    text = activeAgoLabel,
                     color = PynapliColors.OnPhotoSecondary,
                     fontSize = GridTileTokens.MetaTextSize,
                     style = OnPhotoCaptionStyle,
                     maxLines = 1,
-                    overflow = TextOverflow.Clip,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag(GridCardTags.activeAgoTag(card.id)),
                 )
             }
+            GridTileCaptionRow(card = card, distanceLabel = distanceLabel)
+        }
+    }
+}
+
+@Composable
+private fun GridTileCaptionRow(
+    card: GridProfileCardUi,
+    distanceLabel: String?,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (card.online) {
+            OnlineDot(size = 7.dp, contentDescription = "Online")
+        }
+
+        Text(
+            text = card.displayName,
+            color = PynapliColors.TextPrimary,
+            fontSize = GridTileTokens.NameTextSize,
+            fontWeight = FontWeight.SemiBold,
+            style = OnPhotoCaptionStyle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+
+        if (card.verified) {
+            VerifiedBadge(size = 11.dp, modifier = Modifier.testTag(GridCardTags.verifiedTag(card.id)))
+        }
+
+        if (card.visiting || card.visitingDates != null) {
+            // SWIPE_IMPLEMENTATION_SPEC L348: target is here via passport,
+            // not physically local. Same wording + tone as the Swipe pill.
+            Text(
+                text = card.visitingDates ?: "Visiting",
+                color = PynapliColors.OnPhotoPrimary,
+                fontSize = GridTileTokens.MetaTextSize,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .testTag(GridCardTags.visitingTag(card.id))
+                        .clip(PynapliShape.PillShape)
+                        .background(PynapliColors.WarmBrown.copy(alpha = 0.8f))
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+            )
+        }
+
+        distanceLabel?.let { distance ->
+            Text(
+                text = distance,
+                color = PynapliColors.OnPhotoSecondary,
+                fontSize = GridTileTokens.MetaTextSize,
+                style = OnPhotoCaptionStyle,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+            )
         }
     }
 }
@@ -209,7 +247,41 @@ internal object GridCardTags {
 
     fun tonightTag(cardId: String): String = "grid-card-tonight-$cardId"
 
+    fun newTag(cardId: String): String = "grid-card-new-$cardId"
+
+    fun activeAgoTag(cardId: String): String = "grid-card-active-ago-$cardId"
+
+    fun silhouetteTag(cardId: String): String = "grid-card-silhouette-$cardId"
+
     fun verifiedTag(cardId: String): String = "grid-card-verified-$cardId"
+}
+
+/** No approved photo: a quiet person outline on the neutral tile, the same for everyone. */
+@Composable
+private fun NoPhotoSilhouette(modifier: Modifier = Modifier) {
+    Icon(
+        imageVector = Icons.Filled.Person,
+        contentDescription = "No photo",
+        tint = PynapliColors.TextTertiary,
+        modifier = modifier.fillMaxSize(0.46f),
+    )
+}
+
+/** "New": the server's Fresh rule. A small gold tag, top-left beside the Tonight moon. */
+@Composable
+private fun NewMarker(modifier: Modifier = Modifier) {
+    Text(
+        text = "New",
+        color = PynapliColors.TextInverse,
+        fontSize = GridTileTokens.MetaTextSize,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        modifier =
+            modifier
+                .clip(PynapliShape.PillShape)
+                .background(PynapliColors.Accent)
+                .padding(horizontal = 5.dp, vertical = 1.dp),
+    )
 }
 
 @Composable
@@ -288,9 +360,6 @@ private fun PartnerMiniCircle(
         }
     }
 }
-
-// Order mirrors GridCardTone (and PynapliPlaceholderGradients.cardTones) by ordinal.
-private fun GridCardTone.backgroundBrush(): Brush = PynapliPlaceholderGradients.cardTones[ordinal]
 
 private fun LinkedPartnerTone?.badgeColor(): Color =
     when (this) {

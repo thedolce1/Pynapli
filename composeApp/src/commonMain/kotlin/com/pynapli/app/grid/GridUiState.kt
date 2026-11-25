@@ -8,13 +8,16 @@ import kotlinx.serialization.Serializable
 
 @Immutable
 data class GridUiState(
-    val locationLabel: String = "Current location",
+    // The header pill: "Nearby", or the Travel city when Travel mode is on (never a precise place).
+    val locationLabel: String = "Nearby",
     val filters: GridFilters = GridFilters.defaults,
     val cards: List<GridProfileCardUi> = emptyList(),
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,
     val nextCursor: String? = null,
     val paywallMessage: String? = null,
+    // The plan the paywall row sells (SubscriptionTier: "social" or "select"); names its button.
+    val paywallUpgradeTier: String? = null,
     // Set when the server rejects a gated action with AGE_VERIFICATION_REQUIRED. Drives the
     // "Verify your age" prompt row; its CTA routes into the Profile-Hub age-verification flow.
     // Mirrors [paywallMessage]'s ENTITLEMENT_REQUIRED handling.
@@ -24,6 +27,11 @@ data class GridUiState(
     // False only from app start (or sign-out) until the cold-start cache has been read: the body stays
     // a plain background meanwhile, so a cached Grid paints without a skeleton flashing first.
     val cacheChecked: Boolean = true,
+    // People the last quiet refresh found who are not on screen yet: the "N new nearby" pill. The
+    // shown order never changes under the finger; tapping the pill (or refreshing) applies it.
+    val newNearbyCount: Int = 0,
+    // The server widened a sparse first page beyond the chosen distance: a quiet note says so.
+    val widened: Boolean = false,
 ) {
     val verificationRequired: Boolean get() = verificationMessage != null
 }
@@ -53,8 +61,9 @@ data class GridFilters(
     val tonightAvailable: Boolean = false,
     // FILTERS_SPEC "Active today" (Presence, grid-only): owner active in the last 24h.
     val activeToday: Boolean = false,
-    // FILTERS_SPEC "Recently joined" / "Traveling here" (Presence, grid-only).
-    val recentlyJoined: Boolean = false,
+    // Plan G4 "Fresh" (a quick chip; replaces "Recently joined"): the server's Fresh rule, new
+    // account or new photo and active lately. FILTERS_SPEC "Traveling here" (Presence, grid-only).
+    val fresh: Boolean = false,
     val travelingHere: Boolean = false,
     // People whose announced planned trip brings them here in the next two weeks.
     val visitingSoon: Boolean = false,
@@ -87,7 +96,7 @@ data class GridFilters(
             if (hasPrivateAlbum) count += 1
             if (tonightAvailable) count += 1
             if (activeToday) count += 1
-            if (recentlyJoined) count += 1
+            if (fresh) count += 1
             if (travelingHere) count += 1
             if (visitingSoon) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
@@ -97,10 +106,17 @@ data class GridFilters(
 
     val isAnyActive: Boolean get() = activeCount > 0
 
+    /** Mirrors the server's DiscoveryFilters.requiresAdvancedEntitlement exactly (server stays authoritative). */
     val requiresAdvancedEntitlement: Boolean
         get() =
             lifestyleTags.isNotEmpty() ||
-                logisticsTags.any { it != LogisticsTag.PublicMeetFirst }
+                logisticsTags.any { it.paid }
+
+    /**
+     * These filters minus only the paid ones (plan G9): choosing a paid filter clears that filter,
+     * never the viewer's other choices.
+     */
+    fun withoutPaidFilters(): GridFilters = copy(lifestyleTags = emptySet(), logisticsTags = logisticsTags.filterNot { it.paid }.toSet())
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
         val contexts =
@@ -126,7 +142,7 @@ data class GridFilters(
             logisticsTags = logisticsTags.map { it.serverValue },
             tonightAvailableOnly = tonightAvailable,
             activeTodayOnly = activeToday,
-            recentlyJoinedOnly = recentlyJoined,
+            freshOnly = fresh,
             travelingHereOnly = travelingHere,
             visitingSoonOnly = visitingSoon,
             withPhotosOnly = withPhotos,
@@ -148,6 +164,20 @@ data class GridFilters(
         const val SINGLES_CONTEXT: String = "single"
         const val PARTNERED_CONTEXT: String = "partnered"
         val defaults: GridFilters = GridFilters()
+
+        /**
+         * Whether the viewer's plan unlocks paid Grid filters, from the client's view of the plan:
+         * Social and Select do, Free does not, null (not loaded yet) is unknown. Display only (the
+         * sheet's locks): the server's EntitlementPolicy decides every query.
+         */
+        fun advancedFiltersAllowedFor(tier: String?): Boolean? =
+            when (tier) {
+                null -> null
+                com.pynapli.shared.network.dto.SubscriptionTier.SOCIAL,
+                com.pynapli.shared.network.dto.SubscriptionTier.SELECT,
+                -> true
+                else -> false
+            }
 
         /**
          * Rehydrate a saved preset payload back into a `GridFilters` instance.
@@ -180,7 +210,8 @@ data class GridFilters(
                 hasPrivateAlbum = request.hasPrivateAlbumOnly,
                 tonightAvailable = request.tonightAvailableOnly,
                 activeToday = request.activeTodayOnly,
-                recentlyJoined = request.recentlyJoinedOnly,
+                // A preset saved before Fresh replaced "Recently joined" keeps meaning "new people".
+                fresh = request.freshOnly || request.recentlyJoinedOnly,
                 travelingHere = request.travelingHereOnly,
                 visitingSoon = request.visitingSoonOnly,
                 radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
@@ -193,9 +224,9 @@ data class GridFilters(
 }
 
 /**
- * Identifies a quick-toggle chip exposed in the grid header. Chips that require backing
- * features land in their own slices (Verified in F2, Together in F3, Tonight in F6) and
- * are not modeled here yet.
+ * A one-tap filter the Grid can toggle. The header row shows Online, Fresh, Tonight and Verified
+ * (plus the Favorites view chip, which is not a filter); Singles and Linked stay toggles in the
+ * filter sheet's Who section.
  */
 enum class QuickFilterId {
     Online,
@@ -203,6 +234,7 @@ enum class QuickFilterId {
     Linked,
     Verified,
     Tonight,
+    Fresh,
 }
 
 /**
@@ -342,6 +374,10 @@ enum class LogisticsTag(
     HotelFriendly("hotel_friendly", "Hotel-friendly"),
     PublicMeetFirst("public_meet_first", "Public meet first"),
     ClubEventOnly("club_event_only", "Club/event only"),
+    ;
+
+    /** Social or Select: every logistics filter but "Public meet first", a safety choice kept free. */
+    val paid: Boolean get() = this != PublicMeetFirst
 }
 
 @Immutable
@@ -367,7 +403,41 @@ data class GridProfileCardUi(
     val verified: Boolean = false,
     // Both this person and the partner in the mini are verified: a check on the partner mini.
     val coupleVerified: Boolean = false,
+    // Server-owned Fresh rule (new account or new photo, and active lately): the tile's "New" marker.
+    val fresh: Boolean = false,
+    // Server presence bucket: one of [GridActiveAgo]'s values, or null when unknown/long ago.
+    val activeAgo: String? = null,
 )
+
+/**
+ * The server's coarse "last active" buckets on a Grid card. Coarse on purpose: a bucket never lets
+ * anyone time a member's comings and goings to the minute.
+ */
+object GridActiveAgo {
+    const val ONLINE: String = "online"
+    const val MINUTES_15: String = "15m"
+    const val HOUR_1: String = "1h"
+    const val HOURS_3: String = "3h"
+    const val TODAY: String = "today"
+    const val WEEK: String = "week"
+
+    /** The small tile caption for someone not online now, or null when there is nothing to say. */
+    fun label(activeAgo: String?): String? =
+        when (activeAgo) {
+            MINUTES_15 -> "Active 15m ago"
+            HOUR_1 -> "Active 1h ago"
+            HOURS_3 -> "Active 3h ago"
+            TODAY -> "Active today"
+            WEEK -> "Active this week"
+            else -> null
+        }
+}
+
+/**
+ * A card painted from the cold-start cache: its presence is days old, so it shows as unknown (no
+ * green dot, no "active" caption, no New marker) until the first live answer replaces it.
+ */
+internal fun GridProfileCardUi.withPresenceUnknown(): GridProfileCardUi = copy(online = false, activeAgo = null, fresh = false)
 
 @Immutable
 @Serializable
@@ -423,6 +493,8 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi =
         verified = verified,
         // Server-computed; never drawn without a visible partner mini to attach it to.
         coupleVerified = coupleVerified && linkedPartner != null,
+        fresh = fresh,
+        activeAgo = activeAgo,
     )
 
 internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =

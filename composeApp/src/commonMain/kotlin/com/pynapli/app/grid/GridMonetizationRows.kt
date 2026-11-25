@@ -24,11 +24,22 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.VerifiedUser
+import com.pynapli.shared.network.dto.SubscriptionTier
+
+/** The paywall row's button names the plan that unlocks what the viewer hit, never always "Social". */
+internal fun paywallCtaLabel(upgradeTier: String?): String =
+    when (upgradeTier) {
+        SubscriptionTier.SELECT -> "Select"
+        SubscriptionTier.SOCIAL -> "Social"
+        else -> "See plans"
+    }
 
 @Composable
 internal fun GridPaywallRow(
     message: String,
     onOpenStore: () -> Unit,
+    // SubscriptionTier the row sells (from the server's result-limit tier or a paid-filter gate).
+    upgradeTier: String? = null,
 ) {
     Row(
         modifier =
@@ -53,8 +64,8 @@ internal fun GridPaywallRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onOpenStore, modifier = Modifier.handCursor()) {
-            Text(text = "Social", maxLines = 1)
+        TextButton(onClick = onOpenStore, modifier = Modifier.handCursor().testTag(GridPaywallTags.CTA)) {
+            Text(text = paywallCtaLabel(upgradeTier), maxLines = 1)
         }
     }
 }
@@ -100,6 +111,10 @@ internal fun GridVerificationRow(
             Text(text = "Verify", maxLines = 1, color = PynapliColors.Accent)
         }
     }
+}
+
+internal object GridPaywallTags {
+    const val CTA: String = "grid-paywall-cta"
 }
 
 internal object GridVerificationTags {

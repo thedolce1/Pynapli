@@ -1,6 +1,7 @@
 package com.pynapli.app.grid
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
@@ -45,13 +47,19 @@ internal fun GridScreenContent(
     // Travel mode destination when it is on. The Grid is showing that city, not where the viewer is.
     travelCityName: String? = null,
     onTurnOffTravel: () -> Unit = {},
-    // Favorites view; null hides the Nearby / Favorites switch.
+    // Favorites view; null hides the Favorites chip.
     favoritesState: FavoritesUiState? = null,
     favoritesGridState: LazyGridState? = null,
     onShowNearby: () -> Unit = {},
     onShowFavorites: () -> Unit = {},
     onRefreshFavorites: () -> Unit = {},
     onLoadMoreFavorites: () -> Unit = {},
+    // The "N new nearby" pill: apply the held-back order and return to the top.
+    onShowNewNearby: () -> Unit = {},
+    // The location pill opens Travel mode; null leaves it a plain label.
+    onOpenTravel: (() -> Unit)? = null,
+    // The viewer's plan allows paid filters: true/false, or null while unknown (no locks shown).
+    advancedFiltersAllowed: Boolean? = null,
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
     val showingFavorites = favoritesState?.showing == true && favoritesGridState != null
@@ -68,21 +76,27 @@ internal fun GridScreenContent(
             profileImageUrl = profileImageUrl,
             onProfileIconClick = onProfileIconClick,
             onOpenTonight = onOpenTonight,
-            onOpenFilters = { sheetVisible = true },
             onRefresh =
                 when {
                     sizeClass == PynapliWindowSizeClass.Compact -> null
                     showingFavorites -> onRefreshFavorites
                     else -> onRefresh
                 },
+            travelCityName = travelCityName,
+            onOpenTravel = onOpenTravel,
         )
-        if (favoritesState != null) {
-            GridViewSwitch(
-                showingFavorites = showingFavorites,
-                onShowNearby = onShowNearby,
-                onShowFavorites = onShowFavorites,
-            )
-        }
+        // One chip row for both views. Favorites is a view switch; a filter chip tapped while
+        // Favorites shows goes back to Nearby, since the filters describe Nearby only.
+        QuickFilterRow(
+            filters = state.filters,
+            onToggled = { id ->
+                if (showingFavorites) onShowNearby()
+                onQuickFilterToggled(id)
+            },
+            onOpenSheet = { sheetVisible = true },
+            showingFavorites = if (favoritesState != null) showingFavorites else null,
+            onToggleFavorites = { if (showingFavorites) onShowNearby() else onShowFavorites() },
+        )
         if (showingFavorites && favoritesState != null && favoritesGridState != null) {
             // The Grid's filters, paywall and context strip describe Nearby; Favorites is its own list.
             FavoritesBody(
@@ -100,8 +114,6 @@ internal fun GridScreenContent(
                 locationState = locationState,
                 distanceUnit = distanceUnit,
                 gridState = gridState,
-                onQuickFilterToggled = onQuickFilterToggled,
-                onOpenSheet = { sheetVisible = true },
                 travelCityName = travelCityName,
                 onTurnOffTravel = onTurnOffTravel,
                 onOpenStore = onOpenStore,
@@ -111,6 +123,7 @@ internal fun GridScreenContent(
                 onLoadMore = onLoadMore,
                 onUseCurrentLocation = onUseCurrentLocation,
                 onClearAllFilters = onClearAllFilters,
+                onShowNewNearby = onShowNewNearby,
             )
         }
     }
@@ -121,9 +134,11 @@ internal fun GridScreenContent(
             savedState = savedFiltersState,
             tonightSessionActive = tonightSessionActive,
             lifestyleFiltersAllowed = lifestyleFiltersAllowed,
+            advancedFiltersAllowed = advancedFiltersAllowed != false,
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false
+                if (showingFavorites) onShowNearby()
                 onApplyFilters(applied)
             },
             onClearAll = {
@@ -147,15 +162,13 @@ internal fun GridScreenContent(
     }
 }
 
-/** The Nearby view: quick filters, travel and plan rows, and the ranked Grid. */
+/** The Nearby view: travel and plan rows, and the ranked Grid (the chip row sits above both views). */
 @Composable
 private fun ColumnScope.NearbyGridSections(
     state: GridUiState,
     locationState: LocationUiState,
     distanceUnit: String,
     gridState: LazyGridState,
-    onQuickFilterToggled: (QuickFilterId) -> Unit,
-    onOpenSheet: () -> Unit,
     travelCityName: String?,
     onTurnOffTravel: () -> Unit,
     onOpenStore: () -> Unit,
@@ -165,24 +178,21 @@ private fun ColumnScope.NearbyGridSections(
     onLoadMore: () -> Unit,
     onUseCurrentLocation: () -> Unit,
     onClearAllFilters: () -> Unit,
+    onShowNewNearby: () -> Unit,
 ) {
-    QuickFilterRow(
-        filters = state.filters,
-        onToggled = onQuickFilterToggled,
-        onOpenSheet = onOpenSheet,
-    )
     // Without this, someone who forgot Travel mode was on sees another city's people and
     // distances with nothing on the Grid saying why (the Swipe header already shows it).
     travelCityName?.let { city ->
         GridTravelRow(city = city, onTurnOff = onTurnOffTravel)
     }
     if (state.cards.isNotEmpty()) {
-        GridContextStrip(cards = state.cards, distanceUnit = distanceUnit)
+        GridContextStrip(cards = state.cards, distanceUnit = distanceUnit, widened = state.widened)
     }
     state.paywallMessage?.let { message ->
         GridPaywallRow(
             message = message,
             onOpenStore = onOpenStore,
+            upgradeTier = state.paywallUpgradeTier,
         )
     }
     state.verificationMessage?.let { message ->
@@ -198,17 +208,25 @@ private fun ColumnScope.NearbyGridSections(
         onRefresh = onRefresh,
         modifier = Modifier.weight(1f),
     ) {
-        GridBody(
-            state = state,
-            locationState = locationState,
-            distanceUnit = distanceUnit,
-            gridState = gridState,
-            onProfileSelected = onProfileSelected,
-            onLoadMore = onLoadMore,
-            onUseCurrentLocation = onUseCurrentLocation,
-            onRetry = onRefresh,
-            onClearFilters = onClearAllFilters,
-            modifier = Modifier.fillMaxSize(),
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            GridBody(
+                state = state,
+                locationState = locationState,
+                distanceUnit = distanceUnit,
+                gridState = gridState,
+                onProfileSelected = onProfileSelected,
+                onLoadMore = onLoadMore,
+                onUseCurrentLocation = onUseCurrentLocation,
+                onRetry = onRefresh,
+                onClearFilters = onClearAllFilters,
+                modifier = Modifier.fillMaxSize(),
+            )
+            // Floats over the cards; they never move until it is tapped (or the Grid is refreshed).
+            GridNewNearbyPill(
+                count = state.newNearbyCount,
+                onClick = onShowNewNearby,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
     }
 }

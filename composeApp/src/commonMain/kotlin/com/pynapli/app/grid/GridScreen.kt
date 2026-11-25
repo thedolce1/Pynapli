@@ -10,6 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.location.LocationUiState
@@ -18,10 +20,12 @@ import com.pynapli.app.location.TravelLocationUiState
 import com.pynapli.app.profile.GridProfileBrowser
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
+import com.pynapli.app.swipe.TravelModeSheet
 import com.pynapli.app.tonight.PlayingTonightStateHolder
 import com.pynapli.app.tonight.PlayingTonightUiState
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 
 @Composable
 fun GridScreen(
@@ -48,7 +52,13 @@ fun GridScreen(
     favoritesStateHolder: FavoritesStateHolder? = null,
     // The profile's "Verify to message" opens the existing photo-verification flow.
     onOpenPhotoVerification: (() -> Unit)? = null,
+    // Travel mode is a Select perk, so its paywall opens on Select rather than the plan list.
+    onOpenTravelStore: () -> Unit = onOpenStore,
+    // From the viewer's plan (Social/Select true, Free false, null until it loads). Display only:
+    // it puts locks on paid chips; the server decides what a query may use.
+    advancedFiltersAllowed: Boolean? = null,
 ) {
+    var travelSheetVisible by remember { mutableStateOf(false) }
     val state by stateHolder.state.collectAsState()
     val favoritesState by favoritesStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf<FavoritesUiState?>(null) }
@@ -73,11 +83,26 @@ fun GridScreen(
         stateHolder.primeFromCacheThenLoad()
     }
 
-    // On screen for as long as this is composed: the notification ask waits for some Grid time.
+    // On screen for as long as this is composed: the notification ask waits for some Grid time, and
+    // the 60 s liveness refresh runs only then.
     DisposableEffect(stateHolder) {
         stateHolder.setOnScreen(true)
         onDispose { stateHolder.setOnScreen(false) }
     }
+
+    // A paid filter was taken out (only that one): show the plans.
+    val openStore by rememberUpdatedState(onOpenStore)
+    LaunchedEffect(stateHolder) {
+        stateHolder.events.collect { event ->
+            when (event) {
+                GridEvent.OpenPaywall -> openStore()
+            }
+        }
+    }
+
+    // The Favorites view covers Nearby: pause Nearby's liveness refresh meanwhile.
+    val nearbyShowing = favoritesState?.showing != true
+    LaunchedEffect(stateHolder, nearbyShowing) { stateHolder.setNearbyShowing(nearbyShowing) }
 
     // Leaving the tab disposes this screen; keep both grids' scroll for the way back.
     DisposableEffect(gridState, favoritesGridState) {
@@ -137,7 +162,19 @@ fun GridScreen(
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.delete(id) } }
         },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
-        onRefresh = { scope.launch { stateHolder.refresh() } },
+        // An explicit refresh applies the new order, so it lands at the top (pull-to-refresh is
+        // already there; the wide-window Refresh button may not be).
+        onRefresh = {
+            scope.launch {
+                stateHolder.refresh()
+                gridState.scrollToItem(0)
+            }
+        },
+        onShowNewNearby = {
+            scope.launch { if (stateHolder.applyNewNearby()) gridState.scrollToItem(0) }
+        },
+        onOpenTravel = travelLocationStateHolder?.let { { travelSheetVisible = true } },
+        advancedFiltersAllowed = advancedFiltersAllowed,
         travelCityName = travelState.current?.city,
         onTurnOffTravel = {
             travelLocationStateHolder?.let { holder ->
@@ -163,6 +200,61 @@ fun GridScreen(
         onRefreshFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.refresh() } } },
         onLoadMoreFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.loadMore() } } },
     )
+
+    // Travel mode from the Grid header (plan G8): the same picker and holder Swipe uses, no new travel
+    // logic. Every change reloads the Grid for the new place (a held-back page is another place's).
+    if (travelSheetVisible && travelLocationStateHolder != null) {
+        val reloadForNewPlace: suspend () -> Unit = {
+            stateHolder.invalidate()
+            stateHolder.refresh()
+            gridState.scrollToItem(0)
+        }
+        LaunchedEffect(Unit) { travelLocationStateHolder.loadTrips() }
+        TravelModeSheet(
+            state = travelState,
+            onDismiss = { travelSheetVisible = false },
+            onSearchQueryChange = { query -> travelLocationStateHolder.updateSearchQuery(query) },
+            onRunSearch = { scope.launch { travelLocationStateHolder.runSearch() } },
+            onPickPlace = { place ->
+                scope.launch {
+                    // Close only once the trip is on: a refusal stays in the sheet with its reason.
+                    if (travelLocationStateHolder.setActive(place)) {
+                        travelSheetVisible = false
+                        reloadForNewPlace()
+                    }
+                }
+            },
+            onClear = {
+                travelSheetVisible = false
+                scope.launch {
+                    travelLocationStateHolder.clear()
+                    reloadForNewPlace()
+                }
+            },
+            onOpenStore = {
+                travelSheetVisible = false
+                onOpenTravelStore()
+            },
+            onOpenAgeVerification = {
+                travelSheetVisible = false
+                onOpenAgeVerification()
+            },
+            onSelectPlace = { place -> travelLocationStateHolder.selectPlace(place) },
+            onPlanTrip = { place, startsOn, endsOn, announce ->
+                scope.launch {
+                    val zone = TimeZone.currentSystemDefault().id
+                    // A trip starting today is already on: the Grid moves with it.
+                    if (travelLocationStateHolder.planTrip(place, startsOn, endsOn, zone, announce)) reloadForNewPlace()
+                }
+            },
+            onCancelTrip = { tripId ->
+                scope.launch {
+                    travelLocationStateHolder.cancelTrip(tripId)
+                    reloadForNewPlace()
+                }
+            },
+        )
+    }
 
     // Profile open (GRID_IMPLEMENTATION_SPEC "Profile open"): swipe through the list on show, in its
     // order; block/hide drops the card here and the pager moves on.

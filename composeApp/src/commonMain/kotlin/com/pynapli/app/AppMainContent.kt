@@ -31,6 +31,7 @@ import com.pynapli.app.design.PynapliTabIcons
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.design.currentPynapliWindowSizeClass
+import com.pynapli.app.grid.GridFilters
 import com.pynapli.app.grid.GridScreen
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
@@ -169,6 +170,8 @@ internal fun ColumnScope.PynapliMainContent(
                         onProfileSurface = onProfileSurface,
                         // Locked Grid filters and depth are plan perks.
                         onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
+                        // Travel mode (from the Grid header) is a Select perk.
+                        onOpenTravelStore = { onOpenStore(StorePaywallFocus.Select) },
                         onOpenAgeVerification = onOpenAgeVerification,
                         onOpenTonight = onOpenTonight,
                         onUseCurrentLocation = onUseCurrentLocation,
@@ -379,6 +382,7 @@ private fun ColumnScope.GridTabContent(
     travelLocationStateHolder: TravelLocationStateHolder? = null,
     favoritesStateHolder: com.pynapli.app.grid.FavoritesStateHolder? = null,
     onOpenPhotoVerification: (() -> Unit)? = null,
+    onOpenTravelStore: () -> Unit = onOpenStore,
 ) {
     val authState by authStateHolder.state.collectAsState()
     val locationState by locationStateHolder.state.collectAsState()
@@ -436,6 +440,9 @@ private fun ColumnScope.GridTabContent(
         travelLocationStateHolder = travelLocationStateHolder,
         favoritesStateHolder = favoritesStateHolder,
         onOpenPhotoVerification = onOpenPhotoVerification,
+        onOpenTravelStore = onOpenTravelStore,
+        // Paid Grid filters come with Social or Select; null until the plan has loaded.
+        advancedFiltersAllowed = GridFilters.advancedFiltersAllowedFor(profileHubState.entitlement?.tier),
     )
 }
 

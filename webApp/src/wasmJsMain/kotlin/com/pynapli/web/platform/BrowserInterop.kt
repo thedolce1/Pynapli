@@ -57,6 +57,18 @@ internal fun onDocumentVisible(handler: () -> Unit): Unit =
     }""",
     )
 
+/** Calls [handler] with true when the tab becomes visible and false when it is hidden. */
+internal fun onDocumentVisibilityChange(handler: (Boolean) -> Unit): Unit =
+    js(
+        """{
+        document.addEventListener('visibilitychange', function () {
+            handler(document.visibilityState === 'visible');
+        });
+    }""",
+    )
+
+internal fun documentVisible(): Boolean = js("document.visibilityState === 'visible'")
+
 /**
  * Opens the browser image picker and reads the chosen file. Bytes cross the JS
  * boundary as one base64 string (single interop call; a per-byte copy would take

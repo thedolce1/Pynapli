@@ -26,6 +26,12 @@ import kotlinx.coroutines.flow.update
  */
 class TravelLocationStateHolder(
     private val repository: TravelLocationRepository,
+    /**
+     * Travel mode moves both the Grid and the Swipe deck, whichever screen switched it. Called after
+     * every change that moves the viewer's effective place (on, off, a trip starting today, a running
+     * trip cancelled); the graph wires it to mark both stale.
+     */
+    private val onTravelChanged: () -> Unit = {},
 ) {
     private val _state = MutableStateFlow(TravelLocationUiState())
     val state: StateFlow<TravelLocationUiState> = _state.asStateFlow()
@@ -118,6 +124,7 @@ class TravelLocationStateHolder(
                         searchResults = emptyList(),
                     )
                 }
+                onTravelChanged()
                 true
             }
             is AppResult.Failure -> {
@@ -174,7 +181,10 @@ class TravelLocationStateHolder(
                 }
                 loadTrips()
                 // A trip that starts today is already on: show it as the current destination.
-                if (result.value.status == "active") load()
+                if (result.value.status == "active") {
+                    load()
+                    onTravelChanged()
+                }
                 true
             }
             is AppResult.Failure -> {
@@ -192,7 +202,10 @@ class TravelLocationStateHolder(
             is AppResult.Success -> {
                 val wasRunning = _state.value.trips.any { it.tripId == tripId && it.status == "active" }
                 _state.update { current -> current.copy(trips = current.trips.filterNot { it.tripId == tripId }) }
-                if (wasRunning) load()
+                if (wasRunning) {
+                    load()
+                    onTravelChanged()
+                }
             }
             is AppResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
         }
@@ -201,10 +214,12 @@ class TravelLocationStateHolder(
     suspend fun clear() {
         _state.update { it.copy(isSaving = true, errorCode = null, errorMessage = null) }
         when (val result = repository.clear()) {
-            is AppResult.Success ->
+            is AppResult.Success -> {
                 _state.update {
                     it.copy(isSaving = false, current = null)
                 }
+                onTravelChanged()
+            }
             is AppResult.Failure ->
                 _state.update {
                     it.copy(

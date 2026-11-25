@@ -24,6 +24,8 @@ import com.pynapli.app.location.silentLocationRefreshAllowed
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.web.platform.browserDefaultFontSizePx
+import com.pynapli.web.platform.documentVisible
+import com.pynapli.web.platform.onDocumentVisibilityChange
 import com.pynapli.web.platform.onDocumentVisible
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.MainScope
@@ -78,6 +80,10 @@ fun main() {
     // shells: appScope is app-lifetime today, and a swallowed cancellation would be a silent trap
     // the moment that stops being true.
     graph.startRealtime(appScope)
+    // The Grid's 60 s liveness refresh is one of those jobs; a hidden tab pauses it, since a browser
+    // never cancels the jobs the way Android and iOS do in the background.
+    graph.pynapliAppGraph.gridStateHolder.setAppVisible(documentVisible())
+    onDocumentVisibilityChange { visible -> graph.pynapliAppGraph.gridStateHolder.setAppVisible(visible) }
 
     // Another tab signing out (or in as someone else) ends this tab's session, never hands it over.
     graph.followSessionChangesFromOtherTabs(appScope)

@@ -78,12 +78,12 @@ internal fun PresenceSection(
     online: Boolean,
     tonightAvailable: Boolean,
     activeToday: Boolean,
-    recentlyJoined: Boolean,
+    fresh: Boolean,
     travelingHere: Boolean,
     onOnlineToggle: () -> Unit,
     onTonightToggle: () -> Unit,
     onActiveTodayToggle: () -> Unit,
-    onRecentlyJoinedToggle: () -> Unit,
+    onFreshToggle: () -> Unit,
     onTravelingHereToggle: () -> Unit,
     visitingSoon: Boolean = false,
     onVisitingSoonToggle: () -> Unit = {},
@@ -95,7 +95,7 @@ internal fun PresenceSection(
     ) {
         SheetToggleChip(label = "Online now", active = online, onClick = onOnlineToggle)
         SheetToggleChip(label = "Active today", active = activeToday, onClick = onActiveTodayToggle)
-        SheetToggleChip(label = "Recently joined", active = recentlyJoined, onClick = onRecentlyJoinedToggle)
+        SheetToggleChip(label = "Fresh", active = fresh, onClick = onFreshToggle)
         SheetToggleChip(label = "Traveling here", active = travelingHere, onClick = onTravelingHereToggle)
         SheetToggleChip(label = "Visiting soon", active = visitingSoon, onClick = onVisitingSoonToggle)
         SheetToggleChip(label = "Playing tonight", active = tonightAvailable, onClick = onTonightToggle)
@@ -150,6 +150,8 @@ internal fun TonightSessionEntryRow(
 internal fun LogisticsSection(
     selected: Set<LogisticsTag>,
     onChange: (Set<LogisticsTag>) -> Unit,
+    // Free viewer: every paid tag (all but "Public meet first") shows a lock.
+    lockPaid: Boolean = false,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -158,7 +160,7 @@ internal fun LogisticsSection(
     ) {
         LogisticsTag.entries.forEach { tag ->
             val active = tag in selected
-            SheetToggleChip(label = tag.label, active = active) {
+            SheetToggleChip(label = tag.label, active = active, locked = lockPaid && tag.paid) {
                 onChange(if (active) selected - tag else selected + tag)
             }
         }

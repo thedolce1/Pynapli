@@ -27,7 +27,21 @@ class SwipeStateHolder(
     private var isFlushingActions = false
     private var restoredQueueOwnerUserId: String? = null
 
+    private val _deckStale = MutableStateFlow(false)
+
+    /**
+     * True when the deck describes a place the viewer has left (Travel switched on or off, from the
+     * Grid or from here). The Swipe screen reloads when it sees it; any [load] clears it.
+     */
+    val deckStale: StateFlow<Boolean> = _deckStale.asStateFlow()
+
+    fun markStale() {
+        _deckStale.value = true
+    }
+
     suspend fun load(ownerUserId: String? = restoredQueueOwnerUserId) {
+        // First, before any suspension, so a screen effect racing this load sees it already handled.
+        _deckStale.value = false
         val effectiveOwnerUserId = ownerUserId.normalizedOwnerUserId() ?: restoredQueueOwnerUserId
         restorePendingActions(effectiveOwnerUserId)
         val current = _state.value

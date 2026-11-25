@@ -73,6 +73,14 @@ fun SwipeScreen(
         stateHolder.load(ownerUserId = viewerUserId)
     }
 
+    // Travel switched on or off elsewhere (the Grid header) while this deck was built: reload it.
+    // Reads the live value, so a load that already ran (entry, or this screen's own travel sheet)
+    // is not repeated.
+    val deckStale by stateHolder.deckStale.collectAsState()
+    LaunchedEffect(stateHolder, deckStale) {
+        if (stateHolder.deckStale.value) stateHolder.load(ownerUserId = viewerUserId)
+    }
+
     LaunchedEffect(stateHolder, state.cards.size, state.nextCursor) {
         stateHolder.loadMoreIfNeeded()
     }

@@ -72,7 +72,7 @@ class GridPagingAndEmptyStateTest {
                 }
             }
 
-            onNodeWithText("No one nearby right now.").assertExists()
+            onNodeWithText(GRID_EMPTY_TITLE).assertExists()
             onNodeWithText("Refresh").performClick()
             assertEquals(1, retries)
         }

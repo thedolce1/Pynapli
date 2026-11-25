@@ -72,7 +72,7 @@ class GridScreenScrollPreservationTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun headerFilterButtonOpensFiltersSheet() =
+    fun filtersChipOpensFiltersSheet() =
         runComposeUiTest {
             val cards =
                 (0 until 12).map { index ->
@@ -101,7 +101,7 @@ class GridScreenScrollPreservationTest {
             }
             waitForIdle()
 
-            onNodeWithTag(GridFilterTags.HEADER_OPEN_SHEET).performClick()
+            onNodeWithTag(GridFilterTags.OPEN_SHEET).performClick()
             waitForIdle()
 
             onNodeWithTag(GridFilterTags.SHEET).assertExists()
@@ -124,7 +124,7 @@ class GridScreenScrollPreservationTest {
             }
             waitForIdle()
 
-            onNodeWithTag(GridFilterTags.HEADER_OPEN_SHEET).performClick()
+            onNodeWithTag(GridFilterTags.OPEN_SHEET).performClick()
             waitForIdle()
             onNodeWithTag(GridFilterTags.OPEN_TONIGHT).performScrollTo().performClick()
             waitForIdle()

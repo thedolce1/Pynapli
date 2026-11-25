@@ -384,6 +384,56 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   calls `load()`, which bumps the generation and drops the older answer. A joined load that is
   cancelled before it answers makes the grid load for itself.
 
+### Liveness (2026-11-24, Section 2, plan G7)
+
+- Cards never move under the finger. While the Grid is on screen, Nearby is showing and the app is
+  in front, `GridStateHolder.runLiveRefresh` asks for the first page every 60 s
+  (`LIVE_REFRESH_INTERVAL`) through `refreshLive`: cards already shown update in place (online dot,
+  `activeAgo`, New marker, photo), shown cards missing from page one stay (they may be on page two),
+  and people not on screen are held back behind an "N new nearby" pill (`GridNewNearbyPill`).
+  Tapping the pill, pull-to-refresh or the wide-window Refresh button applies the held-back order and
+  scrolls to the top.
+- `refreshLive` is not a `load()`: it never bumps the feed generation (a page being appended
+  survives), never touches filters, spinner or errors, fails silently, and skips while any other
+  Grid request is on the wire. A load, filter change, travel change (`invalidate`), block/hide (for
+  that person) or sign-out drops the held-back page.
+- The loop rides with the realtime jobs (`PynapliCommonGraph.startRealtime`), so Android and iOS
+  cancel it in the background; the web shell pauses it on a hidden tab (`setAppVisible`).
+- Resume and tab return: presence older than 60 s refreshes in place; an order older than 15 min
+  (`RESULTS_EXPIRE_AFTER`) is replaced quietly. Two time marks keep the rules apart (last live answer
+  vs. last applied order). App resume refreshes only the Grid on screen; a later tab return covers it.
+- Cached cards (cold-start snapshot) paint with presence unknown (no dot, no active caption, no New
+  marker) until the first live answer.
+- A presence "went offline" delta sets `activeAgo = "15m"` (the server sends it when its online hold
+  ends); "came online" sets `"online"`.
+
+### Header, tile and web cache (2026-11-24, Section 2, plans G8, G11, G12)
+
+- Header: avatar, the location pill ("Nearby", or the Travel city while Travel mode is on; never a
+  precise place) which opens the same `TravelModeSheet` and `TravelLocationStateHolder` Swipe uses
+  (Select paywall focus; every travel change reloads the Grid and marks the Swipe deck stale), then
+  Refresh (wide windows) and Tonight; no header Filters icon. Below it one chip row for both views: Filters (with its active count),
+  Online, Favorites (a view switch, not a filter; it replaced the Nearby/Favorites switch), Fresh,
+  Tonight, Verified. Active chips carry a check as well as the accent outline. Singles and Linked
+  live in the sheet's Who section; distance lives in the sheet. A filter chip tapped while Favorites
+  shows returns to Nearby.
+- Tile: online dot, name, verified check, distance bucket, partner mini, Tonight moon, Visiting
+  pill, a gold "New" tag when the server marks the card `fresh`, and an "Active 15m ago / 1h / 3h /
+  today / this week" caption from `activeAgo` when not online. No photo is a neutral raised surface
+  with a silhouette, the same for everyone (no colour by list position).
+- Web keeps the cold-start snapshot in `sessionStorage` only (`sessionStorageGridSnapshotStore`):
+  a reload paints instantly, closing the tab forgets it, and any `localStorage` copy under the key is
+  removed. It is stored with the account's id and painted only for that account
+  (`AccountBoundGridSnapshotStore`): a cross-tab account switch, or no session, reads as empty and
+  removes it; sign-out clears it.
+- Empty: "No one nearby yet" only when there are no cards, no active filter and no error; the server
+  widens a sparse first page, the client only renders. When the server says it widened
+  (`GridQueryResponseDto.widened`), the context strip adds "Showing people farther away".
+- Presence heartbeat (plan G2, client): `PresenceHeartbeat` sends `POST /v1/presence/heartbeat`
+  once on becoming eligible and about every 60 s while signed in, out of the sign-up stepper and
+  visible; launched with the realtime jobs (stopped in the background on Android and iOS, paused on
+  a hidden web tab); never retried (`PresenceHeartbeatTest`).
+
 ## Filter Application
 
 On filter change:
@@ -400,6 +450,25 @@ Do not:
 - Clear the whole grid first.
 - Show a full-screen spinner if old data exists.
 - Reset scroll to top unless the user chooses a radically different context or location.
+
+Paid filters and persistence (2026-11-24, Section 2, plan G9):
+
+- The paid set mirrors the server's `DiscoveryFilters.requiresAdvancedEntitlement` exactly: any
+  Lifestyle tag, and every Logistics tag except "Public meet first". Choosing one clears only that
+  filter (`GridFilters.withoutPaidFilters`), keeps the viewer's other choices, shows the paywall row
+  and opens the plans (`GridEvent.OpenPaywall`). The client always asks; a server
+  `ENTITLEMENT_REQUIRED` strips the paid filters and re-asks once for the rest (the client's view
+  of the plan can lag a purchase, so it never pre-strips). The plans open only for filters the
+  viewer just applied, never for a cold-start restore after a plan lapsed or a quiet refresh (those
+  still strip and show the row). A refusal superseded by a newer choice or sign-out changes
+  nothing. `AGE_VERIFICATION_REQUIRED` takes out only the lifestyle tags. The sheet shows a lock on
+  paid chips for Free viewers (the profile hub's plan, `GridFilters.advancedFiltersAllowedFor`;
+  display only, unknown shows none).
+- Filters persist across cold starts on the device only (`GridFilterStore`): SQLDelight `app_meta`
+  on Android and iOS, a file on the dev desktop shell, `localStorage` on web. Stored in the saved
+  preset shape (no cursor, no cards, no place), restored before the first query, cleared on sign-out.
+- Fresh (`freshOnly`) replaced "Recently joined"; a preset saved with `recentlyJoinedOnly` restores
+  as Fresh.
 
 ## Default Deck / Never-Empty
 
@@ -588,8 +657,9 @@ updates when the app pauses, prefer event deltas over polling.
 - [x] Presence deltas over `/v1/presence/stream` flip online dots in place (no reorder, no refetch);
   per-delta block filter and explicit subscription scope; `PresenceOfflineScanner` emits offline
   deltas; client reconnects with backoff. Android WebSockets need the OkHttp engine.
-- [x] Pull-to-refresh (`GridPullToRefresh`) preserves filters and scroll; a Refresh button covers
-  pointer devices.
+- [x] Pull-to-refresh (`GridPullToRefresh`) preserves filters; a Refresh button covers pointer
+  devices. Since 2026-11-24 an explicit refresh applies the new order and returns to the top (plan
+  G7); background refreshes never move cards.
 - [x] Instant cached first render (`GridSnapshotStore`, last 60 cards) followed by a quiet refresh.
 - [x] Location updates are thresholded before submission; denied-location QA
   (`scripts/android-grid-denied-location-qa.ps1`).
@@ -614,18 +684,35 @@ updates when the app pauses, prefer event deltas over polling.
   no activity or notification, cap 500, free) and a paged `GET /v1/favorites` of Grid cards, online first
   then the public distance bucket; hidden-distance people get a location-independent position; Grid
   visibility rules on every read (blocks, hides, incognito, banned, deleted, quarantined drop out);
-  sealed viewer-bound cursor (`FavoriteServiceIntegrationTest`). Nearby/Favorites switch on the Grid.
+  sealed viewer-bound cursor (`FavoriteServiceIntegrationTest`). A Favorites chip in the Grid's chip
+  row switches views (it replaced the Nearby/Favorites switch, 2026-11-24).
 - [x] Favorites: online dots update live through the Grid presence stream while the view is showing;
   the starred list is in the account data export. A long-press quick menu on Grid cards is deliberately
   not built: one tap opens the profile, which holds the star and every other action.
 - [x] Last seen (V106): profile detail shows a server bucket (`online_now`, `active_15m`, `active_today`,
   `active_week`) from a throttled heartbeat and session activity; never a timestamp; none for incognito
-  (`LastActiveIntegrationTest`). The card face carries its own coarser key, `activeAgo` (plan G11, above).
-- [x] Tab return keeps the Grid's cards, order and scroll (quiet refetch only after 15 minutes); a block or
+  (`LastActiveIntegrationTest`). The card face shows the Grid card's own coarse `activeAgo` bucket
+  (2026-11-24, plan G11), never a timestamp.
+- [x] Tab return keeps the Grid's cards, order and scroll (presence refreshes in place after 60 s; the
+  order is replaced quietly only after 15 minutes); a block or
   hide also leaves the cold-start cache; sign-out or a dead session wipes the Grid and its cache
   (`GridInstantLoadTest`).
 - [x] A failed next page stops auto-paging and offers Retry; an unfiltered empty Grid shows an empty state
-  (`GridPagingAndEmptyStateTest`).
+  (`GridPagingAndEmptyStateTest`, `GridPhaseTest`: "No one nearby yet" only with no cards, filters or
+  error).
+- [x] Liveness (plan G7): 60 s quiet in-place refresh while visible and in front, "N new nearby" pill,
+  60 s resume refresh, cached presence unknown (`GridLivenessTest`, virtual clock).
+- [x] Header (plan G8): Filters count + Online/Favorites/Fresh/Tonight/Verified chips; Nearby or
+  Travel-city pill opens Travel mode from the Grid.
+- [x] Filters (plan G9): a paid filter clears only itself and opens the paywall; locks in the sheet;
+  filters persist locally and clear on sign-out (`GridPaidFiltersAndPersistenceTest`).
+- [x] Tile (plan G11): New marker, active-ago caption, neutral no-photo silhouette
+  (`GridCardLivenessMarksTest`); DESIGN_SPEC allows the Tonight moon, Visiting pill and ~1 dp gap.
+- [x] Web cached first paint in `sessionStorage` only (plan G12), bound to the signed-in account
+  (`AccountBoundGridSnapshotStoreTest`).
+- [x] Free-cap row names the plan that lifts the cap (Social from Free, Select from Social;
+  `GridPaywallTierTest`). The row itself changes in Section 3.
+- [ ] Section 2: emulator + browser QA of the pill, chips, travel pill, locks and profile pager.
 - [x] Swipe between profiles in grid order, full screen on phones, panel with Previous/Next and arrow keys
   on wider windows; fetch on settle only; next page at the end; block/hide moves on; tap-to-change photos;
   inline first-message composer and "Verify to message" (`ProfilePagerControllerTest`,
