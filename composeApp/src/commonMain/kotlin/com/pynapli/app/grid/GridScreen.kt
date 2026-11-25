@@ -93,12 +93,14 @@ fun GridScreen(
         onDispose { stateHolder.setOnScreen(false) }
     }
 
-    // A paid filter was taken out (only that one): show the plans.
+    // A paid filter was taken out (only that one): show the plans. A plan change reloaded the order
+    // from page one: show it from the top.
     val openStore by rememberUpdatedState(onOpenStore)
-    LaunchedEffect(stateHolder) {
+    LaunchedEffect(stateHolder, gridState) {
         stateHolder.events.collect { event ->
             when (event) {
                 GridEvent.OpenPaywall -> openStore()
+                GridEvent.ScrollToTop -> gridState.scrollToItem(0)
             }
         }
     }

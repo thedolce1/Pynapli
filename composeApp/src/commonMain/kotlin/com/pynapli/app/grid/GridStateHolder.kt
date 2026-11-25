@@ -506,7 +506,7 @@ class GridStateHolder(
 
     private val _events = MutableSharedFlow<GridEvent>(extraBufferCapacity = 1)
 
-    /** One-off events for the screen: open the paywall after a paid filter was taken out. */
+    /** One-off events for the screen: open the paywall after a paid filter was taken out, scroll to top. */
     val events: SharedFlow<GridEvent> = _events.asSharedFlow()
 
     private var filtersRestored = false
@@ -663,6 +663,32 @@ class GridStateHolder(
         _onScreen.value = visible
     }
 
+    /** The viewer's plan tier as last observed this session; null until the first observation. */
+    private var knownPlanTier: String? = null
+
+    /**
+     * The client learned the viewer's plan ([tier], a SubscriptionTier value): from the Store after a
+     * purchase or restore, or from the Profile Hub on sign-in and resume (a lapse or a partner's
+     * benefit ending shows up there). Which cards are locked is the server's call, so a change of
+     * plan only means the cards on screen were locked for another plan: the Grid reloads, and the
+     * answer unlocks them (an upgrade) or brings the locks back (a downgrade).
+     *
+     * The first observation only records the tier: the Grid that is loading was answered for it.
+     * The reload replaces the order with page one, so it lands at the top (as a refresh does); off
+     * screen, the cards are marked expired and the next return reloads them from the top.
+     */
+    suspend fun onPlanTierObserved(tier: String?) {
+        if (tier == null) return
+        val previous = knownPlanTier
+        knownPlanTier = tier
+        if (previous == null || previous == tier) return
+        invalidate()
+        scrollAnchor = GridScrollAnchor()
+        if (!_onScreen.value) return
+        load(quiet = true)
+        _events.tryEmit(GridEvent.ScrollToTop)
+    }
+
     /** Marks the cards as expired, so the next return to the Grid refetches them quietly. */
     fun invalidate() {
         loadedAt = null
@@ -701,6 +727,8 @@ class GridStateHolder(
         filterStoreLock.withLock { runCatchingCancellable { filterStore.clear() } }
         scrollAnchor = GridScrollAnchor()
         travelKeyWhenLeft = null
+        // The next account's first plan observation is a baseline, not a change.
+        knownPlanTier = null
         _serverHasLocation.value = null
         _state.value = GridUiState(isRefreshing = true, cacheChecked = false)
         runCatchingCancellable { snapshotStore.clear() }
@@ -765,6 +793,9 @@ class GridStateHolder(
 sealed interface GridEvent {
     /** A paid filter was taken out (the client knew, or the server refused): show the plans. */
     data object OpenPaywall : GridEvent
+
+    /** The order was replaced from page one (a plan change reloaded it): show it from the top. */
+    data object ScrollToTop : GridEvent
 }
 
 internal const val PAID_FILTER_PAYWALL_MESSAGE: String = "Social or Select unlocks Lifestyle and Logistics filters. Your other filters still apply."

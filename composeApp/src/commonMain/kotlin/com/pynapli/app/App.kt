@@ -32,6 +32,9 @@ import com.pynapli.app.perf.PynapliPerfMarks
 import com.pynapli.app.store.StorePaywallFocus
 import com.pynapli.app.store.StorePaywallSheet
 import com.pynapli.app.store.toStorePartnerLink
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 
 /**
@@ -86,6 +89,19 @@ fun PynapliApp(
                 graph.gridStateHolder.removeCardById(userId)
                 graph.favoritesStateHolder?.removeCardById(userId)
             }
+        }
+        // A plan change (a purchase or restore in the Store, or a lapse picked up by the Profile Hub on
+        // resume) reloads the Grid, so cards locked for the old plan unlock or lock (Section 3). Each
+        // source only emits when its own fetch answered, so the newest emission is the current plan.
+        LaunchedEffect(graph.gridStateHolder, graph.storeStateHolder, graph.profileHubStateHolder) {
+            merge(
+                graph.storeStateHolder.state
+                    .map { it.entitlement?.tier }
+                    .distinctUntilChanged(),
+                graph.profileHubStateHolder.state
+                    .map { it.entitlement?.tier }
+                    .distinctUntilChanged(),
+            ).collect { tier -> graph.gridStateHolder.onPlanTierObserved(tier) }
         }
         LaunchedEffect(authState.isCheckingSession, authState.session == null) {
             if (!authState.isCheckingSession && authState.session == null) {
