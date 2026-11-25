@@ -401,11 +401,11 @@ class GridStateHolder(
         _appVisible.value = visible
     }
 
-    private val _nearbyShowing = MutableStateFlow(true)
+    private val nearbyShowing = MutableStateFlow(true)
 
     /** False while the Favorites view covers Nearby: no liveness refresh for cards nobody sees. */
     fun setNearbyShowing(showing: Boolean) {
-        _nearbyShowing.value = showing
+        nearbyShowing.value = showing
     }
 
     /**
@@ -414,7 +414,7 @@ class GridStateHolder(
      * and iOS cancel in the background.
      */
     suspend fun runLiveRefresh() {
-        combine(_onScreen, _appVisible, _nearbyShowing) { onScreen, visible, nearby -> onScreen && visible && nearby }
+        combine(_onScreen, _appVisible, nearbyShowing) { onScreen, visible, nearby -> onScreen && visible && nearby }
             .distinctUntilChanged()
             .collectLatest { live ->
                 if (!live) return@collectLatest

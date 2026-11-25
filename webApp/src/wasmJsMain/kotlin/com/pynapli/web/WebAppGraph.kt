@@ -139,7 +139,10 @@ class WebAppGraph {
             // Bound to the signed-in account, so a cross-tab account switch never paints the old cards.
             gridSnapshotStore =
                 sessionStorageGridSnapshotStore(
-                    currentUserId = { authStateHolder.state.value.session?.userId },
+                    currentUserId = {
+                        authStateHolder.state.value.session
+                            ?.userId
+                    },
                 ),
             // Filter choices only, kept across browser sessions; sign-out clears them.
             gridFilterStore = localStorageGridFilterStore(),

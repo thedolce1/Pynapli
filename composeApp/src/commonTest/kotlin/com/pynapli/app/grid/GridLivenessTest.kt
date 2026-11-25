@@ -42,7 +42,11 @@ class GridLivenessTest {
             assertFalse(shown.isRefreshing, "no spinner for a quiet refresh")
 
             assertTrue(holder.applyNewNearby())
-            assertEquals(listOf("d", "b", "a"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("d", "b", "a"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
             assertEquals(0, holder.state.value.newNearbyCount)
             assertFalse(holder.applyNewNearby(), "nothing left to apply")
         }
@@ -58,8 +62,15 @@ class GridLivenessTest {
             repository.feed = feed(card("a").copy(online = true))
             holder.refreshLive()
 
-            assertEquals(listOf("a", "b"), holder.state.value.cards.map { it.id })
-            assertTrue(holder.state.value.cards[0].online)
+            assertEquals(
+                listOf("a", "b"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
+            assertTrue(
+                holder.state.value.cards[0]
+                    .online,
+            )
             assertEquals(0, holder.state.value.newNearbyCount)
             assertFalse(holder.applyNewNearby())
         }
@@ -160,13 +171,23 @@ class GridLivenessTest {
             clock += 31.seconds
             holder.refreshOnReturn()
             assertEquals(2, repository.loadCount, "a quiet refresh after a minute away")
-            assertEquals(listOf("a", "b"), holder.state.value.cards.map { it.id }, "in place, no reorder")
+            assertEquals(
+                listOf("a", "b"),
+                holder.state.value.cards
+                    .map { it.id },
+                "in place, no reorder",
+            )
             assertEquals(1, holder.state.value.newNearbyCount)
 
             clock += 15.minutes
             holder.refreshOnReturn()
             assertEquals(3, repository.loadCount)
-            assertEquals(listOf("c", "b", "a"), holder.state.value.cards.map { it.id }, "an expired order is replaced")
+            assertEquals(
+                listOf("c", "b", "a"),
+                holder.state.value.cards
+                    .map { it.id },
+                "an expired order is replaced",
+            )
             assertEquals(0, holder.state.value.newNearbyCount)
         }
 
@@ -197,7 +218,9 @@ class GridLivenessTest {
 
             val priming = async { holder.primeFromCacheThenLoad() }
             runCurrent()
-            val painted = holder.state.value.cards.single()
+            val painted =
+                holder.state.value.cards
+                    .single()
             assertFalse(painted.online, "no green dot from a days-old cache")
             assertNull(painted.activeAgo)
             assertFalse(painted.fresh)
@@ -226,7 +249,11 @@ class GridLivenessTest {
 
             assertEquals(0, holder.state.value.newNearbyCount)
             assertFalse(holder.applyNewNearby())
-            assertEquals(listOf("a"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("a"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
         }
 
     @Test
@@ -265,7 +292,11 @@ class GridLivenessTest {
             gate.complete(Unit)
             paging.await()
 
-            assertEquals(listOf("a", "b"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("a", "b"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
         }
 
     @Test
@@ -275,11 +306,25 @@ class GridLivenessTest {
             holder.load()
 
             holder.applyPresenceDelta(PresenceDeltaDto(userId = "a", online = false, lastActiveAt = "2026-11-24T12:00:00Z"))
-            assertEquals(GridActiveAgo.MINUTES_15, holder.state.value.cards[0].activeAgo)
-            assertEquals("Active 15m ago", GridActiveAgo.label(holder.state.value.cards[0].activeAgo))
+            assertEquals(
+                GridActiveAgo.MINUTES_15,
+                holder.state.value.cards[0]
+                    .activeAgo,
+            )
+            assertEquals(
+                "Active 15m ago",
+                GridActiveAgo.label(
+                    holder.state.value.cards[0]
+                        .activeAgo,
+                ),
+            )
 
             holder.applyPresenceDelta(PresenceDeltaDto(userId = "a", online = true, lastActiveAt = "2026-11-24T12:01:00Z"))
-            assertEquals(GridActiveAgo.ONLINE, holder.state.value.cards[0].activeAgo)
+            assertEquals(
+                GridActiveAgo.ONLINE,
+                holder.state.value.cards[0]
+                    .activeAgo,
+            )
             assertNull(GridActiveAgo.label(GridActiveAgo.ONLINE), "online shows the dot, not a caption")
         }
 }
