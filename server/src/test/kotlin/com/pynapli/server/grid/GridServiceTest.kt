@@ -626,11 +626,13 @@ class GridServiceTest {
             val first = service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 25_000, limit = 12))
             assertEquals(listOf(25_000, 100_000), repository.receivedRadii)
             assertEquals(12, first.items.size)
+            assertTrue(first.widened)
             val cursor = assertNotNull(first.nextCursor, "a widened page must offer the next page")
 
             val second = service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 25_000, limit = 12, cursor = cursor))
             assertEquals(listOf(25_000, 100_000, 100_000), repository.receivedRadii, "the follow-up continues at the max radius")
             assertEquals(12, second.items.size)
+            assertTrue(second.widened, "a page continuing a widened cursor is widened too")
             assertEquals(emptySet(), first.items.map { it.userId }.toSet() intersect second.items.map { it.userId }.toSet())
 
             // The widened cursor continues only the request that produced it.
@@ -669,6 +671,7 @@ class GridServiceTest {
 
             assertEquals(listOf(25_000), repository.receivedRadii)
             assertEquals(12, response.items.size)
+            assertEquals(false, response.widened)
         }
 
     @Test

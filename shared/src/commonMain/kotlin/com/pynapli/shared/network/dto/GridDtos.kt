@@ -48,6 +48,9 @@ data class GridQueryResponseDto(
     val advancedFiltersApplied: Boolean = false,
     val resultLimitReached: Boolean = false,
     val resultLimitTier: String? = null,
+    // Plan G10: the first page was sparse at the requested radius, so this page (and every page that
+    // continues its cursor) comes from the 100 km step. Drives "Showing people farther away".
+    val widened: Boolean = false,
 )
 
 @Serializable

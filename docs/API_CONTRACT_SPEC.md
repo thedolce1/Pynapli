@@ -128,8 +128,9 @@ unknown keys) and older requests mean what they meant.
   filters) is read as `freshOnly = true`. Send `freshOnly` from now on.
 - Sparse areas: a first page that would show fewer than 12 people is answered from the 100 km step
   instead, and **pages normally**: send the returned `nextCursor` with the same request (same
-  `radiusMeters` as before; the cursor carries the widened scope). Nothing in the response marks a
-  widened page.
+  `radiusMeters` as before; the cursor carries the widened scope).
+  `GridQueryResponseDto.widened: Boolean = false` is true on that page and on every page continuing its
+  cursor, so the client can say "Showing people farther away".
 - Order: boosted, then everyone else, then demoted (no activity in 30 days, or no approved photo), each
   by distance. Online is a filter, never an order.
 - Grid messaging reason: `PublicProfileDto.messagingUnavailableReason: String? = null` (profile detail,

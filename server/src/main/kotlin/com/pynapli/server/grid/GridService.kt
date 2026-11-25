@@ -280,6 +280,7 @@ class GridService(
             advancedFiltersApplied = advancedFiltersApplied,
             resultLimitReached = resultLimitReached,
             resultLimitTier = policy.tier.takeIf { resultLimitReached },
+            widened = widened,
         )
     }
 
