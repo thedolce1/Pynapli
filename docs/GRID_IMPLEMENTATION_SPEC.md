@@ -467,6 +467,10 @@ Paid filters and persistence (2026-11-24, Section 2, plan G9):
 - Filters persist across cold starts on the device only (`GridFilterStore`): SQLDelight `app_meta`
   on Android and iOS, a file on the dev desktop shell, `localStorage` on web. Stored in the saved
   preset shape (no cursor, no cards, no place), restored before the first query, cleared on sign-out.
+  Bound to the signed-in account (`AccountBoundGridFilterStore`, privacy review F9): stored with
+  the account's id and restored only for it; a cross-tab account switch, no session or a corrupt or
+  unbound blob reads as nothing saved and is deleted. A filter read or write already under way at
+  sign-out is dropped (account epoch), and the sign-out clear always lands after it (one lock).
 - Fresh (`freshOnly`) replaced "Recently joined"; a preset saved with `recentlyJoinedOnly` restores
   as Fresh.
 

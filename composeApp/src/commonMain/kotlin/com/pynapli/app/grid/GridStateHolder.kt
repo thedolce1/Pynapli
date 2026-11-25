@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -144,6 +146,8 @@ class GridStateHolder(
         keepGatePrompt: Boolean,
         openPaywallOnRefusal: Boolean,
     ) {
+        // The account this load serves; a sign-out meanwhile makes its filter write a no-op.
+        val epoch = accountEpoch
         restoreFiltersOnce()
         _state.update { if (it.cacheChecked) it else it.copy(cacheChecked = true) }
         val before = _state.value
@@ -167,7 +171,7 @@ class GridStateHolder(
         var reaskWithout: GridFilters? = null
         try {
             // Inside the try, so a cancellation here still releases the in-flight marker.
-            persistFilters(filters)
+            persistFilters(filters, epoch)
             reaskWithout = fetchFirstPage(filters, generation, keepCardsVisible, keepGatePrompt, openPaywallOnRefusal)
             answered = true
         } finally {
@@ -466,20 +470,38 @@ class GridStateHolder(
     private var filtersRestored = false
     private var persistedFilters: GridFilters? = null
 
+    /**
+     * Bumped by [clearForSignOut]. A filter read or write that began under an older value belongs to
+     * the account that signed out, so it is dropped (privacy review F9).
+     */
+    private var accountEpoch = 0
+
+    /** Serialises store reads, writes and the sign-out clear, so a clear always lands last. */
+    private val filterStoreLock = Mutex()
+
     /** Cold start: the viewer's last filters come back before the first query asks with them. */
     private suspend fun restoreFiltersOnce() {
         if (filtersRestored) return
         filtersRestored = true
-        val saved = runCatchingCancellable { filterStore.load() }.getOrNull() ?: return
+        val epoch = accountEpoch
+        val saved = filterStoreLock.withLock { runCatchingCancellable { filterStore.load() }.getOrNull() } ?: return
+        // Signed out while reading: these are the previous account's choices.
+        if (epoch != accountEpoch) return
         persistedFilters = saved
         // Only into an untouched Grid: a choice made meanwhile wins over the stored one.
         _state.update { if (it.filters == GridFilters.defaults) it.copy(filters = saved) else it }
     }
 
-    private suspend fun persistFilters(filters: GridFilters) {
-        if (filters == persistedFilters) return
+    private suspend fun persistFilters(
+        filters: GridFilters,
+        epoch: Int,
+    ) {
+        if (epoch != accountEpoch || filters == persistedFilters) return
         persistedFilters = filters
-        runCatchingCancellable { filterStore.save(filters) }
+        filterStoreLock.withLock {
+            // Signed out while waiting: never write the previous account's choices back.
+            if (epoch == accountEpoch) runCatchingCancellable { filterStore.save(filters) }
+        }
     }
 
     suspend fun setRadiusMeters(meters: Int) {
@@ -616,6 +638,7 @@ class GridStateHolder(
      * cache, so the next account never sees it.
      */
     suspend fun clearForSignOut() {
+        accountEpoch += 1
         feedGeneration += 1
         loadedAt = null
         liveAt = null
@@ -624,7 +647,8 @@ class GridStateHolder(
         // The next account starts from its own stored filters (none on this device yet).
         filtersRestored = false
         persistedFilters = null
-        runCatchingCancellable { filterStore.clear() }
+        // After any write already under way (the lock), so the clear is the last word.
+        filterStoreLock.withLock { runCatchingCancellable { filterStore.clear() } }
         scrollAnchor = GridScrollAnchor()
         travelKeyWhenLeft = null
         _serverHasLocation.value = null

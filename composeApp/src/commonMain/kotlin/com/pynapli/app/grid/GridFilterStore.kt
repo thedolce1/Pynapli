@@ -3,6 +3,7 @@ package com.pynapli.app.grid
 import com.pynapli.shared.network.PynapliJson
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.storage.PynapliDatabase
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -29,64 +30,82 @@ object NoOpGridFilterStore : GridFilterStore {
     override suspend fun clear() = Unit
 }
 
+/** The stored filters and the account that chose them. */
+@Serializable
+internal data class OwnedGridFilters(
+    val ownerUserId: String,
+    val filters: GridQueryRequestDto,
+)
+
 internal fun encodeGridFilters(
+    ownerUserId: String,
     filters: GridFilters,
     json: Json = PynapliJson,
-): String = json.encodeToString(GridQueryRequestDto.serializer(), filters.toGridQueryRequest(cursor = null))
+): String = json.encodeToString(OwnedGridFilters.serializer(), OwnedGridFilters(ownerUserId, filters.toGridQueryRequest(cursor = null)))
 
-/** A corrupt or foreign blob reads as "nothing saved", never as an error that blocks the Grid. */
+/**
+ * The filters stored for [ownerUserId], or null. A corrupt blob, one from an earlier build without an
+ * owner, or one chosen by another account reads as "nothing saved", never as an error.
+ */
 internal fun decodeGridFilters(
     value: String?,
+    ownerUserId: String?,
     json: Json = PynapliJson,
 ): GridFilters? {
-    if (value.isNullOrBlank()) return null
-    return runCatching { GridFilters.fromGridQueryRequest(json.decodeFromString(GridQueryRequestDto.serializer(), value)) }.getOrNull()
-}
-
-/** Android and iOS: the `app_meta` key-value table, as the Grid snapshot and app settings use. */
-class SqlDelightGridFilterStore(
-    private val database: PynapliDatabase,
-) : GridFilterStore {
-    override suspend fun load(): GridFilters? =
-        decodeGridFilters(
-            database.appMetaQueries
-                .selectByKey(GRID_FILTERS_KEY)
-                .executeAsOneOrNull()
-                ?.value_,
-        )
-
-    override suspend fun save(filters: GridFilters) {
-        database.appMetaQueries.upsert(
-            key = GRID_FILTERS_KEY,
-            value_ = encodeGridFilters(filters),
-            updated_at_epoch_ms = currentTimeMillis(),
-        )
-    }
-
-    override suspend fun clear() {
-        database.appMetaQueries.deleteByKey(GRID_FILTERS_KEY)
-    }
-
-    @OptIn(ExperimentalTime::class)
-    private fun currentTimeMillis(): Long = Clock.System.now().toEpochMilliseconds()
-
-    private companion object {
-        const val GRID_FILTERS_KEY = "grid_filters_v1"
-    }
+    if (value.isNullOrBlank() || ownerUserId == null) return null
+    val owned = runCatching { json.decodeFromString(OwnedGridFilters.serializer(), value) }.getOrNull() ?: return null
+    if (owned.ownerUserId != ownerUserId) return null
+    return GridFilters.fromGridQueryRequest(owned.filters)
 }
 
 /**
- * Web (`localStorage`) and the dev desktop shell (a file): a named string blob. Filter choices only,
- * which is why `localStorage` is acceptable here while the card snapshot stays in `sessionStorage`.
+ * Filter choices bound to the signed-in account (privacy review F9), like the Grid snapshot: written
+ * with the account's id and restored only for that same account. On web the store is shared by every
+ * tab while another tab can switch this one's session to someone else without a sign-out passing
+ * through here; lifestyle tags are sensitive, so a mismatch, no session or a corrupt blob reads as
+ * nothing saved and the blob is deleted. A save with nobody signed in keeps nothing.
  */
-class KeyValueGridFilterStore(
+class AccountBoundGridFilterStore(
+    private val currentUserId: () -> String?,
     private val read: () -> String?,
     private val write: (String) -> Unit,
     private val remove: () -> Unit,
 ) : GridFilterStore {
-    override suspend fun load(): GridFilters? = decodeGridFilters(read())
+    override suspend fun load(): GridFilters? {
+        val value = read() ?: return null
+        val restored = decodeGridFilters(value, currentUserId())
+        if (restored == null) remove()
+        return restored
+    }
 
-    override suspend fun save(filters: GridFilters) = write(encodeGridFilters(filters))
+    override suspend fun save(filters: GridFilters) {
+        val owner = currentUserId() ?: return remove()
+        write(encodeGridFilters(owner, filters))
+    }
 
     override suspend fun clear() = remove()
 }
+
+/** Android and iOS: the `app_meta` key-value table, as the Grid snapshot and app settings use. */
+fun sqlDelightGridFilterStore(
+    database: PynapliDatabase,
+    currentUserId: () -> String?,
+): GridFilterStore =
+    AccountBoundGridFilterStore(
+        currentUserId = currentUserId,
+        read = {
+            database.appMetaQueries
+                .selectByKey(GRID_FILTERS_KEY)
+                .executeAsOneOrNull()
+                ?.value_
+        },
+        write = { value ->
+            database.appMetaQueries.upsert(key = GRID_FILTERS_KEY, value_ = value, updated_at_epoch_ms = currentTimeMillis())
+        },
+        remove = { database.appMetaQueries.deleteByKey(GRID_FILTERS_KEY) },
+    )
+
+private const val GRID_FILTERS_KEY = "grid_filters_v1"
+
+@OptIn(ExperimentalTime::class)
+private fun currentTimeMillis(): Long = Clock.System.now().toEpochMilliseconds()

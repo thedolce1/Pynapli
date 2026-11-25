@@ -1,9 +1,9 @@
 package com.pynapli.web.settings
 
+import com.pynapli.app.grid.AccountBoundGridFilterStore
 import com.pynapli.app.grid.AccountBoundGridSnapshotStore
 import com.pynapli.app.grid.GridFilterStore
 import com.pynapli.app.grid.GridSnapshotStore
-import com.pynapli.app.grid.KeyValueGridFilterStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.platform.BrowserSessionStorage
 
@@ -33,10 +33,12 @@ fun sessionStorageGridSnapshotStore(currentUserId: () -> String?): GridSnapshotS
 
 /**
  * The Grid's filters across browser sessions (plan G9), in `localStorage`: filter choices only, no
- * cards or places, and sign-out clears them (GridStateHolder.clearForSignOut).
+ * cards or places, and sign-out clears them (GridStateHolder.clearForSignOut). Bound to
+ * [currentUserId]: `localStorage` is shared by every tab, so another account never restores them.
  */
-fun localStorageGridFilterStore(): GridFilterStore =
-    KeyValueGridFilterStore(
+fun localStorageGridFilterStore(currentUserId: () -> String?): GridFilterStore =
+    AccountBoundGridFilterStore(
+        currentUserId = currentUserId,
         read = { BrowserLocalStorage.get(GRID_FILTERS_KEY) },
         write = { value -> BrowserLocalStorage.set(GRID_FILTERS_KEY, value) },
         remove = { BrowserLocalStorage.remove(GRID_FILTERS_KEY) },

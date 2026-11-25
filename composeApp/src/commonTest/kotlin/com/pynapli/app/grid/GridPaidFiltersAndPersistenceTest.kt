@@ -144,13 +144,98 @@ class GridPaidFiltersAndPersistenceTest {
         }
 
     @Test
-    fun aStoredBlobRoundTripsAndACorruptOneReadsAsNothing() {
+    fun aStoredBlobRoundTripsForItsOwnerOnlyAndACorruptOneReadsAsNothing() {
         val filters = GridFilters(online = true, fresh = true, radiusMeters = 10_000, minimumAge = 30, maximumAge = 45)
-        assertEquals(filters, decodeGridFilters(encodeGridFilters(filters)))
-        assertNull(decodeGridFilters("{not json"))
-        assertNull(decodeGridFilters(null))
-        assertFalse(encodeGridFilters(filters).contains("cursor\":\""), "no cursor is stored")
+        val blob = encodeGridFilters("member-a", filters)
+        assertEquals(filters, decodeGridFilters(blob, "member-a"))
+        assertNull(decodeGridFilters(blob, "member-b"), "another account never gets them")
+        assertNull(decodeGridFilters(blob, null), "nor does nobody")
+        assertNull(decodeGridFilters("{not json", "member-a"))
+        assertNull(decodeGridFilters(null, "member-a"))
+        // A bare preset-shaped blob from an earlier build carries no owner: never restored.
+        assertNull(decodeGridFilters("""{"onlineOnly":true}""", "member-a"))
+        assertFalse(blob.contains("cursor\":\""), "no cursor is stored")
     }
+
+    @Test
+    fun accountBoundStoreDeletesWhatAnotherAccountChoseAndKeepsNothingSignedOut() =
+        runTest {
+            var blob: String? = null
+            var userId: String? = "member-a"
+            val store =
+                AccountBoundGridFilterStore(
+                    currentUserId = { userId },
+                    read = { blob },
+                    write = { blob = it },
+                    remove = { blob = null },
+                )
+            store.save(paidAndFree)
+            assertEquals(paidAndFree, store.load())
+
+            // Another tab switched this tab's session to B without a sign-out passing through here.
+            userId = "member-b"
+            assertNull(store.load(), "A's (lifestyle) choices never reach B")
+            assertNull(blob, "and are deleted, not just hidden")
+
+            userId = null
+            store.save(paidAndFree)
+            assertNull(blob, "a save with nobody signed in keeps nothing")
+        }
+
+    @Test
+    fun aCrossTabSwitchNeverRestoresTheOtherAccountsFiltersIntoTheGrid() =
+        runTest {
+            var blob: String? = null
+            var userId: String? = "member-a"
+            val store = AccountBoundGridFilterStore({ userId }, { blob }, { blob = it }, { blob = null })
+            store.save(paidAndFree)
+
+            userId = "member-b"
+            val repository = RecordingGridFeedRepository()
+            val holder = GridStateHolder(repository, filterStore = store)
+            holder.primeFromCacheThenLoad()
+
+            assertEquals(GridFilters.defaults, repository.requests.single(), "B's first query carries none of A's filters")
+        }
+
+    @Test
+    fun aWriteUnderWayAtSignOutIsClearedAfterAndALaterOneNeverLands() =
+        runTest {
+            val store = GatedGridFilterStore()
+            val holder = GridStateHolder(RecordingGridFeedRepository(), filterStore = store)
+            holder.load()
+            store.saveGate = kotlinx.coroutines.CompletableDeferred()
+
+            // A's choice is being written when A signs out.
+            val choosing = async { holder.toggleQuickFilter(QuickFilterId.Verified) }
+            runCurrent()
+            val signingOut = async { holder.clearForSignOut() }
+            runCurrent()
+            store.saveGate!!.complete(Unit)
+            choosing.await()
+            signingOut.await()
+
+            assertNull(store.saved, "the sign-out clear lands after the in-flight write")
+        }
+
+    @Test
+    fun aReadUnderWayAtSignOutNeverAppliesThePreviousAccountsFilters() =
+        runTest {
+            val store = GatedGridFilterStore(initial = paidAndFree)
+            store.loadGate = kotlinx.coroutines.CompletableDeferred()
+            val repository = RecordingGridFeedRepository()
+            val holder = GridStateHolder(repository, filterStore = store)
+
+            val loading = async { holder.load() }
+            runCurrent()
+            val signingOut = async { holder.clearForSignOut() }
+            runCurrent()
+            store.loadGate!!.complete(Unit)
+            loading.await()
+            signingOut.await()
+
+            assertEquals(GridFilters.defaults, holder.state.value.filters)
+        }
 
     @Test
     fun planTiersMapToPaidFilterAccess() {
@@ -179,6 +264,31 @@ private class RecordingGridFeedRepository(
             throw GridFeedException(code = "ENTITLEMENT_REQUIRED", message = "Upgrade required")
         }
         return GridFeedUi(cards = listOf(GridProfileCardUi(id = "a", displayName = "A", online = false, distanceLabel = null, tone = GridCardTone.Warm)))
+    }
+}
+
+/** A store whose load or save can be held on a gate, to put a sign-out in the middle of it. */
+private class GatedGridFilterStore(
+    initial: GridFilters? = null,
+) : GridFilterStore {
+    var saved: GridFilters? = initial
+        private set
+    var loadGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    var saveGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
+    override suspend fun load(): GridFilters? {
+        val value = saved
+        loadGate?.await()
+        return value
+    }
+
+    override suspend fun save(filters: GridFilters) {
+        saveGate?.await()
+        saved = filters
+    }
+
+    override suspend fun clear() {
+        saved = null
     }
 }
 

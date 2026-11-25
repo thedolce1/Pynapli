@@ -5,8 +5,8 @@ import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
-import com.pynapli.app.grid.SqlDelightGridFilterStore
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
+import com.pynapli.app.grid.sqlDelightGridFilterStore
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.store.UnavailableStorePurchaseGateway
@@ -157,7 +157,8 @@ class IosAppGraph(
         PynapliCommonGraph(
             apiClient = apiClient,
             gridSnapshotStore = SqlDelightGridSnapshotStore(database),
-            gridFilterStore = SqlDelightGridFilterStore(database),
+            // Bound to the signed-in account: another account never restores these filters.
+            gridFilterStore = sqlDelightGridFilterStore(database) { authStateHolder.state.value.session?.userId },
             swipeQueueStore = SqlDelightSwipeActionQueueStore(database),
             swipeRepository = ApiSwipeRepository(apiClient),
             // Read-only Store for the first iOS release; StoreKit 2 is a later slice.

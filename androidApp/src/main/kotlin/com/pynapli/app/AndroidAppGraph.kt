@@ -14,8 +14,8 @@ import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.debug.DebugQaFlags
-import com.pynapli.app.grid.SqlDelightGridFilterStore
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
+import com.pynapli.app.grid.sqlDelightGridFilterStore
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
 import com.pynapli.app.notifications.AndroidPushRegistrationStore
@@ -179,7 +179,8 @@ class AndroidAppGraph(
         PynapliCommonGraph(
             apiClient = apiClient,
             gridSnapshotStore = SqlDelightGridSnapshotStore(database),
-            gridFilterStore = SqlDelightGridFilterStore(database),
+            // Bound to the signed-in account: another account never restores these filters.
+            gridFilterStore = sqlDelightGridFilterStore(database) { authStateHolder.state.value.session?.userId },
             swipeQueueStore = SqlDelightSwipeActionQueueStore(database),
             // Debug builds inject swipe failures for the connected QA (android-swipe-queue-qa.ps1).
             swipeRepository =

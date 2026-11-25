@@ -9,7 +9,7 @@ import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
-import com.pynapli.app.grid.KeyValueGridFilterStore
+import com.pynapli.app.grid.AccountBoundGridFilterStore
 import com.pynapli.app.grid.NoOpGridSnapshotStore
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
@@ -124,7 +124,8 @@ class DesktopAppGraph {
             gridSnapshotStore = NoOpGridSnapshotStore,
             // No SQLDelight on desktop (see DesktopStorage): the filters go in a plain file.
             gridFilterStore =
-                KeyValueGridFilterStore(
+                AccountBoundGridFilterStore(
+                    currentUserId = { authStateHolder.state.value.session?.userId },
                     read = { DesktopStorage.get(GRID_FILTERS_KEY) },
                     write = { value -> DesktopStorage.set(GRID_FILTERS_KEY, value) },
                     remove = { DesktopStorage.remove(GRID_FILTERS_KEY) },
