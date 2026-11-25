@@ -36,26 +36,44 @@ object NoOpGridSnapshotStore : GridSnapshotStore {
     override suspend fun clear() = Unit
 }
 
+/** The cards a snapshot holds and the account they were ranked for. */
+@kotlinx.serialization.Serializable
+internal data class OwnedGridSnapshot(
+    val ownerUserId: String,
+    val cards: List<GridProfileCardUi>,
+)
+
 /**
- * A snapshot kept as one named string blob, for shells without SQLDelight. The web passes
- * `sessionStorage` (plan G12): the cards paint instantly on a reload, and are gone when the tab
- * closes, so a shared computer never shows the next visitor someone's Grid.
+ * A snapshot bound to the signed-in account: it is written with the account's id and painted only
+ * for that same account. On web another tab can switch this tab's session to someone else (the
+ * session lives in `localStorage`, the snapshot in this tab's `sessionStorage`); a mismatch, or no
+ * signed-in account, reads as empty and the stale blob is removed, so another account's cards never
+ * paint. Sign-out clears it as well (`GridStateHolder.clearForSignOut`).
  */
-class KeyValueGridSnapshotStore(
+class AccountBoundGridSnapshotStore(
+    private val currentUserId: () -> String?,
     private val read: () -> String?,
     private val write: (String) -> Unit,
     private val remove: () -> Unit,
     private val json: Json = PynapliJson,
     private val maxCards: Int = SqlDelightGridSnapshotStore.MAX_SNAPSHOT_CARDS,
 ) : GridSnapshotStore {
-    private val cardListSerializer = ListSerializer(GridProfileCardUi.serializer())
-
     override suspend fun load(): List<GridProfileCardUi> {
         val value = read() ?: return emptyList()
-        return runCatching { json.decodeFromString(cardListSerializer, value) }.getOrElse { emptyList() }
+        val owner = currentUserId()
+        val snapshot = runCatching { json.decodeFromString(OwnedGridSnapshot.serializer(), value) }.getOrNull()
+        if (owner == null || snapshot == null || snapshot.ownerUserId != owner) {
+            remove()
+            return emptyList()
+        }
+        return snapshot.cards
     }
 
-    override suspend fun save(cards: List<GridProfileCardUi>) = write(json.encodeToString(cardListSerializer, cards.take(maxCards)))
+    override suspend fun save(cards: List<GridProfileCardUi>) {
+        // Nobody signed in (a late answer after sign-out): nothing to bind it to, so nothing is kept.
+        val owner = currentUserId() ?: return remove()
+        write(json.encodeToString(OwnedGridSnapshot.serializer(), OwnedGridSnapshot(owner, cards.take(maxCards))))
+    }
 
     override suspend fun clear() = remove()
 }

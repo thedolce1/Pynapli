@@ -136,7 +136,11 @@ class WebAppGraph {
         PynapliCommonGraph(
             apiClient = apiClient,
             // Instant first paint on a reload, kept in sessionStorage only: gone when the tab closes.
-            gridSnapshotStore = sessionStorageGridSnapshotStore(),
+            // Bound to the signed-in account, so a cross-tab account switch never paints the old cards.
+            gridSnapshotStore =
+                sessionStorageGridSnapshotStore(
+                    currentUserId = { authStateHolder.state.value.session?.userId },
+                ),
             // Filter choices only, kept across browser sessions; sign-out clears them.
             gridFilterStore = localStorageGridFilterStore(),
             swipeQueueStore = NoOpSwipeActionQueueStore,

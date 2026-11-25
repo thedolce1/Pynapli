@@ -354,7 +354,9 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   with a silhouette, the same for everyone (no colour by list position).
 - Web keeps the cold-start snapshot in `sessionStorage` only (`sessionStorageGridSnapshotStore`):
   a reload paints instantly, closing the tab forgets it, and any `localStorage` copy under the key is
-  removed.
+  removed. It is stored with the account's id and painted only for that account
+  (`AccountBoundGridSnapshotStore`): a cross-tab account switch, or no session, reads as empty and
+  removes it; sign-out clears it.
 - Empty: "No one nearby yet" only when there are no cards, no active filter and no error; the server
   widens a sparse first page, the client only renders. When the server says it widened
   (`GridQueryResponseDto.widened`), the context strip adds "Showing people farther away".
@@ -613,7 +615,8 @@ updates when the app pauses, prefer event deltas over polling.
   filters persist locally and clear on sign-out (`GridPaidFiltersAndPersistenceTest`).
 - [x] Tile (plan G11): New marker, active-ago caption, neutral no-photo silhouette
   (`GridCardLivenessMarksTest`); DESIGN_SPEC allows the Tonight moon, Visiting pill and ~1 dp gap.
-- [x] Web cached first paint in `sessionStorage` only (plan G12, `KeyValueGridSnapshotStoreTest`).
+- [x] Web cached first paint in `sessionStorage` only (plan G12), bound to the signed-in account
+  (`AccountBoundGridSnapshotStoreTest`).
 - [x] Free-cap row names the plan that lifts the cap (Social from Free, Select from Social;
   `GridPaywallTierTest`). The row itself changes in Section 3.
 - [ ] Section 2 client work needs the server half (fresh/activeAgo on cards, `freshOnly`) and

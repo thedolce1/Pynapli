@@ -1,9 +1,9 @@
 package com.pynapli.web.settings
 
+import com.pynapli.app.grid.AccountBoundGridSnapshotStore
 import com.pynapli.app.grid.GridFilterStore
 import com.pynapli.app.grid.GridSnapshotStore
 import com.pynapli.app.grid.KeyValueGridFilterStore
-import com.pynapli.app.grid.KeyValueGridSnapshotStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.platform.BrowserSessionStorage
 
@@ -15,10 +15,13 @@ private const val GRID_SNAPSHOT_KEY = "pynapli.grid.snapshot.v1"
  * last cards at once and closing the tab forgets them. Never `localStorage`: on a shared computer
  * the next visitor must not see someone's Grid. Any `localStorage` copy under the same key (none
  * was ever written, but a hand-edited or future build could) is removed on start and on clear.
+ * Bound to [currentUserId]: if another tab switches this tab's session to another account, the old
+ * account's cards never paint (AccountBoundGridSnapshotStore).
  */
-fun sessionStorageGridSnapshotStore(): GridSnapshotStore {
+fun sessionStorageGridSnapshotStore(currentUserId: () -> String?): GridSnapshotStore {
     BrowserLocalStorage.remove(GRID_SNAPSHOT_KEY)
-    return KeyValueGridSnapshotStore(
+    return AccountBoundGridSnapshotStore(
+        currentUserId = currentUserId,
         read = { BrowserSessionStorage.get(GRID_SNAPSHOT_KEY) },
         write = { value -> BrowserSessionStorage.set(GRID_SNAPSHOT_KEY, value) },
         remove = {
