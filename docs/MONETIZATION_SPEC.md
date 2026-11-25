@@ -494,7 +494,7 @@ Bad paywall moments:
 |---|---:|---:|---:|
 | Basic profile | Yes | Yes | Yes |
 | Basic grid | Yes | Yes | Yes |
-| Expanded grid | 60-profile nearby depth | 600-profile nearby depth | Largest uncapped nearby depth |
+| Expanded grid | 60-profile nearby depth, then locked tiles to 600 | 600-profile nearby depth, then locked tiles to 1,200 | Largest uncapped nearby depth |
 | Grid messaging | Yes | Yes | Yes |
 | Basic filters | Yes | Yes | Yes |
 | Advanced filters | No | Some | Yes |

@@ -137,6 +137,47 @@ Never-Empty") pages under its own scope: the 100 km step plus the radius the vie
 does not decode under the normal scope is tried under the widened one, so a widened cursor only ever
 continues the request that produced it.
 
+### Locked cards past the tier depth (Section 3, 2026-11-25)
+
+A Grindr-style paywall on tap. Server side only so far; the client half is a separate slice.
+
+- **Opt-in.** A request with `acceptLockedCards = true` keeps paging past the viewer's tier depth.
+  Without it (every client older than Section 3), the Grid stops at the depth with
+  `resultLimitReached`, exactly as before, so an old client can never show a locked card as a
+  tappable profile. The opt-in is part of the cursor scope (appended only when set), so an opted-in
+  cursor never continues a request without it. Saved filters never store it.
+- **Windows.** Positions are 0-based over the whole served list. Free: unlocked 0–59, locked 60–599.
+  Social: unlocked 0–599, locked 600–1199. Select: never locked. After the locked window the result
+  ends (`resultLimitReached = true`, no `nextCursor`). These come from `EntitlementPolicy`
+  (`gridResultDepthLimit`, `gridLockedPreviewDepth`, `gridUnlockTier`).
+- **Decided per page on the server.** Locked or not is a function of the sealed cursor's seen count
+  and the entitlement read on that request; nothing from the client. An upgrade or downgrade applies
+  on the next page under the same cursor (the scope binds the opt-in, not the tier). A cursor issued
+  with a requested page size above the new tier's cap is refused after a tier change
+  (`INVALID_GRID_CURSOR`), as before Section 3: page size is in the scope. A page can straddle the
+  depth (Social's 600 is not a multiple of 90): locking is per position. Widened (sparse-area) pages
+  carry the same seen count, so they lock the same way.
+- **Rank and cache.** Locking happens after the rank, the shared rank cache and the per-viewer
+  block/hide/online filtering. The cache key and cached rows hold nothing per viewer or per tier.
+  Locking never reorders anything (`GridRankOrderPinTest`, `GridLockedCardsIntegrationTest`).
+- **A locked card has no identity.** It is built from an allowlist (`toLockedGridCardDto`):
+  `userId` and `rankToken` are an opaque per-viewer token, `"locked_"` + base64url of the first 16
+  bytes of HMAC-SHA256(viewer id ‖ member id), keyed from the discovery cursor secret under its own
+  label. It is stable for that viewer, differs for every other viewer, and never parses as a UUID, so
+  every person-targeted route refuses it like any malformed id (`LockedCardTokenRouteRejectionTest`)
+  and the presence stream drops it. `displayName` is `""`; `linkedPartner`, `activeAgo`,
+  `visitingFrom` and `visitingUntil` are null. It keeps only what a tile shows: the approved
+  thumbnail (same URL rules as an unlocked card), the online dot, the public distance bucket when
+  the member shows distance, and the `visiting`, `tonightActive`, `verified`, `coupleVerified` and
+  `fresh` badges.
+- **Scraping guard.** Every page still spends `GRID_QUERY` (720 per user per hour). A page whose range
+  reaches into the locked window also spends `GRID_LOCKED_PAGE` (60 per user per hour) before any
+  ranking work; over it the page is `429 RATE_LIMITED`. A whole Free locked window is 9 pages of 60
+  (Social: 7 of 90).
+- Residual: the thumbnail URL names the media asset (not the member), so someone who already sees
+  that member unlocked elsewhere (Swipe, Tonight) can match the photo. That is inherent in showing
+  the photo at all.
+
 ### Location privacy (load-bearing)
 
 An ordinary account can report any location and read every field, so every Grid observable —
@@ -390,7 +431,8 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   opens the photo-verification sheet; any other refusal keeps the disabled Message button. Spark is
   one tap. Favourite and hide/block/report stay in the top bar.
 - Locked cards (Section 3): `ProfilePagerController.isLocked` is the per-card seam; a locked page
-  shows the paywall and never fetches a profile. Nothing is locked yet.
+  shows the paywall and never fetches a profile. The server now serves locked cards to opted-in
+  clients (see "Locked cards past the tier depth"); the client does not opt in yet.
 
 ### Launch path (2026-11-24, Section 1, plan G1)
 
@@ -592,7 +634,8 @@ This keeps the grid stable and dense.
 ## Subscription Gating
 
 Grid volume is gated by tier (Free / Social / Select page size and depth, enforced server-side; see
-[MONETIZATION_SPEC.md](MONETIZATION_SPEC.md)). **Never gate** basic safety filters, basic
+[MONETIZATION_SPEC.md](MONETIZATION_SPEC.md)). Past the depth an opted-in client gets locked,
+identity-free cards up to the next tier's depth (see "Locked cards past the tier depth"). **Never gate** basic safety filters, basic
 singles/linked/intent clarity, block/report, or basic location privacy.
 
 ## Boost
