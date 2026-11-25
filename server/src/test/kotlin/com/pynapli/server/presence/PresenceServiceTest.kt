@@ -184,6 +184,27 @@ class PresenceServiceTest {
             assertTrue(service.claimRefresh(userId))
         }
 
+    // Final review: a failed tombstone write must never leave the member online after logout.
+    @Test
+    fun endPresenceClearsTheKeyEvenWhenTheTombstoneWriteFails() =
+        runBlocking {
+            val inner = InMemoryPresenceRepository()
+            val repository =
+                object : PresenceRepository by inner {
+                    override suspend fun markPresenceEnded(
+                        userId: UUID,
+                        at: java.time.Instant,
+                    ): Unit = throw IllegalStateException("redis down")
+                }
+            val service = PresenceService(repository)
+            val userId = UUID.randomUUID()
+
+            service.touch(userId)
+            assertEquals(setOf(userId), service.onlineUserIds(listOf(userId)))
+            service.endPresence(userId)
+            assertEquals(emptySet(), service.onlineUserIds(listOf(userId)))
+        }
+
     // Privacy review F3: a socket marks you online when it opens, never on its re-auth tick.
     @Test
     fun aSocketReAuthTickIsNotActivity() =

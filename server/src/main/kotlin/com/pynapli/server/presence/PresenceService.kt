@@ -108,7 +108,14 @@ class PresenceService(
     suspend fun endPresence(userId: UUID) {
         lastRefreshed.remove(userId)
         // Tombstone first, then the key: a refresh racing this sees one or the other (refreshOnline).
-        repository.markPresenceEnded(userId, clock.instant())
+        // A failed tombstone write must never keep the member online: the key is cleared regardless.
+        try {
+            repository.markPresenceEnded(userId, clock.instant())
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Best effort; the clear below still ends presence.
+        }
         repository.clear(userId)
     }
 
