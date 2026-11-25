@@ -193,6 +193,7 @@ private fun ColumnScope.NearbyGridSections(
         GridPaywallRow(
             message = message,
             onOpenStore = onOpenStore,
+            upgradeTier = state.paywallUpgradeTier,
         )
     }
     state.verificationMessage?.let { message ->
