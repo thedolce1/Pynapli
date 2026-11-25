@@ -62,27 +62,6 @@ private fun storedKey(
     allowed: Set<String>,
 ): String? = key?.takeIf { it in allowed && (it != ProfileTaxonomies.SELF_DESCRIBE || !detail.isNullOrBlank()) }
 
-/**
- * Names a member can't choose: the "New member" placeholder shown for a profile without a name (a
- * member using it would look like a fake or unfinished account), and names that pass for Pynapli
- * staff. Compared case-insensitively with whitespace collapsed.
- */
-internal val RESERVED_DISPLAY_NAMES =
-    setOf(
-        "new member",
-        "pynapli",
-        "pynapli user",
-        "pynapli team",
-        "pynapli support",
-        "pynapli admin",
-        "pynapli moderator",
-        "admin",
-        "moderator",
-        "support",
-    )
-
-internal fun String.isReservedDisplayName(): Boolean = trim().lowercase().split(Regex("\\s+")).joinToString(" ") in RESERVED_DISPLAY_NAMES
-
 internal fun UpdateProfileRequestDto.toProfileUpdate(clock: Clock): ProfileUpdate {
     val trimmedName = displayName?.trim()?.takeIf { it.isNotEmpty() }
     if (trimmedName != null && trimmedName.length !in 2..32) {

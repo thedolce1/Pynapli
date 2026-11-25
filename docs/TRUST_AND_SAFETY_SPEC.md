@@ -186,9 +186,15 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
   silent fallback would leave new members photo-less with no alarm.
 - **Environment names are checked:** `PYNAPLI_ENV` must be `local`, `test`, `staging`, `prod` or
   `production` (`UNKNOWN_ENVIRONMENT`), so a typo can't run production without its guards.
-- **Placeholder name:** a profile without a name reads "New member". Members can't choose it, or a
-  staff-looking name (Pynapli, Pynapli Support/Team/Admin/Moderator, Admin, Moderator, Support):
-  `DISPLAY_NAME_RESERVED`.
+- **Placeholder name:** a profile without a name reads "New member". Members can't choose it,
+  "Pynapli"/"Pynapli User", any name containing "pynapli" plus a staff word (support, team, admin,
+  moderator, staff, official), or a bare staff word: `DISPLAY_NAME_RESERVED`
+  (`profile/ReservedDisplayNames.kt`). Matching is on a letters-only skeleton: NFKC, format and
+  zero-width characters dropped, any Unicode whitespace as a space, `Locale.ROOT` lowercase,
+  diacritics stripped, common Cyrillic/Greek/Latin confusables folded to Latin. So no-break
+  spaces, zero-width characters, a Cyrillic "е", punctuation and suffixes ("New member 2") don't get
+  round it. Digit look-alikes ("Adm1n") are not folded. Members who already carry such a name are
+  not renamed; the check runs when a name is set.
 - **What the member sees:** their own pending photo, labelled "Being reviewed · only you can see it",
   in the album manager, Edit profile, the onboarding photo step and their own profile preview. The
   server returns a pending photo only to its owner (owner album listing); every other viewer's query
