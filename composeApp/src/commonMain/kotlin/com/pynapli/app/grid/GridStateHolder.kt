@@ -7,8 +7,12 @@ import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
+import com.pynapli.shared.network.dto.SubscriptionTier
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -26,6 +30,8 @@ class GridStateHolder(
     private val snapshotStore: GridSnapshotStore = NoOpGridSnapshotStore,
     /** Injected so the liveness rules (60 s quiet refresh, 15 min expiry) run on a virtual clock in tests. */
     private val timeSource: TimeSource = TimeSource.Monotonic,
+    /** The viewer's filters across cold starts, on this device only (cleared on sign-out). */
+    private val filterStore: GridFilterStore = NoOpGridFilterStore,
 ) {
     private val _state = MutableStateFlow(GridUiState(isRefreshing = true, cacheChecked = false))
     val state: StateFlow<GridUiState> = _state.asStateFlow()
@@ -43,6 +49,8 @@ class GridStateHolder(
      * present yet, so it never clobbers a live grid. Call once on first composition instead of [load].
      */
     suspend fun primeFromCacheThenLoad() {
+        // Before the join check below, which compares the in-flight load's filters with these.
+        restoreFiltersOnce()
         if (_state.value.cards.isNotEmpty()) {
             // Returning to the Grid tab: the cards are still here, so keep them (and their order and
             // scroll); presence refreshes in place after a minute, the order only once it expired.
@@ -121,7 +129,17 @@ class GridStateHolder(
         _state.update { if (it.newNearbyCount == 0) it else it.copy(newNearbyCount = 0) }
     }
 
-    suspend fun load(quiet: Boolean = false) {
+    suspend fun load(quiet: Boolean = false) = load(quiet = quiet, keepGatePrompt = false)
+
+    /**
+     * [keepGatePrompt]: this load re-asks with the paid (or age-gated) filters taken out, so the
+     * paywall or verification prompt that caused it stays up when the answer lands.
+     */
+    private suspend fun load(
+        quiet: Boolean,
+        keepGatePrompt: Boolean,
+    ) {
+        restoreFiltersOnce()
         _state.update { if (it.cacheChecked) it else it.copy(cacheChecked = true) }
         val before = _state.value
         val keepCardsVisible = quiet && before.cards.isNotEmpty()
@@ -138,11 +156,13 @@ class GridStateHolder(
         }
         val generation = feedGeneration
         val filters = _state.value.filters
+        persistFilters(filters)
         val flight = InFlightLoad(generation, filters)
         inFlightLoad = flight
         var answered = false
+        var reaskWithout: GridFilters? = null
         try {
-            fetchFirstPage(filters, generation, keepCardsVisible)
+            reaskWithout = fetchFirstPage(filters, generation, keepCardsVisible, keepGatePrompt)
             answered = true
         } finally {
             // Always released, cancellation included, so a joiner never waits on a dead request.
@@ -151,14 +171,22 @@ class GridStateHolder(
             if (applied) appliedGeneration = generation
             flight.applied.complete(applied)
         }
+        // A gate refused a filter: the rest of the viewer's choices still deserve a Grid. Bounded:
+        // the re-ask carries no gated filter, so it cannot be refused for one again.
+        if (reaskWithout != null && generation == feedGeneration) load(quiet = quiet, keepGatePrompt = true)
     }
 
-    /** One first-page request; its answer (cards or error) is applied only while [generation] is current. */
+    /**
+     * One first-page request; its answer (cards or error) is applied only while [generation] is
+     * current. Returns the filters to re-ask with when a gate refused only some of them.
+     */
     private suspend fun fetchFirstPage(
         filters: GridFilters,
         generation: Int,
         keepCardsVisible: Boolean,
-    ) {
+        keepGatePrompt: Boolean,
+    ): GridFilters? {
+        var reaskWithout: GridFilters? = null
         runCatchingCancellable { repository.loadGrid(filters) }
             .onSuccess { feed ->
                 // Signed out (or reloaded) while this was in flight: never resurrect old cards.
@@ -171,8 +199,9 @@ class GridStateHolder(
                     current.copy(
                         cards = feed.cards,
                         nextCursor = feed.nextCursor,
-                        paywallMessage = feed.resultLimitPaywallMessage,
-                        verificationMessage = null,
+                        paywallMessage = feed.resultLimitPaywallMessage ?: current.paywallMessage.takeIf { keepGatePrompt },
+                        paywallUpgradeTier = feed.resultLimitUpgradeTier ?: current.paywallUpgradeTier.takeIf { keepGatePrompt },
+                        verificationMessage = current.verificationMessage.takeIf { keepGatePrompt },
                         isRefreshing = false,
                         isLoadingMore = false,
                         errorCode = null,
@@ -185,24 +214,39 @@ class GridStateHolder(
                 if (generation == feedGeneration && (error as? GridFeedException)?.code == "LOCATION_REQUIRED") {
                     _serverHasLocation.value = false
                 }
+                val code = (error as? GridFeedException)?.code
+                val entitlementRequired = code == "ENTITLEMENT_REQUIRED"
+                val verificationRequired = code == "AGE_VERIFICATION_REQUIRED"
+                // Each gate takes out only what it refused (plan G9): the paid filters, or the
+                // age-gated lifestyle tags. Everything else the viewer chose stays.
+                val allowed =
+                    when {
+                        entitlementRequired -> filters.withoutPaidFilters()
+                        verificationRequired -> filters.copy(lifestyleTags = emptySet())
+                        else -> filters
+                    }
+                if (entitlementRequired && generation == feedGeneration) _events.tryEmit(GridEvent.OpenPaywall)
+                if (allowed != filters && generation == feedGeneration) reaskWithout = allowed
                 _state.update { current ->
-                    val code = (error as? GridFeedException)?.code
-                    val entitlementRequired = code == "ENTITLEMENT_REQUIRED"
-                    val verificationRequired = code == "AGE_VERIFICATION_REQUIRED"
-                    // Both gates revert the just-applied (gated) filters and surface a prompt
-                    // instead of a raw error, keeping any visible cards on screen.
+                    // Both gates surface a prompt instead of a raw error, keeping visible cards.
                     val gated = entitlementRequired || verificationRequired
                     if (keepCardsVisible && !gated) {
                         current.copy(isRefreshing = false)
                     } else {
                         current.copy(
                             isRefreshing = false,
-                            filters = if (gated) GridFilters.defaults else current.filters,
+                            filters = if (gated) allowed else current.filters,
                             paywallMessage =
                                 if (entitlementRequired) {
-                                    "Social or Select unlocks this filter."
+                                    PAID_FILTER_PAYWALL_MESSAGE
                                 } else {
                                     current.paywallMessage
+                                },
+                            paywallUpgradeTier =
+                                if (entitlementRequired) {
+                                    SubscriptionTier.SOCIAL
+                                } else {
+                                    current.paywallUpgradeTier
                                 },
                             verificationMessage =
                                 if (verificationRequired) {
@@ -221,6 +265,7 @@ class GridStateHolder(
                     }
                 }
             }
+        return reaskWithout
     }
 
     /**
@@ -301,6 +346,7 @@ class GridStateHolder(
                 cards = feed.cards,
                 nextCursor = feed.nextCursor,
                 paywallMessage = feed.resultLimitPaywallMessage,
+                paywallUpgradeTier = feed.resultLimitUpgradeTier,
                 isLoadingMore = false,
                 newNearbyCount = 0,
             )
@@ -368,6 +414,7 @@ class GridStateHolder(
             current.copy(
                 filters = current.filters.toggle(id),
                 paywallMessage = null,
+                paywallUpgradeTier = null,
                 verificationMessage = null,
                 errorCode = null,
                 errorMessage = null,
@@ -378,16 +425,57 @@ class GridStateHolder(
 
     suspend fun applyFilters(filters: GridFilters) {
         if (_state.value.filters == filters) return
+        // Known not to be entitled (plan G9): take out only the paid filters, keep the rest, and open
+        // the paywall. Unknown entitlement asks the server, whose refusal is handled the same way.
+        val lockedOut = advancedFiltersAllowed == false && filters.requiresAdvancedEntitlement
+        val allowed = if (lockedOut) filters.withoutPaidFilters() else filters
         _state.update { current ->
             current.copy(
-                filters = filters,
-                paywallMessage = null,
+                filters = allowed,
+                paywallMessage = if (lockedOut) PAID_FILTER_PAYWALL_MESSAGE else null,
+                paywallUpgradeTier = if (lockedOut) SubscriptionTier.SOCIAL else null,
                 verificationMessage = null,
                 errorCode = null,
                 errorMessage = null,
             )
         }
-        load()
+        if (lockedOut) _events.tryEmit(GridEvent.OpenPaywall)
+        load(quiet = false, keepGatePrompt = lockedOut)
+    }
+
+    /**
+     * What the client knows of the viewer's plan: true for Social or Select, false for Free, null
+     * while it has not loaded (then nothing is locked up front and the server decides). Only used
+     * to show locks and to skip a round trip; the server stays authoritative.
+     */
+    private var advancedFiltersAllowed: Boolean? = null
+
+    fun setAdvancedFiltersAllowed(allowed: Boolean?) {
+        advancedFiltersAllowed = allowed
+    }
+
+    private val _events = MutableSharedFlow<GridEvent>(extraBufferCapacity = 1)
+
+    /** One-off events for the screen: open the paywall after a paid filter was taken out. */
+    val events: SharedFlow<GridEvent> = _events.asSharedFlow()
+
+    private var filtersRestored = false
+    private var persistedFilters: GridFilters? = null
+
+    /** Cold start: the viewer's last filters come back before the first query asks with them. */
+    private suspend fun restoreFiltersOnce() {
+        if (filtersRestored) return
+        filtersRestored = true
+        val saved = runCatchingCancellable { filterStore.load() }.getOrNull() ?: return
+        persistedFilters = saved
+        // Only into an untouched Grid: a choice made meanwhile wins over the stored one.
+        _state.update { if (it.filters == GridFilters.defaults) it.copy(filters = saved) else it }
+    }
+
+    private suspend fun persistFilters(filters: GridFilters) {
+        if (filters == persistedFilters) return
+        persistedFilters = filters
+        runCatchingCancellable { filterStore.save(filters) }
     }
 
     suspend fun setRadiusMeters(meters: Int) {
@@ -439,6 +527,7 @@ class GridStateHolder(
                         cards = existing.cards + appended,
                         nextCursor = feed.nextCursor,
                         paywallMessage = feed.resultLimitPaywallMessage,
+                        paywallUpgradeTier = feed.resultLimitUpgradeTier,
                         isLoadingMore = false,
                         errorCode = null,
                         errorMessage = null,
@@ -527,6 +616,11 @@ class GridStateHolder(
         liveAt = null
         pendingFeed = null
         pendingAt = null
+        // The next account starts from its own stored filters (none on this device yet).
+        filtersRestored = false
+        persistedFilters = null
+        advancedFiltersAllowed = null
+        runCatchingCancellable { filterStore.clear() }
         scrollAnchor = GridScrollAnchor()
         travelKeyWhenLeft = null
         _serverHasLocation.value = null
@@ -584,6 +678,14 @@ class GridStateHolder(
         val LIVE_REFRESH_INTERVAL: Duration = 60.seconds
     }
 }
+
+/** One-off Grid events for the screen (StateFlow for state, SharedFlow for these). */
+sealed interface GridEvent {
+    /** A paid filter was taken out (the client knew, or the server refused): show the plans. */
+    data object OpenPaywall : GridEvent
+}
+
+internal const val PAID_FILTER_PAYWALL_MESSAGE: String = "Social or Select unlocks Lifestyle and Logistics filters. Your other filters still apply."
 
 /** A saved [androidx.compose.foundation.lazy.grid.LazyGridState] position. */
 data class GridScrollAnchor(
@@ -651,6 +753,19 @@ data class GridFeedUi(
                 when (resultLimitTier) {
                     "free" -> "Social unlocks more nearby profiles."
                     "social" -> "Select unlocks the largest nearby grid."
+                    else -> null
+                }
+            }
+
+    /** The plan that lifts the depth cap the viewer hit: Social from Free, Select from Social. */
+    val resultLimitUpgradeTier: String?
+        get() =
+            if (!resultLimitReached) {
+                null
+            } else {
+                when (resultLimitTier) {
+                    SubscriptionTier.FREE -> SubscriptionTier.SOCIAL
+                    SubscriptionTier.SOCIAL -> SubscriptionTier.SELECT
                     else -> null
                 }
             }

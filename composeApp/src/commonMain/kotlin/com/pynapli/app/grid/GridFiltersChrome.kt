@@ -22,18 +22,39 @@ internal fun SectionTitle(text: String) {
     PynapliSectionTitle(text)
 }
 
+/**
+ * A sheet filter chip. [locked] marks a paid option before it is tapped (plan G9): it still toggles,
+ * and applying it takes out only that filter and opens the plans.
+ */
 @Composable
 internal fun SheetToggleChip(
     label: String,
     active: Boolean,
+    locked: Boolean = false,
     onClick: () -> Unit,
 ) {
     PynapliPill(
         text = label,
         selected = active,
         onClick = onClick,
+        leading =
+            if (locked) {
+                {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = "Social or Select",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            } else {
+                null
+            },
     )
 }
+
+/** Under a section of paid filters, for a viewer on Free. */
+internal const val PAID_FILTERS_HINT: String = "Social or Select. Pick one to see the plans; your other filters still apply."
 
 @Composable
 internal fun ComingSoonSection(message: String) {

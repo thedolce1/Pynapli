@@ -11,9 +11,11 @@ import com.pynapli.app.grid.ApiFavoritesRepository
 import com.pynapli.app.grid.ApiGridFeedRepository
 import com.pynapli.app.grid.ApiSavedGridFilterRepository
 import com.pynapli.app.grid.FavoritesStateHolder
+import com.pynapli.app.grid.GridFilterStore
 import com.pynapli.app.grid.GridPresenceStreamCoordinator
 import com.pynapli.app.grid.GridSnapshotStore
 import com.pynapli.app.grid.GridStateHolder
+import com.pynapli.app.grid.NoOpGridFilterStore
 import com.pynapli.app.grid.NoOpGridSnapshotStore
 import com.pynapli.app.grid.SavedGridFilterStateHolder
 import com.pynapli.app.location.ApiLocationUpdateRepository
@@ -84,6 +86,8 @@ class PynapliCommonGraph(
     apiClient: PynapliApiClient,
     /** Platform storage: SQLDelight on Android, absent on web until a localStorage snapshot earns it. */
     gridSnapshotStore: GridSnapshotStore = NoOpGridSnapshotStore,
+    /** The Grid's filters across cold starts: SQLDelight app_meta on mobile, localStorage on web. */
+    gridFilterStore: GridFilterStore = NoOpGridFilterStore,
     swipeQueueStore: SwipeActionQueueStore = NoOpSwipeActionQueueStore,
     /**
      * Android wraps the API repository with a debug fault injector for the connected swipe QA, so the
@@ -108,6 +112,7 @@ class PynapliCommonGraph(
         GridStateHolder(
             repository = ApiGridFeedRepository(apiClient),
             snapshotStore = gridSnapshotStore,
+            filterStore = gridFilterStore,
         )
 
     val savedGridFilterStateHolder = SavedGridFilterStateHolder(ApiSavedGridFilterRepository(apiClient))

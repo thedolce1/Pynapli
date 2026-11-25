@@ -31,6 +31,7 @@ import com.pynapli.web.settings.LocalStorageAppSettingsStore
 import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
 import com.pynapli.web.settings.SessionStoragePendingSignupStore
 import com.pynapli.web.settings.SessionStorageUnderageStopStore
+import com.pynapli.web.settings.localStorageGridFilterStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -136,6 +137,8 @@ class WebAppGraph {
             apiClient = apiClient,
             // NoOp stores until a localStorage snapshot store earns its place (WEB_PWA_GAMEPLAN W2/W4).
             gridSnapshotStore = NoOpGridSnapshotStore,
+            // Filter choices only, kept across browser sessions; sign-out clears them.
+            gridFilterStore = localStorageGridFilterStore(),
             swipeQueueStore = NoOpSwipeActionQueueStore,
             // Store is founder-locked read-only on web.
             storePurchaseGateway = UnavailableStorePurchaseGateway(),

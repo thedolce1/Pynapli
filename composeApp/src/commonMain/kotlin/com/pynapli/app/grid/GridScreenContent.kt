@@ -58,6 +58,8 @@ internal fun GridScreenContent(
     onShowNewNearby: () -> Unit = {},
     // The location pill opens Travel mode; null leaves it a plain label.
     onOpenTravel: (() -> Unit)? = null,
+    // The viewer's plan allows paid filters: true/false, or null while unknown (no locks shown).
+    advancedFiltersAllowed: Boolean? = null,
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
     val showingFavorites = favoritesState?.showing == true && favoritesGridState != null
@@ -133,6 +135,7 @@ internal fun GridScreenContent(
             savedState = savedFiltersState,
             tonightSessionActive = tonightSessionActive,
             lifestyleFiltersAllowed = lifestyleFiltersAllowed,
+            advancedFiltersAllowed = advancedFiltersAllowed != false,
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false

@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
@@ -51,6 +52,9 @@ fun GridScreen(
     favoritesStateHolder: FavoritesStateHolder? = null,
     // Travel mode is a Select perk, so its paywall opens on Select rather than the plan list.
     onOpenTravelStore: () -> Unit = onOpenStore,
+    // From the viewer's plan (Social/Select true, Free false, null until it loads); the server stays
+    // authoritative, this only shows locks and skips a refused round trip.
+    advancedFiltersAllowed: Boolean? = null,
 ) {
     var travelSheetVisible by remember { mutableStateOf(false) }
     val state by stateHolder.state.collectAsState()
@@ -82,6 +86,18 @@ fun GridScreen(
     DisposableEffect(stateHolder) {
         stateHolder.setOnScreen(true)
         onDispose { stateHolder.setOnScreen(false) }
+    }
+
+    LaunchedEffect(stateHolder, advancedFiltersAllowed) { stateHolder.setAdvancedFiltersAllowed(advancedFiltersAllowed) }
+
+    // A paid filter was taken out (only that one): show the plans.
+    val openStore by rememberUpdatedState(onOpenStore)
+    LaunchedEffect(stateHolder) {
+        stateHolder.events.collect { event ->
+            when (event) {
+                GridEvent.OpenPaywall -> openStore()
+            }
+        }
     }
 
     // The Favorites view covers Nearby: pause Nearby's liveness refresh meanwhile.
@@ -158,6 +174,7 @@ fun GridScreen(
             scope.launch { if (stateHolder.applyNewNearby()) gridState.scrollToItem(0) }
         },
         onOpenTravel = travelLocationStateHolder?.let { { travelSheetVisible = true } },
+        advancedFiltersAllowed = advancedFiltersAllowed,
         travelCityName = travelState.current?.city,
         onTurnOffTravel = {
             travelLocationStateHolder?.let { holder ->

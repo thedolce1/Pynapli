@@ -31,6 +31,7 @@ import com.pynapli.app.design.PynapliTabIcons
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.design.currentPynapliWindowSizeClass
+import com.pynapli.app.grid.GridFilters
 import com.pynapli.app.grid.GridScreen
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
@@ -429,6 +430,8 @@ private fun ColumnScope.GridTabContent(
         travelLocationStateHolder = travelLocationStateHolder,
         favoritesStateHolder = favoritesStateHolder,
         onOpenTravelStore = onOpenTravelStore,
+        // Paid Grid filters come with Social or Select; null until the plan has loaded.
+        advancedFiltersAllowed = GridFilters.advancedFiltersAllowedFor(profileHubState.entitlement?.tier),
     )
 }
 

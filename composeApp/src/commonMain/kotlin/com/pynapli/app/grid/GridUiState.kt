@@ -16,6 +16,8 @@ data class GridUiState(
     val isLoadingMore: Boolean = false,
     val nextCursor: String? = null,
     val paywallMessage: String? = null,
+    // The plan the paywall row sells (SubscriptionTier: "social" or "select"); names its button.
+    val paywallUpgradeTier: String? = null,
     // Set when the server rejects a gated action with AGE_VERIFICATION_REQUIRED. Drives the
     // "Verify your age" prompt row; its CTA routes into the Profile-Hub age-verification flow.
     // Mirrors [paywallMessage]'s ENTITLEMENT_REQUIRED handling.
@@ -102,10 +104,17 @@ data class GridFilters(
 
     val isAnyActive: Boolean get() = activeCount > 0
 
+    /** Mirrors the server's DiscoveryFilters.requiresAdvancedEntitlement exactly (server stays authoritative). */
     val requiresAdvancedEntitlement: Boolean
         get() =
             lifestyleTags.isNotEmpty() ||
-                logisticsTags.any { it != LogisticsTag.PublicMeetFirst }
+                logisticsTags.any { it.paid }
+
+    /**
+     * These filters minus only the paid ones (plan G9): choosing a paid filter clears that filter,
+     * never the viewer's other choices.
+     */
+    fun withoutPaidFilters(): GridFilters = copy(lifestyleTags = emptySet(), logisticsTags = logisticsTags.filterNot { it.paid }.toSet())
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
         val contexts =
@@ -153,6 +162,20 @@ data class GridFilters(
         const val SINGLES_CONTEXT: String = "single"
         const val PARTNERED_CONTEXT: String = "partnered"
         val defaults: GridFilters = GridFilters()
+
+        /**
+         * Whether the viewer's plan unlocks paid Grid filters, from the client's view of the plan:
+         * Social and Select do, Free does not, null (not loaded yet) is unknown. The server's
+         * EntitlementPolicy stays authoritative; this only drives locks and skips a refused query.
+         */
+        fun advancedFiltersAllowedFor(tier: String?): Boolean? =
+            when (tier) {
+                null -> null
+                com.pynapli.shared.network.dto.SubscriptionTier.SOCIAL,
+                com.pynapli.shared.network.dto.SubscriptionTier.SELECT,
+                -> true
+                else -> false
+            }
 
         /**
          * Rehydrate a saved preset payload back into a `GridFilters` instance.
@@ -349,6 +372,10 @@ enum class LogisticsTag(
     HotelFriendly("hotel_friendly", "Hotel-friendly"),
     PublicMeetFirst("public_meet_first", "Public meet first"),
     ClubEventOnly("club_event_only", "Club/event only"),
+    ;
+
+    /** Social or Select: every logistics filter but "Public meet first", a safety choice kept free. */
+    val paid: Boolean get() = this != PublicMeetFirst
 }
 
 @Immutable

@@ -150,6 +150,8 @@ internal fun TonightSessionEntryRow(
 internal fun LogisticsSection(
     selected: Set<LogisticsTag>,
     onChange: (Set<LogisticsTag>) -> Unit,
+    // Free viewer: every paid tag (all but "Public meet first") shows a lock.
+    lockPaid: Boolean = false,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -158,7 +160,7 @@ internal fun LogisticsSection(
     ) {
         LogisticsTag.entries.forEach { tag ->
             val active = tag in selected
-            SheetToggleChip(label = tag.label, active = active) {
+            SheetToggleChip(label = tag.label, active = active, locked = lockPaid && tag.paid) {
                 onChange(if (active) selected - tag else selected + tag)
             }
         }
