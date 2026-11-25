@@ -299,7 +299,7 @@ class MediaServiceTest {
 
     @Test
     fun chatPhotoMakesNoVisionCallByDefaultAndStillSends() =
-        runBlocking {
+        runBlocking<Unit> {
             val vision = CountingSafeSearchClient(violence = "VERY_LIKELY")
             val (gateway, ownerId, assetId) = chatGateway(vision, scanPrivateMedia = false)
 
