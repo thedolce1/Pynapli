@@ -71,6 +71,48 @@ internal fun GridPaywallRow(
 }
 
 /**
+ * Section 3's boundary banner: one full-width row inside the Grid, right before the first locked
+ * card. It names the plan that unlocks the rest (the server's unlockTier) and opens the plans sheet
+ * on it. Same quiet surface as [GridPaywallRow], with the gold accent because it sells a plan.
+ */
+@Composable
+internal fun GridLockedBanner(
+    unlockTier: String?,
+    onOpenStore: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .clip(PynapliShape.CardShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .testTag(GridLockedTags.BANNER),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = PynapliColors.Accent,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = lockedBannerMessage(unlockTier),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onOpenStore, modifier = Modifier.handCursor().testTag(GridLockedTags.BANNER_CTA)) {
+            Text(text = paywallCtaLabel(unlockTier), maxLines = 1, color = PynapliColors.Accent)
+        }
+    }
+}
+
+/**
  * Surfaced when the server rejects a gated grid action with AGE_VERIFICATION_REQUIRED.
  * Mirrors [GridPaywallRow] but routes the user into the Profile-Hub age-verification flow
  * (not the Store). Uses the premium gold accent on the CTA per the design north-star.
@@ -115,6 +157,11 @@ internal fun GridVerificationRow(
 
 internal object GridPaywallTags {
     const val CTA: String = "grid-paywall-cta"
+}
+
+internal object GridLockedTags {
+    const val BANNER: String = "grid-locked-banner"
+    const val BANNER_CTA: String = "grid-locked-banner-cta"
 }
 
 internal object GridVerificationTags {

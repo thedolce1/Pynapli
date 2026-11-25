@@ -21,7 +21,10 @@ enum class StorePaywallFocus {
     /** The plan list: locked filters, Likes You reveal, read receipts, Psync limits, the profile menu. */
     Plans,
 
-    /** The Select plan: Travel mode. */
+    /** The Social plan: the Grid's locked cards when Social unlocks them. */
+    Social,
+
+    /** The Select plan: Travel mode, and the Grid's locked cards when only Select unlocks them. */
     Select,
 
     /** Pineapple Likes: out of Pineapple Likes. */
@@ -46,14 +49,27 @@ internal fun storeListIndexFor(
     val firstProduct = firstTier + state.tiers.size + 1
     return when (focus) {
         StorePaywallFocus.Plans -> partnerBenefit
-        StorePaywallFocus.Select ->
-            state.tiers
-                .indexOfFirst { it.tier == SubscriptionTier.SELECT }
-                .takeIf { it >= 0 }
-                ?.let { firstTier + it }
+        StorePaywallFocus.Social -> tierIndex(state, SubscriptionTier.SOCIAL)?.let { firstTier + it }
+        StorePaywallFocus.Select -> tierIndex(state, SubscriptionTier.SELECT)?.let { firstTier + it }
         StorePaywallFocus.PineappleLikes -> productIndex(state, PremiumInventoryType.PINEAPPLE_LIKE)?.let { firstProduct + it }
     }
 }
+
+private fun tierIndex(
+    state: StoreUiState,
+    tier: String,
+): Int? = state.tiers.indexOfFirst { it.tier == tier }.takeIf { it >= 0 }
+
+/**
+ * The plans sheet focus for the Grid's locked cards, from the server's `unlockTier`: Social or
+ * Select's row, or the plan list when the server named neither.
+ */
+fun storePaywallFocusForUnlockTier(unlockTier: String?): StorePaywallFocus =
+    when (unlockTier) {
+        SubscriptionTier.SOCIAL -> StorePaywallFocus.Social
+        SubscriptionTier.SELECT -> StorePaywallFocus.Select
+        else -> StorePaywallFocus.Plans
+    }
 
 private fun productIndex(
     state: StoreUiState,

@@ -52,6 +52,7 @@ import com.pynapli.app.profilehub.ProfileHubScreen
 import com.pynapli.app.profilehub.ProfileHubStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
 import com.pynapli.app.store.StorePaywallFocus
+import com.pynapli.app.store.storePaywallFocusForUnlockTier
 import com.pynapli.app.swipe.SavedSwipeFilterStateHolder
 import com.pynapli.app.swipe.SwipeScreen
 import com.pynapli.app.swipe.SwipeStateHolder
@@ -172,6 +173,8 @@ internal fun ColumnScope.PynapliMainContent(
                         onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
                         // Travel mode (from the Grid header) is a Select perk.
                         onOpenTravelStore = { onOpenStore(StorePaywallFocus.Select) },
+                        // Locked Grid cards: the plan the server says unlocks them.
+                        onOpenUnlockStore = { tier -> onOpenStore(storePaywallFocusForUnlockTier(tier)) },
                         onOpenAgeVerification = onOpenAgeVerification,
                         onOpenTonight = onOpenTonight,
                         onUseCurrentLocation = onUseCurrentLocation,
@@ -383,6 +386,7 @@ private fun ColumnScope.GridTabContent(
     favoritesStateHolder: com.pynapli.app.grid.FavoritesStateHolder? = null,
     onOpenPhotoVerification: (() -> Unit)? = null,
     onOpenTravelStore: () -> Unit = onOpenStore,
+    onOpenUnlockStore: (unlockTier: String?) -> Unit = { onOpenStore() },
 ) {
     val authState by authStateHolder.state.collectAsState()
     val locationState by locationStateHolder.state.collectAsState()
@@ -441,6 +445,7 @@ private fun ColumnScope.GridTabContent(
         favoritesStateHolder = favoritesStateHolder,
         onOpenPhotoVerification = onOpenPhotoVerification,
         onOpenTravelStore = onOpenTravelStore,
+        onOpenUnlockStore = onOpenUnlockStore,
         // Paid Grid filters come with Social or Select; null until the plan has loaded.
         advancedFiltersAllowed = GridFilters.advancedFiltersAllowedFor(profileHubState.entitlement?.tier),
     )

@@ -57,6 +57,9 @@ fun GridScreen(
     // From the viewer's plan (Social/Select true, Free false, null until it loads). Display only:
     // it puts locks on paid chips; the server decides what a query may use.
     advancedFiltersAllowed: Boolean? = null,
+    // Section 3: a locked tile, the boundary banner and a locked pager page open the plans sheet on
+    // the server's unlockTier ("social" or "select").
+    onOpenUnlockStore: (unlockTier: String?) -> Unit = { onOpenStore() },
 ) {
     var travelSheetVisible by remember { mutableStateOf(false) }
     val state by stateHolder.state.collectAsState()
@@ -199,6 +202,7 @@ fun GridScreen(
         onShowFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.show() } } },
         onRefreshFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.refresh() } } },
         onLoadMoreFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.loadMore() } } },
+        onOpenUnlockStore = onOpenUnlockStore,
     )
 
     // Travel mode from the Grid header (plan G8): the same picker and holder Swipe uses, no new travel

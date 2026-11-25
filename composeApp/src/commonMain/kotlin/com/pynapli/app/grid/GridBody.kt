@@ -56,6 +56,8 @@ internal fun GridBody(
     onRetry: () -> Unit,
     onClearFilters: () -> Unit,
     modifier: Modifier = Modifier,
+    // The locked-card boundary banner's button: the plans sheet on the server's unlockTier.
+    onOpenUnlockStore: (unlockTier: String?) -> Unit = {},
 ) {
     // Loading dissolves into the arriving content rather than snapping; the skeleton fades out while
     // the grid fades + staggers in (see ProfileGrid). Phase is stable across profile open/close (cards
@@ -165,6 +167,9 @@ internal fun GridBody(
                     isLoadingMore = state.isLoadingMore,
                     loadMoreFailed = state.errorMessage != null,
                     modifier = Modifier,
+                    lockedBannerIndex = state.lockedBannerIndex,
+                    unlockTier = state.unlockTier,
+                    onOpenUnlockStore = onOpenUnlockStore,
                 )
             }
         }

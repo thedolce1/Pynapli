@@ -60,6 +60,8 @@ internal fun GridScreenContent(
     onOpenTravel: (() -> Unit)? = null,
     // The viewer's plan allows paid filters: true/false, or null while unknown (no locks shown).
     advancedFiltersAllowed: Boolean? = null,
+    // Section 3: the boundary banner opens the plans sheet on the server's unlockTier.
+    onOpenUnlockStore: (unlockTier: String?) -> Unit = { onOpenStore() },
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
     val showingFavorites = favoritesState?.showing == true && favoritesGridState != null
@@ -124,6 +126,7 @@ internal fun GridScreenContent(
                 onUseCurrentLocation = onUseCurrentLocation,
                 onClearAllFilters = onClearAllFilters,
                 onShowNewNearby = onShowNewNearby,
+                onOpenUnlockStore = onOpenUnlockStore,
             )
         }
     }
@@ -179,6 +182,7 @@ private fun ColumnScope.NearbyGridSections(
     onUseCurrentLocation: () -> Unit,
     onClearAllFilters: () -> Unit,
     onShowNewNearby: () -> Unit,
+    onOpenUnlockStore: (unlockTier: String?) -> Unit,
 ) {
     // Without this, someone who forgot Travel mode was on sees another city's people and
     // distances with nothing on the Grid saying why (the Swipe header already shows it).
@@ -220,6 +224,7 @@ private fun ColumnScope.NearbyGridSections(
                 onRetry = onRefresh,
                 onClearFilters = onClearAllFilters,
                 modifier = Modifier.fillMaxSize(),
+                onOpenUnlockStore = onOpenUnlockStore,
             )
             // Floats over the cards; they never move until it is tapped (or the Grid is refreshed).
             GridNewNearbyPill(
