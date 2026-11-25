@@ -122,8 +122,9 @@ internal class MediaUploadActions(
         val uploadedAsset =
             repository.markAssetUploaded(ownerUserId, mediaAssetId)
                 ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
-        // Moderation hook: public photos are held/removed before discovery; private albums remain
-        // consent-gated unless a scanner returns a severe safety/legal rejection.
+        // Moderation hook: a profile photo is approved or held for a person before discovery (never
+        // auto-removed); private albums remain consent-gated unless a scanner returns a severe
+        // safety/legal rejection.
         val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, uploadedAsset)
 
         return item.copy(mediaAsset = visibleAsset).toDto(mediaAssetUrlResolver)
@@ -148,25 +149,43 @@ internal class MediaUploadActions(
                 }
 
             is MediaModerationDecision.Rejected ->
-                if (albumKind == "private" && decision.severity != MediaModerationSeverity.SEVERE) {
-                    repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
-                } else {
-                    val removed = repository.markAssetModerationRejected(ownerUserId, mediaAssetId) ?: uploadedAsset
-                    if (decision.severity == MediaModerationSeverity.SEVERE) {
-                        runCatching {
-                            moderationEscalationPublisher.recordSevereMediaDecision(
-                                ownerUserId = ownerUserId,
-                                mediaAssetId = mediaAssetId,
-                                albumKind = albumKind,
-                                reason = decision.reason,
-                                reportCategory = decision.reportCategory,
-                            )
-                        }.onFailure { error ->
-                            logger.warn("Failed to create severe media moderation escalation for asset {}", mediaAssetId, error)
-                        }
+                when {
+                    // A profile photo is never removed by an automated decision (TRUST_AND_SAFETY_SPEC
+                    // "Photo pre-screening"): it stays hidden in the human queue (uploaded/pending), and
+                    // a severe signal still files the escalation report so a moderator sees it.
+                    albumKind == "profile" -> {
+                        if (decision.severity == MediaModerationSeverity.SEVERE) escalate(ownerUserId, mediaAssetId, albumKind, decision)
+                        uploadedAsset
                     }
-                    removed
+
+                    albumKind == "private" && decision.severity != MediaModerationSeverity.SEVERE ->
+                        repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+
+                    else -> {
+                        val removed = repository.markAssetModerationRejected(ownerUserId, mediaAssetId) ?: uploadedAsset
+                        if (decision.severity == MediaModerationSeverity.SEVERE) escalate(ownerUserId, mediaAssetId, albumKind, decision)
+                        removed
+                    }
                 }
+        }
+    }
+
+    private suspend fun escalate(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        decision: MediaModerationDecision.Rejected,
+    ) {
+        runCatching {
+            moderationEscalationPublisher.recordSevereMediaDecision(
+                ownerUserId = ownerUserId,
+                mediaAssetId = mediaAssetId,
+                albumKind = albumKind,
+                reason = decision.reason,
+                reportCategory = decision.reportCategory,
+            )
+        }.onFailure { error ->
+            logger.warn("Failed to create severe media moderation escalation for asset {}", mediaAssetId, error)
         }
     }
 

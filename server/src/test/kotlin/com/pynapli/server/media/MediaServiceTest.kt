@@ -139,19 +139,118 @@ class MediaServiceTest {
         }
 
     @Test
-    fun rejectingScannerRemovesProfileUpload() =
+    fun rejectingScannerHoldsProfileUploadForAPersonInsteadOfRemovingIt() =
         runBlocking {
+            // Never auto-reject a profile photo (TRUST_AND_SAFETY_SPEC "Photo pre-screening").
             val ownerId = UUID.randomUUID()
             val scanner =
                 object : MediaModerationScanner {
                     override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = MediaModerationDecision.Rejected("policy")
                 }
-            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = scanner)
+            val escalationPublisher = RecordingMediaModerationEscalationPublisher()
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = scanner,
+                    moderationEscalationPublisher = escalationPublisher,
+                )
 
             val item = service.uploadAndComplete(ownerId, albumKind = "profile")
 
-            assertEquals("removed", item.mediaAsset.moderationStatus)
+            assertEquals("uploaded", item.mediaAsset.processingStatus)
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+            assertEquals(null, escalationPublisher.mediaAssetId)
         }
+
+    @Test
+    fun severeSignalOnAProfilePhotoHoldsAndEscalatesWithoutRemoving() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val escalationPublisher = RecordingMediaModerationEscalationPublisher()
+            val service =
+                MediaService(
+                    repository = InMemoryMediaRepository(),
+                    uploadSigner = FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(violence = "VERY_LIKELY") }),
+                    moderationEscalationPublisher = escalationPublisher,
+                )
+
+            val item = service.uploadAndComplete(ownerId, albumKind = "profile")
+
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+            assertEquals(item.mediaAsset.mediaAssetId, escalationPublisher.mediaAssetId.toString())
+            assertEquals("profile", escalationPublisher.albumKind)
+        }
+
+    @Test
+    fun cloudVisionCleanProfilePhotoIsApprovedOnUploadComplete() =
+        runBlocking {
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(racy = "LIKELY") }),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "profile")
+
+            assertEquals("ready", item.mediaAsset.processingStatus)
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun cloudVisionFlaggedProfilePhotoWaitsInTheQueue() =
+        runBlocking {
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(adult = "POSSIBLE") }),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "profile")
+
+            assertEquals("uploaded", item.mediaAsset.processingStatus)
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun cloudVisionErrorLeavesProfilePhotoInTheQueue() =
+        runBlocking {
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { throw java.io.IOException("vision down") }),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "profile")
+
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun cloudVisionFlagDoesNotHoldConsentGatedPrivateMedia() =
+        runBlocking {
+            // Explicit content is allowed in a private album; only the severe signal removes it.
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(adult = "VERY_LIKELY") }),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "private")
+
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+        }
+
+    private fun safeSearch(
+        adult: String = "VERY_UNLIKELY",
+        racy: String = "VERY_UNLIKELY",
+        violence: String = "VERY_UNLIKELY",
+    ) = SafeSearchAnnotation(adult = adult, racy = racy, violence = violence)
 
     @Test
     fun nonSeverePrivateRejectionDoesNotRemoveConsentGatedMedia() =
