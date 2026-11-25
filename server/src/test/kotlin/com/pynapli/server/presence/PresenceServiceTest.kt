@@ -189,7 +189,9 @@ class PresenceServiceTest {
     fun aSocketReAuthTickIsNotActivity() =
         testApplication {
             val userId = UUID.randomUUID()
-            val opens = java.util.concurrent.atomic.AtomicInteger()
+            val opens =
+                java.util.concurrent.atomic
+                    .AtomicInteger()
             val authService = authServiceFor("token-1", userId, onAuthenticated = { opens.incrementAndGet() })
             application {
                 configurePresenceStreamRoutes(

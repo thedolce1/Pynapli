@@ -155,7 +155,9 @@ class PresenceOfflineScannerTest {
 }
 
 private class MutablePresenceRepository : PresenceRepository {
-    val online = java.util.concurrent.ConcurrentHashMap.newKeySet<UUID>()
+    val online =
+        java.util.concurrent.ConcurrentHashMap
+            .newKeySet<UUID>()
 
     override suspend fun heartbeat(userId: UUID): PresenceState = PresenceState(online = true, expiresInSeconds = 900)
 

@@ -158,7 +158,11 @@ class IosAppGraph(
             apiClient = apiClient,
             gridSnapshotStore = SqlDelightGridSnapshotStore(database),
             // Bound to the signed-in account: another account never restores these filters.
-            gridFilterStore = sqlDelightGridFilterStore(database) { authStateHolder.state.value.session?.userId },
+            gridFilterStore =
+                sqlDelightGridFilterStore(database) {
+                    authStateHolder.state.value.session
+                        ?.userId
+                },
             swipeQueueStore = SqlDelightSwipeActionQueueStore(database),
             swipeRepository = ApiSwipeRepository(apiClient),
             // Read-only Store for the first iOS release; StoreKit 2 is a later slice.

@@ -145,7 +145,11 @@ class WebAppGraph {
                     },
                 ),
             // Filter choices only, kept across browser sessions; sign-out clears them.
-            gridFilterStore = localStorageGridFilterStore(currentUserId = { authStateHolder.state.value.session?.userId }),
+            gridFilterStore =
+                localStorageGridFilterStore(currentUserId = {
+                    authStateHolder.state.value.session
+                        ?.userId
+                }),
             swipeQueueStore = NoOpSwipeActionQueueStore,
             // Store is founder-locked read-only on web.
             storePurchaseGateway = UnavailableStorePurchaseGateway(),

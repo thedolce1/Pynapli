@@ -125,7 +125,10 @@ class DesktopAppGraph {
             // No SQLDelight on desktop (see DesktopStorage): the filters go in a plain file.
             gridFilterStore =
                 AccountBoundGridFilterStore(
-                    currentUserId = { authStateHolder.state.value.session?.userId },
+                    currentUserId = {
+                        authStateHolder.state.value.session
+                            ?.userId
+                    },
                     read = { DesktopStorage.get(GRID_FILTERS_KEY) },
                     write = { value -> DesktopStorage.set(GRID_FILTERS_KEY, value) },
                     remove = { DesktopStorage.remove(GRID_FILTERS_KEY) },

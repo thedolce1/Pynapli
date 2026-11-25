@@ -180,7 +180,11 @@ class AndroidAppGraph(
             apiClient = apiClient,
             gridSnapshotStore = SqlDelightGridSnapshotStore(database),
             // Bound to the signed-in account: another account never restores these filters.
-            gridFilterStore = sqlDelightGridFilterStore(database) { authStateHolder.state.value.session?.userId },
+            gridFilterStore =
+                sqlDelightGridFilterStore(database) {
+                    authStateHolder.state.value.session
+                        ?.userId
+                },
             swipeQueueStore = SqlDelightSwipeActionQueueStore(database),
             // Debug builds inject swipe failures for the connected QA (android-swipe-queue-qa.ps1).
             swipeRepository =
