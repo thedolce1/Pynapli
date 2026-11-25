@@ -82,6 +82,10 @@ data class PublicProfileDto(
     val privateAlbumAccessStatus: String = "none",
     val linkedPartner: LinkedPartnerMiniDto? = null,
     val allowGridMessages: Boolean,
+    // Plan G12: why [allowGridMessages] is false, when the viewer can do something about it. Only
+    // "VERIFY_TO_MESSAGE" today (the owner takes Grid messages from photo-verified members only and
+    // the viewer is not verified: link to verification). Null otherwise, including every other "no".
+    val messagingUnavailableReason: String? = null,
     val allowFlirts: Boolean,
     val allowAlbumRequests: Boolean,
 )

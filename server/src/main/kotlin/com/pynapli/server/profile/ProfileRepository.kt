@@ -108,6 +108,8 @@ data class PublicProfileRecord(
     val allowGridMessages: Boolean,
     val allowFlirts: Boolean,
     val allowAlbumRequests: Boolean,
+    // The owner's Grid message policy is verified_only (and Grid messages are on).
+    val gridMessageVerifiedOnly: Boolean = false,
 )
 
 data class ProfileUpdate(

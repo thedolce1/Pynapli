@@ -82,9 +82,21 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
                 )
             },
         allowGridMessages = allowGridMessages,
+        messagingUnavailableReason = messagingUnavailableReason(),
         allowFlirts = allowFlirts,
         allowAlbumRequests = allowAlbumRequests,
     )
+
+/**
+ * Plan G12: why Grid messaging is off for this viewer, when telling them helps and reveals nothing.
+ * Only the verification gate has a reason (the viewer can fix it); every other "no" (the owner's
+ * matches-only / no-one / off settings) stays a plain [PublicProfileRecord.allowGridMessages] false.
+ * Blocks and hides never reach here: the profile is not found at all.
+ */
+internal fun PublicProfileRecord.messagingUnavailableReason(): String? =
+    if (!allowGridMessages && gridMessageVerifiedOnly) MESSAGING_UNAVAILABLE_VERIFY_TO_MESSAGE else null
+
+internal const val MESSAGING_UNAVAILABLE_VERIFY_TO_MESSAGE = "VERIFY_TO_MESSAGE"
 
 internal fun DiscoverySettingsRecord.toDto(): DiscoverySettingsDto =
     DiscoverySettingsDto(

@@ -101,6 +101,9 @@ internal object JdbcProfileSql {
                    THEN true
                    ELSE false
                END AS allow_grid_messages,
+               -- Plan G12: the owner takes Grid messages from verified members only. With
+               -- allow_grid_messages false above, this can only mean the viewer is not verified.
+               (ds.allow_grid_messages = true AND ds.grid_message_policy = 'verified_only') AS grid_message_verified_only,
                ds.allow_flirts,
                ds.allow_album_requests,
                COALESCE(private_album_access.status, 'none') AS private_album_access_status,

@@ -43,6 +43,7 @@ internal fun ResultSet.toPublicProfileRecord(): PublicProfileRecord {
         distanceMeters = distanceMeters,
         privateAlbumAccessStatus = getString("private_album_access_status"),
         allowGridMessages = getBoolean("allow_grid_messages"),
+        gridMessageVerifiedOnly = getBoolean("grid_message_verified_only"),
         allowFlirts = getBoolean("allow_flirts"),
         allowAlbumRequests = getBoolean("allow_album_requests"),
     )
