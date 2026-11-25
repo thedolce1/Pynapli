@@ -23,7 +23,10 @@ import com.pynapli.server.media.MediaObjectDeleter
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.MediaServiceMessageMediaGateway
 import com.pynapli.server.media.MediaVerificationSelfieGateway
+import com.pynapli.server.media.SafeSearchLikelihood
+import com.pynapli.server.media.SafeSearchPolicy
 import com.pynapli.server.media.StaticMediaUploadSigner
+import com.pynapli.server.media.toLikelihood
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.JdbcReportRepository
 import com.pynapli.server.safety.MediaModerationEscalationService
@@ -246,21 +249,36 @@ internal fun loadMediaSigningCredentials(config: ServerConfig): ServiceAccountCr
     )
 }
 
-// Upload-complete moderation: dev auto-approve wins first, then the configured provider.
-// "cloud_vision" needs the media signing credentials; if they're absent we fall back to
-// manual review rather than silently auto-approving (fail-safe).
-private fun createMediaModerationScanner(
+// Upload-complete moderation: dev auto-approve wins first (refused at startup outside local/test),
+// then the configured provider. "cloud_vision" needs the media signing credentials:
+// loadMediaSigningCredentials throws without them, and startup validation names the gap
+// (MEDIA_SIGNING_CREDENTIALS_REQUIRED) in staging/prod, so nothing silently degrades to manual.
+internal fun createMediaModerationScanner(
     config: ServerConfig,
     mediaSigningCredentials: ServiceAccountCredentials?,
 ): MediaModerationScanner =
     when {
         config.mediaDevAutoApproveUploads -> AutoApproveMediaModerationScanner()
-        config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) &&
-            mediaSigningCredentials != null ->
+        config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) ->
             CloudVisionMediaModerationScanner(
-                credentials = mediaSigningCredentials,
+                credentials =
+                    checkNotNull(mediaSigningCredentials) {
+                        "Cloud Vision moderation requires PYNAPLI_MEDIA_GCS_SIGNING_SA_JSON/PATH (or a Firebase service account)."
+                    },
                 endpoint = config.mediaModerationVisionEndpoint,
+                policy = config.safeSearchPolicy(),
             )
 
         else -> ManualReviewMediaModerationScanner()
     }
+
+/** The configured auto-approve ceilings; startup validation has already refused unknown names. */
+internal fun ServerConfig.safeSearchPolicy(): SafeSearchPolicy =
+    SafeSearchPolicy(
+        maxAdult = mediaModerationMaxAdult.toCeiling(SafeSearchPolicy.DEFAULT_MAX_ADULT),
+        maxViolence = mediaModerationMaxViolence.toCeiling(SafeSearchPolicy.DEFAULT_MAX_VIOLENCE),
+        maxRacy = mediaModerationMaxRacy.toCeiling(SafeSearchPolicy.DEFAULT_MAX_RACY),
+    )
+
+private fun String.toCeiling(default: SafeSearchLikelihood): SafeSearchLikelihood =
+    toLikelihood().takeIf { it in SafeSearchPolicy.CONFIGURABLE_CEILINGS } ?: default

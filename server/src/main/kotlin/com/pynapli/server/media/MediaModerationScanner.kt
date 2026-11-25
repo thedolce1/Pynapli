@@ -59,9 +59,10 @@ class AutoApproveMediaModerationScanner : MediaModerationScanner {
 }
 
 /**
- * Production default: holds every upload for review. A real automated scanner (e.g. cloud
- * SafeSearch / a moderation API) can replace this behind the same interface without touching
- * MediaService.
+ * Holds every upload for review (`PYNAPLI_MEDIA_MODERATION_PROVIDER=manual`). The default for
+ * local/test when dev auto-approve is off; refused in production unless
+ * `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true`. Staging and production default to
+ * [CloudVisionMediaModerationScanner].
  */
 class ManualReviewMediaModerationScanner : MediaModerationScanner {
     override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = MediaModerationDecision.PendingReview

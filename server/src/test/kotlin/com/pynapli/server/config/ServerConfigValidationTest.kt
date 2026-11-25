@@ -184,6 +184,60 @@ class ServerConfigValidationTest {
     }
 
     @Test
+    fun productionRefusesManualModerationWithoutTheOverride() {
+        val manual = validStagingConfig(environment = "production").copy(mediaModerationProvider = "manual")
+        val prod = validStagingConfig(environment = "prod").copy(mediaModerationProvider = "MANUAL")
+
+        assertEquals(listOf("MEDIA_MODERATION_MANUAL_FORBIDDEN"), manual.startupValidationIssues().map { it.code })
+        assertEquals(listOf("MEDIA_MODERATION_MANUAL_FORBIDDEN"), prod.startupValidationIssues().map { it.code })
+        assertEquals(
+            emptyList(),
+            manual.copy(mediaModerationManualInProductionAllowed = true).startupValidationIssues(),
+        )
+    }
+
+    @Test
+    fun stagingAndLocalMayRunManualModeration() {
+        assertEquals(emptyList(), validStagingConfig().copy(mediaModerationProvider = "manual").startupValidationIssues())
+        assertEquals(emptyList(), localConfig().copy(mediaModerationProvider = "manual").startupValidationIssues())
+    }
+
+    @Test
+    fun cloudVisionWithoutCredentialsFailsStartupInProduction() {
+        val issues =
+            validStagingConfig(environment = "production")
+                .copy(mediaGcsSigningServiceAccountPath = null, mediaGcsSigningServiceAccountJson = null)
+                .startupValidationIssues()
+                .map { it.code }
+
+        assertTrue("MEDIA_SIGNING_CREDENTIALS_REQUIRED" in issues, "got $issues")
+    }
+
+    @Test
+    fun moderationThresholdsMustBeKnownCeilings() {
+        assertEquals(emptyList(), localConfig().copy(mediaModerationMaxAdult = "very_unlikely").startupValidationIssues())
+        val badConfigs =
+            listOf(
+                localConfig().copy(mediaModerationMaxAdult = "UNLIKLEY"),
+                localConfig().copy(mediaModerationMaxViolence = "VERY_LIKELY"),
+                localConfig().copy(mediaModerationMaxRacy = "UNKNOWN"),
+                validStagingConfig().copy(mediaModerationMaxRacy = ""),
+            )
+        for (bad in badConfigs) {
+            assertEquals(listOf("INVALID_MEDIA_MODERATION_THRESHOLD"), bad.startupValidationIssues().map { it.code })
+        }
+    }
+
+    @Test
+    fun moderationDefaultsToCloudVisionOnlyInStagingAndProduction() {
+        assertEquals("cloud_vision", defaultMediaModerationProvider("staging"))
+        assertEquals("cloud_vision", defaultMediaModerationProvider("prod"))
+        assertEquals("cloud_vision", defaultMediaModerationProvider(" Production "))
+        assertEquals("manual", defaultMediaModerationProvider("local"))
+        assertEquals("manual", defaultMediaModerationProvider("test"))
+    }
+
+    @Test
     fun validateForStartupThrowsAllIssueCodes() {
         val error = assertFailsWith<ServerConfigException> { stagingWithLocalDefaults().validateForStartup() }
 
@@ -246,5 +300,6 @@ class ServerConfigValidationTest {
             contactBlockTargetKey = "contactblocktargetstagingruntimevalue123456789",
             playStoreSandboxEnabled = playStoreSandboxEnabled,
             corsAllowedOrigins = corsAllowedOrigins,
+            mediaModerationProvider = "cloud_vision",
         )
 }

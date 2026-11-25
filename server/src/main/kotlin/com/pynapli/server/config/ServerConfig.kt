@@ -22,10 +22,21 @@ data class ServerConfig(
     val mediaLocalUploadDirectory: String = ".pynapli-local-media",
     val mediaDevAutoApproveUploads: Boolean = false,
     // Automated moderation provider for upload-complete: "manual" (hold every upload for human
-    // review, the safe default) or "cloud_vision" (Google Cloud Vision SafeSearch, requires the GCS
+    // review) or "cloud_vision" (Google Cloud Vision SafeSearch pre-screening, requires the GCS
     // signing service account + the cloud-platform scope). Dev auto-approve still wins when set.
+    // fromEnvironment defaults staging/prod to cloud_vision (defaultMediaModerationProvider);
+    // production refuses manual unless mediaModerationManualInProductionAllowed.
     val mediaModerationProvider: String = "manual",
     val mediaModerationVisionEndpoint: String = "https://vision.googleapis.com/v1/images:annotate",
+    // PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION: the explicit, written-down override that
+    // lets production run with every profile photo waiting for a person (e.g. a Vision outage).
+    val mediaModerationManualInProductionAllowed: Boolean = false,
+    // SafeSearch auto-approve ceilings (Vision likelihood names). A profile photo is approved only
+    // when adult/violence/racy are all at or below these; anything above waits for a person.
+    // Defaults: TRUST_AND_SAFETY_SPEC "Photo pre-screening". Validated at startup.
+    val mediaModerationMaxAdult: String = "UNLIKELY",
+    val mediaModerationMaxViolence: String = "POSSIBLE",
+    val mediaModerationMaxRacy: String = "LIKELY",
     val mediaGcsSigningRegion: String = "auto",
     val mediaGcsSigningServiceAccountPath: String? = null,
     val mediaGcsSigningServiceAccountJson: String? = null,
@@ -215,10 +226,16 @@ data class ServerConfig(
                 mediaDevAutoApproveUploads =
                     System.getenv("PYNAPLI_MEDIA_DEV_AUTO_APPROVE_UPLOADS")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
-                mediaModerationProvider = System.getenv("PYNAPLI_MEDIA_MODERATION_PROVIDER") ?: "manual",
+                mediaModerationProvider =
+                    System.getenv("PYNAPLI_MEDIA_MODERATION_PROVIDER") ?: defaultMediaModerationProvider(environment),
                 mediaModerationVisionEndpoint =
                     System.getenv("PYNAPLI_MEDIA_MODERATION_VISION_ENDPOINT")
                         ?: "https://vision.googleapis.com/v1/images:annotate",
+                mediaModerationManualInProductionAllowed =
+                    System.getenv("PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION")?.toBooleanStrictOrNull() ?: false,
+                mediaModerationMaxAdult = System.getenv("PYNAPLI_MEDIA_MODERATION_MAX_ADULT") ?: "UNLIKELY",
+                mediaModerationMaxViolence = System.getenv("PYNAPLI_MEDIA_MODERATION_MAX_VIOLENCE") ?: "POSSIBLE",
+                mediaModerationMaxRacy = System.getenv("PYNAPLI_MEDIA_MODERATION_MAX_RACY") ?: "LIKELY",
                 mediaGcsSigningRegion = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_REGION") ?: "auto",
                 mediaGcsSigningServiceAccountPath = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_SA_PATH"),
                 mediaGcsSigningServiceAccountJson = System.getenv("PYNAPLI_MEDIA_GCS_SIGNING_SA_JSON"),
@@ -533,6 +550,13 @@ data class ServerConfig(
         }
     }
 }
+
+/**
+ * Moderation provider when PYNAPLI_MEDIA_MODERATION_PROVIDER is unset: staging and production
+ * pre-screen with Cloud Vision; local/test (and anything unrecognised) hold every upload for a person.
+ */
+internal fun defaultMediaModerationProvider(environment: String): String =
+    if (environment.trim().lowercase() in setOf("staging", "prod", "production")) "cloud_vision" else "manual"
 
 internal fun serverPortFromEnvironment(environmentVariables: Map<String, String>): Int =
     environmentVariables["PYNAPLI_SERVER_PORT"]?.toIntOrNull()

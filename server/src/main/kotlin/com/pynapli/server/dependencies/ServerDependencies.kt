@@ -199,10 +199,11 @@ class ServerDependencies(
             config.validateForStartup()
             val startupSummary = config.startupSummary()
             logger.info(
-                "Pynapli API startup: environment={} port={} mediaProvider={} pushProvider={} appCheck={} cloudSql={} redis={}",
+                "Pynapli API startup: environment={} port={} mediaProvider={} moderation={} pushProvider={} appCheck={} cloudSql={} redis={}",
                 startupSummary.environment,
                 startupSummary.port,
                 startupSummary.mediaStorageProvider,
+                startupSummary.mediaModeration,
                 startupSummary.notificationPushProvider,
                 startupSummary.appCheckEnforced,
                 startupSummary.cloudSqlConfigured,

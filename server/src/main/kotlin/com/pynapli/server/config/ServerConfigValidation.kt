@@ -15,6 +15,8 @@ data class ServerStartupSummary(
     val environment: String,
     val port: Int,
     val mediaStorageProvider: String,
+    // "dev_auto_approve", "manual" or "cloud_vision": which upload-complete scanner is wired.
+    val mediaModeration: String,
     val notificationPushProvider: String,
     val appCheckEnforced: Boolean,
     val cloudSqlConfigured: Boolean,
@@ -33,6 +35,7 @@ fun ServerConfig.startupSummary(): ServerStartupSummary =
         environment = environment,
         port = port,
         mediaStorageProvider = mediaStorageProvider,
+        mediaModeration = if (mediaDevAutoApproveUploads) "dev_auto_approve" else mediaModerationProvider.lowercase(),
         notificationPushProvider = notificationPushProvider,
         appCheckEnforced = appCheckEnforced,
         cloudSqlConfigured = !databaseCloudSqlInstance.isNullOrBlank(),
@@ -62,6 +65,17 @@ private fun MutableList<ServerConfigIssue>.validateCommonSettings(config: Server
         condition = config.mediaModerationProvider.lowercase() in MEDIA_MODERATION_PROVIDERS,
         code = "INVALID_MEDIA_MODERATION_PROVIDER",
         message = "PYNAPLI_MEDIA_MODERATION_PROVIDER must be manual or cloud_vision.",
+    )
+    // A typo in a ceiling must fail startup, never fall back to a looser or stricter default.
+    // VERY_LIKELY is refused: it would switch screening off for that category.
+    require(
+        condition =
+            listOf(config.mediaModerationMaxAdult, config.mediaModerationMaxViolence, config.mediaModerationMaxRacy)
+                .all { it.trim().uppercase() in MEDIA_MODERATION_CEILINGS },
+        code = "INVALID_MEDIA_MODERATION_THRESHOLD",
+        message =
+            "PYNAPLI_MEDIA_MODERATION_MAX_ADULT/_MAX_VIOLENCE/_MAX_RACY must each be one of " +
+                "VERY_UNLIKELY, UNLIKELY, POSSIBLE or LIKELY.",
     )
     require(
         condition = config.mediaDeliveryProvider.lowercase() in MEDIA_DELIVERY_PROVIDERS,
@@ -296,6 +310,17 @@ private fun MutableList<ServerConfigIssue>.validateProductionOnlySettings(config
         code = "PLAY_STORE_SANDBOX_FORBIDDEN",
         message = "Production must not enable sandbox Play Billing verification.",
     )
+    // Manual moderation in production means every new member's photo waits for a person, so the
+    // grid fills with photo-less tiles. It is allowed only with the explicit override.
+    require(
+        condition =
+            !config.mediaModerationProvider.equals("manual", ignoreCase = true) ||
+                config.mediaModerationManualInProductionAllowed,
+        code = "MEDIA_MODERATION_MANUAL_FORBIDDEN",
+        message =
+            "Production must pre-screen photos: set PYNAPLI_MEDIA_MODERATION_PROVIDER=cloud_vision, or set " +
+                "PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true to run manual review on purpose.",
+    )
 }
 
 private fun MutableList<ServerConfigIssue>.require(
@@ -387,5 +412,8 @@ private val PRODUCTION_LIKE_ENVIRONMENTS = setOf("staging", "prod", "production"
 private val PRODUCTION_ENVIRONMENTS = setOf("prod", "production")
 private val MEDIA_STORAGE_PROVIDERS = setOf("local", "gcs")
 private val MEDIA_MODERATION_PROVIDERS = setOf("manual", "cloud_vision")
+
+// Mirrors SafeSearchPolicy.CONFIGURABLE_CEILINGS (config must not depend on the media package).
+private val MEDIA_MODERATION_CEILINGS = setOf("VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY")
 private val MEDIA_DELIVERY_PROVIDERS = setOf("signed_gcs", "cdn")
 private val NOTIFICATION_PUSH_PROVIDERS = setOf("local", "firebase", "fcm")
