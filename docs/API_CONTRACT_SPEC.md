@@ -174,6 +174,17 @@ id, key id and key are all set (deletion must be able to revoke).
   (`PublicProfileDto`) carries the same `coupleVerified`.
 - `verifiedCouplesOnly` (Grid query and Swipe deck request, default false) returns only people whose
   card would carry `coupleVerified` for this viewer. It does not set or change `linkedOnly`.
+- Partner filters (G2-3; Grid query, Swipe deck request and Psync filters; all optional, old clients
+  omit them): `partnerGenders: [String]` and `partnerOrientations: [String]` (structured
+  ProfileTaxonomies keys, self-describe rejected, at most 8), `partnerMinimumAge` /
+  `partnerMaximumAge: Int?` (18..99, min <= max), `partnerVerifiedOnly: Boolean`, and
+  `excludeSingleMen: Boolean` ("No single men"). Invalid values return `INVALID_GRID_FILTER` /
+  `INVALID_SWIPE_FILTER` / `INVALID_SAVED_FILTER_PAYLOAD`. Each is tested only against the linked
+  partner this viewer is shown (the `linkedOnly` gate), so a hidden partner never matches; any
+  partner filter implies Linked without setting `linkedOnly`. Free, and never relaxed on Swipe.
+- `LinkedPartnerMiniDto.age: Int?` and `gender: String?` (G2-3): the partner's own declared display
+  age and gender key, set only on a mini the server shows this viewer, on Grid cards and the public
+  profile's partner preview. Null on Swipe cards, Psync and the Tonight feed.
 - Blocks, privacy and risk apply before cards are returned.
 - Tier volume caps (page size and depth) are enforced server-side. **Cursor tokens carry scope and
   seen-count state**, so a client can't bypass tier depth by changing the requested limit. Grid

@@ -135,10 +135,67 @@ Rules:
 - `Unlinked partnered` is not offered: without a structured relationship field it can't be told
   apart from Singles.
 - These filters apply to individual users, not couple cards.
-- Psync residual: a Psync deck is dealt once for both partners from the initiator's view. It uses the
-  initiator's partner_visibility, hides and blocks, and no contact blocks (as for Psync candidates).
-  Each partner's read then strips minis of people hiding from them. With Linked on, a card dealt to
-  both may show one partner no mini.
+- Psync: a Psync deck is ranked once from the initiator's view. Since G2-3 every partner-derived
+  filter (Linked, Singles, the Partner filters, "No single men") is then re-checked for **both**
+  session partners, each with their own hides, blocks and contact blocks
+  (`PartnerFilterSql.matchingCandidateIds`), and a card is dealt only when it passes for both: the
+  stricter view wins. Residual: the dealt card's partner mini is still the initiator's snapshot, and
+  each partner's read only strips minis of people hiding from them.
+- Quick shortcuts in the Grid sheet: **Single women** / **Single men** set Singles plus that gender
+  (the person's own declared gender, and no partner shown to the viewer). They add nothing on the
+  server.
+
+### Partner
+
+Purpose: let couples and singles say who they want the *other half* to be, without combined couple
+cards and without the app guessing couple composition. Shipped 2026-11-26 (plan G2-3), Grid sheet
+section under Who; on the wire for Grid, Swipe and Psync.
+
+Filters:
+
+- Partner's gender (multi-select, the same structured gender keys as Gender; self-describe is not an
+  option and never matches)
+- Partner's age range (18 to 99, like Age)
+- Partner's orientation (multi-select, the same structured keys as Orientation)
+- Partner photo verified
+- Quick chip: **No single men**
+
+Rules:
+
+- Each filter tests the candidate's **visibly linked partner's own declared profile** (gender key,
+  display age, orientation key, photo verification), never anything inferred from the candidate, and
+  never a couple label. The app never says "MF", "FF" or "MM".
+- One gate: every partner predicate runs inside `LinkedPartnerFilterSql.visiblePartnerExists`, the
+  exact gate behind Linked and the tile's partner mini (owner's partner_visibility, the viewer's
+  hides, contact blocks, blocks either way, the partner's status, visibility, incognito and
+  moderation tier, an active link). A partner the viewer may not see contributes nothing, so the
+  candidate behaves as "no visible partner" and a partner filter never matches through a hidden
+  partner. Results always agree with what the tile shows. Fragment: `PartnerFilterSql`, used by
+  `GridFilterSql` (nearby and Visiting soon), the Swipe deck rank (including the linked-only
+  forced-id path) and Psync (both partners' views).
+- Partner filters imply Linked. With Singles alone they cannot match anyone, so the sheet's Partner
+  section says "Partner filters need a visible partner" instead of offering chips, and the client
+  drops them on apply, on save and in the request. With Linked, or no Who choice, they apply. The
+  server does not reject Singles plus a partner filter; that just matches nobody.
+- "Partner photo verified" needs only the partner verified. "Verified couples only" (Trust) needs
+  both partners verified; the sheet says so under the chip.
+- "No single men" drops people whose **own** declared gender is `man` and who have no linked partner
+  shown to this viewer (same gate). Men visibly linked to a partner still show; people with no
+  declared gender, and every other gender key, are kept. A man whose partner is hidden from the
+  viewer reads as single on his tile, and is treated as single. Only the `man` key counts: `trans_man`
+  is not included (founder may revisit; the app only uses what members declare). Quick row placement:
+  last, after Verified (Filters · Online · Favorites · Fresh · Tonight · Verified · No single men),
+  scrolling sideways.
+- Per viewer: never served from the shared rank cache (like Linked); in both rank-cache keys, the
+  Grid cursor scope, the Swipe deck-token scope, the persisted deck payload (all appended only when
+  set, so older scopes keep their hash), both saved-filter services and the device filter store.
+- Swipe: never relaxed, locked or not, like "Verified couples only". There is no dealbreaker key for
+  them because they are always hard.
+- Free (founder decision 2, 2026-11-26): not in `requiresAdvancedEntitlement`.
+- Cost: off, each predicate short-circuits on its leading boolean. On, one EXISTS per surviving
+  candidate: a probe of `idx_user_profile_links_active_user` (at most one active link) and primary-key
+  lookups on the partner's users / profiles / discovery_settings / account_risk_states, plus the gate's
+  own probes. No new index (V131 unused).
 
 ### Intent
 
@@ -249,7 +306,7 @@ Filters:
 - Age verified
 - Photo verified
 - Linked partner visible
-- Linked partner verified
+- Linked partner verified (shipped as "Partner photo verified" in the Partner section, G2-3)
 - Verified couples only (both linked partners verified; see Swipe "Verified")
 - Verified-only messages
 
@@ -609,6 +666,17 @@ Do not rely on bios for filtering.
 - [x] Swinger filters (Round 4): `LifestyleFilterSql` is the one predicate set for Grid rank, Swipe deck rank and the Playing Tonight feed (any-of within Swap / Room / Experience / other, all-of across; experience vs `profiles.experience_level`; `boundaryItems` hides `<item>:not_for_me`). `boundaryItems` is in both rank-cache keys, both cursor/deck-token scopes, `DiscoveryFiltersJson`, both saved-filter services and Psync. Swipe dealbreakers `swap` / `room` / `experience` / `boundaries` survive relaxation. Tonight feed takes `orientations` / `lifestyleTags` / `boundaryItems` in the body of `POST /v1/tonight/feed/query` (never the query string) with the Grid age-verification + advanced-filter gates; Swipe card tags include the experience level. Travel mode uses the same SQL. Covered by `SwingerFilterDiscoveryTest` (Grid + Swipe, home + Travel), `TonightFeedServiceIntegrationTest`, `SwipeDeckLifestyleRelaxationTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `SwingerFiltersClientTest`.
 - [x] "Verified couples only" (2026-11-18, Grid + Swipe + Psync decks): `verifiedCouplesOnly` on `GridQueryRequestDto` / `SwipeDeckRequestDto` (default false, so older clients and saved filters behave as before) means exactly the couple-verified badge for the viewer (`CoupleVerifiedFilterSql`, shared by `JdbcGridRankSql` and `JdbcSwipeDeckRankSql`, also on the linked-only forced-id Swipe path). Never served from the shared rank cache (like `linkedOnly`), in both rank-cache keys, the Grid cursor scope and the Swipe deck-token scope (appended only when on), `DiscoveryFiltersJson` (only when on), both saved-filter services and Psync validation and summaries. Free (in `hasAdvancedFilters`, not `requiresAdvancedEntitlement`). Never relaxes (founder decision 2026-11-18): `SwipeDeckRelaxation` neither counts it as relaxable nor drops it, locked or not, on the normal, linked-only and Psync paths, and the Grid's widen-on-empty keeps it; the Swipe empty deck then reads "No verified couples nearby yet" (`emptyDeckCopy`, `SwipeEmptyDeckCopyTest`); `verifiedOnly` relaxes as before (`VerifiedCouplesFilterIntegrationTest` thin-deck and widening cases). Client: a "Verified couples only" chip in the Grid Trust row and under the Swipe Verified choice; counts as active, clears with Clear all, round-trips through saved presets. Covered by `VerifiedCouplesFilterIntegrationTest` (filtered ids equal the ids whose badge shows, across pending links, hidden/verified-only/matches partner visibility, blocks, viewer hides, incognito, terminated and deleted partners, with `linkedOnly` and `verifiedOnly`, and shared-cache cross-viewer cases), `VerifiedCouplesFilterContractTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `GridStateHolderTest` and `SwipeFiltersTest`. Playing Tonight's feed has its own three-field filter set and does not take it.
 - [x] G2-1 (2026-11-26; written, not yet built or run): **Linked privacy fix.** `linkedOnly` on the Grid rank, the Swipe deck rank and `listLinkedCandidateUserIdsNear` now uses `LinkedPartnerFilterSql`, which is `partnerShownToViewer` plus the people hiding from the viewer (contact blocks, passed in by GridService and SwipeDeckQueryAction, and empty for Psync). Before, a member who hid their partner (partner_visibility, viewer hide, contact block) still matched "Linked". The proof is `LinkedFilterPartnerVisibilityIntegrationTest`: on Grid and Swipe, Linked == the ids whose tile shows a partner mini, and not-linked == the rest. It covers public, verified only (viewer verified and not), matches only (matched and not), hidden, viewer-hid-partner, contact-blocked partner, blocks both ways, incognito partner and pending link. Also in G2-1: Who from the visible link (`DiscoveryFiltersWhoTest`); distance steps (`GridRadiusStepsTest`); Visiting soon (`VisitingSoonDiscoveryTest`); one Active-today source (`GridFilterDiscoveryTest`). The Grid filter predicates now live in `GridFilterSql`, shared by the nearby rank and Visiting soon.
+
+- [x] G2-3 (2026-11-26; written, not yet built or run): **Partner filters + "No single men"** (see
+  "Partner"). `PartnerFilterSql` inside the Linked gate on Grid (nearby, Visiting soon), Swipe and
+  Psync (strictest of both partners); off the shared rank cache; in cache keys, cursor and deck
+  scopes, `DiscoveryFiltersJson`, both saved-filter services and the device store; never relaxed;
+  free. Proof: `PartnerFiltersVisibilityIntegrationTest` (each filter x public, verified_only
+  unverified/verified viewer, matches_only matched/not, hidden, viewer-hid-partner, contact-blocked
+  partner, blocked either way, incognito partner, pending link: matches iff the tile shows the partner
+  and the partner satisfies it; No single men; Psync), `PartnerFiltersContractTest`,
+  `PartnerFiltersClientTest`. Open: build and tests, independent privacy review, emulator and browser
+  walk, the Swipe sheet's Partner section (server and DTO ready; Swipe client not wired yet).
 
 ## Do Not Implement
 

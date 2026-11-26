@@ -52,6 +52,10 @@ Show only:
 - Online indicator
 - Distance, if visible
 - Tiny linked-partner avatar/icon, if linked
+- Under that mini only, a tiny caption with the partner's own declared age and a short gender mark
+  ("34 · W"; M, W, TM, TW, NB; no mark for self-describe), plan G2-3. Only where the mini already
+  shows: the server fills `LinkedPartnerMiniDto.age` / `gender` in the same gated row as the mini and
+  strips them with it. Never a couple label ("MF"/"FF"), never inferred.
 
 Do not show:
 
@@ -613,6 +617,14 @@ Filter correctness (2026-11-26, G2-1):
   pages by keyset and is sealed into the cursor scope (`VisitingSoonDiscoveryTest`).
 - Active today, the activeAgo caption and Fresh read one source, `user_last_active`
   (`GridActivitySql.activeToday`).
+
+Couples in the filters (2026-11-26, G2-3; written, not yet built or run):
+
+- Partner filters (partner's gender, age range, orientation, photo verified) and the "No single men"
+  quick chip, FILTERS_SPEC "Partner". `PartnerFilterSql` sits in `GridFilterSql` right after Linked,
+  so nearby and Visiting soon share it; it is per viewer, so these requests take the uncached rank.
+- The sheet's Partner section sits under Who; Single women / Single men shortcuts set Singles plus
+  that gender. Couples stay individual tiles.
 - Every sheet change (Apply, Clear all, a saved preset) switches Favorites back to Nearby.
 
 ## Default Deck / Never-Empty
@@ -881,6 +893,11 @@ updates when the app pauses, prefer event deltas over polling.
   plus the Favorites reset removed (see "Filter correctness" under Filter Application).
 - [ ] G2-1: build, full test run, independent privacy review of the Linked fix, emulator + browser walk
   (sheet Who and Distance, Visiting soon paging, Clear all from Favorites).
+- [x] G2-3 (2026-11-26, written, not yet built or run here): Partner filters and "No single men" behind
+  the Linked gate (Grid, Swipe, Psync), the Partner section and Single women / Single men in the sheet,
+  the partner's age and gender mark under the tile's partner mini.
+- [ ] G2-3: build, full test run, independent privacy review, emulator + browser walk (quick row
+  scrolls with the new chip, Partner section disabled under Singles, mini caption legible on photos).
 ## Do Not Implement
 
 - Do not use offset pagination for live grid pages.
