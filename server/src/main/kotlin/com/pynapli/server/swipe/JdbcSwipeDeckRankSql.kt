@@ -132,7 +132,6 @@ $candidateSource
               AND coarse.distance_meters <= ?
               AND (?::integer IS NULL OR p.display_age >= ?::integer)
               AND (?::integer IS NULL OR p.display_age <= ?::integer)
-              AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
               AND (?::boolean = false OR p.verified_at IS NOT NULL)
               AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
               AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
@@ -241,7 +240,6 @@ $candidateSource
         """.trimIndent()
 
     return prepareStatement(sql).use { statement ->
-        val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
         val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
         val intents = createArrayOf("text", filters.intents.toTypedArray())
         val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
@@ -267,8 +265,6 @@ $candidateSource
         statement.setObject(index++, filters.minimumAge)
         statement.setObject(index++, filters.maximumAge)
         statement.setObject(index++, filters.maximumAge)
-        statement.setArray(index++, contexts)
-        statement.setArray(index++, contexts)
         statement.setBoolean(index++, filters.verifiedOnly)
         statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
         statement.setBoolean(index++, filters.ageVerifiedOnly)

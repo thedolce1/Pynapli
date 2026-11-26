@@ -6,7 +6,12 @@ import com.pynapli.shared.profile.ProfileTaxonomies
 data class DiscoveryFilters(
     val minimumAge: Int? = null,
     val maximumAge: Int? = null,
+    // Legacy, always empty from discoveryFiltersFrom: the Who tokens fold onto [linkedOnly] there, and
+    // no query matches the free-text relationship_context any more. Kept so cache keys, cursor scopes
+    // and stored filter JSON keep their shape.
     val relationshipContexts: Set<String> = emptySet(),
+    // Who (FILTERS_SPEC): true = a partner is shown to this viewer ("Linked" / "Partnered"), false =
+    // none is ("Singles"), null = everyone. LinkedPartnerFilterSql.
     val linkedOnly: Boolean? = null,
     val verifiedOnly: Boolean = false,
     val facePhotoVerifiedOnly: Boolean = false,
@@ -135,6 +140,21 @@ fun discoveryFiltersFrom(
                     throw errorFactory("INVALID_DISCOVERY_FILTER")
                 }
             }.toSet()
+    // FILTERS_SPEC "Who": Singles and Partnered are derived from the visible partner link, never from
+    // the free-text relationship_context (the profile field is open text and nothing writes a fixed
+    // vocabulary into it, so matching it never worked). The legacy tokens fold onto linkedOnly:
+    // "single" means no partner shown to this viewer, "partnered" / "linked" means one is shown. The
+    // two states are exclusive, so asking for both is the union: everyone (linkedOnly = null). Any
+    // other context value is ignored. relationshipContexts is therefore always empty from here on.
+    val wantsUnlinked = linkedOnly == false || contexts.any { it in SINGLE_CONTEXTS }
+    val wantsLinked = linkedOnly == true || contexts.any { it in LINKED_CONTEXTS }
+    val who =
+        when {
+            wantsLinked && wantsUnlinked -> null
+            wantsLinked -> true
+            wantsUnlinked -> false
+            else -> null
+        }
 
     val styles =
         discoveryStyles
@@ -207,8 +227,8 @@ fun discoveryFiltersFrom(
     return DiscoveryFilters(
         minimumAge = min,
         maximumAge = max,
-        relationshipContexts = contexts,
-        linkedOnly = linkedOnly,
+        relationshipContexts = emptySet(),
+        linkedOnly = who,
         verifiedOnly = verifiedOnly,
         facePhotoVerifiedOnly = facePhotoVerifiedOnly,
         ageVerifiedOnly = ageVerifiedOnly,
@@ -234,6 +254,10 @@ private const val MIN_FILTER_AGE = 18
 private const val MAX_FILTER_AGE = 99
 private const val MAX_RELATIONSHIP_CONTEXT_FILTERS = 8
 private const val MAX_RELATIONSHIP_CONTEXT_LENGTH = 40
+
+// The legacy Who tokens clients send in relationshipContexts (GridFilters / SwipeFilters).
+private val SINGLE_CONTEXTS = setOf("single")
+private val LINKED_CONTEXTS = setOf("partnered", "linked")
 
 private val ALLOWED_DISCOVERY_STYLES = DiscoveryTagTaxonomies.discoveryStyles
 

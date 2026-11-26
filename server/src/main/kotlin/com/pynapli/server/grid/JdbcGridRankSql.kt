@@ -120,7 +120,6 @@ internal fun Connection.queryGridRank(
               AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= ?
               AND (?::integer IS NULL OR p.display_age >= ?::integer)
               AND (?::integer IS NULL OR p.display_age <= ?::integer)
-              AND (cardinality(?::text[]) = 0 OR lower(p.relationship_context) = ANY(?::text[]))
               AND (?::boolean = false OR p.verified_at IS NOT NULL)
               AND (?::boolean = false OR p.face_photo_verified_at IS NOT NULL)
               AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
@@ -279,7 +278,6 @@ internal fun Connection.queryGridRank(
         """.trimIndent()
 
     return prepareStatement(sql).use { statement ->
-        val contexts = createArrayOf("text", filters.relationshipContexts.toTypedArray())
         val styles = createArrayOf("text", filters.discoveryStyles.toTypedArray())
         val logisticsTags = createArrayOf("text", filters.logisticsTags.toTypedArray())
         val intents = createArrayOf("text", filters.intents.toTypedArray())
@@ -300,8 +298,6 @@ internal fun Connection.queryGridRank(
         statement.setObject(index++, filters.minimumAge)
         statement.setObject(index++, filters.maximumAge)
         statement.setObject(index++, filters.maximumAge)
-        statement.setArray(index++, contexts)
-        statement.setArray(index++, contexts)
         statement.setBoolean(index++, filters.verifiedOnly)
         statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
         statement.setBoolean(index++, filters.ageVerifiedOnly)

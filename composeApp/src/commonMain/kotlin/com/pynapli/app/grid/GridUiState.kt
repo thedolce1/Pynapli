@@ -45,8 +45,9 @@ data class GridUiState(
 @Immutable
 data class GridFilters(
     val online: Boolean = false,
+    // FILTERS_SPEC "Who", from the visible partner link (server-decided): Singles = no partner shown
+    // to the viewer, Linked = a partner shown. Exclusive states, so both on is the union (everyone).
     val singles: Boolean = false,
-    val partnered: Boolean = false,
     val linked: Boolean = false,
     val verified: Boolean = false,
     val facePhotoVerified: Boolean = false,
@@ -86,7 +87,6 @@ data class GridFilters(
             if (online) count += 1
             if (verifiedCouples) count += 1
             if (singles) count += 1
-            if (partnered) count += 1
             if (linked) count += 1
             if (verified) count += 1
             if (facePhotoVerified) count += 1
@@ -132,11 +132,9 @@ data class GridFilters(
     fun toGridFeedRequest(cursor: String?): GridQueryRequestDto = toGridQueryRequest(cursor).copy(acceptLockedCards = true)
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
-        val contexts =
-            buildList {
-                if (singles) add(SINGLES_CONTEXT)
-                if (partnered) add(PARTNERED_CONTEXT)
-            }
+        // Singles travels as the "single" Who token, Linked as linkedOnly; the server folds both onto
+        // the visible link (both on = everyone), so a saved preset with both restores both.
+        val contexts = if (singles) listOf(SINGLES_CONTEXT) else emptyList()
         return GridQueryRequestDto(
             radiusMeters = radiusMeters,
             limit = PAGE_SIZE,
@@ -175,6 +173,7 @@ data class GridFilters(
         const val MAX_FILTER_AGE: Int = 99
         const val PAGE_SIZE: Int = 60
         const val SINGLES_CONTEXT: String = "single"
+        // The retired "Partnered" token: a preset that carries it restores as Linked.
         const val PARTNERED_CONTEXT: String = "partnered"
         val defaults: GridFilters = GridFilters()
 
@@ -206,9 +205,8 @@ data class GridFilters(
             val intentByValue = Intent.entries.associateBy { it.serverValue }
             return GridFilters(
                 online = request.onlineOnly,
-                singles = SINGLES_CONTEXT in contexts,
-                partnered = PARTNERED_CONTEXT in contexts,
-                linked = request.linkedOnly == true,
+                singles = SINGLES_CONTEXT in contexts || request.linkedOnly == false,
+                linked = request.linkedOnly == true || PARTNERED_CONTEXT in contexts,
                 verified = request.verifiedOnly,
                 facePhotoVerified = request.facePhotoVerifiedOnly,
                 ageVerified = request.ageVerifiedOnly,

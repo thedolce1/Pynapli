@@ -321,22 +321,23 @@ internal fun TrustSection(
 /** Shared label for the Grid and Swipe "Verified couples only" chips. */
 internal const val VERIFIED_COUPLES_ONLY_LABEL = "Verified couples only"
 
+/**
+ * FILTERS_SPEC "Who", from the visible partner link (server-decided): Singles = no partner shown to
+ * the viewer, Linked = a partner shown. "Partnered" merged into Linked: the free-text relationship
+ * context it used to match was never reliable. Both on is the union, everyone.
+ */
 @Composable
 internal fun WhoSection(
     singles: Boolean,
     linked: Boolean,
-    partnered: Boolean,
-    onTogglesChanged: (Boolean, Boolean, Boolean) -> Unit,
+    onTogglesChanged: (Boolean, Boolean) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SheetToggleChip(label = "Singles", active = singles) {
-            onTogglesChanged(!singles, linked, partnered)
+            onTogglesChanged(!singles, linked)
         }
         SheetToggleChip(label = "Linked", active = linked) {
-            onTogglesChanged(singles, !linked, partnered)
-        }
-        SheetToggleChip(label = "Partnered", active = partnered) {
-            onTogglesChanged(singles, linked, !partnered)
+            onTogglesChanged(singles, !linked)
         }
     }
 }

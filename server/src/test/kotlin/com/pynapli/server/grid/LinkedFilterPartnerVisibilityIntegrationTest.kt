@@ -74,6 +74,48 @@ class LinkedFilterPartnerVisibilityIntegrationTest {
             assertTrue(world.vo1 in swipeIds(world.viewer, linkedOnly = true))
         }
 
+    /**
+     * FILTERS_SPEC "Who": Singles and Partnered follow the visible link, not the free-text
+     * relationship_context. Every seeded profile says "single" in that text (the fixture default),
+     * linked or not, and none says "partnered", so before the fold Singles returned everyone and
+     * Partnered nobody.
+     */
+    @Test
+    fun singlesAndPartneredFollowTheVisibleLinkNotTheFreeText() =
+        runBlocking {
+            val world = seedWorld()
+            val all = graph.grid.queryGrid(world.viewer, gridRequest(linkedOnly = null)).items
+            val showsPartner = all.filter { it.linkedPartner != null }.map { UUID.fromString(it.userId) }.toSet()
+            val everyone = all.map { UUID.fromString(it.userId) }.toSet()
+
+            suspend fun grid(
+                contexts: List<String>,
+                linkedOnly: Boolean? = null,
+            ): Set<UUID> =
+                graph.grid
+                    .queryGrid(world.viewer, gridRequest(linkedOnly).copy(relationshipContexts = contexts))
+                    .items
+                    .map { UUID.fromString(it.userId) }
+                    .toSet()
+
+            assertEquals(everyone - showsPartner, grid(listOf("single")), "Singles = no partner shown")
+            assertEquals(showsPartner, grid(listOf("partnered")), "Partnered = a partner shown")
+            // Exclusive states, so both at once is the union: everyone.
+            assertEquals(everyone, grid(listOf("single", "partnered")))
+            assertEquals(everyone, grid(listOf("single"), linkedOnly = true))
+            // Any other free-text value filters nothing.
+            assertEquals(everyone, grid(listOf("married, open")))
+
+            // Swipe takes the same tokens.
+            val swipeSingles =
+                graph.swipe
+                    .queryDeck(world.viewer, swipeRequest(linkedOnly = null).copy(relationshipContexts = listOf("single")))
+                    .items
+                    .map { UUID.fromString(it.userId) }
+                    .toSet()
+            assertEquals(swipeIds(world.viewer, linkedOnly = false), swipeSingles)
+        }
+
     private suspend fun assertGridProperty(world: World) {
         val all = graph.grid.queryGrid(world.viewer, gridRequest(linkedOnly = null)).items
         val showsPartner = all.filter { it.linkedPartner != null }.map { UUID.fromString(it.userId) }.toSet()
