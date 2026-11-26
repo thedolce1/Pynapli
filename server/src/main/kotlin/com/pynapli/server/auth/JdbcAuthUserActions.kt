@@ -112,7 +112,7 @@ internal fun Connection.insertEmailAccount(
     ) { insertEmailIdentity(identityId, userId, emailHash, passwordHash) }
 
 /** A Google or Apple identity a new account starts with (no password). */
-internal class NewSocialIdentity(
+class NewSocialIdentity(
     val identityId: UUID,
     val provider: String,
     val subject: String,

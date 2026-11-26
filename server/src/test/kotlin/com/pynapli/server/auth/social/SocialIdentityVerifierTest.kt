@@ -69,8 +69,7 @@ class SocialIdentityVerifierTest {
     fun aTokenWithoutExpiryIsRejected() = rejected { google.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", NONCE, expiresAt = null), NONCE) }
 
     @Test
-    fun aTokenIssuedInTheFutureIsRejected() =
-        rejected { google.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", NONCE, issuedAt = Instant.now().plusSeconds(3600)), NONCE) }
+    fun aTokenIssuedInTheFutureIsRejected() = rejected { google.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", NONCE, issuedAt = Instant.now().plusSeconds(3600)), NONCE) }
 
     @Test
     fun aDifferentNonceIsRejected() = rejected { google.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", "another-nonce"), NONCE) }
@@ -79,8 +78,7 @@ class SocialIdentityVerifierTest {
     fun aMissingNonceIsRejected() = rejected { google.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", null), NONCE) }
 
     @Test
-    fun googleDoesNotAcceptTheHashedNonceForm() =
-        rejected { google.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", SocialIdentityVerifier.sha256Hex(NONCE)), NONCE) }
+    fun googleDoesNotAcceptTheHashedNonceForm() = rejected { google.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", SocialIdentityVerifier.sha256Hex(NONCE)), NONCE) }
 
     @Test
     fun appleAcceptsTheHashedAndTheRawNonce() =

@@ -154,7 +154,11 @@ class SocialSignInIntegrationTest {
         return signIn(provider, token, nonce, birthdate, code)
     }
 
-    private suspend fun HttpResponse.errorCode(): String = JSON.parseToJsonElement(bodyAsText()).jsonObject["code"]!!.jsonPrimitive.content
+    private suspend fun HttpResponse.errorCode(): String =
+        JSON
+            .parseToJsonElement(bodyAsText())
+            .jsonObject["code"]!!
+            .jsonPrimitive.content
 
     private suspend fun session(response: HttpResponse): AuthSessionDto = JSON.decodeFromString(AuthSessionDto.serializer(), response.bodyAsText())
 

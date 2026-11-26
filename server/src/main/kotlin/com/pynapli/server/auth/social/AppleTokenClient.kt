@@ -188,6 +188,11 @@ class HttpAppleTokenClient(
 
         private fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8)
 
-        private fun jsonString(value: String): String = Json.encodeToString(kotlinx.serialization.json.JsonPrimitive.serializer(), kotlinx.serialization.json.JsonPrimitive(value))
+        private fun jsonString(value: String): String =
+            Json.encodeToString(
+                kotlinx.serialization.json.JsonPrimitive
+                    .serializer(),
+                kotlinx.serialization.json.JsonPrimitive(value),
+            )
     }
 }

@@ -80,7 +80,7 @@ providers' rules, not the Pynapli palette, so their colours live in `PynapliProv
   with" / "Sign up with" / "Continue with"; we use one everywhere).
 - **Marks are the providers' own files, never drawn in code.** Nothing lookalike is committed.
   The founder drops the official files in as Compose resources (PATH_TO_TESTERS A10):
-  `composeApp/src/commonMain/composeResources/files/brand/google-g.svg` and `.../apple-logo-black.svg`.
+  `composeApp/src/commonMain/composeResources/files/brand/google-g.png` and `.../apple-logo-black.png`.
   Until a file is in and its guard (`GOOGLE_MARK_IS_OFFICIAL_ARTWORK`,
   `APPLE_MARK_IS_OFFICIAL_ARTWORK`, both shipped `false`) is flipped, no button for that provider
   shows anywhere: welcome, sign-in form, or "Add" in Sign-in methods (`SocialButtonGuard`).

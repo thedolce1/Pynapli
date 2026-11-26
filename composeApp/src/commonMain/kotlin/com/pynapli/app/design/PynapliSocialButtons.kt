@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -33,7 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.pynapli.app.resources.Res
 import com.pynapli.shared.core.result.runCatchingCancellable
 import org.jetbrains.compose.resources.ExperimentalResourceApi
-import org.jetbrains.compose.resources.decodeToSvgPainter
+import org.jetbrains.compose.resources.decodeToImageBitmap
 
 /**
  * Provider colours from each provider's own button rules, not the Pynapli palette, and therefore
@@ -63,14 +64,14 @@ enum class PynapliSocialButtonKind { Google, Apple }
  * Google: the standard colour "G" SVG from the Sign in with Google branding page
  * (developers.google.com/identity/branding-guidelines, "Download" assets), the logo alone.
  */
-const val GOOGLE_MARK_ASSET: String = "files/brand/google-g.svg"
+const val GOOGLE_MARK_ASSET: String = "files/brand/google-g.png"
 
 /**
  * Apple: the logo-only SVG, black, from Sign in with Apple's resources in Apple Design Resources
  * (developer.apple.com/design/resources/, "Sign in with Apple"). Drawn at the button's height,
  * uncropped, as Apple's rules ask.
  */
-const val APPLE_MARK_ASSET: String = "files/brand/apple-logo-black.svg"
+const val APPLE_MARK_ASSET: String = "files/brand/apple-logo-black.png"
 
 /**
  * Launch guards. Each stays false until that provider's official file is at its path above; while
@@ -143,13 +144,16 @@ fun PynapliSocialButton(
     }
 }
 
-/** The provider's own SVG from Compose resources, or null while loading or if it is missing. */
+/**
+ * The provider's own logo PNG from Compose resources, or null while loading or if it is missing.
+ * PNG, not SVG: Compose's SVG decoder is not available on Android.
+ */
 @OptIn(ExperimentalResourceApi::class)
 @Composable
 private fun rememberProviderMark(path: String): Painter? {
     val density = LocalDensity.current
     val painter by produceState<Painter?>(initialValue = null, path, density) {
-        value = runCatchingCancellable { Res.readBytes(path).decodeToSvgPainter(density) }.getOrNull()
+        value = runCatchingCancellable { BitmapPainter(Res.readBytes(path).decodeToImageBitmap()) }.getOrNull()
     }
     return painter
 }

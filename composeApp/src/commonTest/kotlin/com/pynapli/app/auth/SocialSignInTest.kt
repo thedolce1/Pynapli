@@ -102,7 +102,11 @@ class SocialSignInTest {
 
             fixture.onboarding.continueWithSocial(SocialProvider.Google)
 
-            assertEquals("user-1", fixture.auth.state.value.session?.userId)
+            assertEquals(
+                "user-1",
+                fixture.auth.state.value.session
+                    ?.userId,
+            )
             assertEquals(listOf("nonce-1"), fixture.provider.noncesSeen)
             val request = fixture.api.signIns.single()
             assertEquals("google", request.first)
@@ -125,7 +129,12 @@ class SocialSignInTest {
 
             assertEquals(2, fixture.api.nonceCalls)
             assertEquals(listOf("nonce-1", "nonce-2"), fixture.provider.noncesSeen)
-            assertEquals("nonce-2", fixture.api.signIns.single().second.nonce)
+            assertEquals(
+                "nonce-2",
+                fixture.api.signIns
+                    .single()
+                    .second.nonce,
+            )
         }
 
     @Test
@@ -156,7 +165,11 @@ class SocialSignInTest {
             assertTrue(second.acceptedPrivacy)
             // No email, password or code: straight on to Location with a live session.
             assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
-            assertEquals("user-1", fixture.auth.state.value.session?.userId)
+            assertEquals(
+                "user-1",
+                fixture.auth.state.value.session
+                    ?.userId,
+            )
             assertEquals(OnboardingProgress(completed = false, userId = "user-1"), fixture.progress.progress)
             assertEquals(0, fixture.api.emailSignups)
         }
@@ -333,7 +346,11 @@ class SocialSignInTest {
 
             gate.complete(SocialCredentialResult.Success("token-1"))
             job.join()
-            assertEquals("user-1", fixture.auth.state.value.session?.userId)
+            assertEquals(
+                "user-1",
+                fixture.auth.state.value.session
+                    ?.userId,
+            )
             assertFalse(fixture.onboarding.state.value.active)
         }
 
@@ -379,7 +396,10 @@ class SocialSignInTest {
     @Test
     fun changePasswordShowsOnlyWhenTheServerSaysThereIsAPassword() =
         runTest {
-            suspend fun shown(api: FakeSocialAuthApi, provider: FakeSocialProvider = FakeSocialProvider()): Boolean {
+            suspend fun shown(
+                api: FakeSocialAuthApi,
+                provider: FakeSocialProvider = FakeSocialProvider(),
+            ): Boolean {
                 val holder = SignInMethodsStateHolder(SocialIdentityRepository(api), provider)
                 holder.load()
                 return holder.state.value.showChangePassword
@@ -642,7 +662,10 @@ class SocialSignInTest {
 
             holder.reset()
             assertFalse(holder.state.value.visible)
-            assertTrue(holder.state.value.linked.isEmpty())
+            assertTrue(
+                holder.state.value.linked
+                    .isEmpty(),
+            )
         }
 
     // ---- Fixture
@@ -685,8 +708,7 @@ class SocialSignInTest {
     }
 }
 
-private fun session(userId: String = "user-1"): AppResult<AuthSessionDto> =
-    AppResult.Success(AuthSessionDto(accessToken = "access", refreshToken = "refresh", user = AuthUserDto(userId = userId, status = "active")))
+private fun session(userId: String = "user-1"): AppResult<AuthSessionDto> = AppResult.Success(AuthSessionDto(accessToken = "access", refreshToken = "refresh", user = AuthUserDto(userId = userId, status = "active")))
 
 private fun needsAgeGate(): AppResult<AuthSessionDto> = AppResult.Failure(AppError(SocialAuthErrorCodes.NEEDS_AGE_GATE, "Tell us your birthday."))
 

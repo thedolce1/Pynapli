@@ -106,7 +106,7 @@ class KtorSocialAuthApiTest {
             val api =
                 client {
                     respond(
-                        content = """{"code":"${SocialAuthErrorCodes.NEEDS_AGE_GATE}","message":"Tell us your birthday first."}""",
+                        content = """{"code":"${SocialAuthErrorCodes.NEEDS_AGE_GATE}","message":"Tell us your birthday first.","requestId":"req-1"}""",
                         status = HttpStatusCode.UnprocessableEntity,
                         headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
                     )
@@ -162,8 +162,7 @@ class KtorSocialAuthApiTest {
                 },
         )
 
-    private fun MockRequestHandleScope.respondJson(content: String): HttpResponseData =
-        respond(content = content, status = HttpStatusCode.OK, headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
+    private fun MockRequestHandleScope.respondJson(content: String): HttpResponseData = respond(content = content, status = HttpStatusCode.OK, headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
 
     private fun OutgoingContent.jsonBody(): JsonObject = Json.parseToJsonElement((this as TextContent).text).jsonObject
 

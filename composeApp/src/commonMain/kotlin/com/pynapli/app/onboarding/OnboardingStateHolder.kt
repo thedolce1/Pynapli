@@ -3,9 +3,9 @@ package com.pynapli.app.onboarding
 import androidx.compose.runtime.Immutable
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.SocialSignInOutcome
+import com.pynapli.shared.auth.PasswordRules
 import com.pynapli.shared.auth.SocialAgeGate
 import com.pynapli.shared.auth.SocialProvider
-import com.pynapli.shared.auth.PasswordRules
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient

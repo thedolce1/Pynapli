@@ -697,8 +697,7 @@ class AuthStateHolder(
 
     companion object {
         /** The neutral "already has an account" notice (ONBOARDING_AUTH_SPEC). Never says more. */
-        fun emailHasAccountMessage(provider: SocialProvider): String =
-            "An account already uses this email. Sign in the way you usually do, then add ${provider.displayName} in Settings."
+        fun emailHasAccountMessage(provider: SocialProvider): String = "An account already uses this email. Sign in the way you usually do, then add ${provider.displayName} in Settings."
 
         const val SOCIAL_NOT_CONFIRMED = "We couldn't confirm that sign-in. Try again."
         const val SOCIAL_TRY_AGAIN = "Sign-in didn't work. Try again."

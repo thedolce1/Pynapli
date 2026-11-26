@@ -10,9 +10,9 @@ import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
+import com.pynapli.app.auth.AndroidGoogleSignInProvider
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
-import com.pynapli.app.auth.AndroidGoogleSignInProvider
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.debug.DebugQaFlags
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
