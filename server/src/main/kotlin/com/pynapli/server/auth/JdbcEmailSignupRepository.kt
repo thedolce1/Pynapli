@@ -22,6 +22,24 @@ class JdbcEmailSignupRepository(
 
     override suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord? = users.findEmailIdentity(emailHash)
 
+    override suspend fun addressHasAccount(emailHash: String): Boolean =
+        dataSource.withConnection { connection ->
+            connection
+                .prepareStatement(
+                    """
+                    SELECT 1 FROM users WHERE email_hash = ? AND deleted_at IS NULL
+                    UNION ALL
+                    SELECT 1 FROM auth_identities ai JOIN users u ON u.id = ai.user_id
+                    WHERE ai.provider = 'email' AND ai.provider_subject = ? AND u.deleted_at IS NULL
+                    LIMIT 1
+                    """.trimIndent(),
+                ).use { statement ->
+                    statement.setString(1, emailHash)
+                    statement.setString(2, emailHash)
+                    statement.executeQuery().use { rs -> rs.next() }
+                }
+        }
+
     override suspend fun insertPendingSignup(
         pending: NewPendingSignup,
         now: Instant,
