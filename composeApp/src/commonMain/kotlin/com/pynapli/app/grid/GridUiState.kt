@@ -81,7 +81,48 @@ data class GridFilters(
     // "Verified couples only": both linked partners selfie-verified (the couple-verified badge).
     // Independent of [linked]; the server applies it without touching linkedOnly.
     val verifiedCouples: Boolean = false,
+    // FILTERS_SPEC "Partner" (plan G2-3): the visibly linked partner's OWN declared gender, age,
+    // orientation and photo verification. The server tests them only through the partner gate behind
+    // Linked, so a partner hidden from this viewer never matches. They imply Linked, so with Singles
+    // alone they are off ([partnerFiltersApply]) and never sent.
+    val partnerGenders: Set<String> = emptySet(),
+    val partnerMinimumAge: Int? = null,
+    val partnerMaximumAge: Int? = null,
+    val partnerOrientations: Set<String> = emptySet(),
+    val partnerVerified: Boolean = false,
+    // "No single men" quick chip: hide men with no partner shown to this viewer (linked men still show).
+    val noSingleMen: Boolean = false,
 ) {
+    /** Any partner filter is chosen (whether or not the Who choice lets it apply). */
+    val hasPartnerFilters: Boolean
+        get() =
+            partnerGenders.isNotEmpty() ||
+                partnerMinimumAge != null ||
+                partnerMaximumAge != null ||
+                partnerOrientations.isNotEmpty() ||
+                partnerVerified
+
+    /**
+     * Partner filters mean "people with a visible linked partner who ...", so they only apply when Who
+     * is Linked or unrestricted. Singles alone (no partner shown) and a partner filter can never both
+     * hold, so the sheet disables the Partner section there and the request leaves them out.
+     */
+    val partnerFiltersApply: Boolean get() = !(singles && !linked)
+
+    /** These filters with partner filters dropped when Who rules them out (what is sent and stored). */
+    fun withPartnerFiltersReconciled(): GridFilters =
+        if (partnerFiltersApply) {
+            this
+        } else {
+            copy(
+                partnerGenders = emptySet(),
+                partnerMinimumAge = null,
+                partnerMaximumAge = null,
+                partnerOrientations = emptySet(),
+                partnerVerified = false,
+            )
+        }
+
     val activeCount: Int
         get() {
             var count = 0
@@ -108,6 +149,13 @@ data class GridFilters(
             if (visitingSoon) count += 1
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
+            if (noSingleMen) count += 1
+            if (partnerFiltersApply) {
+                if (partnerGenders.isNotEmpty()) count += 1
+                if (partnerMinimumAge != null || partnerMaximumAge != null) count += 1
+                if (partnerOrientations.isNotEmpty()) count += 1
+                if (partnerVerified) count += 1
+            }
             return count
         }
 
@@ -136,6 +184,7 @@ data class GridFilters(
         // Singles travels as the "single" Who token, Linked as linkedOnly; the server folds both onto
         // the visible link (both on = everyone), so a saved preset with both restores both.
         val contexts = if (singles) listOf(SINGLES_CONTEXT) else emptyList()
+        val partner = withPartnerFiltersReconciled()
         return GridQueryRequestDto(
             radiusMeters = snapRadius(radiusMeters),
             limit = PAGE_SIZE,
@@ -163,6 +212,12 @@ data class GridFilters(
             genders = genders.toList(),
             orientations = orientations.toList(),
             verifiedCouplesOnly = verifiedCouples,
+            partnerGenders = partner.partnerGenders.toList(),
+            partnerMinimumAge = partner.partnerMinimumAge,
+            partnerMaximumAge = partner.partnerMaximumAge,
+            partnerOrientations = partner.partnerOrientations.toList(),
+            partnerVerifiedOnly = partner.partnerVerified,
+            excludeSingleMen = noSingleMen,
         )
     }
 
@@ -241,21 +296,28 @@ data class GridFilters(
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 verifiedCouples = request.verifiedCouplesOnly,
+                partnerGenders = request.partnerGenders.toSet(),
+                partnerMinimumAge = request.partnerMinimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
+                partnerMaximumAge = request.partnerMaximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
+                partnerOrientations = request.partnerOrientations.toSet(),
+                partnerVerified = request.partnerVerifiedOnly,
+                noSingleMen = request.excludeSingleMen,
             )
         }
     }
 }
 
 /**
- * A one-tap filter the Grid can toggle. The header row shows Online, Fresh, Tonight and Verified
- * (plus the Favorites view chip, which is not a filter); Singles and Linked are toggles in the
- * filter sheet's Who section, not quick filters.
+ * A one-tap filter the Grid can toggle. The header row shows Online, Fresh, Tonight, Verified and
+ * "No single men" (plus the Favorites view chip, which is not a filter); Singles and Linked are
+ * toggles in the filter sheet's Who section, not quick filters.
  */
 enum class QuickFilterId {
     Online,
     Verified,
     Tonight,
     Fresh,
+    NoSingleMen,
 }
 
 /**
@@ -468,7 +530,42 @@ data class GridLinkedPartnerUi(
     val userId: String,
     val displayName: String? = null,
     val thumbnailUrl: String? = null,
+    // The partner's own declared age and gender key (plan G2-3). The server sends them only with a
+    // mini it shows this viewer; the tile draws [partnerMiniCaption] under the mini.
+    val age: Int? = null,
+    val gender: String? = null,
 )
+
+/**
+ * The small caption under a tile's partner mini: the partner's age and a short gender mark, "34 · W".
+ * Only the partner's own declared values; never a couple label (no "MF"/"FF"), never inferred.
+ * Self-describe and unknown keys get no mark. Null when there is nothing to show.
+ */
+internal fun partnerMiniCaption(partner: GridLinkedPartnerUi?): String? {
+    if (partner == null) return null
+    val mark = partner.gender?.let { PARTNER_GENDER_MARKS[it] }
+    val parts = listOfNotNull(partner.age?.toString(), mark)
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
+/** Screen-reader text for the partner mini: "Linked partner, 34, woman". */
+internal fun partnerMiniDescription(partner: GridLinkedPartnerUi): String {
+    val gender =
+        partner.gender
+            ?.takeIf { it in PARTNER_GENDER_MARKS }
+            ?.let { com.pynapli.shared.profile.ProfileTaxonomies.genderLabel(it)?.lowercase() }
+    return listOfNotNull("Linked partner", partner.age?.toString(), gender).joinToString(", ")
+}
+
+// Short marks for the structured gender keys (ProfileTaxonomies). Self-describe has none.
+private val PARTNER_GENDER_MARKS: Map<String, String> =
+    mapOf(
+        "woman" to "W",
+        "man" to "M",
+        "trans_woman" to "TW",
+        "trans_man" to "TM",
+        "non_binary" to "NB",
+    )
 
 @Serializable
 enum class LinkedPartnerTone {
@@ -515,4 +612,6 @@ internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =
         userId = userId,
         displayName = displayName,
         thumbnailUrl = thumbnailUrl,
+        age = age,
+        gender = gender,
     )

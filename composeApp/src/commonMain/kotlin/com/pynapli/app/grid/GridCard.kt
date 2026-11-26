@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -155,6 +156,10 @@ internal fun GridProfileTile(
                 thumbnailUrl = card.linkedPartner.thumbnailUrl,
                 coupleVerified = card.coupleVerified,
                 color = card.linkedPartnerTone.badgeColor(),
+                // Plan G2-3: the partner's own age and gender mark, only on a mini the server shows.
+                caption = partnerMiniCaption(card.linkedPartner),
+                description = partnerMiniDescription(card.linkedPartner),
+                captionTag = GridCardTags.partnerCaptionTag(card.id),
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
@@ -288,6 +293,8 @@ internal object GridCardTags {
     fun silhouetteTag(cardId: String): String = "grid-card-silhouette-$cardId"
 
     fun verifiedTag(cardId: String): String = "grid-card-verified-$cardId"
+
+    fun partnerCaptionTag(cardId: String): String = "grid-card-partner-caption-$cardId"
 }
 
 /** No approved photo: a quiet person outline on the neutral tile, the same for everyone. */
@@ -368,21 +375,49 @@ private fun LinkedPartnerBadge(
     thumbnailUrl: String?,
     coupleVerified: Boolean,
     color: Color,
+    caption: String?,
+    description: String,
+    captionTag: String,
     modifier: Modifier = Modifier,
 ) {
-    // The couple badge rides on the partner mini: both partners verified (TRUST_AND_SAFETY_SPEC).
-    Box(modifier = modifier) {
-        PartnerMiniCircle(thumbnailUrl = thumbnailUrl, color = color)
-        if (coupleVerified) {
-            VerifiedBadge(
-                size = 12.dp,
-                contentDescription = "Verified couple",
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        // The couple badge rides on the partner mini: both partners verified (TRUST_AND_SAFETY_SPEC).
+        Box {
+            PartnerMiniCircle(thumbnailUrl = thumbnailUrl, color = color, description = description)
+            if (coupleVerified) {
+                VerifiedBadge(
+                    size = 12.dp,
+                    contentDescription = "Verified couple",
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 3.dp, y = 3.dp)
+                            .clip(CircleShape)
+                            .background(PynapliColors.OnPhotoBadgeFill),
+                )
+            }
+        }
+        if (caption != null) {
+            // Plan G2-3: "34 · W", the partner's own declared age and gender, on the same dark
+            // on-photo fill as the mini's badges. Read by the mini's description, so hidden from
+            // screen readers here.
+            Text(
+                text = caption,
+                color = PynapliColors.OnPhotoPrimary,
+                fontSize = GridTileTokens.MetaTextSize,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
                 modifier =
                     Modifier
-                        .align(Alignment.BottomEnd)
-                        .offset(x = 3.dp, y = 3.dp)
-                        .clip(CircleShape)
-                        .background(PynapliColors.OnPhotoBadgeFill),
+                        .testTag(captionTag)
+                        .clearAndSetSemantics {}
+                        .clip(PynapliShape.PillShape)
+                        .background(PynapliColors.OnPhotoBadgeFill)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
             )
         }
     }
@@ -392,6 +427,7 @@ private fun LinkedPartnerBadge(
 private fun PartnerMiniCircle(
     thumbnailUrl: String?,
     color: Color,
+    description: String,
 ) {
     Box(
         modifier =
@@ -405,14 +441,14 @@ private fun PartnerMiniCircle(
         if (thumbnailUrl != null) {
             AsyncImage(
                 model = thumbnailUrl,
-                contentDescription = "Linked partner",
+                contentDescription = description,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
             Icon(
                 imageVector = Icons.Filled.Person,
-                contentDescription = "Linked partner",
+                contentDescription = description,
                 tint = PynapliColors.OnPhotoPrimary,
                 modifier = Modifier.size(15.dp),
             )

@@ -102,6 +102,11 @@ internal fun GridFiltersSheet(
                     draft = draft.copy(singles = singles, linked = linked)
                 },
             )
+            SinglesShortcutRow(filters = draft, onChange = { draft = it })
+
+            // Plan G2-3: under Who, because these narrow "Linked" by the partner's own profile.
+            SectionTitle("Partner")
+            PartnerSection(filters = draft, onChange = { draft = it })
 
             SectionTitle("Gender")
             GenderSection(
@@ -184,7 +189,7 @@ internal fun GridFiltersSheet(
                     isSaving = savedState.isSaving,
                     onSave = {
                         if (saveName.isNotBlank()) {
-                            onSavePreset(saveName, draft.withLifestyleAccess(lifestyleFiltersAllowed))
+                            onSavePreset(saveName, draft.withLifestyleAccess(lifestyleFiltersAllowed).withPartnerFiltersReconciled())
                             saveName = ""
                         }
                     },
@@ -201,7 +206,7 @@ internal fun GridFiltersSheet(
             ) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.handCursor()) { Text(text = "Cancel") }
                 Button(
-                    onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed)) },
+                    onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed).withPartnerFiltersReconciled()) },
                     modifier = Modifier.testTag(GridFilterTags.APPLY).handCursor(),
                 ) { Text(text = "Apply") }
             }

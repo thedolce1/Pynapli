@@ -326,6 +326,7 @@ internal fun TrustSection(
             onTogglesChanged(verified, facePhotoVerified, !ageVerified)
         }
         // Both linked partners selfie-verified: the couple-verified badge (independent of "Linked").
+        // "Partner photo verified" (Partner section) is the partner-only half of this.
         SheetToggleChip(
             label = VERIFIED_COUPLES_ONLY_LABEL,
             active = verifiedCouples,
@@ -357,6 +358,113 @@ internal fun WhoSection(
         }
     }
 }
+
+/**
+ * "Single women" / "Single men" (plan G2-3): one-tap shortcuts for Singles + that gender, i.e. the
+ * person's own declared gender and no partner shown to the viewer. Nothing new on the server: they
+ * set the same Who and Gender filters the sections below show. Tapping an active one clears it.
+ */
+@Composable
+internal fun SinglesShortcutRow(
+    filters: GridFilters,
+    onChange: (GridFilters) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SinglesShortcut.entries.forEach { shortcut ->
+            val active = shortcut.isActive(filters)
+            SheetToggleChip(label = shortcut.label, active = active) {
+                onChange(if (active) shortcut.cleared(filters) else shortcut.applied(filters))
+            }
+        }
+    }
+}
+
+/** The Who shortcuts: Singles plus one declared gender key. */
+internal enum class SinglesShortcut(
+    val label: String,
+    val genderKey: String,
+) {
+    SingleWomen("Single women", "woman"),
+    SingleMen("Single men", "man"),
+    ;
+
+    fun isActive(filters: GridFilters): Boolean = filters.singles && !filters.linked && filters.genders == setOf(genderKey)
+
+    // Singles rules the partner filters out, so the applied state drops them (they could never match).
+    fun applied(filters: GridFilters): GridFilters = filters.copy(singles = true, linked = false, genders = setOf(genderKey)).withPartnerFiltersReconciled()
+
+    fun cleared(filters: GridFilters): GridFilters = filters.copy(singles = false, genders = emptySet())
+}
+
+/**
+ * FILTERS_SPEC "Partner" (plan G2-3): the visibly linked partner's own declared gender, age,
+ * orientation and photo verification. The server only ever tests a partner it shows this viewer, so
+ * these imply Linked. With Singles alone they cannot match anyone, so the section says so instead of
+ * offering dead chips (and the filters are dropped on apply).
+ */
+@Composable
+internal fun PartnerSection(
+    filters: GridFilters,
+    onChange: (GridFilters) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag(GridFilterTags.PARTNER_SECTION),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (!filters.partnerFiltersApply) {
+            Text(
+                text = PARTNER_NEEDS_LINKED_HINT,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
+        Text(
+            text = PARTNER_SECTION_HINT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FilterGroupLabel("Partner's gender")
+        GenderSection(
+            selected = filters.partnerGenders,
+            onChange = { onChange(filters.copy(partnerGenders = it)) },
+        )
+        FilterGroupLabel("Partner's age")
+        AgeSection(
+            minimumAge = filters.partnerMinimumAge,
+            maximumAge = filters.partnerMaximumAge,
+            onChange = { lo, hi -> onChange(filters.copy(partnerMinimumAge = lo, partnerMaximumAge = hi)) },
+        )
+        FilterGroupLabel("Partner's orientation")
+        OrientationSection(
+            selected = filters.partnerOrientations,
+            onChange = { onChange(filters.copy(partnerOrientations = it)) },
+        )
+        FilterGroupLabel("Partner's trust")
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SheetToggleChip(label = PARTNER_VERIFIED_LABEL, active = filters.partnerVerified) {
+                onChange(filters.copy(partnerVerified = !filters.partnerVerified))
+            }
+        }
+        Text(
+            text = PARTNER_VERIFIED_HINT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+internal const val PARTNER_SECTION_HINT: String =
+    "Matches the partner they show you, by what that partner put on their own profile. Using any of these shows only people with a visible linked partner."
+internal const val PARTNER_NEEDS_LINKED_HINT: String =
+    "Partner filters need a visible partner. Turn on Linked, or turn off Singles, to use them."
+internal const val PARTNER_VERIFIED_LABEL: String = "Partner photo verified"
+internal const val PARTNER_VERIFIED_HINT: String =
+    "Only the partner needs to be verified. \"Verified couples only\" under Trust needs both of them."
 
 @Composable
 internal fun GenderSection(

@@ -763,6 +763,7 @@ class GridStateHolder(
             QuickFilterId.Verified -> copy(verified = !verified)
             QuickFilterId.Tonight -> copy(tonightAvailable = !tonightAvailable)
             QuickFilterId.Fresh -> copy(fresh = !fresh)
+            QuickFilterId.NoSingleMen -> copy(noSingleMen = !noSingleMen)
         }
 
     private fun normalizedAgeRange(
