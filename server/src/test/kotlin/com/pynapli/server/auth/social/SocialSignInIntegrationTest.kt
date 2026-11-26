@@ -23,6 +23,7 @@ import com.pynapli.server.testsupport.PynapliTestDatabase
 import com.pynapli.server.testsupport.QueuedSignupWork
 import com.pynapli.server.testsupport.RecordingAppleTokenClient
 import com.pynapli.server.testsupport.TEST_CLIENT_IP
+import com.pynapli.server.testsupport.raceTogether
 import com.pynapli.server.testsupport.signUpVerified
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.LinkSocialIdentityRequestDto
@@ -230,6 +231,26 @@ class SocialSignInIntegrationTest {
             assertEquals(HttpStatusCode.OK, again.status)
             assertEquals(created.user.userId, session(again).user.userId)
             assertEquals(1, count("SELECT count(*) FROM users"))
+        }
+
+    @Test
+    fun aConcurrentReplayOfOneTokenAndNonceGetsExactlyOneSession() =
+        testApplication {
+            serve()
+            client.attempt(SocialProvider.GOOGLE, "g-race", birthdate = ADULT)
+            val nonce = client.nonce()
+            val token = idp.idToken(SocialProvider.GOOGLE, "g-race", nonce)
+            val (first, second) =
+                raceTogether(
+                    { client.signIn(SocialProvider.GOOGLE, token, nonce).status },
+                    { client.signIn(SocialProvider.GOOGLE, token, nonce).status },
+                )
+            val statuses = listOf(first.getOrThrow(), second.getOrThrow())
+            assertEquals(1, statuses.count { it == HttpStatusCode.OK }, "statuses: $statuses")
+            assertEquals(1, statuses.count { it == HttpStatusCode.Unauthorized }, "statuses: $statuses")
+            // One account, and exactly one session from the race (plus the one sign-up created).
+            assertEquals(1, count("SELECT count(*) FROM users"))
+            assertEquals(2, count("SELECT count(*) FROM user_sessions"))
         }
 
     @Test
