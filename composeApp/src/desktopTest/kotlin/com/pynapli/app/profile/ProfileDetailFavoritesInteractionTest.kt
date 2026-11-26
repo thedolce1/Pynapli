@@ -12,14 +12,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliTheme
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.shared.network.dto.PublicProfileDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ProfileDetailFavoritesInteractionTest {
-    private val card = GridProfileCardUi(id = "u1", displayName = "Maya", online = false, distanceLabel = "2 km", tone = GridCardTone.Warm)
+    private val card = GridProfileCardUi(id = "u1", displayName = "Maya", online = false, distanceLabel = "2 km")
 
     private fun profile(
         favorite: Boolean,

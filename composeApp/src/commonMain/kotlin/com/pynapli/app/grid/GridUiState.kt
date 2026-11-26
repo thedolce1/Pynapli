@@ -246,13 +246,11 @@ data class GridFilters(
 
 /**
  * A one-tap filter the Grid can toggle. The header row shows Online, Fresh, Tonight and Verified
- * (plus the Favorites view chip, which is not a filter); Singles and Linked stay toggles in the
- * filter sheet's Who section.
+ * (plus the Favorites view chip, which is not a filter); Singles and Linked are toggles in the
+ * filter sheet's Who section, not quick filters.
  */
 enum class QuickFilterId {
     Online,
-    Singles,
-    Linked,
     Verified,
     Tonight,
     Fresh,
@@ -409,7 +407,6 @@ data class GridProfileCardUi(
     val thumbnailUrl: String? = null,
     val online: Boolean,
     val distanceLabel: String?,
-    val tone: GridCardTone,
     val linkedPartner: GridLinkedPartnerUi? = null,
     val linkedPartnerTone: LinkedPartnerTone? = null,
     val distanceMeters: Int? = null,
@@ -472,22 +469,6 @@ data class GridLinkedPartnerUi(
 )
 
 @Serializable
-enum class GridCardTone {
-    Warm,
-    Slate,
-    Rust,
-    DeepGreen,
-    Bronze,
-    Graphite,
-    Teal,
-    Rose,
-    Cocoa,
-    Moss,
-    Stone,
-    Midnight,
-}
-
-@Serializable
 enum class LinkedPartnerTone {
     Violet,
     Gold,
@@ -508,7 +489,6 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi {
         thumbnailUrl = thumbnailUrl,
         online = online,
         distanceLabel = distanceLabel,
-        tone = GridCardTone.entries[index % GridCardTone.entries.size],
         linkedPartner = partner?.toUi(),
         linkedPartnerTone = partner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
         distanceMeters = distanceMeters,

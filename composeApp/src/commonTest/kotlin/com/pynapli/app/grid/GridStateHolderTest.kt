@@ -248,12 +248,14 @@ class GridStateHolderTest {
             val stateHolder = GridStateHolder(repository)
 
             stateHolder.load()
+            // Who (Singles / Linked) comes from the sheet; the quick chips keep it.
+            stateHolder.applyFilters(GridFilters(singles = true, linked = true))
             stateHolder.toggleQuickFilter(QuickFilterId.Online)
-            stateHolder.toggleQuickFilter(QuickFilterId.Linked)
-            stateHolder.toggleQuickFilter(QuickFilterId.Singles)
+            stateHolder.toggleQuickFilter(QuickFilterId.Verified)
 
             val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
             assertEquals(true, request.onlineOnly)
+            assertEquals(true, request.verifiedOnly)
             assertEquals(true, request.linkedOnly)
             assertEquals(listOf(GridFilters.SINGLES_CONTEXT), request.relationshipContexts)
         }
@@ -303,7 +305,7 @@ class GridStateHolderTest {
 
             stateHolder.load()
             stateHolder.toggleQuickFilter(QuickFilterId.Online)
-            stateHolder.toggleQuickFilter(QuickFilterId.Linked)
+            stateHolder.toggleQuickFilter(QuickFilterId.Verified)
             stateHolder.setRadiusMeters(2_000)
             val callsBefore = repository.loadCount
 
@@ -335,7 +337,6 @@ class GridStateHolderTest {
                     displayName = "One",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val repository =
                 FakeGridFeedRepository(
@@ -373,7 +374,6 @@ class GridStateHolderTest {
                     displayName = "First",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val secondCard =
                 GridProfileCardUi(
@@ -381,7 +381,6 @@ class GridStateHolderTest {
                     displayName = "Second",
                     online = false,
                     distanceLabel = "2 km",
-                    tone = GridCardTone.Slate,
                 )
             val gate = CompletableDeferred<Unit>()
             val repository =
@@ -443,7 +442,6 @@ class GridStateHolderTest {
                     displayName = "First",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val repository =
                 ScriptedGridFeedRepository(
@@ -511,7 +509,6 @@ class GridStateHolderTest {
                     displayName = "One",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val repository =
                 ScriptedGridFeedRepository(
@@ -568,7 +565,6 @@ class GridStateHolderTest {
                     displayName = "First",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val secondCard =
                 GridProfileCardUi(
@@ -576,7 +572,6 @@ class GridStateHolderTest {
                     displayName = "Second",
                     online = false,
                     distanceLabel = "2 km",
-                    tone = GridCardTone.Slate,
                 )
             val gate = CompletableDeferred<Unit>()
             val repository =
@@ -627,9 +622,9 @@ class GridStateHolderTest {
         runTest {
             val cards =
                 listOf(
-                    GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null, tone = GridCardTone.Warm),
-                    GridProfileCardUi(id = "b", displayName = "B", online = true, distanceLabel = null, tone = GridCardTone.Slate),
-                    GridProfileCardUi(id = "c", displayName = "C", online = false, distanceLabel = null, tone = GridCardTone.Rust),
+                    GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null),
+                    GridProfileCardUi(id = "b", displayName = "B", online = true, distanceLabel = null),
+                    GridProfileCardUi(id = "c", displayName = "C", online = false, distanceLabel = null),
                 )
             val repository = FakeGridFeedRepository(GridFeedUi(cards = cards))
             val stateHolder = GridStateHolder(repository)
@@ -657,7 +652,7 @@ class GridStateHolderTest {
         runTest {
             val cards =
                 listOf(
-                    GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null, tone = GridCardTone.Warm),
+                    GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null),
                 )
             val repository = FakeGridFeedRepository(GridFeedUi(cards = cards))
             val stateHolder = GridStateHolder(repository)
@@ -680,7 +675,6 @@ class GridStateHolderTest {
                     displayName = "First",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val duplicateFirst = first.copy(displayName = "First duplicate")
             val second =
@@ -689,7 +683,6 @@ class GridStateHolderTest {
                     displayName = "Second",
                     online = false,
                     distanceLabel = "2 km",
-                    tone = GridCardTone.Slate,
                 )
             val repository =
                 FakeGridFeedRepository(
@@ -772,7 +765,6 @@ class GridStateHolderTest {
                     displayName = "Cached",
                     online = false,
                     distanceLabel = "5 km",
-                    tone = GridCardTone.Slate,
                 )
             val fresh =
                 GridProfileCardUi(
@@ -780,7 +772,6 @@ class GridStateHolderTest {
                     displayName = "Fresh",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val gate = CompletableDeferred<Unit>()
             val repository =
@@ -825,7 +816,6 @@ class GridStateHolderTest {
                     displayName = "Fresh",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val repository = FakeGridFeedRepository(GridFeedUi(cards = listOf(fresh)))
             val snapshotStore = FakeGridSnapshotStore(initial = emptyList())
@@ -943,7 +933,7 @@ class GridStateHolderTest {
 }
 
 class GridInstantLoadTest {
-    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km", tone = GridCardTone.Warm)
+    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km")
 
     @Test
     fun serverHasLocationFollowsLiveAnswersOnlyAndResetsOnSignOut() =
@@ -1146,4 +1136,4 @@ private class CursorGatedGridFeedRepository(
     }
 }
 
-private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null, tone = GridCardTone.Slate)
+private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null)

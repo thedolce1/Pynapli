@@ -1,6 +1,5 @@
 package com.pynapli.app.profile
 
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.PublicProfileDto
@@ -71,6 +70,5 @@ class ProfileDetailPagingTest {
             displayName = "User $id",
             online = false,
             distanceLabel = null,
-            tone = GridCardTone.entries.first(),
         )
 }

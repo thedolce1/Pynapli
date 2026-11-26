@@ -384,7 +384,7 @@ class GridLivenessTest {
         }
 }
 
-private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km", tone = GridCardTone.Slate)
+private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km")
 
 private fun feed(
     vararg cards: GridProfileCardUi,

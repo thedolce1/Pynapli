@@ -160,9 +160,6 @@ fun GridScreen(
         onSavePreset = { name, filters ->
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.save(name, filters) } }
         },
-        onApplySavedPreset = { dto ->
-            scope.launch { stateHolder.applyFilters(GridFilters.fromGridQueryRequest(dto.payload)) }
-        },
         onDeleteSavedPreset = { id ->
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.delete(id) } }
         },

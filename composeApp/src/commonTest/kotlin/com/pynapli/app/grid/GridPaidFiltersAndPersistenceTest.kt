@@ -263,7 +263,7 @@ private class RecordingGridFeedRepository(
             gateRefusal?.await()
             throw GridFeedException(code = "ENTITLEMENT_REQUIRED", message = "Upgrade required")
         }
-        return GridFeedUi(cards = listOf(GridProfileCardUi(id = "a", displayName = "A", online = false, distanceLabel = null, tone = GridCardTone.Warm)))
+        return GridFeedUi(cards = listOf(GridProfileCardUi(id = "a", displayName = "A", online = false, distanceLabel = null)))
     }
 }
 

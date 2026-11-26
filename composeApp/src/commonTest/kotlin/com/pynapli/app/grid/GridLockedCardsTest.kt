@@ -311,9 +311,9 @@ class GridLockedCardsTest {
             assertEquals(before, repository.firstPageRequests)
         }
 
-    private fun card(id: String): GridProfileCardUi = GridProfileCardUi(id = id, displayName = "User $id", online = true, distanceLabel = "1 km", tone = GridCardTone.Warm)
+    private fun card(id: String): GridProfileCardUi = GridProfileCardUi(id = id, displayName = "User $id", online = true, distanceLabel = "1 km")
 
-    private fun locked(id: String): GridProfileCardUi = GridProfileCardUi(id = id, displayName = "", online = true, distanceLabel = "2 km", tone = GridCardTone.Warm, locked = true)
+    private fun locked(id: String): GridProfileCardUi = GridProfileCardUi(id = id, displayName = "", online = true, distanceLabel = "2 km", locked = true)
 
     private fun lockedPage(
         cards: List<GridProfileCardUi>,
