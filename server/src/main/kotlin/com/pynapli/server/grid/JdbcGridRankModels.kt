@@ -30,6 +30,9 @@ internal data class GridHydration(
     val linkedPartnerUserId: UUID?,
     val linkedPartnerDisplayName: String?,
     val linkedPartnerThumbnailMediaAssetId: UUID?,
+    // The partner's own declared age and gender key (plan G2-3), from the same gated LATERAL.
+    val linkedPartnerAge: Int? = null,
+    val linkedPartnerGender: String? = null,
     val tonightActive: Boolean = false,
     // The card owner is photo-verified (profiles.verified_at).
     val verified: Boolean = false,

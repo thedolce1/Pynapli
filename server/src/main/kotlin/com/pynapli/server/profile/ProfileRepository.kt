@@ -88,6 +88,9 @@ data class PublicProfileRecord(
     val linkedPartnerOrientationDetail: String? = null,
     val linkedPartnerExperienceLevel: String? = null,
     val linkedPartnerLifestyleTags: List<String> = emptyList(),
+    // The visible linked partner's own declared age and gender key (plan G2-3).
+    val linkedPartnerAge: Int? = null,
+    val linkedPartnerGender: String? = null,
     // Both this profile and its visible linked partner are photo-verified.
     val coupleVerified: Boolean = false,
     // "Met in person" badges as the viewer may see them (batch-computed, opt-in gated in SQL).

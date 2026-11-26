@@ -63,6 +63,8 @@ internal object JdbcProfileSql {
                linked_partner.linked_partner_orientation_detail,
                linked_partner.linked_partner_experience_level,
                linked_partner.linked_partner_lifestyle_tags,
+               linked_partner.linked_partner_age,
+               linked_partner.linked_partner_gender,
                p.display_age,
                (p.verified_at IS NOT NULL) AS verified,
                -- Couple verified: this profile and its visible linked partner are both photo-verified.
@@ -260,6 +262,9 @@ internal object JdbcProfileSql {
                    linked_profile.orientation AS linked_partner_orientation,
                    linked_profile.orientation_detail AS linked_partner_orientation_detail,
                    linked_profile.experience_level AS linked_partner_experience_level,
+                   -- Plan G2-3: the partner's own declared age and gender key, with this gated row only.
+                   linked_profile.display_age AS linked_partner_age,
+                   linked_profile.gender AS linked_partner_gender,
                    ARRAY(
                        SELECT t FROM unnest(COALESCE(linked_profile.lifestyle_tags, '{}'::text[])) AS t
                        WHERE t IN ('soft_swap', 'full_swap', 'same_room', 'separate_room')

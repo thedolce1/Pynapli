@@ -57,6 +57,9 @@ data class GridCardRecord(
     val linkedPartnerUserId: UUID? = null,
     val linkedPartnerDisplayName: String? = null,
     val linkedPartnerThumbnailMediaAssetId: UUID? = null,
+    // The partner's own declared age and gender key (plan G2-3); stripped with the rest of the mini.
+    val linkedPartnerAge: Int? = null,
+    val linkedPartnerGender: String? = null,
     /**
      * Target has an active travel_locations row. Surfaced as a "Visiting" pill
      * on the Grid card (SWIPE_IMPLEMENTATION_SPEC L348) so the viewer knows

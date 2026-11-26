@@ -28,6 +28,8 @@ internal fun ResultSet.toPublicProfileRecord(): PublicProfileRecord {
         linkedPartnerOrientationDetail = getString("linked_partner_orientation_detail"),
         linkedPartnerExperienceLevel = getString("linked_partner_experience_level"),
         linkedPartnerLifestyleTags = getStringList("linked_partner_lifestyle_tags"),
+        linkedPartnerAge = getInt("linked_partner_age").takeUnless { wasNull() },
+        linkedPartnerGender = getString("linked_partner_gender"),
         displayAge = getInt("display_age").takeUnless { wasNull() },
         bio = getString("bio"),
         neighborhood = getString("neighborhood"),

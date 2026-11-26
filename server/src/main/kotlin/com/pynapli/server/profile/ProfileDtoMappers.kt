@@ -81,6 +81,8 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
                     orientationDetail = linkedPartnerOrientationDetail,
                     experienceLevel = linkedPartnerExperienceLevel,
                     lifestyleTags = linkedPartnerLifestyleTags,
+                    age = linkedPartnerAge,
+                    gender = linkedPartnerGender,
                 )
             },
         allowGridMessages = allowGridMessages,
