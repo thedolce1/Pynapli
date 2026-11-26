@@ -135,10 +135,15 @@ Rules:
 - `Unlinked partnered` is not offered: without a structured relationship field it can't be told
   apart from Singles.
 - These filters apply to individual users, not couple cards.
-- Psync residual: a Psync deck is dealt once for both partners from the initiator's view. It uses the
-  initiator's partner_visibility, hides and blocks, and no contact blocks (as for Psync candidates).
-  Each partner's read then strips minis of people hiding from them. With Linked on, a card dealt to
-  both may show one partner no mini.
+- Psync (closed 2026-11-26): a Psync deck is shown to both partners, so Linked, Singles and
+  Verified couples, like the partner mini itself, follow the strictest of the two views. The
+  candidate's partner must be shown to BOTH session partners (each one's blocks, hides and the
+  owner's partner_visibility) and hide from neither (the union of both partners' contact blocks).
+  PSYNC_SPEC "Psync Filters" has the rule; the proof is `PsyncPartnerVisibilityIntegrationTest`.
+- Favorites cards strip a partner the viewer hid, as well as one hiding from the viewer, the same
+  as the Grid (`FavoriteServiceIntegrationTest`).
+- Visiting soon applies Linked through the same gate
+  (`VisitingSoonDiscoveryTest` "Visiting soon Linked keeps a shown partner …").
 
 ### Intent
 
