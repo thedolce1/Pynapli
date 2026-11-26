@@ -197,7 +197,9 @@ class VisitingSoonDiscoveryTest :
                             viewer,
                             50_000,
                             60,
-                            filters = com.pynapli.server.discovery.DiscoveryFilters(linkedOnly = linkedOnly),
+                            filters =
+                                com.pynapli.server.discovery
+                                    .DiscoveryFilters(linkedOnly = linkedOnly),
                             // The contact-block set GridService passes: the partner hiding from the viewer.
                             hiddenFromViewerIds = setOf(contactBlockingPartner),
                         ).cards
