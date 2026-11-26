@@ -70,6 +70,35 @@ swipe moves to the next or previous person, so photos on those pages change by t
 right half, with the pips kept. On Medium+ windows it stays the side panel, with Previous/Next above
 the profile and the Left/Right arrow keys. Swipe, Activity and Messages keep the regular peek.
 
+## Sign-in provider buttons
+
+"Continue with Google" and "Continue with Apple" (`design/PynapliSocialButtons.kt`) follow the
+providers' rules, not the Pynapli palette, so their colours live in `PynapliProviderColors`, not
+`PynapliColors`:
+
+- **Titles:** only "Continue with Google" / "Continue with Apple" (both providers allow "Sign in
+  with" / "Sign up with" / "Continue with"; we use one everywhere).
+- **Marks are the providers' own files, never drawn in code.** Nothing lookalike is committed.
+  The founder drops the official files in as Compose resources (PATH_TO_TESTERS A10):
+  `composeApp/src/commonMain/composeResources/files/brand/google-g.svg` and `.../apple-logo-black.svg`.
+  Until a file is in and its guard (`GOOGLE_MARK_IS_OFFICIAL_ARTWORK`,
+  `APPLE_MARK_IS_OFFICIAL_ARTWORK`, both shipped `false`) is flipped, no button for that provider
+  shows anywhere: welcome, sign-in form, or "Add" in Sign-in methods (`SocialButtonGuard`).
+- **Google** (developers.google.com/identity/branding-guidelines): the dark theme on our dark
+  background (fill `#131314`, 1px stroke `#8E918F`, text `#E3E3E3`); the standard colour "G" file
+  at its own proportions, never recoloured or stretched (use the G as it appears in Google's
+  dark-theme button asset, including its own background if it has one).
+- **Apple** (HIG, "Sign in with Apple"): the white style on dark backgrounds, logo and title both
+  black, no other colours; no smaller than any other sign-in button and visible without scrolling.
+  The logo-only file is drawn at the button's height, uncropped.
+- **Shape and size:** full width, 48dp (Apple's title 20sp, 43% of the height; Google's 14sp),
+  the pill shape like every other button here; Google first,
+  then Apple, then an "or" rule before Create account on the welcome landing (on the sign-in form
+  the rule comes first, under Sign in).
+- **Web:** the actual sign-in happens on the provider's own rendered button inside a small layer
+  above the canvas (`pynapli-social.js`), styled with our tokens' hex values; it is the one modal
+  that is not a `PynapliSheet`, because the provider's button must be real DOM.
+
 ## Navigation
 
 - Bottom navigation (Compact) / navigation rail (Medium+) tabs: **Grid, Swipe, Activity, Messages**.

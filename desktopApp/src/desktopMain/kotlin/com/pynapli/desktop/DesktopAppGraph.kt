@@ -9,6 +9,7 @@ import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
+import com.pynapli.app.auth.UnavailableSocialSignInProvider
 import com.pynapli.app.grid.AccountBoundGridFilterStore
 import com.pynapli.app.grid.NoOpGridSnapshotStore
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
@@ -92,6 +93,8 @@ class DesktopAppGraph {
             appVersion = "0.1.0",
             deviceId = stableDesktopInstallId(),
             sessionInvalidations = sessionInvalidationBus.events,
+            // Dev-only shell: no provider integration, so the social buttons never show here.
+            socialSignInProvider = UnavailableSocialSignInProvider,
         )
 
     val appSettingsStateHolder =
@@ -142,6 +145,7 @@ class DesktopAppGraph {
                 realtimeStreams.activity,
             messageStreamClient =
                 realtimeStreams.message,
+            socialSignInProvider = UnavailableSocialSignInProvider,
         )
 
     /** Psync realtime channel; the per-viewer holder is built inside `PynapliApp`. */

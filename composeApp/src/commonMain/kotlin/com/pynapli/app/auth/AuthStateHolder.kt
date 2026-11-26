@@ -2,6 +2,10 @@ package com.pynapli.app.auth
 
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.PasswordRules
+import com.pynapli.shared.auth.SocialAgeGate
+import com.pynapli.shared.auth.SocialAuthErrorCodes
+import com.pynapli.shared.auth.SocialProvider
+import com.pynapli.shared.auth.SocialProviderNonce
 import com.pynapli.shared.auth.StoredSession
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
@@ -26,6 +30,9 @@ class AuthStateHolder(
     // Collected by [observeSessionInvalidations]; empty by default so tests and older call sites need
     // not supply it.
     private val sessionInvalidations: Flow<Unit> = emptyFlow(),
+    // "Continue with Google / Apple" (ONBOARDING_AUTH_SPEC). Each shell passes the same instance it
+    // gives PynapliCommonGraph; the default (nothing available) keeps tests and the buttons hidden.
+    private val socialSignInProvider: SocialSignInProvider = UnavailableSocialSignInProvider,
 ) {
     private val deviceIdOrNull: String? get() = deviceId.takeIf { it.isNotBlank() }
 
@@ -122,11 +129,11 @@ class AuthStateHolder(
         )
 
     fun updateEmail(value: String) {
-        _state.update { current -> current.copy(email = value, errorMessage = null, accountSuspended = false, appealSent = false) }
+        _state.update { current -> current.copy(email = value, errorMessage = null, accountSuspended = false, appealSent = false, socialAppealProvider = null) }
     }
 
     fun updatePassword(value: String) {
-        _state.update { current -> current.copy(password = value, errorMessage = null, accountSuspended = false, appealSent = false) }
+        _state.update { current -> current.copy(password = value, errorMessage = null, accountSuspended = false, appealSent = false, socialAppealProvider = null) }
     }
 
     fun updateAppealReason(value: String) {
@@ -141,18 +148,91 @@ class AuthStateHolder(
             _state.update { it.copy(errorMessage = "Tell us a little about what happened.") }
             return
         }
+        current.socialAppealProvider?.let { provider ->
+            submitSocialAccountAppeal(provider, reason)
+            return
+        }
         _state.update { it.copy(isSubmitting = true, errorMessage = null) }
         when (val result = authRepository.submitAccountAppeal(current.email.trim(), current.password, reason, deviceIdOrNull)) {
             is AppResult.Success -> _state.update { it.copy(isSubmitting = false, appealSent = true) }
-            is AppResult.Failure ->
-                _state.update {
-                    it.copy(
-                        isSubmitting = false,
-                        // An appeal already in review counts as sent.
-                        appealSent = result.error.code == "APPEAL_ALREADY_OPEN",
-                        errorMessage = result.error.message.takeUnless { _ -> result.error.code == "APPEAL_ALREADY_OPEN" },
-                    )
+            is AppResult.Failure -> applyAppealFailure(result.error.code, result.error.message)
+        }
+    }
+
+    /**
+     * The appeal of an account that signs in with [provider] (no password to prove it): a fresh nonce
+     * and a fresh provider sign-in, sent with the reason; no session is created.
+     */
+    private suspend fun submitSocialAccountAppeal(
+        provider: SocialProvider,
+        reason: String,
+    ) {
+        _state.update { it.copy(isSubmitting = true, socialInProgress = provider, errorMessage = null) }
+        try {
+            val nonce =
+                when (val issued = authRepository.socialNonce(deviceIdOrNull)) {
+                    is AppResult.Success -> issued.value.nonce
+
+                    is AppResult.Failure -> {
+                        _state.update { it.copy(errorMessage = issued.error.message) }
+                        return
+                    }
                 }
+            val credential =
+                when (val result = socialSignInProvider.requestIdToken(provider, SocialProviderNonce.forProviderRequest(provider, nonce))) {
+                    is SocialCredentialResult.Success -> result
+
+                    SocialCredentialResult.Cancelled -> return
+
+                    SocialCredentialResult.Unavailable -> {
+                        _state.update { it.copy(errorMessage = "${provider.displayName} sign-in isn't available on this device.") }
+                        return
+                    }
+
+                    is SocialCredentialResult.Error -> {
+                        _state.update { it.copy(errorMessage = result.message) }
+                        return
+                    }
+                }
+            when (val result = authRepository.submitSocialAccountAppeal(provider, credential.idToken, nonce, reason)) {
+                is AppResult.Success -> _state.update { it.copy(appealSent = true) }
+                is AppResult.Failure -> applyAppealFailure(result.error.code, result.error.message)
+            }
+        } finally {
+            _state.update { it.copy(isSubmitting = false, socialInProgress = null) }
+        }
+    }
+
+    private fun applyAppealFailure(
+        code: String,
+        message: String,
+    ) {
+        _state.update {
+            it.copy(
+                isSubmitting = false,
+                // An appeal already in review counts as sent.
+                appealSent = code == "APPEAL_ALREADY_OPEN",
+                errorMessage =
+                    when (code) {
+                        "APPEAL_ALREADY_OPEN" -> null
+
+                        SocialAuthErrorCodes.ACCOUNT_NOT_RESTRICTED -> {
+                            "This account isn't restricted any more. Try signing in again."
+                        }
+
+                        SocialAuthErrorCodes.ACCOUNT_NOT_FOUND -> {
+                            "No Pynapli account signs in with that account. Try the one you used before."
+                        }
+
+                        SocialAuthErrorCodes.INVALID_TOKEN -> {
+                            SOCIAL_NOT_CONFIRMED
+                        }
+
+                        else -> {
+                            message
+                        }
+                    },
+            )
         }
     }
 
@@ -268,6 +348,7 @@ class AuthStateHolder(
             accountSuspended = false,
             appealReason = "",
             appealSent = false,
+            socialAppealProvider = null,
         )
 
     suspend fun submit() {
@@ -443,11 +524,165 @@ class AuthStateHolder(
         }
     }
 
+    /**
+     * Loads which "Continue with ..." buttons to show (ONBOARDING_AUTH_SPEC): a provider shows only
+     * when the platform can run it ([SocialSignInProvider.supports], which includes "this build has
+     * a client id") and the server's config switches it on. Any failure hides them all; with no
+     * provider on this platform the server is not even asked. Run whenever the signed-out surfaces
+     * show.
+     */
+    suspend fun loadSocialSignInConfig() {
+        val platformProviders = SocialProvider.entries.filter(socialSignInProvider::supports)
+        if (platformProviders.isEmpty()) {
+            _state.update { it.copy(socialProviders = emptyList()) }
+            return
+        }
+        val enabled =
+            when (val result = authRepository.socialSignInConfig()) {
+                is AppResult.Success ->
+                    platformProviders.filter { provider ->
+                        when (provider) {
+                            SocialProvider.Google -> result.value.google
+                            SocialProvider.Apple -> result.value.apple
+                        }
+                    }
+
+                is AppResult.Failure -> emptyList()
+            }
+        _state.update { it.copy(socialProviders = enabled) }
+        if (enabled.isNotEmpty()) runCatchingCancellable { socialSignInProvider.warmUp(enabled.toSet()) }
+    }
+
+    /**
+     * One "Continue with [provider]" attempt: a fresh nonce from the server (single use, so every
+     * attempt fetches its own), the provider's sign-in UI for an ID token bound to it, then the
+     * server. A known identity signs in here exactly like an email login. An unknown one needs the
+     * birthday and policies first ([ageGate] null): that comes back as
+     * [SocialSignInOutcome.NeedsAgeGate] and the stepper collects them, then calls this again with
+     * [ageGate], which fetches a new nonce and a new token (the first nonce is spent).
+     *
+     * An address that already has an account is never linked on its own (a takeover risk, and it
+     * would say who is a member): the sign-in form opens with a neutral notice instead. Tokens,
+     * codes and nonces are never kept in state or logged.
+     */
+    suspend fun continueWithSocial(
+        provider: SocialProvider,
+        ageGate: SocialAgeGate? = null,
+    ): SocialSignInOutcome {
+        if (state.value.isSubmitting) return SocialSignInOutcome.Busy
+        if (!socialSignInProvider.supports(provider)) return SocialSignInOutcome.ProviderUnavailable
+        _state.update { it.copy(isSubmitting = true, socialInProgress = provider, errorMessage = null, accountSuspended = false, socialAppealProvider = null) }
+        // Null while running, and still null if the caller's scope is cancelled mid-attempt.
+        var outcome: SocialSignInOutcome? = null
+        try {
+            val settled = attemptSocial(provider, ageGate)
+            outcome = settled
+            return settled
+        } finally {
+            // Also when the caller's scope is cancelled while the provider UI is up: never stuck busy.
+            _state.update { current ->
+                val next = current.copy(isSubmitting = false, socialInProgress = null)
+                when (val settled = outcome) {
+                    is SocialSignInOutcome.Failed -> next.copy(errorMessage = settled.message)
+                    else -> next
+                }
+            }
+        }
+    }
+
+    private suspend fun attemptSocial(
+        provider: SocialProvider,
+        ageGate: SocialAgeGate?,
+    ): SocialSignInOutcome {
+        val nonce =
+            when (val issued = authRepository.socialNonce(deviceIdOrNull)) {
+                is AppResult.Success -> issued.value.nonce
+                is AppResult.Failure -> return socialServerFailure(provider, issued.error.code, issued.error.message)
+            }
+        val credential =
+            when (val result = socialSignInProvider.requestIdToken(provider, SocialProviderNonce.forProviderRequest(provider, nonce))) {
+                is SocialCredentialResult.Success -> result
+
+                SocialCredentialResult.Cancelled -> return SocialSignInOutcome.Cancelled
+
+                SocialCredentialResult.Unavailable -> {
+                    // This device can't run it after all: stop offering the button here.
+                    _state.update { it.copy(socialProviders = it.socialProviders - provider) }
+                    return SocialSignInOutcome.ProviderUnavailable
+                }
+
+                is SocialCredentialResult.Error -> return SocialSignInOutcome.Failed(result.message)
+            }
+        val result =
+            authRepository.signInSocial(
+                provider = provider,
+                idToken = credential.idToken,
+                nonce = nonce,
+                authorizationCode = credential.authorizationCode,
+                ageGate = ageGate,
+                platform = platform,
+                appVersion = appVersion,
+                deviceId = deviceIdOrNull,
+            )
+        return when (result) {
+            is AppResult.Success -> {
+                _state.update { it.copy(password = "", errorMessage = null, session = result.value) }
+                SocialSignInOutcome.SignedIn
+            }
+
+            is AppResult.Failure -> socialServerFailure(provider, result.error.code, result.error.message)
+        }
+    }
+
+    private fun socialServerFailure(
+        provider: SocialProvider,
+        code: String,
+        message: String,
+    ): SocialSignInOutcome =
+        when (code) {
+            SocialAuthErrorCodes.NEEDS_AGE_GATE -> SocialSignInOutcome.NeedsAgeGate
+
+            SocialAuthErrorCodes.EMAIL_HAS_ACCOUNT -> {
+                // Straight to the sign-in form, the notice under it. Worded the same for every
+                // address and provider; nothing is linked.
+                _state.update { current ->
+                    current.clearedForm(mode = AuthMode.SignIn, showWelcome = false).copy(errorMessage = emailHasAccountMessage(provider))
+                }
+                SocialSignInOutcome.EmailHasAccount
+            }
+
+            SocialAuthErrorCodes.INVALID_TOKEN -> SocialSignInOutcome.Failed(SOCIAL_NOT_CONFIRMED)
+
+            SocialAuthErrorCodes.TEMPORARILY_UNAVAILABLE ->
+                SocialSignInOutcome.Failed("${provider.displayName} sign-in isn't available right now. Try again in a few minutes.")
+
+            SocialAuthErrorCodes.UNAVAILABLE -> {
+                // Switched off on the server: hide every button.
+                _state.update { it.copy(socialProviders = emptyList()) }
+                SocialSignInOutcome.ProviderUnavailable
+            }
+
+            // A suspended account: the sign-in form with the message and the appeal form, which
+            // proves the account through a fresh sign-in at this provider (no password needed).
+            SocialAuthErrorCodes.ACCOUNT_NOT_ACTIVE -> {
+                _state.update { current ->
+                    current
+                        .clearedForm(mode = AuthMode.SignIn, showWelcome = false)
+                        .copy(accountSuspended = true, socialAppealProvider = provider)
+                }
+                SocialSignInOutcome.Failed(message)
+            }
+
+            else -> SocialSignInOutcome.Failed(message)
+        }
+
     suspend fun logout() {
         logoutInProgress = true
         try {
             runCatchingCancellable { beforeLogout() }
             authRepository.logout()
+            // Provider-side "signed in" memory (Google's account auto-select) goes too.
+            runCatchingCancellable { socialSignInProvider.onSignedOut() }
             // Back to the welcome landing in sign-in mode, whatever the session was doing before. The
             // address goes too: on a shared device the next person must not see whose account was here
             // (that alone confirms the address is a member).
@@ -460,9 +695,42 @@ class AuthStateHolder(
     /** True from the start of [logout] until its state lands; see [observeSessionInvalidations]. */
     private var logoutInProgress = false
 
-    private companion object {
+    companion object {
+        /** The neutral "already has an account" notice (ONBOARDING_AUTH_SPEC). Never says more. */
+        fun emailHasAccountMessage(provider: SocialProvider): String =
+            "An account already uses this email. Sign in the way you usually do, then add ${provider.displayName} in Settings."
+
+        const val SOCIAL_NOT_CONFIRMED = "We couldn't confirm that sign-in. Try again."
+        const val SOCIAL_TRY_AGAIN = "Sign-in didn't work. Try again."
+
         private const val RESET_CODE_LENGTH = 6
         private const val MIN_APPEAL_REASON = 10
         private const val SESSION_ENDED_MESSAGE = "Your session ended. Please sign in again."
     }
+}
+
+/** How one [AuthStateHolder.continueWithSocial] attempt ended. */
+sealed interface SocialSignInOutcome {
+    /** The session is live (a known identity, or the sign-up just completed). */
+    data object SignedIn : SocialSignInOutcome
+
+    /** Unknown identity: collect Birthday + Policies, then call again with the age gate. */
+    data object NeedsAgeGate : SocialSignInOutcome
+
+    /** The address has an account: the sign-in form is showing with the neutral notice. */
+    data object EmailHasAccount : SocialSignInOutcome
+
+    /** The person closed the provider's UI. Nothing to show. */
+    data object Cancelled : SocialSignInOutcome
+
+    /** The provider can't run here (or the server switched it off); its button is gone. */
+    data object ProviderUnavailable : SocialSignInOutcome
+
+    /** Another request was in flight; nothing happened. */
+    data object Busy : SocialSignInOutcome
+
+    /** Anything else; [message] is also in [AuthUiState.errorMessage]. */
+    data class Failed(
+        val message: String,
+    ) : SocialSignInOutcome
 }

@@ -209,7 +209,9 @@ Email: with no email provider wired, nobody can create an account (sign-up answe
   balancer). TLS is provisioned for you.
 - [ ] PWA: leave `window.__PYNAPLI_API_BASE__ = null` (uses `api.pynapli.com`) or set the API URL;
   build `webApp/build/dist/wasmJs/productionExecutable`; deploy to **`app.pynapli.com`** (a second
-  Firebase Hosting site, SPA rewrite to `index.html`).
+  Firebase Hosting site, SPA rewrite to `index.html`). Give that site the response headers in
+  [WEB_PWA_GAMEPLAN.md](../../docs/WEB_PWA_GAMEPLAN.md) ("Response headers for app.pynapli.com"):
+  its CSP allows the Google / Apple sign-in scripts, and its COOP must be `same-origin-allow-popups`.
 - [ ] Site: `firebase deploy --only hosting` for **`pynapli.com`** (`web/dist`; see
   [web/HOSTING.md](../../web/HOSTING.md)).
 

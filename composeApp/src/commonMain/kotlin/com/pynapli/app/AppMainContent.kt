@@ -95,6 +95,7 @@ internal fun ColumnScope.PynapliMainContent(
     onboardingStateHolder: OnboardingStateHolder?,
     photoVerificationStateHolder: PhotoVerificationStateHolder?,
     contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
+    signInMethodsStateHolder: com.pynapli.app.profilehub.SignInMethodsStateHolder? = null,
     conversationActions: ConversationActions,
     scope: CoroutineScope,
     onProfileSurface: (ProfileSurface) -> Unit,
@@ -134,6 +135,7 @@ internal fun ColumnScope.PynapliMainContent(
                 onOpenPsync = onOpenPsync,
                 photoVerificationStateHolder = photoVerificationStateHolder,
                 contactBlocksStateHolder = contactBlocksStateHolder,
+                signInMethodsStateHolder = signInMethodsStateHolder,
                 onPickVerificationSelfie = onPickVerificationSelfie,
             )
         profileSurface == ProfileSurface.MediaAlbums -> {
@@ -254,6 +256,7 @@ private fun ColumnScope.ProfileHubSurface(
     onOpenPsync: (() -> Unit)? = null,
     photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
     contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
+    signInMethodsStateHolder: com.pynapli.app.profilehub.SignInMethodsStateHolder? = null,
     onPickVerificationSelfie: (() -> Unit)? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
@@ -334,6 +337,7 @@ private fun ColumnScope.ProfileHubSurface(
             },
         photoVerificationStateHolder = photoVerificationStateHolder,
         contactBlocksStateHolder = contactBlocksStateHolder,
+        signInMethodsStateHolder = signInMethodsStateHolder,
         onPickVerificationSelfie = onPickVerificationSelfie,
         // Cap + center the settings column on wide windows so it reads as an
         // intentional column instead of stretching edge-to-edge (WEB_PWA_GAMEPLAN).

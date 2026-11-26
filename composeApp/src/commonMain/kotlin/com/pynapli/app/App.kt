@@ -134,6 +134,8 @@ fun PynapliApp(
                 storePaywallFocus = null
                 // Signed out: never show this account's verification state to the next one.
                 graph.photoVerificationStateHolder?.reset()
+                // Nor its linked sign-in methods.
+                graph.signInMethodsStateHolder?.reset()
             },
             onOpenProfileHub = { profileSurface = ProfileSurface.Hub },
             onOpenPartnerPanel = {
@@ -200,6 +202,13 @@ fun PynapliApp(
             }
         }
 
+        // Which "Continue with ..." buttons the signed-out screens show (server flag AND platform).
+        LaunchedEffect(authState.isCheckingSession, authState.authenticated) {
+            if (!authState.isCheckingSession && !authState.authenticated) {
+                graph.authStateHolder.loadSocialSignInConfig()
+            }
+        }
+
         if (authState.isCheckingSession) {
             // The same splash the boot stage drew, so nothing moves at the swap (Section 1, B5).
             PynapliSplashContent()
@@ -227,7 +236,8 @@ fun PynapliApp(
                 onConfirmDob = { scope.launch { graph.onboardingStateHolder.confirmDob() } },
                 onBackToDob = graph.onboardingStateHolder::backToDob,
                 onCancelToSignIn = { scope.launch { graph.onboardingStateHolder.cancelToSignIn() } },
-                onAcceptPolicies = graph.onboardingStateHolder::acceptPolicies,
+                // Email moves on to the account step; Google / Apple finishes the sign-up here.
+                onAcceptPolicies = { scope.launch { graph.onboardingStateHolder.acceptPoliciesAndContinue() } },
                 onBackToPolicies = graph.onboardingStateHolder::backToPolicies,
                 onEmailChanged = graph.onboardingStateHolder::updateEmail,
                 onPasswordChanged = graph.onboardingStateHolder::updatePassword,
@@ -296,6 +306,13 @@ fun PynapliApp(
                             holder.startCreateAccount()
                         }
                     },
+                // Through the stepper when there is one: an unknown identity continues there.
+                onContinueWithSocial = { provider ->
+                    scope.launch {
+                        val onboarding = graph.onboardingStateHolder
+                        if (onboarding != null) onboarding.continueWithSocial(provider) else graph.authStateHolder.continueWithSocial(provider)
+                    }
+                },
                 testerDiagnosticLabel = platform.testerDiagnosticLabel,
             )
             return@PynapliTheme
@@ -358,6 +375,7 @@ fun PynapliApp(
                 onboardingStateHolder = graph.onboardingStateHolder,
                 photoVerificationStateHolder = graph.photoVerificationStateHolder,
                 contactBlocksStateHolder = graph.contactBlocksStateHolder,
+                signInMethodsStateHolder = graph.signInMethodsStateHolder,
                 favoritesStateHolder = graph.favoritesStateHolder,
                 conversationActions = conversationActions,
                 scope = scope,
