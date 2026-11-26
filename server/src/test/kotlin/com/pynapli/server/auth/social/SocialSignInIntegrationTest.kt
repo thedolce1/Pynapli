@@ -258,6 +258,20 @@ class SocialSignInIntegrationTest {
         }
 
     @Test
+    fun anEmailIdentityCountsEvenWithoutUsersEmailHashTheSameAsForEmailSignUp() =
+        testApplication {
+            serve()
+            val member = authService.signUpVerified("legacy@gmail.com", PASSWORD, passwordHasher = hasher)
+            // An account whose users.email_hash is gone but whose email identity still holds the address.
+            exec("UPDATE users SET email_hash = NULL WHERE id = ?", UUID.fromString(member.user.userId))
+            val emailHash = Sha256.hash("legacy@gmail.com")
+            assertTrue(JdbcSocialIdentityRepository(dataSource).emailHasAccount(emailHash))
+            assertTrue(JdbcEmailSignupRepository(dataSource).addressHasAccount(emailHash), "the same predicate on both sides")
+            assertEquals("SOCIAL_EMAIL_HAS_ACCOUNT", client.attempt(SocialProvider.GOOGLE, "g-legacy", email = "legacy@gmail.com", birthdate = ADULT).errorCode())
+            assertFalse(JdbcSocialIdentityRepository(dataSource).emailHasAccount(Sha256.hash("nobody@gmail.com")))
+        }
+
+    @Test
     fun anAddressTheProviderDoesNotVouchForNeverMatchesAnAccount() =
         testApplication {
             serve()

@@ -2,6 +2,7 @@ package com.pynapli.server.auth.social
 
 import com.pynapli.server.auth.NewSocialIdentity
 import com.pynapli.server.auth.UserRecord
+import com.pynapli.server.auth.addressHasAccount
 import com.pynapli.server.auth.insertSocialAccount
 import com.pynapli.server.auth.insertSocialIdentity
 import com.pynapli.server.db.inTransaction
@@ -72,7 +73,10 @@ interface SocialIdentityRepository {
         subject: String,
     ): SocialIdentityRecord?
 
-    /** Whether a non-deleted account holds this users.email_hash (any sign-in method). */
+    /**
+     * Whether a non-deleted account holds the address: users.email_hash or an email identity, the same
+     * predicate as email sign-up's (`addressHasAccount`).
+     */
     suspend fun emailHasAccount(emailHash: String): Boolean
 
     suspend fun createAccount(
@@ -127,12 +131,7 @@ class JdbcSocialIdentityRepository(
         }
 
     override suspend fun emailHasAccount(emailHash: String): Boolean =
-        dataSource.withConnection { connection ->
-            connection.prepareStatement("SELECT 1 FROM users WHERE email_hash = ? AND deleted_at IS NULL").use { statement ->
-                statement.setString(1, emailHash)
-                statement.executeQuery().use { rs -> rs.next() }
-            }
-        }
+        dataSource.withConnection { connection -> connection.addressHasAccount(emailHash) }
 
     override suspend fun createAccount(
         userId: UUID,

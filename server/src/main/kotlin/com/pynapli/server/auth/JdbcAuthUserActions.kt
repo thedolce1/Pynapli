@@ -80,6 +80,27 @@ internal class JdbcAuthUserActions(
 }
 
 /**
+ * Whether a non-deleted account holds the address (its SHA-256 [emailHash]): users.email_hash (any
+ * sign-in method), or an email identity. The one predicate for "this address has an account", used by
+ * email sign-up's notice decision and by social sign-in's SOCIAL_EMAIL_HAS_ACCOUNT, so they never
+ * disagree.
+ */
+internal fun Connection.addressHasAccount(emailHash: String): Boolean =
+    prepareStatement(
+        """
+        SELECT 1 FROM users WHERE email_hash = ? AND deleted_at IS NULL
+        UNION ALL
+        SELECT 1 FROM auth_identities ai JOIN users u ON u.id = ai.user_id
+        WHERE ai.provider = 'email' AND ai.provider_subject = ? AND u.deleted_at IS NULL
+        LIMIT 1
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setString(1, emailHash)
+        statement.setString(2, emailHash)
+        statement.executeQuery().use { rs -> rs.next() }
+    }
+
+/**
  * Every row a new email account starts with: see [insertAccount]. The verified sign-up
  * (EmailSignupService) and the local-only dev shortcut both come here. [emailVerifiedAt] is set for
  * accounts whose address was proven with an emailed code.
