@@ -62,6 +62,9 @@ data class GridQueryResponseDto(
     val lockedFromIndex: Int? = null,
     // The plan that unlocks the locked cards ("social" or "select"), set whenever lockedFromIndex is.
     val unlockTier: String? = null,
+    // G2-2: the page size the server used for this viewer's plan (Free 60, Social 90, Select 120).
+    // The app asks for the most and the server clamps. 0 from an older server.
+    val pageSize: Int = 0,
 )
 
 @Serializable

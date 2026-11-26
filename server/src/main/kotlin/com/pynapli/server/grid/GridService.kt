@@ -108,50 +108,53 @@ class GridService(
         val servedDepth = if (lockingApplies) policy.gridLockedPreviewDepth else lockedFrom
         val depthLimited = servedDepth != Int.MAX_VALUE
 
-        val cursorScopeHash =
-            profile("grid.cursorScope") {
-                DiscoveryCursorCodec.gridScopeHash(
-                    viewerUserId = viewerUserId,
-                    radiusMeters = radiusMeters,
-                    limit = pageLimit,
-                    filters = filters,
-                    onlineOnly = request.onlineOnly,
-                    acceptLockedCards = request.acceptLockedCards,
-                )
-            }
+        // The one cursor scope recipe: [scopeLimit] is the page size, [widened] the sparse-area scope.
+        fun gridScope(
+            scopeLimit: Int,
+            widened: Boolean,
+        ): String =
+            DiscoveryCursorCodec.gridScopeHash(
+                viewerUserId = viewerUserId,
+                radiusMeters = if (widened) MAX_RADIUS_METERS else radiusMeters,
+                limit = scopeLimit,
+                filters = filters,
+                onlineOnly = request.onlineOnly,
+                widenedFromRadiusMeters = if (widened) radiusMeters else null,
+                acceptLockedCards = request.acceptLockedCards,
+            )
+        val cursorScopeHash = profile("grid.cursorScope") { gridScope(pageLimit, widened = false) }
         // Sparse-area widening (plan G10) pages under its own scope: the widened radius plus the radius
         // the viewer asked for. The client keeps sending its own radius, so a follow-up cursor that does
         // not decode under the normal scope is tried under the widened one. Both are sealed, so neither
         // can be forged, and a widened cursor continues only the request that produced it.
         val canWiden = !request.visitingSoonOnly && radiusMeters < MAX_RADIUS_METERS
-        val widenedScopeHash =
-            if (canWiden) {
-                DiscoveryCursorCodec.gridScopeHash(
-                    viewerUserId = viewerUserId,
-                    radiusMeters = MAX_RADIUS_METERS,
-                    limit = pageLimit,
-                    filters = filters,
-                    onlineOnly = request.onlineOnly,
-                    widenedFromRadiusMeters = radiusMeters,
-                    acceptLockedCards = request.acceptLockedCards,
-                )
-            } else {
+        val widenedScopeHash = if (canWiden) gridScope(pageLimit, widened = true) else null
+        var continuingWidened = false
+        fun decodeOrNull(
+            token: String,
+            scope: String,
+        ): GridCursorAnchor? =
+            try {
+                cursorCodec.decodeGridCursor(token, scope)
+            } catch (_: DiscoveryCursorException) {
                 null
             }
-        var continuingWidened = false
+        // G2-2 ticket 4: page size follows the plan, and a plan change between two pages (an upgrade, a
+        // lapse) changes it. A cursor sealed under another plan's page size still continues: it is the
+        // same sealed position (keyset anchor + seen count), only the page length differs, so the next
+        // page uses this plan's size and is re-sealed under it. Old clients keep sending 60 and match first.
+        val otherPageSizes = GRID_TIER_PAGE_SIZES.filter { it != pageLimit }
         val cursor =
             profile("grid.cursorDecode") {
                 request.cursor?.let { token ->
-                    try {
-                        cursorCodec.decodeGridCursor(token, cursorScopeHash)
-                    } catch (_: DiscoveryCursorException) {
-                        val widenedScope = widenedScopeHash ?: throw GridException("INVALID_GRID_CURSOR")
-                        try {
-                            cursorCodec.decodeGridCursor(token, widenedScope).also { continuingWidened = true }
-                        } catch (_: DiscoveryCursorException) {
-                            throw GridException("INVALID_GRID_CURSOR")
-                        }
-                    }
+                    decodeOrNull(token, cursorScopeHash)
+                        ?: widenedScopeHash?.let { decodeOrNull(token, it) }?.also { continuingWidened = true }
+                        ?: otherPageSizes.firstNotNullOfOrNull { size -> decodeOrNull(token, gridScope(size, widened = false)) }
+                        ?: otherPageSizes
+                            .takeIf { canWiden }
+                            ?.firstNotNullOfOrNull { size -> decodeOrNull(token, gridScope(size, widened = true)) }
+                            ?.also { continuingWidened = true }
+                        ?: throw GridException("INVALID_GRID_CURSOR")
                 }
             }
         val seenBefore = cursor?.seenCount ?: 0
@@ -166,6 +169,7 @@ class GridService(
                 resultLimitTier = policy.tier.takeIf { depthLimited },
                 lockedFromIndex = lockedFrom.takeIf { lockingApplies },
                 unlockTier = policy.gridUnlockTier.takeIf { lockingApplies },
+                pageSize = pageLimit,
             )
         }
 
@@ -340,6 +344,7 @@ class GridService(
             widened = widened,
             lockedFromIndex = lockedFrom.takeIf { lockSignal },
             unlockTier = policy.gridUnlockTier.takeIf { lockSignal },
+            pageSize = pageLimit,
         )
     }
 
@@ -377,6 +382,10 @@ class GridService(
         private const val MAX_RADIUS_METERS = 100_000
         private const val MAX_LIMIT = 120
         const val MIN_PAGE_SIZE = 12
+
+        // G2-2 ticket 4: the page sizes the plans use (SubscriptionPolicy: Free 60, Social 90, Select 120).
+        // A cursor sealed under any of them continues under the viewer's current plan.
+        internal val GRID_TIER_PAGE_SIZES: List<Int> = listOf(60, 90, MAX_LIMIT)
 
         // Plan G10: a first page showing fewer people than this widens to MAX_RADIUS_METERS.
         const val SPARSE_FIRST_PAGE = 12

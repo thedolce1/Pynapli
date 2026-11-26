@@ -129,7 +129,9 @@ data class GridFilters(
      * past the plan limit with locked cards instead of stopping. Kept apart from [toGridQueryRequest],
      * which also writes saved presets and the stored filters, where the opt-in has no meaning.
      */
-    fun toGridFeedRequest(cursor: String?): GridQueryRequestDto = toGridQueryRequest(cursor).copy(acceptLockedCards = true)
+    // G2-2: asks for the largest page; the server clamps it to the viewer's plan (Free 60, Social 90,
+    // Select 120) and seals that size into the cursor. Presets keep [PAGE_SIZE].
+    fun toGridFeedRequest(cursor: String?): GridQueryRequestDto = toGridQueryRequest(cursor).copy(acceptLockedCards = true, limit = MAX_FEED_PAGE_REQUEST)
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
         val contexts =
@@ -174,6 +176,9 @@ data class GridFilters(
         const val MIN_FILTER_AGE: Int = 18
         const val MAX_FILTER_AGE: Int = 99
         const val PAGE_SIZE: Int = 60
+
+        /** The live Grid asks for this many; the server answers with the plan's page size (G2-2). */
+        const val MAX_FEED_PAGE_REQUEST: Int = 120
         const val SINGLES_CONTEXT: String = "single"
         const val PARTNERED_CONTEXT: String = "partnered"
         val defaults: GridFilters = GridFilters()
