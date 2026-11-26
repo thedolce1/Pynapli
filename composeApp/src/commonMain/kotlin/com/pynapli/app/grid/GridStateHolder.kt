@@ -483,7 +483,8 @@ class GridStateHolder(
                 errorMessage = null,
             )
         }
-        load()
+        // G2-2: debounced, and a newer chip tap or apply cancels this one (LatestFilterRequest).
+        filterRequests.run(debounced = true) { load() }
     }
 
     suspend fun applyFilters(filters: GridFilters) {
@@ -501,8 +502,11 @@ class GridStateHolder(
         // Always asked, never pre-stripped from the client's view of the plan (which can lag a
         // purchase): the server decides, and a refusal takes out only the paid filters, keeps the
         // rest and, because the viewer just chose them, opens the plans (plan G9).
-        load(quiet = false, keepGatePrompt = false, openPaywallOnRefusal = true)
+        filterRequests.run(debounced = false) { load(quiet = false, keepGatePrompt = false, openPaywallOnRefusal = true) }
     }
+
+    /** The newest chip tap or filter apply; an older one still waiting or on the wire is cancelled. */
+    private val filterRequests = LatestFilterRequest()
 
     private val _events = MutableSharedFlow<GridEvent>(extraBufferCapacity = 1)
 
