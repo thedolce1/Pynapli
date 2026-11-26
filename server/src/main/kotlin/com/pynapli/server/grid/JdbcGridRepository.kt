@@ -57,9 +57,23 @@ internal class JdbcGridRepository(
                         )
                     }
 
-                val pageRows = rankedRows.cards
+                // G2-2 ticket 5: a page served from the shared window re-reads owner visibility now
+                // (incognito, grid_visible, status, profile visibility, travel visibility, risk tier), so
+                // nothing the window baked in outlives a change by up to its TTL. The next cursor still
+                // anchors on the last RANKED row, so a dropped row never skips the rows after it.
+                val pageRows =
+                    if (rankedRows.fromSharedWindow && rankedRows.cards.isNotEmpty()) {
+                        val visible =
+                            profileBlocking("grid.db.ownerRecheck") {
+                                connection.stillDiscoverableOnGrid(rankedRows.cards.map { it.userId })
+                            }
+                        rankedRows.cards.filter { it.userId in visible }
+                    } else {
+                        rankedRows.cards
+                    }
+                val rankedAnchor = rankedRows.cards.lastOrNull()?.takeIf { rankedRows.hasMore }?.toCursorAnchor()
                 if (pageRows.isEmpty()) {
-                    return@withContext GridQueryResult(viewerHadLocation = true, cards = emptyList())
+                    return@withContext GridQueryResult(viewerHadLocation = true, cards = emptyList(), nextCursorAnchor = rankedAnchor)
                 }
 
                 val hydration =
@@ -98,7 +112,7 @@ internal class JdbcGridRepository(
                 GridQueryResult(
                     viewerHadLocation = true,
                     cards = cards,
-                    nextCursorAnchor = if (rankedRows.hasMore && cards.isNotEmpty()) cards.last().toCursorAnchor() else null,
+                    nextCursorAnchor = rankedAnchor,
                 )
             }
         }
@@ -226,7 +240,7 @@ internal class JdbcGridRepository(
         // whether more rows lie beyond it, so rank this page for the viewer
         // directly. Mirrors Swipe's `windowRows < cacheWindow` guard.
         if (sliced.size > limit || cachedRows.size < cacheWindow) {
-            return GridRankPage(cards = sliced.take(limit), hasMore = sliced.size > limit)
+            return GridRankPage(cards = sliced.take(limit), hasMore = sliced.size > limit, fromSharedWindow = true)
         }
 
         return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
@@ -270,7 +284,17 @@ internal class JdbcGridRepository(
 private data class GridRankPage(
     val cards: List<GridRankRow>,
     val hasMore: Boolean,
+    // Served from the shared, cross-viewer window (owner visibility as of the window's ranking).
+    val fromSharedWindow: Boolean = false,
 )
+
+private fun GridRankRow.toCursorAnchor(): GridCursorAnchor =
+    GridCursorAnchor(
+        boostBucket = boostBucket,
+        orderBucket = orderBucket,
+        userId = userId,
+        orderTiebreak = orderTiebreak,
+    )
 
 /** Keyset comparison matching the SQL ORDER BY (boost_bucket, order bucket, order_tiebreak, user_id ASC). */
 private fun GridRankRow.afterCursor(cursor: GridCursorAnchor): Boolean =

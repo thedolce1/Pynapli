@@ -74,6 +74,11 @@ data class ServerConfig(
     val mediaThumbnailIntervalMillis: Long = 30_000L,
     val mediaThumbnailBackfillPerTick: Int = 20,
     val mediaThumbnailSweepPerTick: Int = 500,
+    // G2-2 ticket 5: the shared Grid rank window. Safe to tune because owner visibility, blocks,
+    // hides, contact blocks and self are all applied after it on every path (GRID_IMPLEMENTATION_SPEC
+    // "Rank cache and visibility"). Defaults unchanged: 5 s, 128 rows.
+    val gridRankCacheTtlMillis: Long = 5_000L,
+    val gridRankCacheWindow: Int = 128,
     val accountDataExportEnabled: Boolean = false,
     val accountDataExportIntervalMillis: Long = 60_000L,
     val accountDataExportDirectory: String = ".pynapli-account-exports",
@@ -369,6 +374,18 @@ data class ServerConfig(
                         ?.toIntOrNull()
                         ?.coerceIn(1, 5_000)
                         ?: 500,
+                gridRankCacheTtlMillis =
+                    System
+                        .getenv("PYNAPLI_GRID_RANK_CACHE_TTL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceIn(0L, 120_000L)
+                        ?: 5_000L,
+                gridRankCacheWindow =
+                    System
+                        .getenv("PYNAPLI_GRID_RANK_CACHE_WINDOW")
+                        ?.toIntOrNull()
+                        ?.coerceIn(120, 1_000)
+                        ?: 128,
                 accountDataExportEnabled =
                     System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),

@@ -55,7 +55,10 @@ internal fun buildGridDependencies(
                     // exclusion-free, so per-viewer safety is unchanged; the cache fails
                     // open to direct queries if Redis is unavailable. Single-instance /
                     // tests use the in-memory default baked into JdbcGridRepository.
-                    candidateRankCache = RedisGridCandidateRankCache(redisCache, Duration.ofSeconds(5)),
+                    // G2-2: TTL and window are config (PYNAPLI_GRID_RANK_CACHE_TTL_MS / _WINDOW), defaults
+                    // 5 s / 128; 0 ms switches the shared window off.
+                    rankCacheWindow = config.gridRankCacheWindow,
+                    candidateRankCache = RedisGridCandidateRankCache(redisCache, Duration.ofMillis(config.gridRankCacheTtlMillis)),
                 ),
             cursorCodec = DiscoveryCursorCodec(config.discoveryCursorSecret),
             presenceService = presenceService,
