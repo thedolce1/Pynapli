@@ -43,7 +43,14 @@ data class SocialSignInRequestDto(
     val deviceId: String? = null,
     val platform: String? = null,
     val appVersion: String? = null,
-)
+) {
+    // Never print a bearer-grade credential (logs, crash reports): the token and code are redacted.
+    // Serialization doesn't use toString, so the wire format is unchanged.
+    override fun toString(): String =
+        "SocialSignInRequestDto(idToken=$REDACTED, nonce=$REDACTED, authorizationCode=${redactedOrNull(authorizationCode)}, " +
+            "birthdate=${if (birthdate == null) "null" else REDACTED}, confirmedAdult=$confirmedAdult, acceptedTerms=$acceptedTerms, " +
+            "acceptedPrivacy=$acceptedPrivacy, deviceId=$deviceId, platform=$platform, appVersion=$appVersion)"
+}
 
 /** `POST /v1/auth/identities/{google|apple}` (signed in): links that provider identity to this account. */
 @Serializable
@@ -51,7 +58,13 @@ data class LinkSocialIdentityRequestDto(
     val idToken: String,
     val nonce: String,
     val authorizationCode: String? = null,
-)
+) {
+    override fun toString(): String = "LinkSocialIdentityRequestDto(idToken=$REDACTED, nonce=$REDACTED, authorizationCode=${redactedOrNull(authorizationCode)})"
+}
+
+private const val REDACTED = "<redacted>"
+
+private fun redactedOrNull(value: String?): String = if (value == null) "null" else REDACTED
 
 /** One sign-in method of the signed-in account. [provider] is `email`, `google` or `apple`. */
 @Serializable
@@ -85,4 +98,6 @@ data class SocialAccountAppealRequestDto(
     val idToken: String,
     val nonce: String,
     val reason: String,
-)
+) {
+    override fun toString(): String = "SocialAccountAppealRequestDto(idToken=$REDACTED, nonce=$REDACTED, reason=$REDACTED)"
+}
