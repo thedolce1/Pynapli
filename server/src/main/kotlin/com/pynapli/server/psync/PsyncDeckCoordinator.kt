@@ -4,6 +4,8 @@ import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
+import com.pynapli.server.discovery.PartnerFilterSql
+import com.pynapli.server.swipe.SwipeDeckRequestParser
 import com.pynapli.server.swipe.SwipeDeckTokenCodec
 import com.pynapli.shared.network.dto.PsyncDeckCardDto
 import com.pynapli.shared.network.dto.PsyncDeckResponseDto
@@ -33,6 +35,11 @@ internal class PsyncDeckCoordinator(
         val ranked = generator.rankCandidates(session.initiatorUserId, session.filters, oversample)
 
         val rankedIds = ranked.mapNotNull { runCatching { UUID.fromString(it.userId) }.getOrNull() }
+        // Partner-derived filters (Linked / Singles, partner filters, "No single men") depend on whose
+        // view of each candidate's linked partner is used. The ranker saw the initiator's only (without
+        // their contact blocks), so re-run the same gate for BOTH partners with their own contact
+        // blocks and keep a card only when it passes for each: the strictest of both views.
+        val partnerFilterFails = partnerFilterFailures(session, partnerId, rankedIds)
         val excluded =
             buildSet {
                 add(session.initiatorUserId)
@@ -41,6 +48,7 @@ internal class PsyncDeckCoordinator(
                 // The ranker ran from the initiator's side only. Drop anyone EITHER partner has
                 // already swiped on, matched with or reported, so nobody is asked twice.
                 addAll(repository.alreadySettledTargets(listOf(session.initiatorUserId, partnerId), rankedIds))
+                addAll(partnerFilterFails)
             }
         val deckCards =
             ranked
@@ -69,6 +77,29 @@ internal class PsyncDeckCoordinator(
             }
 
         return repository.activateWithDeck(sessionId, deckSessionId, cards, now)
+    }
+
+    /** Ranked ids failing the partner-derived filters from either partner's view (plan G2-3). */
+    private suspend fun partnerFilterFailures(
+        session: PsyncSession,
+        partnerId: UUID,
+        rankedIds: List<UUID>,
+    ): Set<UUID> {
+        if (rankedIds.isEmpty()) return emptySet()
+        val filters =
+            runCatching {
+                SwipeDeckRequestParser
+                    .parse(session.filters, minRadiusMeters = 0, maxRadiusMeters = Int.MAX_VALUE, maxLimit = Int.MAX_VALUE)
+                    .filters
+            }.getOrElse { throw PsyncException("INVALID_PSYNC_FILTER") }
+        if (!PartnerFilterSql.appliesTo(filters)) return emptySet()
+        val passing =
+            listOf(session.initiatorUserId, partnerId)
+                .map { viewer ->
+                    val hiddenFromViewer = contactBlockVisibility?.hiddenFrom(viewer).orEmpty()
+                    repository.partnerFilterMatches(viewer, rankedIds, filters, hiddenFromViewer)
+                }.reduce { a, b -> a intersect b }
+        return rankedIds.filterNot { it in passing }.toSet()
     }
 
     /** The shared ordered deck for a participant; each card carries the viewer's OWN action only. */

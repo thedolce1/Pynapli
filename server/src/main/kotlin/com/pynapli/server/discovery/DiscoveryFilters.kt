@@ -60,7 +60,48 @@ data class DiscoveryFilters(
     // visible to the viewer). Implies "linked" without changing linkedOnly. Viewer-specific, so it
     // keeps the request off the shared rank cache. Free, like verifiedOnly.
     val verifiedCouplesOnly: Boolean = false,
+    // Partner filters (FILTERS_SPEC "Partner", plan G2-3): tested against the candidate's visibly
+    // linked partner's OWN declared profile (gender, display age, orientation, photo verification),
+    // never inferred from the candidate. Every one of them runs inside the same visibility gate as
+    // [linkedOnly] (PartnerFilterSql over LinkedPartnerFilterSql.visiblePartnerExists): a partner this
+    // viewer may not see contributes nothing, so a partner filter never matches through a hidden
+    // partner. Any of them on implies "Linked". Viewer-specific, so never served from a shared rank
+    // cache. Free (founder decision 2), and hard on Swipe (never relaxed, like verifiedCouplesOnly).
+    val partnerGenders: Set<String> = emptySet(),
+    val partnerMinimumAge: Int? = null,
+    val partnerMaximumAge: Int? = null,
+    val partnerOrientations: Set<String> = emptySet(),
+    val partnerVerifiedOnly: Boolean = false,
+    // "No single men" quick chip: drops people whose own declared gender is "man" and who have no
+    // linked partner shown to this viewer (the same gate). Men visibly linked to a partner still show.
+    val excludeSingleMen: Boolean = false,
 ) {
+    /** Any partner-derived predicate is on (PartnerFilterSql runs its EXISTS). */
+    val hasPartnerFilters: Boolean
+        get() =
+            partnerGenders.isNotEmpty() ||
+                partnerMinimumAge != null ||
+                partnerMaximumAge != null ||
+                partnerOrientations.isNotEmpty() ||
+                partnerVerifiedOnly
+
+    /**
+     * The partner filters and "No single men" for cursor scopes, deck scopes and rank cache keys.
+     * Empty when none is set, so scopes issued before G2-3 keep their hash.
+     */
+    val partnerScopeKey: String
+        get() =
+            buildString {
+                if (hasPartnerFilters) {
+                    append("|partnerGenders=").append(partnerGenders.sorted().joinToString(","))
+                    append("|partnerMinAge=").append(partnerMinimumAge ?: "")
+                    append("|partnerMaxAge=").append(partnerMaximumAge ?: "")
+                    append("|partnerOrientations=").append(partnerOrientations.sorted().joinToString(","))
+                    append("|partnerVerifiedOnly=").append(partnerVerifiedOnly)
+                }
+                if (excludeSingleMen) append("|excludeSingleMen=true")
+            }
+
     // Broad non-default filter signal used by Swipe's stricter paid gate.
     val hasAdvancedFilters: Boolean
         get() =
@@ -117,6 +158,12 @@ fun discoveryFiltersFrom(
     verifiedPreferred: Boolean = false,
     boundaryItems: List<String> = emptyList(),
     verifiedCouplesOnly: Boolean = false,
+    partnerGenders: List<String> = emptyList(),
+    partnerMinimumAge: Int? = null,
+    partnerMaximumAge: Int? = null,
+    partnerOrientations: List<String> = emptyList(),
+    partnerVerifiedOnly: Boolean = false,
+    excludeSingleMen: Boolean = false,
     errorFactory: (String) -> RuntimeException,
 ): DiscoveryFilters {
     val min =
@@ -225,6 +272,19 @@ fun discoveryFiltersFrom(
                 if (value !in FILTERABLE_ORIENTATIONS) throw errorFactory("INVALID_DISCOVERY_FILTER")
             }.toSet()
 
+    // Partner filters: the same age bounds and the same structured taxonomies as the owner's own.
+    val partnerMin =
+        partnerMinimumAge?.also { age ->
+            if (age !in MIN_FILTER_AGE..MAX_FILTER_AGE) throw errorFactory("INVALID_DISCOVERY_FILTER")
+        }
+    val partnerMax =
+        partnerMaximumAge?.also { age ->
+            if (age !in MIN_FILTER_AGE..MAX_FILTER_AGE) throw errorFactory("INVALID_DISCOVERY_FILTER")
+        }
+    if (partnerMin != null && partnerMax != null && partnerMin > partnerMax) throw errorFactory("INVALID_DISCOVERY_FILTER")
+    val partnerGenderValues = identityValues(partnerGenders, FILTERABLE_GENDERS, errorFactory)
+    val partnerOrientationValues = identityValues(partnerOrientations, FILTERABLE_ORIENTATIONS, errorFactory)
+
     return DiscoveryFilters(
         minimumAge = min,
         maximumAge = max,
@@ -248,7 +308,26 @@ fun discoveryFiltersFrom(
         orientations = orientationValues,
         verifiedPreferred = verifiedPreferred,
         verifiedCouplesOnly = verifiedCouplesOnly,
+        partnerGenders = partnerGenderValues,
+        partnerMinimumAge = partnerMin,
+        partnerMaximumAge = partnerMax,
+        partnerOrientations = partnerOrientationValues,
+        partnerVerifiedOnly = partnerVerifiedOnly,
+        excludeSingleMen = excludeSingleMen,
     )
+}
+
+private fun identityValues(
+    values: List<String>,
+    allowed: Set<String>,
+    errorFactory: (String) -> RuntimeException,
+): Set<String> {
+    if (values.size > MAX_IDENTITY_FILTERS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+    return values
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .onEach { value -> if (value !in allowed) throw errorFactory("INVALID_DISCOVERY_FILTER") }
+        .toSet()
 }
 
 private const val MIN_FILTER_AGE = 18

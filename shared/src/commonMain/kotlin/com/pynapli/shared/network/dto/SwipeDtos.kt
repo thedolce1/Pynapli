@@ -73,6 +73,14 @@ data class SwipeDeckRequestDto(
     // linked partners selfie-verified, partner visible). Independent of linkedOnly. Always hard: a thin
     // deck never relaxes it, with or without the "verified" dealbreaker. Old clients omit it.
     val verifiedCouplesOnly: Boolean = false,
+    // Partner filters (same meaning as GridQueryRequestDto's). Always hard: a thin deck never relaxes
+    // them, like verifiedCouplesOnly. Psync applies them from both session partners' views.
+    val partnerGenders: List<String> = emptyList(),
+    val partnerMinimumAge: Int? = null,
+    val partnerMaximumAge: Int? = null,
+    val partnerOrientations: List<String> = emptyList(),
+    val partnerVerifiedOnly: Boolean = false,
+    val excludeSingleMen: Boolean = false,
 )
 
 @Serializable

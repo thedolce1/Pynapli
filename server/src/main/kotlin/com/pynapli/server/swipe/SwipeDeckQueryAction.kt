@@ -173,6 +173,8 @@ internal class SwipeDeckQueryAction(
                     // "Verified couples only" means the badge this viewer sees, which a stripped
                     // partner takes away.
                     .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenFromViewerIds }
+                    // Partner filters too (PartnerFilterSql already gates this partner out in SQL).
+                    .filterNot { filters.hasPartnerFilters && it.linkedPartnerUserId in hiddenFromViewerIds }
                     .map { it.withoutPartnerIn(hiddenFromViewerIds) }
             }
         val pageCards = visible.take(limit)

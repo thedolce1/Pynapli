@@ -26,10 +26,15 @@ object LinkedPartnerFilterSql {
      * candidate's `users` alias and [settings] their `discovery_settings` alias (the owner's
      * partner_visibility). Placeholders, in order: the hidden-from-viewer id array, then
      * [CoupleVerifiedFilterSql.partnerShownToViewer]'s six viewer ids. Bind with [bindVisiblePartner].
+     *
+     * [partnerCondition] (PartnerFilterSql) is ANDed inside the same EXISTS, after the gate, against
+     * the partner's `lp_profile` row, so a partner filter only ever tests a partner this gate shows.
+     * Its placeholders follow the gate's.
      */
     fun visiblePartnerExists(
         user: String,
         settings: String,
+        partnerCondition: String = "",
     ): String {
         val partnerShown =
             CoupleVerifiedFilterSql.partnerShownToViewer(
@@ -54,6 +59,7 @@ object LinkedPartnerFilterSql {
                   -- Contact blocks: a partner hiding from the viewer is never shown to them.
                   AND lp_user.id <> ALL(?::uuid[])
                   AND $partnerShown
+                  $partnerCondition
             )
             """.trimIndent()
     }

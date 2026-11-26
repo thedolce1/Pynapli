@@ -80,6 +80,12 @@ class GridService(
                     genders = request.genders,
                     orientations = request.orientations,
                     verifiedCouplesOnly = request.verifiedCouplesOnly,
+                    partnerGenders = request.partnerGenders,
+                    partnerMinimumAge = request.partnerMinimumAge,
+                    partnerMaximumAge = request.partnerMaximumAge,
+                    partnerOrientations = request.partnerOrientations,
+                    partnerVerifiedOnly = request.partnerVerifiedOnly,
+                    excludeSingleMen = request.excludeSingleMen,
                 ) { _ -> GridException("INVALID_GRID_FILTER") }
             }
         profile("grid.lifestyleGate") { requireLifestyleFilterAccess(viewerUserId, filters) }
@@ -234,12 +240,17 @@ class GridService(
                             // "Verified couples only" means the badge this viewer sees: a couple whose
                             // partner is stripped below no longer qualifies.
                             .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenProfileIds }
+                            // Partner filters (PartnerFilterSql) likewise need the partner this viewer
+                            // sees. The SQL gate already leaves out these partners; this is the backstop.
+                            .filterNot { filters.hasPartnerFilters && it.linkedPartnerUserId in hiddenProfileIds }
                             .map { card ->
                                 if (card.linkedPartnerUserId in hiddenProfileIds) {
                                     card.copy(
                                         linkedPartnerUserId = null,
                                         linkedPartnerDisplayName = null,
                                         linkedPartnerThumbnailMediaAssetId = null,
+                                        linkedPartnerAge = null,
+                                        linkedPartnerGender = null,
                                         // The badge needs a visible partner, as on Swipe cards.
                                         coupleVerified = false,
                                     )
@@ -430,6 +441,9 @@ internal fun GridCardRecord.toGridCardDto(
                     thumbnailUrl =
                         linkedPartnerThumbnailMediaAssetId
                             ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                    // Only inside the shown mini: a stripped partner takes these with it.
+                    age = linkedPartnerAge,
+                    gender = linkedPartnerGender,
                 )
             },
         rankToken = "grid:v1:$userId",

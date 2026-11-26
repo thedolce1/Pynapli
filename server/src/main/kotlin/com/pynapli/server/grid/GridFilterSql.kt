@@ -4,6 +4,7 @@ import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.discovery.LinkedPartnerFilterSql
+import com.pynapli.server.discovery.PartnerFilterSql
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.util.UUID
@@ -36,6 +37,8 @@ internal object GridFilterSql {
         -- "Linked" (linkedOnly): exactly whether the card shows this viewer a partner mini
         -- (LinkedPartnerFilterSql). Viewer-specific, so it never runs on the shared cached path.
         ${LinkedPartnerFilterSql.predicate(user = user, settings = settings)}
+        -- Partner filters + "No single men" (PartnerFilterSql): the same partner gate as Linked.
+        ${PartnerFilterSql.predicates(user = user, profile = profile, settings = settings)}
         AND (cardinality(?::text[]) = 0 OR $profile.discovery_style = ANY(?::text[]))
         -- Lifestyle groups + boundaries (LifestyleFilterSql): same predicate on every surface.
         ${LifestyleFilterSql.predicates(profile)}
@@ -141,6 +144,7 @@ internal object GridFilterSql {
         statement.setBoolean(index++, filters.ageVerifiedOnly)
         index = CoupleVerifiedFilterSql.bind(statement, index, filters.verifiedCouplesOnly, viewerUserId)
         index = LinkedPartnerFilterSql.bind(statement, connection, index, filters.linkedOnly, viewerUserId, hiddenFromViewerIds)
+        index = PartnerFilterSql.bind(statement, connection, index, filters, viewerUserId, hiddenFromViewerIds)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
         index = LifestyleFilterSql.bind(statement, connection, index, filters.lifestyleTags, filters.boundaryItems)

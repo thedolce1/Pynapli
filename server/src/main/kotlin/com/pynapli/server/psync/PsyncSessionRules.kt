@@ -77,6 +77,12 @@ internal fun requirePsyncFiltersAllowed(
             intents = filters.intents,
             verifiedPreferred = filters.verifiedPreferred,
             verifiedCouplesOnly = filters.verifiedCouplesOnly,
+            partnerGenders = filters.partnerGenders,
+            partnerMinimumAge = filters.partnerMinimumAge,
+            partnerMaximumAge = filters.partnerMaximumAge,
+            partnerOrientations = filters.partnerOrientations,
+            partnerVerifiedOnly = filters.partnerVerifiedOnly,
+            excludeSingleMen = filters.excludeSingleMen,
         ) { PsyncException("INVALID_PSYNC_FILTER") }
     if (discovery.requiresAdvancedEntitlement && !policy.advancedFiltersAllowed) {
         throw PsyncException("PSYNC_ADVANCED_FILTERS_NOT_ALLOWED")

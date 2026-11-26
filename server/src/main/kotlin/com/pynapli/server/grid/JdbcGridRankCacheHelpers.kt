@@ -88,7 +88,10 @@ internal fun Connection.viewerHasActiveTravelLocation(viewerUserId: UUID): Boole
  * couples also the owner's partner visibility toward this viewer and the viewer's hidden list)
  * into the linked-partner test, so the window is not shareable cross-viewer.
  */
-internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly
+// The partner filters and "No single men" (PartnerFilterSql) run the same per-viewer partner gate
+// as linkedOnly, so they never share a window either (plan G2-3).
+internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean =
+    linkedOnly == null && !verifiedCouplesOnly && !hasPartnerFilters && !excludeSingleMen
 
 /**
  * Stable cache-class key for the FILTER properties that define the ranked
@@ -143,4 +146,6 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         // Never cached (see isGridRankCacheEligible); keyed anyway so a future eligibility change
         // cannot let filtered and unfiltered viewers share a window.
         append(verifiedCouplesOnly)
+        // Never cached either; keyed for the same reason. Empty when unset.
+        append(partnerScopeKey)
     }

@@ -94,6 +94,22 @@ class JdbcPsyncSessionRepository(
         targetUserIds: List<UUID>,
     ): Set<UUID> = dataSource.psyncAlreadySettledTargets(partnerUserIds, targetUserIds)
 
+    override suspend fun partnerFilterMatches(
+        viewerUserId: UUID,
+        candidateIds: List<UUID>,
+        filters: com.pynapli.server.discovery.DiscoveryFilters,
+        hiddenFromViewerIds: Set<UUID>,
+    ): Set<UUID> =
+        dataSource.withConnection { connection ->
+            com.pynapli.server.discovery.PartnerFilterSql.matchingCandidateIds(
+                connection = connection,
+                viewerUserId = viewerUserId,
+                candidateIds = candidateIds,
+                filters = filters,
+                hiddenFromViewerIds = hiddenFromViewerIds,
+            )
+        }
+
     override suspend fun listDeckCards(sessionId: UUID): List<PsyncSessionCard> = dataSource.listPsyncDeckCards(json, sessionId)
 
     override suspend fun listActionsForActor(

@@ -39,6 +39,17 @@ data class GridQueryRequestDto(
     // "Verified couples only": only people whose couple-verified badge shows for this viewer (both
     // linked partners selfie-verified, partner visible). Independent of linkedOnly. Old clients omit it.
     val verifiedCouplesOnly: Boolean = false,
+    // Partner filters (FILTERS_SPEC "Partner"): matched against the visibly linked partner's OWN declared
+    // profile (gender key, age, orientation key, photo verification), only through the partner gate
+    // behind linkedOnly, so a partner hidden from this viewer never matches. Any of them implies Linked.
+    // Same taxonomies and age bounds as genders / orientations / minimumAge. Free. Old clients omit them.
+    val partnerGenders: List<String> = emptyList(),
+    val partnerMinimumAge: Int? = null,
+    val partnerMaximumAge: Int? = null,
+    val partnerOrientations: List<String> = emptyList(),
+    val partnerVerifiedOnly: Boolean = false,
+    // "No single men": drop people whose own gender is "man" with no linked partner shown to this viewer.
+    val excludeSingleMen: Boolean = false,
     // Section 3 opt-in: this client renders locked cards (GridCardDto.locked) as paywall tiles, never
     // as profiles. Without it the server keeps the old behaviour: the grid stops at the tier depth with
     // resultLimitReached. With it the grid keeps paging past the depth with locked cards up to the next
@@ -124,6 +135,12 @@ data class LinkedPartnerMiniDto(
     val orientationDetail: String? = null,
     val experienceLevel: String? = null,
     val lifestyleTags: List<String> = emptyList(),
+    // The partner's own declared age and gender key (plan G2-3), for the tile's partner mini and the
+    // partner preview. Filled only where this mini is shown at all (the same partner gate), on Grid
+    // cards and the public profile; null on Swipe cards, Psync and the Tonight feed. A self-describe
+    // gender comes back as "self_describe" and shows no mark.
+    val age: Int? = null,
+    val gender: String? = null,
 )
 
 @Serializable

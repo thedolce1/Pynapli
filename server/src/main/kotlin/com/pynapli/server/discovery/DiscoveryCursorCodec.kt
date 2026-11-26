@@ -223,6 +223,9 @@ class DiscoveryCursorCodec(
                     append(filters.orientations.sorted().joinToString(","))
                     // Appended only when set, so cursors issued without it keep their hash.
                     if (filters.verifiedCouplesOnly) append("|verifiedCouplesOnly=true")
+                    // Partner filters + "No single men" (plan G2-3): empty when unset, so older cursors keep
+                    // their hash.
+                    append(filters.partnerScopeKey)
                     widenedFromRadiusMeters?.let { append("|widenedFrom=").append(it) }
                     if (acceptLockedCards) append("|lockedCards=true")
                     if (visitingSoonOnly) append("|visitingSoon=true")

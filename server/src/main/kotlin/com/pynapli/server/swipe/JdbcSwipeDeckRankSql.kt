@@ -4,6 +4,7 @@ import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.LifestyleFilterSql
 import com.pynapli.server.discovery.LinkedPartnerFilterSql
+import com.pynapli.server.discovery.PartnerFilterSql
 import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID
@@ -195,6 +196,9 @@ $candidateSource
               -- "Linked" (linkedOnly): exactly whether the card shows this viewer a partner mini
               -- (LinkedPartnerFilterSql), the same rule as the Grid's.
               ${LinkedPartnerFilterSql.predicate(user = "u", settings = "ds")}
+              -- Partner filters + "No single men" (PartnerFilterSql): the same partner gate as Linked.
+              -- Kept on the linked-only forced-id path too (only linkedOnly is cleared there).
+              ${PartnerFilterSql.predicates(user = "u", profile = "p", settings = "ds")}
               -- Already swiped (live decisions only); skipped on the shared cached window.
               AND (
                   ?::uuid IS NULL
@@ -283,6 +287,7 @@ $candidateSource
         statement.setBoolean(index++, filters.withPhotosOnly)
         statement.setBoolean(index++, filters.hasPrivateAlbumOnly)
         index = LinkedPartnerFilterSql.bind(statement, this, index, filters.linkedOnly, viewerUserId, hiddenFromViewerIds)
+        index = PartnerFilterSql.bind(statement, this, index, filters, viewerUserId, hiddenFromViewerIds)
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setBoolean(index++, excludedTargetUserIds.isNotEmpty())
