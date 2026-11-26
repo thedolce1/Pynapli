@@ -26,7 +26,8 @@ data class DiscoveryFilters(
     val logisticsTags: Set<String> = emptySet(),
     val tonightAvailableOnly: Boolean = false,
     // Grid-only Presence filter (FILTERS_SPEC "Active today"): only surface profiles whose owner has
-    // been active in the last 24h (a non-revoked session seen within the window). Swipe ignores it,
+    // been active in the last 24h (GridActivitySql.activeToday: user_last_active, the same source as the
+    // card's activeAgo caption and Fresh). Swipe ignores it,
     // the way Grid ignores verifiedPreferred. A hard existence gate.
     val activeTodayOnly: Boolean = false,
     // Grid-only Presence filters. freshOnly = the "Fresh" quick chip (plan G4, GridActivitySql.fresh:

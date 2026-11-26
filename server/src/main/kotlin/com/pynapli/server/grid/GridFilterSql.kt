@@ -83,19 +83,9 @@ internal object GridFilterSql {
                   AND has_photo_m.intended_album_kind = 'profile'
             )
         )
-        -- FILTERS_SPEC "Active today" (Grid Presence): profiles whose owner has a non-revoked
-        -- session seen in the last 24h. "Online now" is Redis-live; "active today" is the
-        -- durable session-activity signal, so it lives in SQL as a hard existence gate.
-        AND (
-            ?::boolean = false
-            OR EXISTS (
-                SELECT 1
-                FROM user_sessions active_today_us
-                WHERE active_today_us.user_id = $user.id
-                  AND active_today_us.revoked_at IS NULL
-                  AND active_today_us.last_seen_at > now() - interval '24 hours'
-            )
-        )
+        -- FILTERS_SPEC "Active today" (Grid Presence): GridActivitySql.activeToday, the same
+        -- last-active source as the card's activeAgo caption and Fresh. Only evaluated when on.
+        AND (?::boolean = false OR ${GridActivitySql.activeToday(user = user, tag = "active_today")})
         -- "Fresh" quick chip (plan G4; replaced "Recently joined"): GridActivitySql.fresh, the
         -- same rule as the card's fresh flag. Only evaluated when the filter is on.
         AND (?::boolean = false OR ${GridActivitySql.fresh(user = user, tag = "fresh")})
