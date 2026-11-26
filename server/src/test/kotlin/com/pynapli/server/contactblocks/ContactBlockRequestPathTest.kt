@@ -128,6 +128,7 @@ class ContactBlockRequestPathTest {
             "contactBlockTokens = core.contactBlockTokens,",
             "onAccountVerified = core.contactBlockSettling::atVerify",
             "contactBlockVisibility = core.contactBlockVisibility,",
+            "buildMetInPersonDependencies(config, database.dataSource, core.contactBlockVisibility)",
         ).forEach { wiring -> assertTrue(wiring.compact() in server, "ServerDependencies must pass: $wiring") }
         // Activity, favorites, profile, profile links, media, grid, tonight, messaging, swipe, the field.
         assertTrue(
@@ -137,8 +138,8 @@ class ContactBlockRequestPathTest {
         listOf(
             "onEmailSignIn = contactBlockSettling::atSignIn",
             "NotificationService(notificationRepository, contactBlockVisibility = contactBlockVisibility)",
-            "JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)",
-            "JdbcAccountDataExportArchiver(database.dataSource, contactBlockTokens = contactBlockTokens)",
+            "JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens, metInPersonAccountData = metInPersonAccountData(config))",
+            "JdbcAccountDataExportArchiver(database.dataSource, contactBlockTokens = contactBlockTokens, metInPersonAccountData = metInPersonAccountData(config))",
         ).forEach { wiring -> assertTrue(wiring.compact() in core, "CoreDependencies must pass: $wiring") }
         listOf("GridDependencies.kt", "SwipeDependencies.kt", "TonightDependencies.kt", "MessagingDependencies.kt", "MediaDependencies.kt").forEach { file ->
             assertTrue("contactBlockVisibility=contactBlockVisibility" in root.resolve(file).readText().compact(), "$file must forward the rule")

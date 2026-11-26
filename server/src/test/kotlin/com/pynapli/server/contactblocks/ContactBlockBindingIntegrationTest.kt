@@ -333,7 +333,13 @@ class ContactBlockBindingIntegrationTest :
                 graph.verifyAddress(TARGET, TARGET_ADDRESS)
                 addAndResolve(graph)
                 assertEquals(setOf(BLOCKER), graph.visibility.hiddenFrom(TARGET))
-                val lifecycle = JdbcAccountLifecycleRepository(dataSource, graph.tokens)
+                val lifecycle =
+                    JdbcAccountLifecycleRepository(
+                        dataSource,
+                        graph.tokens,
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
+                    )
 
                 assertNotNull(lifecycle.deleteAccount(TARGET))
                 assertEquals(1, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE target_token IS NULL"))
@@ -357,7 +363,14 @@ class ContactBlockBindingIntegrationTest :
                 addAndResolve(graph)
                 graph.contactBlocks.add(BLOCKER, "nobody@example.com")
 
-                val archive = JdbcAccountDataExportArchiver(dataSource, contactBlockTokens = graph.tokens).buildArchive(BLOCKER)
+                val archive =
+                    JdbcAccountDataExportArchiver(
+                        dataSource,
+                        contactBlockTokens = graph.tokens,
+                        metInPersonAccountData =
+                            com.pynapli.server.metinperson.MetInPersonAccountData
+                                .localDevelopment(),
+                    ).buildArchive(BLOCKER)
                 val text = archive.bytes.decodeToString()
                 val rows = Json.parseToJsonElement(text).jsonObject["hideFromPeopleYouKnow"] as JsonArray
 
@@ -443,7 +456,12 @@ class ContactBlockBindingIntegrationTest :
                 assertEquals(2, graph.count("SELECT COUNT(*) FROM contact_blocks WHERE blocker_user_id = ?", BLOCKER), "a pending row leaves no tombstone")
 
                 // Deleting the blocker's account removes the tombstones too.
-                JdbcAccountLifecycleRepository(dataSource, graph.tokens).deleteAccount(BLOCKER)
+                JdbcAccountLifecycleRepository(
+                    dataSource,
+                    graph.tokens,
+                    com.pynapli.server.metinperson.MetInPersonAccountData
+                        .localDevelopment(),
+                ).deleteAccount(BLOCKER)
                 assertEquals(0, graph.count("SELECT COUNT(*) FROM contact_blocks"))
             }
         }

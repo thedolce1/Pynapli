@@ -131,7 +131,12 @@ internal fun buildCoreDependencies(
     val contactBlockSettling =
         com.pynapli.server.contactblocks
             .ContactBlockSettling(contactBlockResolver, contactBlockResolverWorker)
-    val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)
+    val accountLifecycleRepository =
+        JdbcAccountLifecycleRepository(
+            database.dataSource,
+            contactBlockTokens,
+            metInPersonAccountData = metInPersonAccountData(config),
+        )
     val accountExportStorage = buildAccountExportStorage(config)
     // Sign in with Apple: revocation on deletion works whenever the Apple key is configured, even if
     // the sign-in flag was switched off later (stored grants must still be revoked).
@@ -153,7 +158,12 @@ internal fun buildCoreDependencies(
                 processor =
                     AccountDataExportProcessor(
                         repository = accountLifecycleRepository,
-                        archiver = JdbcAccountDataExportArchiver(database.dataSource, contactBlockTokens = contactBlockTokens),
+                        archiver =
+                            JdbcAccountDataExportArchiver(
+                                database.dataSource,
+                                contactBlockTokens = contactBlockTokens,
+                                metInPersonAccountData = metInPersonAccountData(config),
+                            ),
                         storage = accountExportStorage,
                     ),
                 intervalMillis = config.accountDataExportIntervalMillis,

@@ -28,44 +28,74 @@ object CoupleVerifiedFilterSql {
         user: String,
         profile: String,
         settings: String,
-    ): String =
-        """
-        AND (
-            ?::boolean = false
-            OR (
-                $profile.verified_at IS NOT NULL
-                AND EXISTS (
-                    SELECT 1
-                    FROM user_profile_links cv_upl
-                    JOIN users cv_user ON cv_user.id = cv_upl.linked_user_id
-                    JOIN profiles cv_profile ON cv_profile.user_id = cv_user.id
-                    JOIN discovery_settings cv_ds ON cv_ds.user_id = cv_user.id
-                    LEFT JOIN account_risk_states cv_risk ON cv_risk.user_id = cv_user.id
-                    WHERE cv_upl.user_id = $user.id
-                      AND cv_upl.status = 'active'
-                      AND cv_upl.unlinked_at IS NULL
-                      AND cv_user.status = 'active'
-                      AND cv_user.deleted_at IS NULL
-                      AND cv_profile.visibility_status = 'visible'
-                      AND cv_profile.verified_at IS NOT NULL
-                      AND cv_ds.incognito = false
-                      AND COALESCE(cv_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM user_blocks cv_ub
-                          WHERE (cv_ub.blocker_user_id = ?::uuid AND cv_ub.blocked_user_id = cv_user.id)
-                             OR (cv_ub.blocker_user_id = cv_user.id AND cv_ub.blocked_user_id = ?::uuid)
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM user_hidden_profiles cv_hidden
-                          WHERE cv_hidden.hider_user_id = ?::uuid
-                            AND cv_hidden.hidden_user_id = cv_user.id
-                      )
-                      AND ${ownerShowsPartnerToViewer(settings = settings, owner = "$user.id")}
+    ): String {
+        val partnerShown =
+            partnerShownToViewer(
+                partnerUser = "cv_user",
+                partnerProfile = "cv_profile",
+                partnerSettings = "cv_ds",
+                partnerRisk = "cv_risk",
+                ownerSettings = settings,
+                owner = "$user.id",
+            )
+        return """
+            AND (
+                ?::boolean = false
+                OR (
+                    $profile.verified_at IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM user_profile_links cv_upl
+                        JOIN users cv_user ON cv_user.id = cv_upl.linked_user_id
+                        JOIN profiles cv_profile ON cv_profile.user_id = cv_user.id
+                        JOIN discovery_settings cv_ds ON cv_ds.user_id = cv_user.id
+                        LEFT JOIN account_risk_states cv_risk ON cv_risk.user_id = cv_user.id
+                        WHERE cv_upl.user_id = $user.id
+                          AND cv_upl.status = 'active'
+                          AND cv_upl.unlinked_at IS NULL
+                          AND cv_profile.verified_at IS NOT NULL
+                          AND $partnerShown
+                    )
                 )
             )
+            """.trimIndent()
+    }
+
+    /**
+     * The profile's linked-partner rule: the partner the owner's card or profile shows this viewer. The
+     * partner is active, not deleted, visible, not incognito, not quarantined/terminated, not blocked
+     * either way with the viewer, not hidden by the viewer, and the owner's partner_visibility lets the
+     * viewer see them. Aliases are the calling query's; six viewer placeholders, in order: the block check
+     * (two), hidden-by-viewer, then [ownerShowsPartnerToViewer]'s three. Shared by the couples filter and
+     * the "Met in person" partner tick, so the tick never names a partner the profile would hide.
+     */
+    fun partnerShownToViewer(
+        partnerUser: String,
+        partnerProfile: String,
+        partnerSettings: String,
+        partnerRisk: String,
+        ownerSettings: String,
+        owner: String,
+    ): String =
+        """
+        $partnerUser.status = 'active'
+        AND $partnerUser.deleted_at IS NULL
+        AND $partnerProfile.visibility_status = 'visible'
+        AND $partnerSettings.incognito = false
+        AND COALESCE($partnerRisk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+        AND NOT EXISTS (
+            SELECT 1
+            FROM user_blocks cv_ub
+            WHERE (cv_ub.blocker_user_id = ?::uuid AND cv_ub.blocked_user_id = $partnerUser.id)
+               OR (cv_ub.blocker_user_id = $partnerUser.id AND cv_ub.blocked_user_id = ?::uuid)
         )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM user_hidden_profiles cv_hidden
+            WHERE cv_hidden.hider_user_id = ?::uuid
+              AND cv_hidden.hidden_user_id = $partnerUser.id
+        )
+        AND ${ownerShowsPartnerToViewer(settings = ownerSettings, owner = owner)}
         """.trimIndent()
 
     /**

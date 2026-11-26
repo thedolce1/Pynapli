@@ -275,6 +275,7 @@ internal fun ProfileDetailContent(
             }
 
             profile != null -> {
+                profile.metInPersonBadgeUi()?.let { badge -> MetInPersonBadgeRow(badge) }
                 ProfileFacts(profileState = state)
                 LinkedPartnerSection(
                     linkedPartner = profile.linkedPartner,

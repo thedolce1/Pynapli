@@ -66,6 +66,8 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
         photoUrls = profilePhotoMediaAssetIds.mapNotNull { mediaAssetUrlResolver?.publicContentUrl(it) },
         verified = verified,
         coupleVerified = coupleVerified && linkedPartnerUserId != null,
+        metInPerson = metInPerson,
+        metInPersonAsCouple = metInPersonAsCouple && linkedPartnerUserId != null,
         privateAlbumAccessStatus = privateAlbumAccessStatus,
         linkedPartner =
             linkedPartnerUserId?.let { partnerUserId ->
@@ -116,4 +118,5 @@ internal fun DiscoverySettingsRecord.toDto(): DiscoverySettingsDto =
         visibleWhileTraveling = visibleWhileTraveling,
         sharePsyncSoloMatches = sharePsyncSoloMatches,
         partnerVisibility = partnerVisibility,
+        showMetInPersonBadge = showMetInPersonBadge,
     )

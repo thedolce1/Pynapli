@@ -5,6 +5,7 @@ import com.pynapli.server.auth.social.SealedAppleToken
 import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.metinperson.MetInPersonAccountData
 import java.sql.Connection
 import java.util.UUID
 import javax.sql.DataSource
@@ -12,6 +13,8 @@ import javax.sql.DataSource
 internal class JdbcAccountDeletionActions(
     private val dataSource: DataSource,
     private val contactBlockTokens: ContactBlockTokens,
+    // K3-dependent: required, so a dropped wiring fails the build instead of erasing nothing.
+    private val metInPersonAccountData: MetInPersonAccountData,
 ) {
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult? =
         dataSource.withConnection { connection ->
@@ -34,7 +37,11 @@ internal class JdbcAccountDeletionActions(
                 val purgedLocationCount = purgeExactLocation(connection, userId)
                 purgeFavoritesAndLastActive(connection, userId)
                 releaseContactBlocks(connection, userId)
+                // Met in person: confirmations given (by token) and received, and the badge.
+                metInPersonAccountData.erase(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
+                // After the links end: ending them fires the history trigger, which would record again.
+                purgeLinkHistory(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)
                 disablePushDevices(connection, userId)
@@ -358,6 +365,18 @@ internal class JdbcAccountDeletionActions(
             }
         connection.prepareStatement("UPDATE users SET contact_token = NULL WHERE id = ?").use { statement ->
             statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
+    }
+
+    /** The durable partner-link record (V124) goes with the person, in either direction. */
+    private fun purgeLinkHistory(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection.prepareStatement("DELETE FROM profile_link_history WHERE user_id = ? OR linked_user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.setObject(2, userId)
             statement.executeUpdate()
         }
     }

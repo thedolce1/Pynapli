@@ -102,6 +102,8 @@ class ProfileHubStateHolder(
 
     fun updateSharePsyncSoloMatches(value: Boolean) = drafts.updateSharePsyncSoloMatches(value)
 
+    fun updateShowMetInPersonBadge(value: Boolean) = drafts.updateShowMetInPersonBadge(value)
+
     fun updateShowInViewedLists(value: Boolean) = drafts.updateShowInViewedLists(value)
 
     fun updateAllowGridMessages(value: Boolean) = drafts.updateAllowGridMessages(value)

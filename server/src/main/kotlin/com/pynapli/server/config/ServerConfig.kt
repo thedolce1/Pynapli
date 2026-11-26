@@ -177,6 +177,9 @@ data class ServerConfig(
     // Keys the at-rest encryption of Apple refresh tokens (PYNAPLI_SOCIAL_TOKEN_KEY). Production-like
     // environments with social sign-in on refuse to start without an explicit, strong, distinct value.
     val socialTokenKey: String = "pynapli-local-dev-social-token-key",
+    // K3: keys the "Met in person" voucher/pair/conversation tokens (PYNAPLI_MET_IN_PERSON_TOKEN_SECRET).
+    // Never rotate or lose it once confirmations exist: the tokens could no longer be matched.
+    val metInPersonTokenSecret: String = "pynapli-local-dev-met-in-person-token-secret",
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
@@ -592,6 +595,12 @@ data class ServerConfig(
                 appleTokenUrl = nonBlankEnv("PYNAPLI_APPLE_TOKEN_URL"),
                 appleRevokeUrl = nonBlankEnv("PYNAPLI_APPLE_REVOKE_URL"),
                 socialTokenKey = nonBlankEnv("PYNAPLI_SOCIAL_TOKEN_KEY") ?: "pynapli-local-dev-social-token-key",
+                metInPersonTokenSecret =
+                    System
+                        .getenv("PYNAPLI_MET_IN_PERSON_TOKEN_SECRET")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "pynapli-local-dev-met-in-person-token-secret",
             )
         }
     }

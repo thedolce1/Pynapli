@@ -66,7 +66,8 @@ class ProfileService(
                 ?: throw ProfileException("PROFILE_NOT_FOUND")
         val profile =
             if (fetched.linkedPartner?.userId?.let { runCatching { UUID.fromString(it) }.getOrNull() } in hiddenFromViewer) {
-                fetched.copy(linkedPartner = null, coupleVerified = false)
+                // Every couple signal goes with the partner: the couple badges would name the hidden link.
+                fetched.copy(linkedPartner = null, coupleVerified = false, metInPersonAsCouple = false)
             } else {
                 fetched
             }

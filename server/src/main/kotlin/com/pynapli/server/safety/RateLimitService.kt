@@ -205,6 +205,9 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.PRIVATE_ALBUM_FETCH, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
                 // Opening someone's profile, per user: browsing opens a few dozen an hour; walking ids is a crawl.
                 RateLimitPolicy(action = RateLimitedAction.PROFILE_FETCH, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
+                // "Met in person" menu fetches and confirm/take back, per user: a menu opens a few times
+                // an hour; a script walking conversation or person ids is a crawl.
+                RateLimitPolicy(action = RateLimitedAction.MET_IN_PERSON, limit = 240, windowSeconds = ONE_HOUR_SECONDS),
                 // Admin per-person lookups per client IP: a moderator works a queue, not a crawl.
                 RateLimitPolicy(action = RateLimitedAction.ADMIN_PERSON_LOOKUP, limit = 300, windowSeconds = ONE_HOUR_SECONDS),
                 // Global abuse ceilings (RequestRateLimitPlugin), per minute so a burst is caught fast.
@@ -266,6 +269,7 @@ object RateLimitedAction {
     const val MESSAGE_SEND = "message_send"
     const val MESSAGE_SEND_CONVERSATION = "message_send_conversation"
     const val PROFILE_FETCH = "profile_fetch"
+    const val MET_IN_PERSON = "met_in_person"
     const val THREAD_CREATE = "thread_create"
     const val TYPING = "typing"
     const val PROFILE_LINK_INVITE = "profile_link_invite"
