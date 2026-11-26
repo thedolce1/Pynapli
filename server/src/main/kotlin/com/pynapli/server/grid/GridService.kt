@@ -112,6 +112,8 @@ class GridService(
                     filters = filters,
                     onlineOnly = request.onlineOnly,
                     acceptLockedCards = request.acceptLockedCards,
+                    // Its own keyset order (arrival day first), so its cursors never continue Nearby.
+                    visitingSoonOnly = request.visitingSoonOnly,
                 )
             }
         // Sparse-area widening (plan G10) pages under its own scope: the widened radius plus the radius
@@ -204,8 +206,9 @@ class GridService(
             val result =
                 profile("grid.repository") {
                     if (request.visitingSoonOnly) {
-                        // One page, soonest trips first; blocks, hides and presence apply below as usual.
-                        repository.queryVisitingSoon(viewerUserId, queryRadius, fetchLimit)
+                        // Every Grid filter, soonest arrival first, paged by its own cursor. Blocks, hides
+                        // and contact blocks are applied in SQL (so pages fill) and again below.
+                        repository.queryVisitingSoon(viewerUserId, queryRadius, fetchLimit, filters, cursor, hiddenFromViewerIds)
                     } else {
                         // The contact-block set goes in too: "Linked" must treat a partner hiding from
                         // the viewer as not shown, exactly as the card below strips their mini.

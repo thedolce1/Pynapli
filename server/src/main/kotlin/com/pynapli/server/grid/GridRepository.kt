@@ -15,11 +15,18 @@ interface GridRepository {
         hiddenFromViewerIds: Set<UUID> = emptySet(),
     ): GridQueryResult
 
-    /** People whose announced planned trip reaches the viewer's area within two weeks, soonest first. */
+    /**
+     * People whose announced planned trip reaches the viewer's area within two weeks and who pass every
+     * Grid filter: soonest arrival first, then distance bucket, then id, paged by [cursor]
+     * (JdbcGridVisitingSoonSql).
+     */
     suspend fun queryVisitingSoon(
         viewerUserId: UUID,
         radiusMeters: Int,
         limit: Int,
+        filters: DiscoveryFilters = DiscoveryFilters(),
+        cursor: GridCursorAnchor? = null,
+        hiddenFromViewerIds: Set<UUID> = emptySet(),
     ): GridQueryResult = GridQueryResult(viewerHadLocation = true, cards = emptyList())
 }
 
