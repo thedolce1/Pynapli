@@ -176,6 +176,13 @@ class RateLimitService(
                 RateLimitPolicy(action = RateLimitedAction.AUTH_SIGNUP_VERIFY_IP, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.AUTH_PASSWORD_RESET_IP, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.ACCOUNT_APPEAL_IP, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
+                // Continue with Google / Apple. Nonces per client IP (one per attempt, a few retries);
+                // token routes per client IP; and, once a token verified, per provider identity.
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SOCIAL_NONCE_IP, limit = 120, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SOCIAL_IP, limit = 100, windowSeconds = ONE_HOUR_SECONDS),
+                RateLimitPolicy(action = RateLimitedAction.AUTH_SOCIAL_SIGN_IN, limit = 30, windowSeconds = ONE_HOUR_SECONDS),
+                // Linking/unlinking a sign-in method, per account.
+                RateLimitPolicy(action = RateLimitedAction.SOCIAL_IDENTITY_CHANGE, limit = 20, windowSeconds = ONE_HOUR_SECONDS),
                 // Per user, far above real use: a fast chatter sends a few messages a minute.
                 RateLimitPolicy(action = RateLimitedAction.MESSAGE_SEND, limit = 600, windowSeconds = ONE_HOUR_SECONDS),
                 // Per sender per conversation (text + media): three a minute sustained for an hour.
@@ -252,6 +259,10 @@ object RateLimitedAction {
     const val AUTH_SIGNUP_VERIFY_IP = "auth_signup_verify_ip"
     const val AUTH_PASSWORD_RESET_IP = "auth_password_reset_ip"
     const val ACCOUNT_APPEAL_IP = "account_appeal_ip"
+    const val AUTH_SOCIAL_NONCE_IP = "auth_social_nonce_ip"
+    const val AUTH_SOCIAL_IP = "auth_social_ip"
+    const val AUTH_SOCIAL_SIGN_IN = "auth_social_sign_in"
+    const val SOCIAL_IDENTITY_CHANGE = "social_identity_change"
     const val MESSAGE_SEND = "message_send"
     const val MESSAGE_SEND_CONVERSATION = "message_send_conversation"
     const val PROFILE_FETCH = "profile_fetch"

@@ -154,6 +154,29 @@ data class ServerConfig(
     // strong, distinct values. Rotating either orphans every stored code (founder setup item).
     val contactBlockEmailKey: String = "pynapli-local-dev-contact-block-email-key",
     val contactBlockTargetKey: String = "pynapli-local-dev-contact-block-target-key",
+    // Continue with Google / Apple (ONBOARDING_AUTH_SPEC "Social sign-in"). Off by default; each
+    // provider is served only when this is on AND that provider is fully configured (SocialSignInSettings).
+    val socialSignInEnabled: Boolean = false,
+    // PYNAPLI_GOOGLE_CLIENT_IDS: every OAuth client id whose ID tokens are accepted (web + Android).
+    val googleClientIds: List<String> = emptyList(),
+    // PYNAPLI_APPLE_CLIENT_IDS: the Services ID (web) and the bundle id (iOS).
+    val appleClientIds: List<String> = emptyList(),
+    // Apple's client-secret JWT (code exchange + revocation): team id, key id and the .p8 key's PEM
+    // text (PYNAPLI_APPLE_PRIVATE_KEY, from the secret manager only; never committed).
+    val appleTeamId: String? = null,
+    val appleKeyId: String? = null,
+    val applePrivateKeyPem: String? = null,
+    // PYNAPLI_APPLE_REDIRECT_URIS = "servicesId=https://...,...": the redirect_uri a web (Services ID)
+    // authorization used, which Apple's code exchange must repeat. Native (bundle id) codes need none.
+    val appleRedirectUris: Map<String, String> = emptyMap(),
+    // Test/local overrides of the provider endpoints. Refused at startup in staging/production.
+    val googleJwksUrl: String? = null,
+    val appleJwksUrl: String? = null,
+    val appleTokenUrl: String? = null,
+    val appleRevokeUrl: String? = null,
+    // Keys the at-rest encryption of Apple refresh tokens (PYNAPLI_SOCIAL_TOKEN_KEY). Production-like
+    // environments with social sign-in on refuse to start without an explicit, strong, distinct value.
+    val socialTokenKey: String = "pynapli-local-dev-social-token-key",
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
@@ -552,6 +575,23 @@ data class ServerConfig(
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() }
                         ?: "pynapli-local-dev-contact-block-target-key",
+                socialSignInEnabled =
+                    System
+                        .getenv("PYNAPLI_SOCIAL_SIGN_IN_ENABLED")
+                        ?.trim()
+                        ?.toBooleanStrictOrNull()
+                        ?: false,
+                googleClientIds = commaList(System.getenv("PYNAPLI_GOOGLE_CLIENT_IDS")),
+                appleClientIds = commaList(System.getenv("PYNAPLI_APPLE_CLIENT_IDS")),
+                appleTeamId = nonBlankEnv("PYNAPLI_APPLE_TEAM_ID"),
+                appleKeyId = nonBlankEnv("PYNAPLI_APPLE_KEY_ID"),
+                applePrivateKeyPem = nonBlankEnv("PYNAPLI_APPLE_PRIVATE_KEY"),
+                appleRedirectUris = appleRedirectUrisFrom(System.getenv("PYNAPLI_APPLE_REDIRECT_URIS")),
+                googleJwksUrl = nonBlankEnv("PYNAPLI_GOOGLE_JWKS_URL"),
+                appleJwksUrl = nonBlankEnv("PYNAPLI_APPLE_JWKS_URL"),
+                appleTokenUrl = nonBlankEnv("PYNAPLI_APPLE_TOKEN_URL"),
+                appleRevokeUrl = nonBlankEnv("PYNAPLI_APPLE_REVOKE_URL"),
+                socialTokenKey = nonBlankEnv("PYNAPLI_SOCIAL_TOKEN_KEY") ?: "pynapli-local-dev-social-token-key",
             )
         }
     }
@@ -586,3 +626,30 @@ internal fun corsAllowedOriginsFromEnvironment(
         else -> listOf("https://app.pynapli.com")
     }
 }
+
+private fun nonBlankEnv(name: String): String? = System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
+
+internal fun commaList(value: String?): List<String> = value?.split(",")?.mapNotNull { it.trim().takeIf(String::isNotEmpty) }.orEmpty()
+
+/** "clientId=uri,clientId=uri"; split on the first '=' so a query string in the URI survives. */
+internal fun appleRedirectUrisFrom(value: String?): Map<String, String> =
+    commaList(value)
+        .mapNotNull { pair ->
+            val clientId = pair.substringBefore('=', missingDelimiterValue = "").trim()
+            val uri = pair.substringAfter('=', missingDelimiterValue = "").trim()
+            if (clientId.isEmpty() || uri.isEmpty()) null else clientId to uri
+        }.toMap()
+
+/** Google is usable once the flag is on and at least one client id is accepted. */
+fun ServerConfig.googleSignInConfigured(): Boolean = socialSignInEnabled && googleClientIds.isNotEmpty()
+
+/**
+ * Apple is usable only when everything deletion needs is there too: Apple requires the grant to be
+ * revoked when the account is deleted, which needs the client-secret key.
+ */
+fun ServerConfig.appleSignInConfigured(): Boolean =
+    socialSignInEnabled &&
+        appleClientIds.isNotEmpty() &&
+        !appleTeamId.isNullOrBlank() &&
+        !appleKeyId.isNullOrBlank() &&
+        !applePrivateKeyPem.isNullOrBlank()

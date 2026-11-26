@@ -180,6 +180,7 @@ private fun MutableList<ServerConfigIssue>.validateCorsOrigins(config: ServerCon
 private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config: ServerConfig) {
     if (!config.isProductionLikeEnvironment()) return
 
+    validateSocialSignIn(config)
     require(
         condition = !config.databaseUrl.isLocalPostgresUrl(),
         code = "DATABASE_URL_NOT_PRODUCTION_SAFE",
@@ -329,6 +330,41 @@ private fun MutableList<ServerConfigIssue>.validateProductionOnlySettings(config
         message =
             "Production must pre-screen photos: set PYNAPLI_MEDIA_MODERATION_PROVIDER=cloud_vision, or set " +
                 "PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true to run manual review on purpose.",
+    )
+}
+
+/**
+ * Continue with Google / Apple in staging/production: the provider endpoints are never overridden
+ * (those overrides exist for tests and local fakes only), Apple is either fully configured or not at
+ * all, and the key sealing Apple refresh tokens is explicit, strong and used for nothing else.
+ */
+private fun MutableList<ServerConfigIssue>.validateSocialSignIn(config: ServerConfig) {
+    require(
+        condition =
+            listOf(config.googleJwksUrl, config.appleJwksUrl, config.appleTokenUrl, config.appleRevokeUrl).all { it.isNullOrBlank() },
+        code = "SOCIAL_PROVIDER_ENDPOINT_OVERRIDE_FORBIDDEN",
+        message = "PYNAPLI_GOOGLE_JWKS_URL / PYNAPLI_APPLE_JWKS_URL / PYNAPLI_APPLE_TOKEN_URL / PYNAPLI_APPLE_REVOKE_URL are for tests only.",
+    )
+    if (!config.socialSignInEnabled) return
+    val appleParts = listOf(config.appleTeamId, config.appleKeyId, config.applePrivateKeyPem)
+    require(
+        condition = config.appleClientIds.isEmpty() || appleParts.none { it.isNullOrBlank() },
+        code = "APPLE_SIGN_IN_INCOMPLETE",
+        message = "Sign in with Apple needs PYNAPLI_APPLE_TEAM_ID, PYNAPLI_APPLE_KEY_ID and PYNAPLI_APPLE_PRIVATE_KEY (deletion must revoke Apple tokens).",
+    )
+    require(
+        condition =
+            config.socialTokenKey.isStrongRuntimeSecret() &&
+                config.socialTokenKey !in
+                setOf(
+                    config.contactBlockEmailKey,
+                    config.contactBlockTargetKey,
+                    config.discoveryCursorSecret,
+                    config.activityCursorSecret,
+                    config.swipeDeckTokenSecret,
+                ),
+        code = "SOCIAL_TOKEN_KEY_REQUIRED",
+        message = "Social sign-in in production-like environments needs an explicit, strong PYNAPLI_SOCIAL_TOKEN_KEY that differs from every other secret.",
     )
 }
 

@@ -80,11 +80,9 @@ internal class JdbcAuthUserActions(
 }
 
 /**
- * Every row a new email account starts with, in the order sign-up has always written them: the
- * user, its email identity, the profile and the discovery settings. Must run inside a transaction.
- * The one place an email account is created: the verified sign-up (EmailSignupService) and the
- * local-only dev shortcut both come here, so an account looks the same whichever path made it.
- * [emailVerifiedAt] is set for accounts whose address was proven with an emailed code.
+ * Every row a new email account starts with: see [insertAccount]. The verified sign-up
+ * (EmailSignupService) and the local-only dev shortcut both come here. [emailVerifiedAt] is set for
+ * accounts whose address was proven with an emailed code.
  */
 internal fun Connection.insertEmailAccount(
     userId: UUID,
@@ -99,6 +97,77 @@ internal fun Connection.insertEmailAccount(
     privacyAcceptedAt: Instant,
     privacyVersion: String,
     emailVerifiedAt: Instant?,
+): UserRecord =
+    insertAccount(
+        userId = userId,
+        emailHash = emailHash,
+        birthdate = birthdate,
+        displayAge = displayAge,
+        adultConfirmedAt = adultConfirmedAt,
+        termsAcceptedAt = termsAcceptedAt,
+        termsVersion = termsVersion,
+        privacyAcceptedAt = privacyAcceptedAt,
+        privacyVersion = privacyVersion,
+        emailVerifiedAt = emailVerifiedAt,
+    ) { insertEmailIdentity(identityId, userId, emailHash, passwordHash) }
+
+/** A Google or Apple identity a new account starts with (no password). */
+internal class NewSocialIdentity(
+    val identityId: UUID,
+    val provider: String,
+    val subject: String,
+    val emailVerified: Boolean,
+    val emailHint: String?,
+)
+
+/**
+ * Every row a new social account starts with (Continue with Google / Apple): the same account rows as
+ * email sign-up, with the provider identity instead of the email one. [emailHash] and [emailVerifiedAt]
+ * are set only when the provider vouched for the person's real address (SocialIdentityVerifier
+ * `authoritativeEmail`); otherwise both are null and the account has no address at all.
+ */
+internal fun Connection.insertSocialAccount(
+    userId: UUID,
+    identity: NewSocialIdentity,
+    emailHash: String?,
+    birthdate: LocalDate,
+    displayAge: Int,
+    acceptedAt: Instant,
+    termsVersion: String,
+    privacyVersion: String,
+    emailVerifiedAt: Instant?,
+): UserRecord =
+    insertAccount(
+        userId = userId,
+        emailHash = emailHash,
+        birthdate = birthdate,
+        displayAge = displayAge,
+        adultConfirmedAt = acceptedAt,
+        termsAcceptedAt = acceptedAt,
+        termsVersion = termsVersion,
+        privacyAcceptedAt = acceptedAt,
+        privacyVersion = privacyVersion,
+        emailVerifiedAt = emailVerifiedAt,
+    ) { insertSocialIdentity(userId, identity) }
+
+/**
+ * Every row a new account starts with, in the order sign-up has always written them: the user, its
+ * first identity ([insertIdentity]), the profile and the discovery settings. Must run inside a
+ * transaction. The one place an account is created, so an account looks the same whichever path
+ * (email sign-up, the dev shortcut, Google, Apple) made it.
+ */
+internal fun Connection.insertAccount(
+    userId: UUID,
+    emailHash: String?,
+    birthdate: LocalDate,
+    displayAge: Int,
+    adultConfirmedAt: Instant,
+    termsAcceptedAt: Instant,
+    termsVersion: String,
+    privacyAcceptedAt: Instant,
+    privacyVersion: String,
+    emailVerifiedAt: Instant?,
+    insertIdentity: Connection.() -> Unit,
 ): UserRecord {
     insertUser(
         userId = userId,
@@ -110,15 +179,37 @@ internal fun Connection.insertEmailAccount(
         privacyVersion = privacyVersion,
         emailVerifiedAt = emailVerifiedAt,
     )
-    insertEmailIdentity(identityId, userId, emailHash, passwordHash)
+    insertIdentity()
     insertProfile(userId, birthdate, displayAge)
     insertDiscoverySettings(userId)
     return UserRecord(id = userId, status = "active")
 }
 
+internal fun Connection.insertSocialIdentity(
+    userId: UUID,
+    identity: NewSocialIdentity,
+) {
+    prepareStatement(
+        """
+        INSERT INTO auth_identities (
+            id, user_id, provider, provider_subject, email_verified, provider_email_hint, linked_at, last_used_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, now(), now())
+        """.trimIndent(),
+    ).use { statement ->
+        statement.setObject(1, identity.identityId)
+        statement.setObject(2, userId)
+        statement.setString(3, identity.provider)
+        statement.setString(4, identity.subject)
+        statement.setBoolean(5, identity.emailVerified)
+        statement.setString(6, identity.emailHint)
+        statement.executeUpdate()
+    }
+}
+
 private fun Connection.insertUser(
     userId: UUID,
-    emailHash: String,
+    emailHash: String?,
     adultConfirmedAt: Instant,
     termsAcceptedAt: Instant,
     termsVersion: String,

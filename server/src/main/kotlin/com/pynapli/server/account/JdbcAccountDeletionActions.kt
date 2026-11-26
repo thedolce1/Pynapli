@@ -1,6 +1,7 @@
 package com.pynapli.server.account
 
 import com.pynapli.server.auth.CLEAR_REFRESH_REPLAY_SQL
+import com.pynapli.server.auth.social.SealedAppleToken
 import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
@@ -26,6 +27,8 @@ internal class JdbcAccountDeletionActions(
                 clearActiveTravelLocation(connection, userId)
                 // GDPR/CCPA erasure: scrub PII while preserving safety/legal audit rows.
                 anonymizeUserIdentity(connection, userId)
+                // Read in the same transaction that scrubs them: revoked with Apple after the commit.
+                val appleTokens = appleTokensOf(connection, userId)
                 anonymizeAuthIdentities(connection, userId)
                 anonymizeProfile(connection, userId)
                 val purgedLocationCount = purgeExactLocation(connection, userId)
@@ -49,9 +52,39 @@ internal class JdbcAccountDeletionActions(
                     purgedLocationCount = purgedLocationCount,
                     endedPartnerLinkCount = endedPartnerLinkCount,
                     softDeletedMediaCount = softDeletedMediaCount,
+                    appleTokens = appleTokens,
                 )
             }
         }
+
+    private fun appleTokensOf(
+        connection: Connection,
+        userId: UUID,
+    ): List<SealedAppleToken> =
+        connection
+            .prepareStatement(
+                """
+                SELECT id, apple_client_id, apple_refresh_token_sealed
+                FROM auth_identities
+                WHERE user_id = ? AND provider = 'apple'
+                  AND apple_refresh_token_sealed IS NOT NULL AND apple_client_id IS NOT NULL
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) {
+                            add(
+                                SealedAppleToken(
+                                    identityId = rs.getObject("id", UUID::class.java),
+                                    clientId = rs.getString("apple_client_id"),
+                                    sealed = rs.getBytes("apple_refresh_token_sealed"),
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
 
     private fun endLiveSessions(
         connection: Connection,
@@ -218,7 +251,11 @@ internal class JdbcAccountDeletionActions(
                 SET provider_subject = 'deleted:' || id,
                     password_hash = NULL,
                     password_salt = NULL,
-                    password_iterations = NULL
+                    password_iterations = NULL,
+                    provider_email_hint = NULL,
+                    email_verified = false,
+                    apple_refresh_token_sealed = NULL,
+                    apple_client_id = NULL
                 WHERE user_id = ?
                 """.trimIndent(),
             ).use { statement ->

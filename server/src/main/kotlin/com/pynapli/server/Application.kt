@@ -10,6 +10,7 @@ import com.pynapli.server.admin.configureAdminSubscriptionSupportRoutes
 import com.pynapli.server.admin.configureAdminUserLookupRoutes
 import com.pynapli.server.auth.configureAuthRoutes
 import com.pynapli.server.auth.configureEmailSignupRoutes
+import com.pynapli.server.auth.social.configureSocialAuthRoutes
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.contactblocks.configureContactBlockRoutes
 import com.pynapli.server.dependencies.ServerDependencies
@@ -179,6 +180,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
             devMailbox = dependencies.devSignupMailbox,
         )
     }
+    dependencies.socialAuthService?.let { social -> configureSocialAuthRoutes(dependencies.authService, social) }
     configureAccountLifecycleRoutes(dependencies.authService, dependencies.accountLifecycleService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService, dependencies.requestProfilerFactory)
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
@@ -225,7 +227,12 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.contactBlockService?.let { service ->
         configureContactBlockRoutes(dependencies.authService, service)
     }
-    configureAppealRoutes(dependencies.authService, dependencies.appealService, dependencies.config.trustedProxyHops)
+    configureAppealRoutes(
+        dependencies.authService,
+        dependencies.appealService,
+        dependencies.config.trustedProxyHops,
+        socialAuthService = dependencies.socialAuthService,
+    )
     configureSwipeRoutes(
         authService = dependencies.authService,
         swipeService = dependencies.swipeService,

@@ -152,6 +152,10 @@ class JdbcAccountDataExportArchiver(
                     "SELECT s.id, s.status, s.deck_size, s.location_label, s.created_at, s.started_at, s.ended_at FROM psync_sessions s JOIN psync_session_participants p ON p.session_id = s.id WHERE p.user_id = ? ORDER BY s.created_at",
                 "psyncChoices" to
                     "SELECT session_id, target_user_id, action, created_at FROM psync_session_actions WHERE actor_user_id = ? ORDER BY created_at",
+                // How the person signs in (email/password, Google, Apple): never the subject, password
+                // hash or any provider token.
+                "signInMethods" to
+                    "SELECT provider, linked_at, provider_email_hint, email_verified, last_used_at FROM auth_identities WHERE user_id = ? AND provider_subject NOT LIKE 'deleted:%' ORDER BY linked_at",
                 "signIns" to
                     "SELECT platform, app_version, created_at, last_seen_at, revoked_at FROM user_sessions WHERE user_id = ? ORDER BY created_at",
                 "pushDevices" to
