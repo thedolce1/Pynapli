@@ -595,6 +595,26 @@ Paid filters and persistence (2026-11-24, Section 2, plan G9):
 - Fresh (`freshOnly`) replaced "Recently joined"; a preset saved with `recentlyJoinedOnly` restores
   as Fresh.
 
+Filter correctness (2026-11-26, G2-1):
+
+- One filter fragment: every Grid filter predicate lives in `GridFilterSql`, shared by the nearby
+  rank and "Visiting soon", so the two never drift.
+- Linked / Singles mean exactly "the card shows this viewer a partner mini" / "it shows none"
+  (`LinkedPartnerFilterSql`, the couple-verified badge's partner rule plus contact blocks; same
+  predicate on the Swipe deck and the linked-only Swipe candidate lookup). The owner's
+  partner_visibility, the viewer's hides, contact blocks and blocks either way hide the partner from
+  the filter exactly as from the tile, so the filter can't reveal a hidden partner. Proof:
+  `LinkedFilterPartnerVisibilityIntegrationTest`, whose oracle is the service's own unfiltered tiles.
+  Partnered merged into Linked; free-text `relationship_context` is no longer matched
+  (FILTERS_SPEC "Who").
+- The distance slider stops only on the server's radius steps and labels the step searched
+  (`DiscoveryRadiusSteps`); off-step stored radii snap up like the server (`GridRadiusStepsTest`).
+- Visiting soon applies every filter, lists the soonest arrival first (then L-08 bucket, then id),
+  pages by keyset and is sealed into the cursor scope (`VisitingSoonDiscoveryTest`).
+- Active today, the activeAgo caption and Fresh read one source, `user_last_active`
+  (`GridActivitySql.activeToday`).
+- Every sheet change (Apply, Clear all, a saved preset) switches Favorites back to Nearby.
+
 ## Default Deck / Never-Empty
 
 The Grid must never look broken because a viewer left filters at their defaults or in a sparse
@@ -855,6 +875,12 @@ updates when the app pauses, prefer event deltas over polling.
   on wider windows; fetch on settle only; next page at the end; block/hide moves on; tap-to-change photos;
   inline first-message composer and "Verify to message" (`ProfilePagerControllerTest`,
   `ProfileComposerStateHolderTest`, `ProfileDetailPagingTest`). Emulator and browser walk still owed.
+- [x] G2-1 (2026-11-26, written, not yet built or run here): Linked uses the partner mini's visibility
+  gate (privacy fix, Grid + Swipe), Singles / Partnered from the visible link, the distance slider on
+  the server's steps, Visiting soon filtered + ordered + paged, one Active-today source, and dead code
+  plus the Favorites reset removed (see "Filter correctness" under Filter Application).
+- [ ] G2-1: build, full test run, independent privacy review of the Linked fix, emulator + browser walk
+  (sheet Who and Distance, Visiting soon paging, Clear all from Favorites).
 ## Do Not Implement
 
 - Do not use offset pagination for live grid pages.
