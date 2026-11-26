@@ -79,6 +79,8 @@ data class ServerConfig(
     // "Rank cache and visibility"). Defaults unchanged: 5 s, 128 rows.
     val gridRankCacheTtlMillis: Long = 5_000L,
     val gridRankCacheWindow: Int = 128,
+    // Local measurement only (G2-2 ticket 7): local media URLs change every second, like signed URLs.
+    val mediaLocalUrlChurn: Boolean = false,
     val accountDataExportEnabled: Boolean = false,
     val accountDataExportIntervalMillis: Long = 60_000L,
     val accountDataExportDirectory: String = ".pynapli-account-exports",
@@ -386,6 +388,7 @@ data class ServerConfig(
                         ?.toIntOrNull()
                         ?.coerceIn(120, 1_000)
                         ?: 128,
+                mediaLocalUrlChurn = System.getenv("PYNAPLI_MEDIA_LOCAL_URL_CHURN")?.toBooleanStrictOrNull() ?: false,
                 accountDataExportEnabled =
                     System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),

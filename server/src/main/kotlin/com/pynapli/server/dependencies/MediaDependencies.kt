@@ -122,7 +122,7 @@ internal fun buildMediaDependencies(
         }
     val mediaAssetUrlResolver: MediaAssetUrlResolver? =
         when (config.mediaStorageProvider.lowercase()) {
-            "local" -> LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl)
+            "local" -> LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl, churnUrls = config.mediaLocalUrlChurn)
             "gcs" ->
                 if (cdnSignedUrlFactory != null) {
                     CdnMediaAssetUrlResolver(

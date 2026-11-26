@@ -2,6 +2,7 @@ package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.profiling.profileBlocking
+import com.pynapli.server.profiling.profileCount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
@@ -200,6 +201,7 @@ internal class JdbcGridRepository(
             !candidateRankCache.isEnabled() ||
             viewerTravelActive
         ) {
+            profileCount("grid.rank.uncached")
             return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
         }
 
@@ -211,8 +213,11 @@ internal class JdbcGridRepository(
                 filterKey = filters.gridRankCacheKey(),
                 window = cacheWindow,
             )
+        // G2-2 ticket 7: hit vs miss, read off the profiled request (X-Pynapli-Profile-Counts).
+        var rankedNow = false
         val cachedRows =
             candidateRankCache.load(cacheKey) {
+                rankedNow = true
                 queryGridRank(
                     viewerUserId = viewerUserId,
                     radiusMeters = radiusMeters,
@@ -223,6 +228,7 @@ internal class JdbcGridRepository(
                     orderSeed = viewerLocationKey.orderSeed,
                 )
             }
+        profileCount(if (rankedNow) "grid.rank.cacheMiss" else "grid.rank.cacheHit")
 
         // Cursor slice + self-exclusion in Kotlin over the shared window. Block +
         // hidden are applied post-repository in GridService; self is excluded here
@@ -243,6 +249,8 @@ internal class JdbcGridRepository(
             return GridRankPage(cards = sliced.take(limit), hasMore = sliced.size > limit, fromSharedWindow = true)
         }
 
+        // The window could not settle this page: a second rank pass, ranked for this viewer.
+        profileCount("grid.rank.windowFallback")
         return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
     }
 

@@ -15,6 +15,7 @@ import com.pynapli.server.media.forAssetsOrOriginals
 import com.pynapli.server.presence.GridActiveAgo
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
+import com.pynapli.server.profiling.profileCount
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.RateLimitService
@@ -207,6 +208,7 @@ class GridService(
         // One ranked page at [queryRadius] with every per-viewer exclusion applied: what the viewer
         // would actually see. Run once, or twice when a sparse first page widens.
         suspend fun visiblePage(queryRadius: Int): VisiblePage {
+            profileCount("grid.rank.pass")
             val result =
                 profile("grid.repository") {
                     if (request.visitingSoonOnly) {
@@ -273,6 +275,7 @@ class GridService(
         val widenNow = canWiden && cursor == null && first.filteredCards.size < minOf(SPARSE_FIRST_PAGE, limit)
         val page =
             if (widenNow) {
+                profileCount("grid.rank.widenPass")
                 profile("grid.repositoryWiden") { visiblePage(MAX_RADIUS_METERS) }
             } else {
                 first
