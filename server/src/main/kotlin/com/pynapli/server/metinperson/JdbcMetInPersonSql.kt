@@ -109,7 +109,7 @@ internal object JdbcMetInPersonSql {
               AND vcp.user_id = ?
         )
         SELECT cp.user_id AS subject_user_id,
-               COALESCE(NULLIF(sp.display_name, ''), 'Pynapli User') AS display_name,
+               COALESCE(NULLIF(sp.display_name, ''), 'New member') AS display_name,
                (cp.invitation_status = 'active' AND cp.left_at IS NULL) AS active_participant,
                -- The rows messaging's conversation load holds (contact-block conversation rule).
                (cp.invitation_status IN ('active', 'invited') AND cp.left_at IS NULL) AS current_participant,

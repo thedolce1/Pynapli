@@ -310,7 +310,7 @@ class AdminMetInPersonService(
     private fun Connection.displayNames(userIds: Set<UUID>): Map<UUID, String> {
         if (userIds.isEmpty()) return emptyMap()
         return prepareStatement(
-            "SELECT user_id, COALESCE(NULLIF(display_name, ''), 'Pynapli User') AS name FROM profiles WHERE user_id = ANY(?)",
+            "SELECT user_id, COALESCE(NULLIF(display_name, ''), 'New member') AS name FROM profiles WHERE user_id = ANY(?)",
         ).use { statement ->
             statement.setArray(1, createArrayOf("uuid", userIds.toTypedArray()))
             statement.executeQuery().use { rs ->
