@@ -420,7 +420,7 @@ password, no email code.
   claim equal to a server-issued, single-use, 10-minute nonce (Apple: its SHA-256 hex, or raw). The
   nonce is spent atomically right after the token checks pass, so a token gets exactly one answer.
   Library: google-auth-library `TokenVerifier` (already on the classpath for App Check); the key set
-  is cached an hour and refetched (at most every 5 minutes) when a token names an unknown key.
+  is cached an hour per server instance and refreshed when a token names an unknown key (at most once per 30 s; a kid still unknown after a refresh is ignored for 10 minutes).
 - **Accounts are keyed by the provider `sub`**, never by email (Google: "Always use the sub field").
   One identity per provider per account; one account per identity (`UNIQUE (provider,
   provider_subject)`, `UNIQUE (user_id, provider)`).
@@ -470,11 +470,29 @@ password, no email code.
   relay address, which nobody knows, so contact blocks naming their real address never match them,
   and they can't be found by it. Accepted (founder decision); say so in the privacy copy. Same for a
   Google account whose address Google isn't authoritative for.
+- **Ban evasion through an address-less account.** An Apple relay address or a Google address Google
+  isn't authoritative for gives an account with no `users.email_hash`, so it escapes the
+  one-account-per-address guard, and bans or contact blocks that key on a real address don't follow
+  it. The same person can hold a second account this way (also an existing member signing in with
+  such an identity, who gets a new account instead of `SOCIAL_EMAIL_HAS_ACCOUNT`). Mitigations
+  outside this flow: device-farm signals at sign-up, moderation by device and behaviour, photo
+  verification. Accepted with the relay decision.
+- **Apple "stale address".** Apple marks an address verified when the Apple ID was set up with it.
+  If that third-party address later changes hands, the Apple ID holder (no longer its owner) still
+  presents it as verified and can learn whether that address now has an account
+  (`SOCIAL_EMAIL_HAS_ACCOUNT`). Google's authoritative rule avoids this for Google; Apple offers no
+  equivalent signal. Small and accepted: it needs control of an Apple ID set up with that address.
+- **The JWKS key cache is per server instance**: each replica fetches and refreshes Google's and
+  Apple's keys on its own (one fetch per hour, plus at most one refresh per 30 s on an unknown key;
+  kids still unknown after a refresh are ignored for 10 minutes). A rotation can therefore reach the
+  replicas at slightly different times; a token rejected for an unknown key on one replica is accepted
+  once that replica refreshes.
 - Residuals: the answers for an unknown identity (`422` vs `409`) differ, but only to the identity's
   proven owner. Apple revocation is best-effort and not retried (the token is already scrubbed when it
   runs); a failure is logged by status only. The Apple code exchange runs off the request path; if it
   fails, that Apple identity has no stored grant until a later sign-in supplies a new code, and
-  deletion can't revoke it.
+  deletion can't revoke it. If it finishes after the identity was unlinked or the account deleted,
+  the fresh grant is revoked at once instead of stored.
 
 ### Not built / founder track
 
