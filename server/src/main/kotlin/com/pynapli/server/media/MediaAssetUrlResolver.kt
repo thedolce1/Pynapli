@@ -5,6 +5,13 @@ import java.util.UUID
 
 interface MediaAssetUrlResolver {
     fun publicContentUrl(mediaAssetId: UUID): String?
+
+    /**
+     * The grid thumbnail (MediaThumbnails) of an asset, signed the same way as [publicContentUrl].
+     * Only [MediaImageSet] calls it, and only for assets whose thumbnail is ready and still eligible.
+     * Null where a resolver has no thumbnail route.
+     */
+    fun thumbnailContentUrl(mediaAssetId: UUID): String? = null
 }
 
 class LocalMediaAssetUrlResolver(
@@ -16,6 +23,11 @@ class LocalMediaAssetUrlResolver(
     override fun publicContentUrl(mediaAssetId: UUID): String {
         val base = (requestMediaBaseUrl.get() ?: fallbackBaseUrl).trimEnd('/')
         return "$base/v1/media/uploads/local/$mediaAssetId"
+    }
+
+    override fun thumbnailContentUrl(mediaAssetId: UUID): String {
+        val base = (requestMediaBaseUrl.get() ?: fallbackBaseUrl).trimEnd('/')
+        return "$base/v1/media/uploads/local/$mediaAssetId/thumb"
     }
 }
 
@@ -38,6 +50,15 @@ class GcsV4MediaAssetUrlResolver(
                 objectKey = mediaObjectKey(mediaAssetId),
                 ttl = ttl,
             ).url
+
+    override fun thumbnailContentUrl(mediaAssetId: UUID): String =
+        signedUrlFactory
+            .sign(
+                method = "GET",
+                bucket = storageBucket,
+                objectKey = mediaThumbnailObjectKey(mediaAssetId),
+                ttl = ttl,
+            ).url
 }
 
 /**
@@ -58,6 +79,13 @@ class CdnMediaAssetUrlResolver(
         signedUrlFactory
             .sign(
                 baseUrl = "$normalizedBaseUrl/${mediaObjectKey(mediaAssetId)}",
+                ttl = ttl,
+            ).url
+
+    override fun thumbnailContentUrl(mediaAssetId: UUID): String =
+        signedUrlFactory
+            .sign(
+                baseUrl = "$normalizedBaseUrl/${mediaThumbnailObjectKey(mediaAssetId)}",
                 ttl = ttl,
             ).url
 }

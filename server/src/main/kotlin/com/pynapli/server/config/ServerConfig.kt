@@ -68,6 +68,12 @@ data class ServerConfig(
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val mediaCleanupEnabled: Boolean = false,
     val mediaCleanupIntervalMillis: Long = 60 * 60 * 1_000L,
+    // Grid thumbnails (G2-2, MediaThumbnailService): made on approval plus a rate-limited backfill
+    // and cleanup loop. Off in the bare constructor (tests); on by default from the environment.
+    val mediaThumbnailsEnabled: Boolean = false,
+    val mediaThumbnailIntervalMillis: Long = 30_000L,
+    val mediaThumbnailBackfillPerTick: Int = 20,
+    val mediaThumbnailSweepPerTick: Int = 500,
     val accountDataExportEnabled: Boolean = false,
     val accountDataExportIntervalMillis: Long = 60_000L,
     val accountDataExportDirectory: String = ".pynapli-account-exports",
@@ -343,6 +349,26 @@ data class ServerConfig(
                         ?.toLongOrNull()
                         ?.coerceAtLeast(60_000L)
                         ?: 60 * 60 * 1_000L,
+                mediaThumbnailsEnabled =
+                    System.getenv("PYNAPLI_MEDIA_THUMBNAILS_ENABLED")?.toBooleanStrictOrNull() ?: true,
+                mediaThumbnailIntervalMillis =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_INTERVAL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceAtLeast(5_000L)
+                        ?: 30_000L,
+                mediaThumbnailBackfillPerTick =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_BACKFILL_PER_TICK")
+                        ?.toIntOrNull()
+                        ?.coerceIn(0, 200)
+                        ?: 20,
+                mediaThumbnailSweepPerTick =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_SWEEP_PER_TICK")
+                        ?.toIntOrNull()
+                        ?.coerceIn(1, 5_000)
+                        ?: 500,
                 accountDataExportEnabled =
                     System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),

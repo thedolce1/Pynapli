@@ -100,6 +100,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.activityRetentionWorker?.start()
     dependencies.dataRetentionWorker?.start()
     dependencies.mediaCleanupWorker?.start()
+    dependencies.mediaThumbnailWorker?.start()
     dependencies.photoVerificationRetentionWorker?.start()
     dependencies.metInPersonBadgeWorker.start()
     dependencies.tonightSessionExpiryWorker.start()

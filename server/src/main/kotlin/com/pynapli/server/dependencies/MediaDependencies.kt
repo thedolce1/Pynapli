@@ -58,6 +58,11 @@ internal class MediaDependencies(
     val selfieMediaGateway: SelfieMediaGateway,
     // Face counting for verification selfies; only when Cloud Vision moderation is configured.
     val selfieFaceDetector: SelfieFaceDetector?,
+    // Grid thumbnails (G2-2). The resolver is always present when media URLs are; the scheduler and
+    // worker only when thumbnails are enabled and the storage can hold them.
+    val mediaImageResolver: com.pynapli.server.media.MediaImageResolver? = null,
+    val thumbnailScheduler: com.pynapli.server.media.MediaThumbnailScheduler? = null,
+    val thumbnailWorker: com.pynapli.server.media.MediaThumbnailWorker? = null,
 )
 
 internal fun buildMediaDependencies(
@@ -161,6 +166,7 @@ internal fun buildMediaDependencies(
                 )
         }
     val mediaRepository = JdbcMediaRepository(dataSource)
+    val thumbnails = buildThumbnails(config, dataSource, gcsSignedUrlFactory, localMediaUploadStorage)
     val moderationScanner = createMediaModerationScanner(config, mediaSigningCredentials)
     // Founder decision: Vision sees public profile photos (and, via the face detector below,
     // verification selfies) only, unless private-media scanning is switched on.
@@ -180,6 +186,7 @@ internal fun buildMediaDependencies(
             rateLimitService = rateLimitService,
             contactBlockVisibility = contactBlockVisibility,
             scanScope = scanScope,
+            profilePhotoApproved = thumbnails?.scheduler,
         )
     // Chat photo media reuses the same signer/asset/scanner/resolver as album media.
     val messageMediaGateway =
@@ -224,8 +231,49 @@ internal fun buildMediaDependencies(
         messageMediaGateway = messageMediaGateway,
         selfieMediaGateway = selfieMediaGateway,
         selfieFaceDetector = selfieFaceDetector,
+        mediaImageResolver =
+            mediaAssetUrlResolver?.let { com.pynapli.server.media.MediaImageResolver(it, thumbnails?.repository) },
+        thumbnailScheduler = thumbnails?.scheduler,
+        thumbnailWorker = thumbnails?.worker,
     )
 }
+
+private class ThumbnailParts(
+    val repository: com.pynapli.server.media.MediaThumbnailRepository,
+    val scheduler: com.pynapli.server.media.MediaThumbnailScheduler,
+    val worker: com.pynapli.server.media.MediaThumbnailWorker,
+)
+
+// Thumbnails live in the same storage as the originals: GCS through the shared signing factory, or
+// the local upload directory. Any other provider (or thumbnails switched off) serves originals only.
+private fun buildThumbnails(
+    config: ServerConfig,
+    dataSource: DataSource,
+    gcsSignedUrlFactory: GcsV4SignedUrlFactory?,
+    localMediaUploadStorage: LocalMediaUploadStorage?,
+): ThumbnailParts? {
+    if (!config.mediaThumbnailsEnabled) return null
+    val store: com.pynapli.server.media.MediaThumbnailStore =
+        when {
+            gcsSignedUrlFactory != null -> com.pynapli.server.media.GcsMediaThumbnailStore(gcsSignedUrlFactory)
+            localMediaUploadStorage != null -> com.pynapli.server.media.LocalMediaThumbnailStore(localMediaUploadStorage)
+            else -> return null
+        }
+    val repository = com.pynapli.server.media.JdbcMediaThumbnailRepository(dataSource)
+    val service = com.pynapli.server.media.MediaThumbnailService(repository = repository, store = store)
+    return ThumbnailParts(
+        repository = repository,
+        scheduler = com.pynapli.server.media.MediaThumbnailScheduler(service),
+        worker =
+            com.pynapli.server.media.MediaThumbnailWorker(
+                service = service,
+                intervalMillis = config.mediaThumbnailIntervalMillis,
+                backfillPerTick = config.mediaThumbnailBackfillPerTick,
+                sweepPerTick = config.mediaThumbnailSweepPerTick,
+                jobLock = com.pynapli.server.db.PostgresJobLock(dataSource),
+            ),
+    )
+})
 
 private val LOCAL_MEDIA_ALLOWED_ENVIRONMENTS = setOf("local", "test")
 
