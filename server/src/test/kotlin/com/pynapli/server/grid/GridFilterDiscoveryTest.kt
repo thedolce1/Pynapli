@@ -164,8 +164,11 @@ class GridFilterDiscoveryTest :
                 val todayOrSooner = setOf(GridActiveAgo.ONLINE, GridActiveAgo.WITHIN_15_MINUTES, GridActiveAgo.WITHIN_1_HOUR, GridActiveAgo.WITHIN_3_HOURS, GridActiveAgo.TODAY)
                 val captions =
                     GridService(JdbcGridRepository(dataSource))
-                        .queryGrid(viewer, com.pynapli.shared.network.dto.GridQueryRequestDto(radiusMeters = 100_000, limit = 60))
-                        .items
+                        .queryGrid(
+                            viewer,
+                            com.pynapli.shared.network.dto
+                                .GridQueryRequestDto(radiusMeters = 100_000, limit = 60),
+                        ).items
                         .filter { it.activeAgo in todayOrSooner }
                         .map { UUID.fromString(it.userId) }
                         .toSet()

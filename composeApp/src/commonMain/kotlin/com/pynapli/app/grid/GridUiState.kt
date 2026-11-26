@@ -168,6 +168,7 @@ data class GridFilters(
 
     companion object {
         const val DEFAULT_RADIUS_METERS: Int = 50_000
+
         // The server tests only DiscoveryRadiusSteps (2, 5, 10, 25, 50, 100 km); these are its ends.
         const val MIN_RADIUS_METERS: Int = 2_000
         const val MAX_RADIUS_METERS: Int = 100_000
@@ -175,6 +176,7 @@ data class GridFilters(
         const val MAX_FILTER_AGE: Int = 99
         const val PAGE_SIZE: Int = 60
         const val SINGLES_CONTEXT: String = "single"
+
         // The retired "Partnered" token: a preset that carries it restores as Linked.
         const val PARTNERED_CONTEXT: String = "partnered"
         val defaults: GridFilters = GridFilters()

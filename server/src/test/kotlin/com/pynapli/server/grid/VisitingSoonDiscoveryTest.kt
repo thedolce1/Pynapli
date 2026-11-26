@@ -86,7 +86,11 @@ class VisitingSoonDiscoveryTest :
 
                 assertEquals(
                     setOf(verified, unverified).map { it.toString() }.toSet(),
-                    grid.queryGrid(viewer, visitingSoon().copy(minimumAge = 40)).items.map { it.userId }.toSet(),
+                    grid
+                        .queryGrid(viewer, visitingSoon().copy(minimumAge = 40))
+                        .items
+                        .map { it.userId }
+                        .toSet(),
                 )
                 assertEquals(
                     listOf(verified.toString()),
