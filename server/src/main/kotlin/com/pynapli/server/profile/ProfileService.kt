@@ -3,6 +3,7 @@ package com.pynapli.server.profile
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.favorites.FavoriteService
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.forAssetsOrOriginals
 import com.pynapli.server.presence.LastActiveRepository
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
@@ -37,6 +38,9 @@ class ProfileService(
     // "Hide from people you know": someone hiding from the viewer is PROFILE_NOT_FOUND (as a deleted
     // or hidden profile is), and never shows as the partner on someone else's profile.
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // G2-2: stable cache keys on every photo, the partner mini as a thumbnail, and the first
+    // photo's thumbnail key so the pager paints the cached Grid tile first.
+    private val mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
 ) {
     private val profileViewRecorder =
         ProfileViewActivityRecorder(
@@ -61,7 +65,14 @@ class ProfileService(
         if (targetUserId in hiddenFromViewer) throw ProfileException("PROFILE_NOT_FOUND")
         val fetched =
             profile("profile.repository") {
-                repository.getPublicProfile(viewerUserId, targetUserId)?.toDto(mediaAssetUrlResolver)
+                repository.getPublicProfile(viewerUserId, targetUserId)?.let { record ->
+                    val images =
+                        mediaImages.forAssetsOrOriginals(
+                            mediaAssetUrlResolver,
+                            listOf(record.profilePhotoMediaAssetId, record.linkedPartnerThumbnailMediaAssetId),
+                        )
+                    record.toDto(mediaAssetUrlResolver, images)
+                }
             }
                 ?: throw ProfileException("PROFILE_NOT_FOUND")
         val profile =

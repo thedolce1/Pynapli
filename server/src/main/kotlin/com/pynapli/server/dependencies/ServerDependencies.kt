@@ -273,6 +273,7 @@ class ServerDependencies(
                     activityBroadcaster = core.activityBroadcaster,
                     cursorCodec = ActivityCursorCodec(config.activityCursorSecret),
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
                 )
             val activityRetentionWorker =
                 if (config.activityRetentionEnabled) {
@@ -324,6 +325,7 @@ class ServerDependencies(
                     blockRepository = core.blockRepository,
                     rateLimitService = core.rateLimitService,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
                 )
             val profileService =
                 ProfileService(
@@ -342,6 +344,7 @@ class ServerDependencies(
                     profileViewRecordScope = profileActivityScope,
                     profileViewRecordConcurrency = 4,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
                 )
             val profileLinkService =
                 ProfileLinkService(
@@ -394,6 +397,7 @@ class ServerDependencies(
                     subscriptionService = commerceTravel.subscriptionService,
                     rateLimitService = core.rateLimitService,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImageResolver = media.mediaImageResolver,
                 )
             val tonight =
                 buildTonightDependencies(
@@ -488,6 +492,7 @@ class ServerDependencies(
                     productMetrics = core.productMetrics,
                     matchConversationOpener = messaging.messagingService.matchConversationOpener,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImageResolver = media.mediaImageResolver,
                 )
             return ServerDependencies(
                 config = config,

@@ -13,6 +13,7 @@ internal fun SwipeCardDto.toProfileCardUi(): GridProfileCardUi {
         id = userId,
         displayName = displayName,
         thumbnailUrl = photoUrl,
+        thumbnailCacheKey = photoCacheKeys.firstOrNull(),
         online = online,
         distanceLabel = distanceLabel,
         tone = GridCardTone.entries[toneIndex],

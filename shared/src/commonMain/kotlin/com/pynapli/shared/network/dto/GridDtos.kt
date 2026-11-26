@@ -69,6 +69,10 @@ data class GridCardDto(
     val userId: String,
     val displayName: String,
     val thumbnailUrl: String? = null,
+    // G2-2: the stable key that names [thumbnailUrl]'s bytes ("<assetId>:v1-thumb-480" for the
+    // server-made thumbnail, "<assetId>:orig" for the original). Clients cache by it, so a re-signed
+    // URL is a cache hit; the URL still guards access. Null on locked cards (no identity, Section 3).
+    val thumbnailCacheKey: String? = null,
     val online: Boolean,
     val distanceLabel: String? = null,
     val distanceMeters: Int? = null,
@@ -117,6 +121,8 @@ data class LinkedPartnerMiniDto(
     val userId: String,
     val displayName: String? = null,
     val thumbnailUrl: String? = null,
+    // G2-2: stable cache key for [thumbnailUrl] (same meaning as GridCardDto.thumbnailCacheKey).
+    val thumbnailCacheKey: String? = null,
     val online: Boolean = false,
     // Partner preview only (public profile detail): the partner's own orientation, experience
     // level and swap/room tags. Always null/empty on Grid cards and the Tonight feed.

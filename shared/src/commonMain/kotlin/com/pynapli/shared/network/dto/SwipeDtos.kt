@@ -84,6 +84,12 @@ data class SwipeCardDto(
     val distanceMeters: Int? = null,
     val photoUrl: String? = null,
     val photoUrls: List<String> = emptyList(),
+    // G2-2: stable cache keys for [photoUrls], index for index ("<assetId>:orig"): a client caches by
+    // these, so a re-signed URL for the same bytes is a cache hit. The URL still guards access.
+    val photoCacheKeys: List<String> = emptyList(),
+    // The key the first photo's small Grid thumbnail is cached under, to paint while the original
+    // loads. Null when no thumbnail exists.
+    val photoThumbnailCacheKey: String? = null,
     val linkedPartner: LinkedPartnerMiniDto? = null,
     val rankToken: String,
     val online: Boolean = false,

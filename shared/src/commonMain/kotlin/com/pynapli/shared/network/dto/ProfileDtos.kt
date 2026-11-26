@@ -65,6 +65,13 @@ data class PublicProfileDto(
     val distanceMeters: Int? = null,
     val profilePhotoUrl: String? = null,
     val photoUrls: List<String> = emptyList(),
+    // G2-2: stable cache keys ("<assetId>:orig") for [profilePhotoUrl] and, index for index, [photoUrls].
+    // They name the bytes only; the signed URL still guards access.
+    val profilePhotoCacheKey: String? = null,
+    val photoCacheKeys: List<String> = emptyList(),
+    // The key the first photo's Grid thumbnail is cached under: the pager paints it while the
+    // original loads. Null when no thumbnail exists.
+    val profilePhotoThumbnailCacheKey: String? = null,
     val verified: Boolean = false,
     // This person and the linked partner in [linkedPartner] are both photo-verified (server-computed;
     // false whenever the partner mini is hidden from this viewer).

@@ -3,6 +3,7 @@ package com.pynapli.server.profile
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.MediaImageSet
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.DiscoverySettingsDto
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
@@ -42,8 +43,15 @@ internal fun ProfileRecord.toDto(): ProfileDto =
         ageVerified = ageVerified,
     )
 
-internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResolver?): PublicProfileDto =
-    PublicProfileDto(
+internal fun PublicProfileRecord.toDto(
+    mediaAssetUrlResolver: MediaAssetUrlResolver?,
+    // G2-2: originals with stable keys for the pager; the partner mini as a Grid thumbnail.
+    images: MediaImageSet = MediaImageSet.originalsOnly(mediaAssetUrlResolver),
+): PublicProfileDto {
+    val first = images.original(profilePhotoMediaAssetId)
+    val photos = profilePhotoMediaAssetIds.mapNotNull { images.original(it) }
+    val partnerTile = images.tile(linkedPartnerThumbnailMediaAssetId)
+    return PublicProfileDto(
         userId = userId.toString(),
         displayName = displayName,
         displayAge = displayAge,
@@ -62,8 +70,11 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
         intents = intents,
         distanceLabel = distanceMeters?.toPublicDistanceLabel(),
         distanceMeters = distanceMeters?.toPublicDistanceMeters(),
-        profilePhotoUrl = profilePhotoMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
-        photoUrls = profilePhotoMediaAssetIds.mapNotNull { mediaAssetUrlResolver?.publicContentUrl(it) },
+        profilePhotoUrl = first?.url,
+        photoUrls = photos.map { it.url },
+        profilePhotoCacheKey = first?.cacheKey,
+        photoCacheKeys = photos.map { it.cacheKey },
+        profilePhotoThumbnailCacheKey = images.thumbnailCacheKey(profilePhotoMediaAssetId),
         verified = verified,
         coupleVerified = coupleVerified && linkedPartnerUserId != null,
         metInPerson = metInPerson,
@@ -74,9 +85,8 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
                 LinkedPartnerMiniDto(
                     userId = partnerUserId.toString(),
                     displayName = linkedPartnerDisplayName,
-                    thumbnailUrl =
-                        linkedPartnerThumbnailMediaAssetId
-                            ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                    thumbnailUrl = partnerTile?.url,
+                    thumbnailCacheKey = partnerTile?.cacheKey,
                     orientation = linkedPartnerOrientation,
                     orientationDetail = linkedPartnerOrientationDetail,
                     experienceLevel = linkedPartnerExperienceLevel,
@@ -88,6 +98,7 @@ internal fun PublicProfileRecord.toDto(mediaAssetUrlResolver: MediaAssetUrlResol
         allowFlirts = allowFlirts,
         allowAlbumRequests = allowAlbumRequests,
     )
+}
 
 /**
  * Plan G12: why Grid messaging is off for this viewer, when telling them helps and reveals nothing.

@@ -34,8 +34,10 @@ class SwipeService(
     // "Hide from people you know": viewer-side only (the deck, rewind and like-back of the person
     // someone hides from), never the hiding member's own deck.
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // G2-2: partner minis use the Grid thumbnail when ready; photos carry stable cache keys.
+    mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
 ) {
-    private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver)
+    private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver, mediaImages)
     private val sideEffects =
         SwipeActionSideEffects(
             repository = repository,

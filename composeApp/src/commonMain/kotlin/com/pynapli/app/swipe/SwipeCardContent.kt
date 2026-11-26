@@ -34,6 +34,7 @@ import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.ArrowUpward
+import com.pynapli.app.media.rememberCachedImageModel
 import com.pynapli.shared.network.dto.SwipeCardDto
 
 @Composable
@@ -42,10 +43,16 @@ internal fun BoxScope.SwipeCardPhotos(
     resolvedPhotos: List<String>,
     photoIndex: Int,
     displayName: String,
+    // G2-2: stable cache keys for [resolvedPhotos] (empty = by URL), and the first photo's Grid
+    // thumbnail key, painted while the full-size original loads.
+    photoCacheKeys: List<String> = emptyList(),
+    firstPhotoPlaceholderCacheKey: String? = null,
 ) {
     // One image slot whose source changes on tap: photos switch instantly, as on Tinder, and the
     // slot is the same on every card so a card keeps its loaded image when it is promoted to the top.
-    val url = resolvedPhotos.getOrNull(photoIndex.coerceIn(0, (resolvedPhotos.size - 1).coerceAtLeast(0)))
+    val shownIndex = photoIndex.coerceIn(0, (resolvedPhotos.size - 1).coerceAtLeast(0))
+    val url = resolvedPhotos.getOrNull(shownIndex)
+    val cacheKey = photoCacheKeys.getOrNull(shownIndex)
     Box(
         modifier =
             Modifier
@@ -54,7 +61,12 @@ internal fun BoxScope.SwipeCardPhotos(
     ) {
         if (url != null) {
             AsyncImage(
-                model = url,
+                model =
+                    rememberCachedImageModel(
+                        url = url,
+                        cacheKey = cacheKey,
+                        placeholderCacheKey = firstPhotoPlaceholderCacheKey?.takeIf { shownIndex == 0 && it != cacheKey },
+                    ),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

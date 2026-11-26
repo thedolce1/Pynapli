@@ -14,6 +14,7 @@ internal fun ActivityEventDto.toActivityProfileCardUi(): GridProfileCardUi =
         id = actorUserId,
         displayName = actorDisplayName,
         thumbnailUrl = actorPhotoUrl,
+        thumbnailCacheKey = actorPhotoCacheKey,
         online = false,
         distanceLabel = distanceLabel,
         distanceMeters = distanceMeters,

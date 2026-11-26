@@ -43,6 +43,7 @@ import com.pynapli.app.grid.LifestyleGroup
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag
 import com.pynapli.app.grid.discoveryTagLabel
+import com.pynapli.app.media.rememberCachedImageModel
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.profile.ProfileTaxonomies
 
@@ -234,11 +235,14 @@ internal fun LinkedPartnerSection(
             ?: cardLinkedPartner?.displayName
             ?: "Profile ${partnerUserId.take(8)}"
     val thumbnailUrl = linkedPartner?.thumbnailUrl ?: cardLinkedPartner?.thumbnailUrl
+    // G2-2: the key that belongs to whichever URL was chosen.
+    val thumbnailCacheKey = if (linkedPartner?.thumbnailUrl != null) linkedPartner.thumbnailCacheKey else cardLinkedPartner?.thumbnailCacheKey
     val partner =
         GridLinkedPartnerUi(
             userId = partnerUserId,
             displayName = displayName,
             thumbnailUrl = thumbnailUrl,
+            thumbnailCacheKey = thumbnailCacheKey,
         )
 
     Row(
@@ -265,7 +269,7 @@ internal fun LinkedPartnerSection(
         ) {
             if (thumbnailUrl != null) {
                 AsyncImage(
-                    model = thumbnailUrl,
+                    model = rememberCachedImageModel(thumbnailUrl, thumbnailCacheKey),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),

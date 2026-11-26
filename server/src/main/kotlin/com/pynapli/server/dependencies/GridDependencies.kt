@@ -43,6 +43,7 @@ internal fun buildGridDependencies(
     subscriptionService: SubscriptionService,
     rateLimitService: RateLimitService,
     contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    mediaImageResolver: com.pynapli.server.media.MediaImageResolver? = null,
 ): GridDependencies {
     val gridService =
         GridService(
@@ -66,6 +67,7 @@ internal fun buildGridDependencies(
             rateLimitService = rateLimitService,
             contactBlockVisibility = contactBlockVisibility,
             lockedCardTokens = LockedGridCardTokens(config.discoveryCursorSecret),
+            mediaImages = mediaImageResolver,
         )
     val savedGridFilterService =
         SavedGridFilterService(

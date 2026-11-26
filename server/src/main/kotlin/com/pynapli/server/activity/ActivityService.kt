@@ -31,6 +31,8 @@ class ActivityService(
     // and that person can't flirt with or request the album of the actor by a stale id. The feed and
     // counts apply the rule in SQL (JdbcActivityRepository's contact block tokens).
     contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // G2-2: actor photos on rows use the Grid thumbnail when ready, with stable cache keys.
+    mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
 ) {
     private val signalActions =
         ActivitySignalActions(
@@ -52,6 +54,7 @@ class ActivityService(
             subscriptionService = subscriptionService,
             cursorCodec = cursorCodec,
             contactBlockVisibility = contactBlockVisibility,
+            mediaImages = mediaImages,
         )
     private val managementActions =
         ActivityManagementActions(

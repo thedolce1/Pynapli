@@ -423,6 +423,9 @@ data class GridProfileCardUi(
     // Section 3: past the viewer's plan limit (server-decided). [id] is then an opaque "locked_"
     // token, [displayName] is empty, and the tile shows only photo, dot, distance and badges.
     val locked: Boolean = false,
+    // G2-2: the server's stable key for [thumbnailUrl]'s bytes (Coil memory + disk cache key), so a
+    // re-signed URL is a cache hit. Names bytes only; the URL still guards access. Null when locked.
+    val thumbnailCacheKey: String? = null,
 )
 
 /**
@@ -461,6 +464,7 @@ data class GridLinkedPartnerUi(
     val userId: String,
     val displayName: String? = null,
     val thumbnailUrl: String? = null,
+    val thumbnailCacheKey: String? = null,
 )
 
 @Serializable
@@ -517,6 +521,8 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi {
         fresh = fresh,
         activeAgo = if (isLocked) null else activeAgo,
         locked = isLocked,
+        // A locked tile is cached by URL only: no stable identifier reaches it (Section 3).
+        thumbnailCacheKey = if (isLocked) null else thumbnailCacheKey,
     )
 }
 
@@ -525,4 +531,5 @@ internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =
         userId = userId,
         displayName = displayName,
         thumbnailUrl = thumbnailUrl,
+        thumbnailCacheKey = thumbnailCacheKey,
     )

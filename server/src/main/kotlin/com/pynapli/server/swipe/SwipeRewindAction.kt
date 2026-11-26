@@ -135,6 +135,7 @@ internal class SwipeRewindAction(
                         rankToken = cardToken,
                         online = candidate.targetUserId in online,
                         onlineUserIds = online,
+                        images = dtoMapper.imagesFor(listOf(card)),
                     ),
             )
         } else {

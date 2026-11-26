@@ -8,6 +8,7 @@ import com.pynapli.server.grid.GridException
 import com.pynapli.server.grid.GridHydration
 import com.pynapli.server.grid.toGridCardDto
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.forAssetsOrOriginals
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.RateLimitService
@@ -33,6 +34,8 @@ class FavoriteService internal constructor(
     // "Hide from people you know": someone hiding from the viewer can't be starred (same answer as a
     // missing account) and never shows in the viewer's list, nor as a partner mini on a card there.
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // G2-2: tiles use the Grid thumbnail when ready, with stable cache keys (as on the Grid).
+    private val mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
 ) {
     suspend fun add(
         viewerUserId: UUID,
@@ -95,6 +98,11 @@ class FavoriteService internal constructor(
         val remaining = if (cursor == null) ordered else ordered.filter { (_, anchor) -> anchor.compareTo(cursor) > 0 }
         val page = remaining.take(limit)
         val hydration = repository.hydrate(viewerUserId, page.map { it.first.userId })
+        val images =
+            mediaImages.forAssetsOrOriginals(
+                mediaAssetUrlResolver,
+                hydration.values.flatMap { listOf(it.thumbnailMediaAssetId, it.linkedPartnerThumbnailMediaAssetId) },
+            )
         val cards =
             page.map { (row, _) ->
                 val h = hydration[row.userId]?.let { hydrated -> if (hydrated.linkedPartnerUserId in hiddenFromViewer) hydrated.withoutPartner() else hydrated }
@@ -114,7 +122,7 @@ class FavoriteService internal constructor(
                     fresh = h?.fresh ?: false,
                     lastActiveAt = h?.lastActiveAt,
                     activityHidden = h?.activityHidden ?: true,
-                ).toGridCardDto(online, mediaAssetUrlResolver)
+                ).toGridCardDto(online, mediaAssetUrlResolver, images = images)
             }
         val nextCursor =
             if (remaining.size > limit) {

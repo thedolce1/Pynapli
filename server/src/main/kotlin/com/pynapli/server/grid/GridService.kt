@@ -9,6 +9,9 @@ import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.MediaImageResolver
+import com.pynapli.server.media.MediaImageSet
+import com.pynapli.server.media.forAssetsOrOriginals
 import com.pynapli.server.presence.GridActiveAgo
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
@@ -44,6 +47,8 @@ class GridService(
     private val clock: Clock = Clock.systemUTC(),
     // Section 3: opaque per-viewer ids for locked cards. Production derives it from the cursor secret.
     private val lockedCardTokens: LockedGridCardTokens = LockedGridCardTokens("pynapli-local-dev-discovery-cursor-secret"),
+    // G2-2: tile photos use the server-made thumbnail when ready, with stable cache keys.
+    private val mediaImages: MediaImageResolver? = null,
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
@@ -279,6 +284,13 @@ class GridService(
         val pageCards = filteredCards.take(limit)
         val moreInFetchedWindow = filteredCards.size > limit
         val now = clock.instant()
+        val images =
+            profile("grid.images") {
+                mediaImages.forAssetsOrOriginals(
+                    mediaAssetUrlResolver,
+                    pageCards.flatMap { listOf(it.thumbnailMediaAssetId, it.linkedPartnerThumbnailMediaAssetId) },
+                )
+            }
         val dtoCards =
             profile("grid.dto") {
                 pageCards.mapIndexed { index, card ->
@@ -289,9 +301,10 @@ class GridService(
                             token = lockedCardTokens.tokenFor(viewerUserId, card.userId),
                             onlineUserIds = onlineUserIds,
                             mediaAssetUrlResolver = mediaAssetUrlResolver,
+                            images = images,
                         )
                     } else {
-                        card.toGridCardDto(onlineUserIds, mediaAssetUrlResolver, now)
+                        card.toGridCardDto(onlineUserIds, mediaAssetUrlResolver, now, images)
                     }
                 }
             }
@@ -404,13 +417,18 @@ internal fun GridCardRecord.toGridCardDto(
     onlineUserIds: Set<UUID>,
     mediaAssetUrlResolver: MediaAssetUrlResolver?,
     now: Instant = Instant.now(),
-): GridCardDto =
-    GridCardDto(
+    // G2-2: thumbnail-or-original per photo with its stable cache key (one lookup per page).
+    images: MediaImageSet = MediaImageSet.originalsOnly(mediaAssetUrlResolver),
+): GridCardDto {
+    val tile = images.tile(thumbnailMediaAssetId)
+    val partnerTile = images.tile(linkedPartnerThumbnailMediaAssetId)
+    return GridCardDto(
         userId = userId.toString(),
         displayName = displayName,
         visitingFrom = visitingFrom?.toString(),
         visitingUntil = visitingUntil?.toString(),
-        thumbnailUrl = thumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+        thumbnailUrl = tile?.url,
+        thumbnailCacheKey = tile?.cacheKey,
         online = userId in onlineUserIds,
         distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,
         distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,
@@ -419,9 +437,8 @@ internal fun GridCardRecord.toGridCardDto(
                 LinkedPartnerMiniDto(
                     userId = partnerUserId.toString(),
                     displayName = linkedPartnerDisplayName,
-                    thumbnailUrl =
-                        linkedPartnerThumbnailMediaAssetId
-                            ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                    thumbnailUrl = partnerTile?.url,
+                    thumbnailCacheKey = partnerTile?.cacheKey,
                 )
             },
         rankToken = "grid:v1:$userId",
@@ -437,3 +454,4 @@ internal fun GridCardRecord.toGridCardDto(
                 sinceLastActive = lastActiveAt?.let { Duration.between(it, now) },
             ),
     )
+}
