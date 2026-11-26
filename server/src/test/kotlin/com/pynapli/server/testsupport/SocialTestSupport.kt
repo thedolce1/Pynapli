@@ -32,7 +32,9 @@ internal class FakeIdentityProvider : AutoCloseable {
     @Volatile var publishedKids: List<String> = emptyList()
 
     /** How many times the JWKS was fetched. */
-    val jwksFetches = java.util.concurrent.atomic.AtomicInteger()
+    val jwksFetches =
+        java.util.concurrent.atomic
+            .AtomicInteger()
 
     /** Form bodies the fake Apple endpoints received, as decoded maps. */
     val tokenRequests: MutableList<Map<String, String>> = Collections.synchronizedList(mutableListOf())

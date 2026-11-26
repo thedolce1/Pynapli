@@ -135,7 +135,13 @@ class SocialIdentityVerifierTest {
         runBlocking {
             val clock = MovableClock()
             val verifier = provider.verifier(SocialProvider.GOOGLE, clock = clock)
-            val stranger = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair().private
+            val stranger =
+                KeyPairGenerator
+                    .getInstance("RSA")
+                    .apply { initialize(2048) }
+                    .generateKeyPair()
+                    .private
+
             fun bogus(kid: String) = provider.idToken(SocialProvider.GOOGLE, "g-x", NONCE, kid = kid, signWith = stranger)
 
             verifier.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", NONCE), NONCE)

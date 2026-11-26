@@ -209,7 +209,10 @@ class SocialIdentityVerifier(
     /** The header's `kid`, or null for a token whose header can't be read (then it is just rejected). */
     private fun keyIdOf(token: String): String? =
         runCatching {
-            val header = java.util.Base64.getUrlDecoder().decode(token.substringBefore('.'))
+            val header =
+                java.util.Base64
+                    .getUrlDecoder()
+                    .decode(token.substringBefore('.'))
             kotlinx.serialization.json.Json
                 .parseToJsonElement(header.toString(Charsets.UTF_8))
                 .let { it as? kotlinx.serialization.json.JsonObject }

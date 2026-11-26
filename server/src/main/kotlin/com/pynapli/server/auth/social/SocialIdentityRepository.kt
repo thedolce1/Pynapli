@@ -131,8 +131,7 @@ class JdbcSocialIdentityRepository(
             connection.findIdentity(provider.wire, subject)
         }
 
-    override suspend fun emailHasAccount(emailHash: String): Boolean =
-        dataSource.withConnection { connection -> connection.addressHasAccount(emailHash) }
+    override suspend fun emailHasAccount(emailHash: String): Boolean = dataSource.withConnection { connection -> connection.addressHasAccount(emailHash) }
 
     override suspend fun createAccount(
         userId: UUID,
