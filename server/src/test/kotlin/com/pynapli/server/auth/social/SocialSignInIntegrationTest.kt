@@ -455,7 +455,14 @@ class SocialSignInIntegrationTest {
 
             val lifecycle =
                 AccountLifecycleService(
-                    repository = JdbcAccountLifecycleRepository(dataSource, ContactBlockTokens.localDevelopment()),
+                    repository =
+                        JdbcAccountLifecycleRepository(
+                            dataSource,
+                            ContactBlockTokens.localDevelopment(),
+                            metInPersonAccountData =
+                                com.pynapli.server.metinperson.MetInPersonAccountData
+                                    .localDevelopment(),
+                        ),
                     revokeAppleGrants = revoker::revokeLater,
                 )
             lifecycle.deleteAccount(userId, "DELETE")
@@ -530,7 +537,15 @@ class SocialSignInIntegrationTest {
         testApplication {
             serve(serviceWithRealApple("a-gone"))
             val userId = UUID.fromString(session(client.attempt(SocialProvider.APPLE, "a-gone", birthdate = ADULT, code = "gone-code")).user.userId)
-            AccountLifecycleService(JdbcAccountLifecycleRepository(dataSource, ContactBlockTokens.localDevelopment())).deleteAccount(userId, "DELETE")
+            AccountLifecycleService(
+                JdbcAccountLifecycleRepository(
+                    dataSource,
+                    ContactBlockTokens.localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
+                ),
+            ).deleteAccount(userId, "DELETE")
 
             work.runAll()
 
@@ -615,7 +630,13 @@ class SocialSignInIntegrationTest {
             work.runAll()
             val text =
                 run {
-                    JdbcAccountDataExportArchiver(dataSource, contactBlockTokens = ContactBlockTokens.localDevelopment()).buildArchive(userId)
+                    JdbcAccountDataExportArchiver(
+                        dataSource,
+                        contactBlockTokens = ContactBlockTokens.localDevelopment(),
+                        metInPersonAccountData =
+                            com.pynapli.server.metinperson.MetInPersonAccountData
+                                .localDevelopment(),
+                    ).buildArchive(userId)
                 }.bytes.decodeToString()
             val methods = JSON.parseToJsonElement(text).jsonObject["signInMethods"].toString()
             assertTrue(methods.contains("apple"))
