@@ -547,8 +547,8 @@ class GridStateHolder(
     }
 
     suspend fun setRadiusMeters(meters: Int) {
-        val clamped = meters.coerceIn(GridFilters.MIN_RADIUS_METERS, GridFilters.MAX_RADIUS_METERS)
-        applyFilters(_state.value.filters.copy(radiusMeters = clamped))
+        // Clamped and snapped to the server's step, so the state holds the radius actually searched.
+        applyFilters(_state.value.filters.copy(radiusMeters = GridFilters.snapRadius(meters)))
     }
 
     suspend fun setAgeRange(

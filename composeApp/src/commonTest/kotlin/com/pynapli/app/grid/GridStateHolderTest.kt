@@ -275,6 +275,10 @@ class GridStateHolderTest {
 
             stateHolder.setRadiusMeters(meters = 0)
             assertEquals(GridFilters.MIN_RADIUS_METERS, repository.lastFilters!!.radiusMeters)
+
+            // An off-step radius is held as the server's step (26 km searches 50 km).
+            stateHolder.setRadiusMeters(meters = 26_000)
+            assertEquals(50_000, repository.lastFilters!!.radiusMeters)
         }
 
     @Test

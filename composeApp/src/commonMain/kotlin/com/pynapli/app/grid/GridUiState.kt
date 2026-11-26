@@ -1,6 +1,7 @@
 package com.pynapli.app.grid
 
 import androidx.compose.runtime.Immutable
+import com.pynapli.shared.distance.DiscoveryRadiusSteps
 import com.pynapli.shared.network.dto.GridCardDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
@@ -136,7 +137,7 @@ data class GridFilters(
         // the visible link (both on = everyone), so a saved preset with both restores both.
         val contexts = if (singles) listOf(SINGLES_CONTEXT) else emptyList()
         return GridQueryRequestDto(
-            radiusMeters = radiusMeters,
+            radiusMeters = snapRadius(radiusMeters),
             limit = PAGE_SIZE,
             cursor = cursor,
             minimumAge = minimumAge,
@@ -167,7 +168,8 @@ data class GridFilters(
 
     companion object {
         const val DEFAULT_RADIUS_METERS: Int = 50_000
-        const val MIN_RADIUS_METERS: Int = 1_000
+        // The server tests only DiscoveryRadiusSteps (2, 5, 10, 25, 50, 100 km); these are its ends.
+        const val MIN_RADIUS_METERS: Int = 2_000
         const val MAX_RADIUS_METERS: Int = 100_000
         const val MIN_FILTER_AGE: Int = 18
         const val MAX_FILTER_AGE: Int = 99
@@ -176,6 +178,12 @@ data class GridFilters(
         // The retired "Partnered" token: a preset that carries it restores as Linked.
         const val PARTNERED_CONTEXT: String = "partnered"
         val defaults: GridFilters = GridFilters()
+
+        /**
+         * The radius the server searches for [meters]: clamped to the slider ends, then snapped UP to
+         * the next DiscoveryRadiusSteps step, exactly as the server snaps it (L-09).
+         */
+        fun snapRadius(meters: Int): Int = DiscoveryRadiusSteps.snapUp(meters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS))
 
         /**
          * Whether the viewer's plan unlocks paid Grid filters, from the client's view of the plan:
@@ -225,7 +233,9 @@ data class GridFilters(
                 fresh = request.freshOnly || request.recentlyJoinedOnly,
                 travelingHere = request.travelingHereOnly,
                 visitingSoon = request.visitingSoonOnly,
-                radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
+                // A stored or saved off-step radius (from the old continuous slider) maps up exactly as the
+                // server maps it, so the sheet shows the radius actually searched.
+                radiusMeters = snapRadius(request.radiusMeters),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 verifiedCouples = request.verifiedCouplesOnly,
