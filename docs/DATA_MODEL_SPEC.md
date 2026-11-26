@@ -108,6 +108,13 @@ every change must keep.
 - **Bio is never a filter source.** Everything filterable is a structured, indexed column or tag.
 - Saved filter presets may be JSON; live filterable profile data may not.
 - Public photos need moderation approval before public visibility. The Grid uses thumbnails only.
+- Grid thumbnails (V130, G2-2): `media_assets.thumbnail_variant` (only `v1-thumb-480`; set as a claim
+  before the object at `media/{id}/v1-thumb-480.jpg` is written, so a crash leaves a row to clean),
+  `thumbnail_ready_at` (set only after the write, in a statement that re-checks the photo is still an
+  approved, live profile photo; the only column read paths trust), `thumbnail_claimed_at` (a 5-minute
+  generation lease), `thumbnail_attempts` and `thumbnail_failed_at` (terminal: keep the original).
+  Partial indexes serve the backfill scan and the reconciler walk. The media purge skips rows whose
+  `thumbnail_variant` is still set. Never set for private, chat or verification media.
 - `profiles.verified_at` / `face_photo_verified_at` are written only by an admin approving a selfie
   photo verification (`photo_verifications`, V103) and cleared by an admin revoke. Filters, badges and
   `partner_visibility = 'verified_only'` read them. `age_verified_at` is written by age verification.
