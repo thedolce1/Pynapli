@@ -24,9 +24,13 @@ internal class SwipeDeckQueryAction(
     suspend fun queryDeck(
         viewerUserId: UUID,
         request: SwipeDeckRequestDto,
-        // False only for a Psync deck: that deck is shared by two partners and filtered per person when shown.
-        applyContactBlocks: Boolean = true,
+        // Set only for a Psync deck: the other partner of the session. That deck is shared by both, so
+        // people hiding from one partner are still dealt (each partner's view leaves out who hides from
+        // them, PsyncDeckCoordinator), but a candidate's PARTNER is shown, and counts for Linked /
+        // verified couples, only when both partners may see them (PSYNC_SPEC, strictest view).
+        psyncPartnerUserId: UUID? = null,
     ): SwipeDeckResponseDto {
+        val applyContactBlocks = psyncPartnerUserId == null
         val deckRequest =
             SwipeDeckRequestParser.parse(
                 request = request,
@@ -105,6 +109,16 @@ internal class SwipeDeckQueryAction(
             profile("swipe.deck.contactBlocks") {
                 if (applyContactBlocks) contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty() else emptySet()
             }
+        // Whose partner is never shown (nor counted for Linked / verified couples): people hiding from this
+        // viewer; on a Psync deck, from EITHER partner, so neither can infer a partner hidden from them.
+        val partnerHiddenIds =
+            if (psyncPartnerUserId == null) {
+                hiddenFromViewerIds
+            } else {
+                profile("swipe.deck.psyncContactBlocks") {
+                    contactBlockVisibility?.let { it.hiddenFrom(viewerUserId) + it.hiddenFrom(psyncPartnerUserId) }.orEmpty()
+                }
+            }
         // Blocked people are excluded before ranking, not only from the finished page: a Boost lifts
         // candidates onto the page, and a blocked one must never take a slot.
         val excludedTargetUserIds = existingSessionState?.targetUserIds.orEmpty() + blockedRelatedIds + hiddenFromViewerIds
@@ -119,7 +133,8 @@ internal class SwipeDeckQueryAction(
                     filters = filters,
                     excludedTargetUserIds = excludedTargetUserIds,
                     // "Linked" treats a partner hiding from the viewer as not shown, as the card does.
-                    hiddenFromViewerIds = hiddenFromViewerIds,
+                    hiddenFromViewerIds = partnerHiddenIds,
+                    coViewerUserId = psyncPartnerUserId,
                 )
             }
         val dealbreakerSet = deckRequest.dealbreakers
@@ -153,7 +168,8 @@ internal class SwipeDeckQueryAction(
                             limit = limit + 1,
                             filters = relaxedFilters,
                             excludedTargetUserIds = alreadySeen,
-                            hiddenFromViewerIds = hiddenFromViewerIds,
+                            hiddenFromViewerIds = partnerHiddenIds,
+                            coViewerUserId = psyncPartnerUserId,
                         )
                     }
                 val merged = (firstPass.cards + secondPass.cards).distinctBy { it.userId }
@@ -165,15 +181,15 @@ internal class SwipeDeckQueryAction(
 
         // Backstop for a repository that does not apply the exclusion set.
         val visible =
-            if (blockedRelatedIds.isEmpty() && hiddenFromViewerIds.isEmpty()) {
+            if (blockedRelatedIds.isEmpty() && hiddenFromViewerIds.isEmpty() && partnerHiddenIds.isEmpty()) {
                 result.cards
             } else {
                 result.cards
                     .filterNot { it.userId in blockedRelatedIds || it.userId in hiddenFromViewerIds }
                     // "Verified couples only" means the badge this viewer sees, which a stripped
                     // partner takes away.
-                    .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenFromViewerIds }
-                    .map { it.withoutPartnerIn(hiddenFromViewerIds) }
+                    .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in partnerHiddenIds }
+                    .map { it.withoutPartnerIn(partnerHiddenIds) }
             }
         val pageCards = visible.take(limit)
         val presenceLookupIds =

@@ -1,13 +1,38 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.discovery.CoupleVerifiedFilterSql
+import com.pynapli.server.discovery.LinkedPartnerFilterSql
 import java.sql.Connection
 import java.util.UUID
 
+/**
+ * [coViewerUserId] is a Psync deck's other partner: the deck is shown to both, so the partner mini
+ * (and the couple badge, which needs it) is kept only when the partner is shown to BOTH partners
+ * (PSYNC_SPEC, the strictest of the two views) and hides from neither ([partnerHiddenUserIds], the
+ * union of both partners' contact blocks). Null for an ordinary deck, where nothing changes.
+ */
 internal fun Connection.hydrateDeckCards(
     viewerUserId: UUID,
     userIds: List<UUID>,
+    coViewerUserId: UUID? = null,
+    partnerHiddenUserIds: Set<UUID> = emptySet(),
 ): Map<UUID, DeckHydration> {
     if (userIds.isEmpty()) return emptyMap()
+    val coViewerGate =
+        if (coViewerUserId == null) {
+            ""
+        } else {
+            val coViewerShown =
+                CoupleVerifiedFilterSql.partnerShownToViewer(
+                    partnerUser = "linked_user",
+                    partnerProfile = "linked_profile",
+                    partnerSettings = "linked_ds",
+                    partnerRisk = "linked_risk",
+                    ownerSettings = "owner_ds",
+                    owner = "u.id",
+                )
+            "AND linked_user.id <> ALL(?::uuid[])\nAND $coViewerShown"
+        }
     val sql =
         """
         SELECT u.id AS user_id,
@@ -119,6 +144,8 @@ internal fun Connection.hydrateDeckCards(
                       )
                   )
               )
+              -- Psync only: also shown to the other partner, and hiding from neither.
+              $coViewerGate
             ORDER BY upl.accepted_at DESC NULLS LAST, upl.created_at DESC, upl.id ASC
             LIMIT 1
         ) linked_partner ON true
@@ -132,7 +159,13 @@ internal fun Connection.hydrateDeckCards(
         statement.setObject(3, viewerUserId) // verified_only gate
         statement.setObject(4, viewerUserId) // matches_only gate (LEAST)
         statement.setObject(5, viewerUserId) // matches_only gate (GREATEST)
-        statement.setArray(6, ids)
+        var index = 6
+        if (coViewerUserId != null) {
+            // Both partners' contact blocks, then partnerShownToViewer's six ids for the other partner.
+            statement.setArray(index++, createArrayOf("uuid", partnerHiddenUserIds.toTypedArray()))
+            index = LinkedPartnerFilterSql.bindPartnerShown(statement, index, listOf(coViewerUserId))
+        }
+        statement.setArray(index, ids)
         statement.executeQuery().use { rs ->
             buildMap {
                 while (rs.next()) {

@@ -48,11 +48,25 @@ internal fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLoca
 internal fun Connection.listLinkedCandidateUserIdsNear(
     viewerUserId: UUID,
     radiusMeters: Int,
-    // People hiding from the viewer (contact blocks; empty for a Psync deck): never a shown partner.
+    // People hiding from the viewer (contact blocks; for a Psync deck, from either partner).
     hiddenFromViewerIds: Set<UUID> = emptySet(),
+    // A Psync deck's other partner (the partner must be shown to both), else null.
+    coViewerUserId: UUID? = null,
     limit: Int = 2_000,
-): Set<UUID> =
-    prepareStatement(
+): Set<UUID> {
+    // A Psync deck is shown to both partners: the partner must be shown to each (PSYNC_SPEC).
+    val partnerViewers = listOfNotNull(viewerUserId, coViewerUserId)
+    val partnerShown =
+        CoupleVerifiedFilterSql.partnerShownToViewer(
+            partnerUser = "linked_user",
+            partnerProfile = "linked_profile",
+            partnerSettings = "linked_settings",
+            partnerRisk = "linked_risk",
+            ownerSettings = "target_settings",
+            owner = "target.id",
+        )
+    val partnerShownToEveryViewer = partnerViewers.joinToString("\n") { "AND $partnerShown" }
+    return prepareStatement(
         """
         WITH viewer_location AS (
             SELECT cell.geom,
@@ -116,18 +130,11 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
           AND target_settings.incognito = false
           AND (target_travel.id IS NULL OR target_settings.visible_while_traveling = true)
           AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-          -- The partner is the one the card's partner mini shows this viewer (LinkedPartnerFilterSql):
-          -- not hiding from the viewer (contact blocks), and CoupleVerifiedFilterSql.partnerShownToViewer
-          -- (status, blocks both ways, the viewer's hidden list, the owner's partner_visibility).
+          -- The partner is the one the card's partner mini shows every viewer (LinkedPartnerFilterSql):
+          -- not hiding from a viewer (contact blocks), and CoupleVerifiedFilterSql.partnerShownToViewer
+          -- per viewer (status, blocks both ways, the viewer's hidden list, the owner's partner_visibility).
           AND linked_user.id <> ALL(?::uuid[])
-          AND ${CoupleVerifiedFilterSql.partnerShownToViewer(
-            partnerUser = "linked_user",
-            partnerProfile = "linked_profile",
-            partnerSettings = "linked_settings",
-            partnerRisk = "linked_risk",
-            ownerSettings = "target_settings",
-            owner = "target.id",
-        )}
+          $partnerShownToEveryViewer
           -- Same membership as the deck: the effective location's cell within the radius step.
           AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= ?
         -- Only matters past the limit: a stable, distance-independent cut (the deck's L-08 tiebreak).
@@ -142,8 +149,8 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
         // Index pre-filter radius (home GPS + travel point), padded by the cell slack.
         statement.setDouble(index++, paddedRadius)
         statement.setDouble(index++, paddedRadius)
-        // Partner shown to the viewer: hidden-from ids, then partnerShownToViewer's six viewer ids.
-        index = LinkedPartnerFilterSql.bindVisiblePartner(statement, this, index, viewerUserId, hiddenFromViewerIds)
+        // Partner shown to every viewer: hidden-from ids, then partnerShownToViewer's six ids per viewer.
+        index = LinkedPartnerFilterSql.bindVisiblePartner(statement, this, index, partnerViewers, hiddenFromViewerIds)
         // Exact cell-to-cell radius membership.
         statement.setDouble(index++, radiusMeters.toDouble())
         statement.setInt(index++, limit)
@@ -155,6 +162,7 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
             }
         }
     }
+}
 
 internal fun Connection.listActiveSwipedTargetIds(
     actorUserId: UUID,

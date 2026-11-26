@@ -28,7 +28,10 @@ object CoupleVerifiedFilterSql {
         user: String,
         profile: String,
         settings: String,
+        // A Psync deck has two viewers (LinkedPartnerFilterSql): the partner must be shown to each.
+        viewerCount: Int = 1,
     ): String {
+        require(viewerCount >= 1)
         val partnerShown =
             partnerShownToViewer(
                 partnerUser = "cv_user",
@@ -38,6 +41,7 @@ object CoupleVerifiedFilterSql {
                 ownerSettings = settings,
                 owner = "$user.id",
             )
+        val everyViewer = List(viewerCount) { "AND $partnerShown" }.joinToString("\n")
         return """
             AND (
                 ?::boolean = false
@@ -54,7 +58,7 @@ object CoupleVerifiedFilterSql {
                           AND cv_upl.status = 'active'
                           AND cv_upl.unlinked_at IS NULL
                           AND cv_profile.verified_at IS NOT NULL
-                          AND $partnerShown
+                          $everyViewer
                     )
                 )
             )
@@ -130,19 +134,24 @@ object CoupleVerifiedFilterSql {
         )
         """.trimIndent()
 
-    /** Binds [predicate] starting at [startIndex]; returns the next free index. */
+    /** Binds [predicate] for one viewer starting at [startIndex]; returns the next free index. */
     fun bind(
         statement: PreparedStatement,
         startIndex: Int,
         enabled: Boolean,
         viewerUserId: UUID,
+    ): Int = bind(statement, startIndex, enabled, listOf(viewerUserId))
+
+    /** Binds [predicate] built with `viewerCount = viewers.size`; returns the next free index. */
+    fun bind(
+        statement: PreparedStatement,
+        startIndex: Int,
+        enabled: Boolean,
+        viewers: List<UUID>,
     ): Int {
         var index = startIndex
         statement.setBoolean(index++, enabled)
-        // Block check (both directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST.
-        repeat(VIEWER_PLACEHOLDERS) { statement.setObject(index++, viewerUserId) }
-        return index
+        // Per viewer: block check (both directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST.
+        return LinkedPartnerFilterSql.bindPartnerShown(statement, index, viewers)
     }
-
-    private const val VIEWER_PLACEHOLDERS = 6
 }

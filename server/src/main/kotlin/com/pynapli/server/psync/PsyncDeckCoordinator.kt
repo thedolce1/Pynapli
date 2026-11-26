@@ -30,7 +30,8 @@ internal class PsyncDeckCoordinator(
         val generator = deckGenerator ?: throw PsyncException("PSYNC_DECK_EMPTY")
 
         val oversample = (session.deckSize * 2).coerceAtMost(PSYNC_MAX_RANK_LIMIT)
-        val ranked = generator.rankCandidates(session.initiatorUserId, session.filters, oversample)
+        // Partner minis and the Linked / verified-couples filters hold for BOTH partners (PSYNC_SPEC).
+        val ranked = generator.rankCandidatesForCouple(session.initiatorUserId, partnerId, session.filters, oversample)
 
         val rankedIds = ranked.mapNotNull { runCatching { UUID.fromString(it.userId) }.getOrNull() }
         val excluded =
