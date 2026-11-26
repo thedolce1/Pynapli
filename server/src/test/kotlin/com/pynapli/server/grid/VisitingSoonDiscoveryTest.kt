@@ -160,6 +160,54 @@ class VisitingSoonDiscoveryTest :
                 assertEquals("INVALID_GRID_CURSOR", refused.code)
             }
         }
+
+        // Linked on Visiting soon uses the partner mini's gate (LinkedPartnerFilterSql), as on Nearby.
+        "Visiting soon Linked keeps a shown partner and leaves out one hidden from the viewer" {
+            runBlocking {
+                val today = LocalDate.now(ZoneOffset.UTC)
+                val viewer = sfViewer(dataSource)
+                val shown = nyMember(dataSource, "f01")
+                val viewerHid = nyMember(dataSource, "f02")
+                val ownerHides = nyMember(dataSource, "f03")
+                val hidingFromViewer = nyMember(dataSource, "f04")
+                val single = nyMember(dataSource, "f05")
+                val shownPartner = nyMember(dataSource, "f11")
+                val hiddenByViewer = nyMember(dataSource, "f12")
+                val ownerHiddenPartner = nyMember(dataSource, "f13")
+                val contactBlockingPartner = nyMember(dataSource, "f14")
+                dataSource.insertActiveProfileLink(shown, shownPartner)
+                dataSource.insertActiveProfileLink(viewerHid, hiddenByViewer)
+                dataSource.insertActiveProfileLink(ownerHides, ownerHiddenPartner)
+                dataSource.insertActiveProfileLink(hidingFromViewer, contactBlockingPartner)
+                dataSource.insertHiddenProfile(viewer, hiddenByViewer)
+                dataSource.connection.use { connection ->
+                    connection.prepareStatement("UPDATE discovery_settings SET partner_visibility = 'hidden' WHERE user_id = ?").use {
+                        it.setObject(1, ownerHides)
+                        it.executeUpdate()
+                    }
+                }
+                listOf(shown, viewerHid, ownerHides, hidingFromViewer, single).forEach {
+                    dataSource.insertTrip(it, today.plusDays(2), today.plusDays(3), announce = true)
+                }
+                val repository = JdbcGridRepository(dataSource)
+
+                suspend fun visiting(linkedOnly: Boolean): Set<UUID> =
+                    repository
+                        .queryVisitingSoon(
+                            viewer,
+                            50_000,
+                            60,
+                            filters = com.pynapli.server.discovery.DiscoveryFilters(linkedOnly = linkedOnly),
+                            // The contact-block set GridService passes: the partner hiding from the viewer.
+                            hiddenFromViewerIds = setOf(contactBlockingPartner),
+                        ).cards
+                        .map { it.userId }
+                        .toSet()
+
+                assertEquals(setOf(shown), visiting(linkedOnly = true))
+                assertEquals(setOf(viewerHid, ownerHides, hidingFromViewer, single), visiting(linkedOnly = false))
+            }
+        }
     })
 
 private fun visitingSoon(limit: Int = 60) = GridQueryRequestDto(radiusMeters = 50_000, limit = limit, visitingSoonOnly = true)
