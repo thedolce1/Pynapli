@@ -699,6 +699,7 @@ private class StaticGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult = result
 }
 
@@ -713,6 +714,7 @@ private class CapturingGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         receivedCursors += cursor
         return result
@@ -734,6 +736,7 @@ private class RadiusAwareGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         receivedRadii += radiusMeters
         return if (radiusMeters >= minMatchRadiusMeters) {
@@ -772,6 +775,7 @@ private class LimitAwareGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         receivedLimits += limit
         receivedCursors += cursor

@@ -10,6 +10,9 @@ interface GridRepository {
         limit: Int,
         filters: DiscoveryFilters = DiscoveryFilters(),
         cursor: GridCursorAnchor? = null,
+        // People hiding from the viewer ("Hide from people you know"). The partner rule (linkedOnly)
+        // never counts one of them as a partner shown to the viewer, as the card strips their mini.
+        hiddenFromViewerIds: Set<UUID> = emptySet(),
     ): GridQueryResult
 
     /** People whose announced planned trip reaches the viewer's area within two weeks, soonest first. */

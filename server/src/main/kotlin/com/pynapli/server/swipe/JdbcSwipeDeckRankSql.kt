@@ -3,6 +3,7 @@ package com.pynapli.server.swipe
 import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.LifestyleFilterSql
+import com.pynapli.server.discovery.LinkedPartnerFilterSql
 import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID
@@ -38,6 +39,8 @@ internal fun Connection.queryDeckRank(
     userSpecificViewerId: UUID?,
     forcedTargetUserIds: Set<UUID>? = null,
     boostedWindow: Int = limit,
+    // People hiding from the viewer (contact blocks): never counted as a shown partner (linkedOnly).
+    hiddenFromViewerIds: Set<UUID> = emptySet(),
 ): List<DeckRankRow> {
     val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
     val candidateSource =
@@ -190,35 +193,9 @@ $candidateSource
                         AND has_private_m.moderation_status = 'approved'
                   )
               )
-              AND (
-                  ?::boolean IS NULL
-                  OR ?::boolean = EXISTS (
-                      SELECT 1
-                      FROM user_profile_links upl
-                      JOIN users linked_user
-                        ON linked_user.id = upl.linked_user_id
-                      JOIN profiles linked_profile
-                        ON linked_profile.user_id = linked_user.id
-                      JOIN discovery_settings linked_ds
-                        ON linked_ds.user_id = linked_user.id
-                      LEFT JOIN account_risk_states linked_risk
-                        ON linked_risk.user_id = linked_user.id
-                      WHERE upl.user_id = u.id
-                        AND upl.status = 'active'
-                        AND upl.unlinked_at IS NULL
-                        AND linked_user.status = 'active'
-                        AND linked_user.deleted_at IS NULL
-                        AND linked_profile.visibility_status = 'visible'
-                        AND linked_ds.incognito = false
-                        AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-                        AND NOT EXISTS (
-                            SELECT 1
-                            FROM user_blocks ub
-                            WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
-                               OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
-                        )
-                  )
-              )
+              -- "Linked" (linkedOnly): exactly whether the card shows this viewer a partner mini
+              -- (LinkedPartnerFilterSql), the same rule as the Grid's.
+              ${LinkedPartnerFilterSql.predicate(user = "u", settings = "ds")}
               -- Already swiped (live decisions only); skipped on the shared cached window.
               AND (
                   ?::uuid IS NULL
@@ -309,10 +286,7 @@ $candidateSource
         statement.setArray(index++, orientations)
         statement.setBoolean(index++, filters.withPhotosOnly)
         statement.setBoolean(index++, filters.hasPrivateAlbumOnly)
-        statement.setObject(index++, filters.linkedOnly)
-        statement.setObject(index++, filters.linkedOnly)
-        statement.setObject(index++, viewerUserId)
-        statement.setObject(index++, viewerUserId)
+        index = LinkedPartnerFilterSql.bind(statement, this, index, filters.linkedOnly, viewerUserId, hiddenFromViewerIds)
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setBoolean(index++, excludedTargetUserIds.isNotEmpty())

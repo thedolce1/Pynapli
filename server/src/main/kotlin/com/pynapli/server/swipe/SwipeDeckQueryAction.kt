@@ -118,6 +118,8 @@ internal class SwipeDeckQueryAction(
                     limit = limit + 1,
                     filters = filters,
                     excludedTargetUserIds = excludedTargetUserIds,
+                    // "Linked" treats a partner hiding from the viewer as not shown, as the card does.
+                    hiddenFromViewerIds = hiddenFromViewerIds,
                 )
             }
         val dealbreakerSet = deckRequest.dealbreakers
@@ -151,6 +153,7 @@ internal class SwipeDeckQueryAction(
                             limit = limit + 1,
                             filters = relaxedFilters,
                             excludedTargetUserIds = alreadySeen,
+                            hiddenFromViewerIds = hiddenFromViewerIds,
                         )
                     }
                 val merged = (firstPass.cards + secondPass.cards).distinctBy { it.userId }

@@ -188,10 +188,13 @@ class GridService(
             }
         // Profiles the viewer hid, plus anyone hiding from the viewer (contact blocks): both drop the
         // card and strip the partner mini, the same way.
+        val hiddenFromViewerIds =
+            profile("grid.contactBlocks") {
+                contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+            }
         val hiddenProfileIds =
             profile("grid.hiddenProfiles") {
-                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty() +
-                    contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty() + hiddenFromViewerIds
             }
         profile("grid.presenceRefresh") { refreshViewerPresence(viewerUserId) }
 
@@ -204,7 +207,9 @@ class GridService(
                         // One page, soonest trips first; blocks, hides and presence apply below as usual.
                         repository.queryVisitingSoon(viewerUserId, queryRadius, fetchLimit)
                     } else {
-                        repository.queryNearby(viewerUserId, queryRadius, fetchLimit, filters, cursor)
+                        // The contact-block set goes in too: "Linked" must treat a partner hiding from
+                        // the viewer as not shown, exactly as the card below strips their mini.
+                        repository.queryNearby(viewerUserId, queryRadius, fetchLimit, filters, cursor, hiddenFromViewerIds)
                     }
                 }
             if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")

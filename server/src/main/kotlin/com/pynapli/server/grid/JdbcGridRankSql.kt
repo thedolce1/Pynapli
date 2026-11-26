@@ -3,6 +3,7 @@ package com.pynapli.server.grid
 import com.pynapli.server.discovery.CoupleVerifiedFilterSql
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.discovery.LifestyleFilterSql
+import com.pynapli.server.discovery.LinkedPartnerFilterSql
 import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID
@@ -19,8 +20,9 @@ import java.util.UUID
  * When [userSpecificViewerId] is null the query is EXCLUSION-FREE: no viewer-self
  * filter and no per-viewer block subquery, so the window can be cached and shared
  * across viewers in the same coarse location + filter class. When it is non-null
- * (uncached bypass paths) the self filter and the linked-partner block subquery
- * are applied inline, preserving the original query's semantics exactly.
+ * (uncached bypass paths) the self filter and the per-viewer block subquery are
+ * applied inline. The linkedOnly predicate is viewer-specific (the partner must be
+ * shown to THIS viewer) and only ever runs uncached (isGridRankCacheEligible).
  *
  * Filter-class predicates (age/gender/relationship/verified/lifestyle/logistics/
  * tonight/intents/linkedOnly) stay in this SQL because they define the cache
@@ -34,6 +36,8 @@ internal fun Connection.queryGridRank(
     userSpecificViewerId: UUID?,
     orderSeed: String,
     cursor: GridCursorAnchor? = null,
+    // People hiding from the viewer (contact blocks): never counted as a shown partner (linkedOnly).
+    hiddenFromViewerIds: Set<UUID> = emptySet(),
 ): List<GridRankRow> {
     val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
     val sql =
@@ -91,41 +95,7 @@ internal fun Connection.queryGridRank(
                    -- Cell-to-cell distance from the target's EFFECTIVE location (travel point when
                    -- travelling, else home): never a raw GPS distance, never a traveller's home.
                    pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) AS distance_meters,
-                   target_travel.id IS NOT NULL AS visiting,
-                   -- has_visible_linked_partner only feeds the linkedOnly filter,
-                   -- which always runs on the uncached path (userSpecificViewerId
-                   -- set). On the cached path (?::uuid IS NULL) the per-viewer
-                   -- block subquery is skipped and the value is unused.
-                   (
-                       ?::uuid IS NOT NULL
-                       AND EXISTS (
-                           SELECT 1
-                           FROM user_profile_links upl
-                           JOIN users linked_user
-                             ON linked_user.id = upl.linked_user_id
-                           JOIN profiles linked_profile
-                             ON linked_profile.user_id = linked_user.id
-                           JOIN discovery_settings linked_ds
-                             ON linked_ds.user_id = linked_user.id
-                           LEFT JOIN account_risk_states linked_risk
-                             ON linked_risk.user_id = linked_user.id
-                           WHERE upl.user_id = u.id
-                             AND upl.status = 'active'
-                             AND upl.unlinked_at IS NULL
-                             AND linked_user.status = 'active'
-                             AND linked_user.deleted_at IS NULL
-                             AND linked_profile.visibility_status = 'visible'
-                             AND linked_ds.incognito = false
-                             AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-                             AND NOT EXISTS (
-                                 SELECT 1
-                                 FROM user_blocks ub
-                                 WHERE (ub.blocker_user_id = ?::uuid AND ub.blocked_user_id = linked_user.id)
-                                    OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?::uuid)
-                             )
-                           LIMIT 1
-                       )
-                   ) AS has_visible_linked_partner
+                   target_travel.id IS NOT NULL AS visiting
             FROM viewer_location v
             JOIN nearby_ids n ON true
             JOIN user_locations ul ON ul.user_id = n.user_id
@@ -156,6 +126,9 @@ internal fun Connection.queryGridRank(
               AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
               -- "Verified couples only": exactly the couple-verified badge for this viewer.
               ${CoupleVerifiedFilterSql.predicate(user = "u", profile = "p", settings = "ds")}
+              -- "Linked" (linkedOnly): exactly whether the card shows this viewer a partner mini
+              -- (LinkedPartnerFilterSql). Viewer-specific, so it never runs on the shared cached path.
+              ${LinkedPartnerFilterSql.predicate(user = "u", settings = "ds")}
               AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
               -- Lifestyle groups + boundaries (LifestyleFilterSql): same predicate on every surface.
               ${LifestyleFilterSql.predicates("p")}
@@ -265,11 +238,6 @@ internal fun Connection.queryGridRank(
                    pynapli_order_bucket_m(bc.show_distance, bc.distance_meters, ?, ?, bc.user_id) AS distance_bucket_meters,
                    pynapli_order_tiebreak(?, bc.user_id) AS order_tiebreak
             FROM base_candidates bc
-            WHERE (
-                ?::boolean IS NULL
-                OR (?::boolean = true AND has_visible_linked_partner)
-                OR (?::boolean = false AND NOT has_visible_linked_partner)
-            )
         ),
         paged_candidates AS (
             SELECT *
@@ -323,10 +291,6 @@ internal fun Connection.queryGridRank(
         // nearby_ids index pre-filter radius (home GPS + travel point), padded by the cell slack.
         statement.setDouble(index++, paddedRadius)
         statement.setDouble(index++, paddedRadius)
-        // has_visible_linked_partner gate + per-viewer block params (skipped when null).
-        statement.setNullableUuid(index++, userSpecificViewerId)
-        statement.setNullableUuid(index++, userSpecificViewerId)
-        statement.setNullableUuid(index++, userSpecificViewerId)
         // self exclusion gate.
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setNullableUuid(index++, userSpecificViewerId)
@@ -342,6 +306,7 @@ internal fun Connection.queryGridRank(
         statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
         statement.setBoolean(index++, filters.ageVerifiedOnly)
         index = CoupleVerifiedFilterSql.bind(statement, index, filters.verifiedCouplesOnly, viewerUserId)
+        index = LinkedPartnerFilterSql.bind(statement, this, index, filters.linkedOnly, viewerUserId, hiddenFromViewerIds)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
         index = LifestyleFilterSql.bind(statement, this, index, filters.lifestyleTags, filters.boundaryItems)
@@ -371,10 +336,6 @@ internal fun Connection.queryGridRank(
         statement.setInt(index++, radiusMeters)
         statement.setString(index++, orderSeed)
         statement.setString(index++, orderSeed)
-        // linkedOnly filter (?::boolean IS NULL / true / false).
-        statement.setObject(index++, filters.linkedOnly)
-        statement.setObject(index++, filters.linkedOnly)
-        statement.setObject(index++, filters.linkedOnly)
         // Keyset cursor predicate (no-op when cursor is null).
         statement.setBoolean(index++, cursor != null)
         statement.setObject(index++, cursor?.boostBucket)

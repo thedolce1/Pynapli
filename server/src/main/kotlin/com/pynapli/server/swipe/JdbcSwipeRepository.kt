@@ -30,6 +30,7 @@ class JdbcSwipeRepository(
         limit: Int,
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
     ): SwipeDeckResult =
         deckQueryActions.queryDeck(
             viewerUserId = viewerUserId,
@@ -37,6 +38,7 @@ class JdbcSwipeRepository(
             limit = limit,
             filters = filters,
             excludedTargetUserIds = excludedTargetUserIds,
+            hiddenFromViewerIds = hiddenFromViewerIds,
         )
 
     override suspend fun upsertDeckSession(

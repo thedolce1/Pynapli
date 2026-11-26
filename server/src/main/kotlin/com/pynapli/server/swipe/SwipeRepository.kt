@@ -12,6 +12,9 @@ interface SwipeRepository {
         limit: Int,
         filters: DiscoveryFilters = DiscoveryFilters(),
         excludedTargetUserIds: Set<UUID> = emptySet(),
+        // People hiding from the viewer (contact blocks; empty for a Psync deck). The partner rule
+        // (linkedOnly) never counts one of them as a partner shown to the viewer.
+        hiddenFromViewerIds: Set<UUID> = emptySet(),
     ): SwipeDeckResult
 
     suspend fun upsertDeckSession(

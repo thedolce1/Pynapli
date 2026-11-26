@@ -28,6 +28,7 @@ internal class JdbcSwipeDeckQueryActions(
         limit: Int,
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>,
+        hiddenFromViewerIds: Set<UUID> = emptySet(),
     ): SwipeDeckResult =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
@@ -55,6 +56,7 @@ internal class JdbcSwipeDeckQueryActions(
                             limit = limit,
                             filters = filters,
                             excludedTargetUserIds = discoveryExcludedTargetIds,
+                            hiddenFromViewerIds = hiddenFromViewerIds,
                         )
                     }
 
@@ -115,9 +117,10 @@ internal class JdbcSwipeDeckQueryActions(
         limit: Int,
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
     ): List<DeckRankRow> {
         if (filters.linkedOnly == true) {
-            val linkedTargetIds = listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters)
+            val linkedTargetIds = listLinkedCandidateUserIdsNear(viewerUserId, radiusMeters, hiddenFromViewerIds)
             if (linkedTargetIds.isEmpty()) return emptyList()
             val linkedRows =
                 queryDeckRank(
@@ -128,12 +131,13 @@ internal class JdbcSwipeDeckQueryActions(
                     excludedTargetUserIds = excludedTargetUserIds,
                     userSpecificViewerId = viewerUserId,
                     forcedTargetUserIds = linkedTargetIds,
+                    hiddenFromViewerIds = hiddenFromViewerIds,
                 )
             return SwipeDeckBoostPlacement.arrange(linkedRows, limit)
         }
 
         if (!filters.isRankCacheEligible() || !deckRankCache.isEnabled()) {
-            return SwipeDeckBoostPlacement.arrange(queryDeckRankForViewer(viewerUserId, radiusMeters, limit, filters, excludedTargetUserIds), limit)
+            return SwipeDeckBoostPlacement.arrange(queryDeckRankForViewer(viewerUserId, radiusMeters, limit, filters, excludedTargetUserIds, hiddenFromViewerIds), limit)
         }
 
         // One ranked window per (viewer cell, radius step, filter class), shared by every viewer in
@@ -170,7 +174,7 @@ internal class JdbcSwipeDeckQueryActions(
             return SwipeDeckBoostPlacement.arrange(remaining, limit)
         }
 
-        return SwipeDeckBoostPlacement.arrange(queryDeckRankForViewer(viewerUserId, radiusMeters, limit, filters, excludedTargetUserIds), limit)
+        return SwipeDeckBoostPlacement.arrange(queryDeckRankForViewer(viewerUserId, radiusMeters, limit, filters, excludedTargetUserIds, hiddenFromViewerIds), limit)
     }
 
     // Uncached rank for one viewer: self, already-swiped and session exclusions applied in SQL.
@@ -180,6 +184,7 @@ internal class JdbcSwipeDeckQueryActions(
         limit: Int,
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
     ): List<DeckRankRow> =
         queryDeckRank(
             viewerUserId = viewerUserId,
@@ -188,6 +193,7 @@ internal class JdbcSwipeDeckQueryActions(
             filters = filters,
             excludedTargetUserIds = excludedTargetUserIds,
             userSpecificViewerId = viewerUserId,
+            hiddenFromViewerIds = hiddenFromViewerIds,
         )
 
     private fun Connection.listHiddenProfileIds(viewerUserId: UUID): Set<UUID> =

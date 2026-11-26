@@ -30,6 +30,7 @@ internal class JdbcGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult =
         withContext(Dispatchers.IO) {
             profileBlocking("grid.db.connectionWait") { dataSource.connection }.use { connection ->
@@ -54,6 +55,7 @@ internal class JdbcGridRepository(
                             limit = limit,
                             filters = filters,
                             cursor = cursor,
+                            hiddenFromViewerIds = hiddenFromViewerIds,
                         )
                     }
 
@@ -178,6 +180,7 @@ internal class JdbcGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridRankPage {
         val viewerTravelActive = viewerHasActiveTravelLocation(viewerUserId)
 
@@ -186,7 +189,7 @@ internal class JdbcGridRepository(
             !candidateRankCache.isEnabled() ||
             viewerTravelActive
         ) {
-            return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
+            return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor, hiddenFromViewerIds)
         }
 
         val cacheWindow = rankCacheWindow.coerceAtLeast(limit)
@@ -229,7 +232,7 @@ internal class JdbcGridRepository(
             return GridRankPage(cards = sliced.take(limit), hasMore = sliced.size > limit)
         }
 
-        return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
+        return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor, hiddenFromViewerIds)
     }
 
     /**
@@ -246,6 +249,7 @@ internal class JdbcGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridRankPage {
         // The keyset cursor predicate is pushed into the SQL here (matching the
         // original single query), so a `limit + 1` fetch is sufficient: the extra
@@ -260,6 +264,7 @@ internal class JdbcGridRepository(
                 userSpecificViewerId = viewerUserId,
                 orderSeed = viewerLocationKey.orderSeed,
                 cursor = cursor,
+                hiddenFromViewerIds = hiddenFromViewerIds,
             )
         val page = ranked.take(limit)
         val hasMore = ranked.size > limit
