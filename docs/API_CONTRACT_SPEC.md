@@ -90,6 +90,78 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   `AuthSessionDto`, 409 `EMAIL_ALREADY_EXISTS` for an existing address) and `POST
   /v1/dev/auth/email/signup/latest-code` (`{email}` -> `DevSignupCodeDto {code?}`; codes only).
 
+### Continue with Google / Apple
+
+#### Section 5 contract (2026-11-26; server built, behind a flag)
+
+Rules and privacy analysis: [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#social-sign-in-continue-with-google--apple).
+DTOs: `shared/.../network/dto/SocialAuthDtos.kt`. Off unless `PYNAPLI_SOCIAL_SIGN_IN_ENABLED=true`.
+
+**Config** (server env): `PYNAPLI_GOOGLE_CLIENT_IDS` (comma list of accepted `aud`: web + Android
+client ids); `PYNAPLI_APPLE_CLIENT_IDS` (Services ID + bundle id); `PYNAPLI_APPLE_TEAM_ID`,
+`PYNAPLI_APPLE_KEY_ID`, `PYNAPLI_APPLE_PRIVATE_KEY` (the .p8 PEM text, secret manager only);
+`PYNAPLI_APPLE_REDIRECT_URIS` (`servicesId=https://...`, the redirect_uri a web code exchange must
+repeat); `PYNAPLI_SOCIAL_TOKEN_KEY` (seals Apple refresh tokens; strong and distinct, required in
+staging/production when the flag is on). Test-only overrides, refused in staging/production:
+`PYNAPLI_GOOGLE_JWKS_URL`, `PYNAPLI_APPLE_JWKS_URL`, `PYNAPLI_APPLE_TOKEN_URL`, `PYNAPLI_APPLE_REVOKE_URL`.
+Google is on when the flag is on and a client id is set; Apple only when the client ids AND the team
+id, key id and key are all set (deletion must be able to revoke).
+
+**Endpoints**
+
+- `GET /v1/auth/social/config` (public) → `SocialSignInConfigDto {google, apple}`. Show a button only
+  when its flag is true.
+- `POST /v1/auth/social/nonce` (public, no body; `AUTH_SOCIAL_NONCE_IP` 120/h per IP) →
+  `SocialNonceDto {nonce, expiresInSeconds: 600}`. Single use; only its hash is stored (Redis). 404
+  `SOCIAL_SIGN_IN_UNAVAILABLE` when no provider is on.
+  - **Google**: pass the nonce as is (Credential Manager `setNonce`, GIS `nonce`).
+  - **Apple**: pass `lowercase hex SHA-256(nonce)` to Apple (iOS `ASAuthorizationAppleIDRequest.nonce`,
+    Sign in with Apple JS `nonce`); the token's `nonce` claim is then that hash. The raw value is also
+    accepted. Always send the raw nonce to Pynapli.
+- `POST /v1/auth/social/{google|apple}` (public; `AUTH_SOCIAL_IP` 100/h per IP, `AUTH_SOCIAL_SIGN_IN`
+  30/h per provider identity) with `SocialSignInRequestDto {idToken, nonce, authorizationCode?,
+  birthdate?, confirmedAdult, acceptedTerms, acceptedPrivacy, deviceId?, platform?, appVersion?}`. The
+  age-gate fields are exactly email sign-up's (`EmailSignupRequestDto`). There is no `displayName`: the
+  provider's name is never used (the Profile step sets one). Answers, in this order:
+  1. Provider off or unknown → `404 SOCIAL_SIGN_IN_UNAVAILABLE`.
+  2. Token fails any check (signature/JWKS, `iss`, `aud` not exactly one configured client id, `exp`
+     passed or missing, `iat` > 5 min ahead, no `sub`, `nonce` claim ≠ the nonce) or the nonce was
+     never issued / expired / already spent → `401 INVALID_SOCIAL_TOKEN`. Provider keys unreachable,
+     or the nonce store down → `503 SOCIAL_SIGN_IN_TEMPORARILY_UNAVAILABLE`.
+  3. **From here the nonce is spent, whatever the answer.** Every retry needs a fresh nonce AND a fresh
+     ID token (and, for Apple, the fresh authorization code that comes with it).
+  4. Known identity → `200 AuthSessionDto` (same as email sign-in); a suspended/banned/paused account
+     → `403 ACCOUNT_NOT_ACTIVE` (appeal below).
+  5. Unknown identity whose **provider-verified** address already belongs to an account →
+     `409 SOCIAL_EMAIL_HAS_ACCOUNT` ("sign in the way you usually do, then add Google/Apple in
+     Settings"). Checked before the age gate. Never linked automatically.
+  6. Unknown identity, `birthdate` null/blank → `422 SOCIAL_SIGNUP_NEEDS_AGE_GATE`; nothing created.
+     Client: run Birthday → Policies, then a fresh nonce + fresh provider sign-in, and send again with
+     the fields.
+  7. Unknown identity with the fields → `validateSignupAgeGate` exactly as email sign-up
+     (`400 AGE_RESTRICTED`, `BIRTHDATE_REQUIRED`, `INVALID_BIRTHDATE`, `ADULT_CONFIRMATION_REQUIRED`,
+     `TERMS_ACCEPTANCE_REQUIRED`, `PRIVACY_ACCEPTANCE_REQUIRED`), then the account is created and
+     `200 AuthSessionDto` (no email code). Apple: send `authorizationCode` so deletion can revoke.
+- `GET /v1/auth/identities` (bearer) → `LinkedIdentitiesDto {identities: [{provider: email|google|apple,
+  linkedAt, emailHint?}], hasPassword}`. `emailHint` is masked (`j•••@gmail.com`).
+- `POST /v1/auth/identities/{google|apple}` (bearer; `SOCIAL_IDENTITY_CHANGE` 20/h per account) with
+  `LinkSocialIdentityRequestDto {idToken, nonce, authorizationCode?}` → `200 LinkedIdentitiesDto`
+  (also when it was already linked to this account). `409 SOCIAL_IDENTITY_IN_USE` (the identity signs
+  in to another account), `409 SOCIAL_PROVIDER_ALREADY_LINKED` (this account already has a different
+  Google/Apple identity), plus the token errors above.
+- `DELETE /v1/auth/identities/{google|apple}` (bearer; same limit) → `200 UnlinkedIdentityDto
+  {unlinked: true}`; `409 LAST_SIGN_IN_METHOD`; `404 SOCIAL_IDENTITY_NOT_LINKED`. Works while the
+  provider is switched off. Unlinking Apple revokes its grant.
+- `POST /v1/auth/account-appeal/social/{google|apple}` (public; `ACCOUNT_APPEAL_IP`) with
+  `SocialAccountAppealRequestDto {idToken, nonce, reason}` → `AppealDto`, the social twin of
+  `/v1/auth/account-appeal`: `409 ACCOUNT_NOT_RESTRICTED` for an active account, `404
+  SOCIAL_ACCOUNT_NOT_FOUND` when the proven identity has no account, plus the token errors.
+- Email sign-up is unchanged: an address held by a Google/Apple account gets the same 202 and the
+  neutral "already has an account" notice email, never a code.
+- Account deletion revokes stored Apple grants (best-effort, after commit) and scrubs every identity;
+  the data export lists `signInMethods` (provider, linked_at, masked hint, email_verified,
+  last_used_at), never subjects or tokens.
+
 ### Grid (`POST /v1/grid/query`)
 
 - Cards stay minimal (id, name, thumbnail, online, distance label, linked-partner mini, `verified`,
@@ -297,7 +369,9 @@ separately.
 - A suspended or banned account appeals through `POST /v1/auth/account-appeal` with email and password
   (rate-limited like login). **The password is checked before account status**, there and at sign-in,
   so a wrong password never reveals that an account exists or is suspended. Sign-in answers
-  `ACCOUNT_NOT_ACTIVE` for such accounts; an active account gets `ACCOUNT_NOT_RESTRICTED` (409).
+  `ACCOUNT_NOT_ACTIVE` for such accounts; an active account gets `ACCOUNT_NOT_RESTRICTED` (409). An
+  account that signs in with Google or Apple appeals through `POST
+  /v1/auth/account-appeal/social/{provider}` with a fresh provider sign-in (Section 5 contract).
 
 ### Age verification
 
