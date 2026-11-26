@@ -98,11 +98,12 @@ interface SocialIdentityRepository {
         emailHint: String?,
     )
 
+    /** False when the identity is gone (unlinked, or the account deleted) by the time the token arrives. */
     suspend fun storeAppleRefreshToken(
         identityId: UUID,
         clientId: String,
         sealed: ByteArray,
-    )
+    ): Boolean
 
     suspend fun listIdentities(userId: UUID): List<IdentitySummary>
 
@@ -192,7 +193,7 @@ class JdbcSocialIdentityRepository(
         identityId: UUID,
         clientId: String,
         sealed: ByteArray,
-    ) {
+    ): Boolean =
         dataSource.withConnection { connection ->
             connection
                 .prepareStatement(
@@ -206,10 +207,9 @@ class JdbcSocialIdentityRepository(
                     statement.setBytes(1, sealed)
                     statement.setString(2, clientId)
                     statement.setObject(3, identityId)
-                    statement.executeUpdate()
+                    statement.executeUpdate() > 0
                 }
         }
-    }
 
     override suspend fun listIdentities(userId: UUID): List<IdentitySummary> =
         dataSource.withConnection { connection ->

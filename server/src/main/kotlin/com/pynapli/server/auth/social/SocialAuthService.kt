@@ -231,7 +231,12 @@ class SocialAuthService(
         launchBackground {
             try {
                 val refreshToken = client.exchangeCode(identity.audience, code, identity.subject) ?: return@launchBackground
-                repository.storeAppleRefreshToken(identityId, identity.audience, tokenSeal.seal(identityId, refreshToken))
+                val stored = repository.storeAppleRefreshToken(identityId, identity.audience, tokenSeal.seal(identityId, refreshToken))
+                // Unlinked or deleted while the exchange ran: nobody will ever revoke this grant, so
+                // revoke it now instead of dropping it (best-effort).
+                if (!stored && !client.revoke(identity.audience, refreshToken)) {
+                    logger.warn("Revoking an Apple grant that arrived after unlink/deletion failed")
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {

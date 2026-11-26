@@ -459,6 +459,64 @@ class SocialSignInIntegrationTest {
             assertEquals(listOf(FakeIdentityProvider.APPLE_CLIENT_ID to "apple-refresh-token-1"), apple.revocations)
         }
 
+    private fun realAppleClient(subject: String): HttpAppleTokenClient {
+        val ecKeys = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+        val pem = "-----BEGIN PRIVATE KEY-----\n" + Base64.getMimeEncoder().encodeToString(ecKeys.private.encoded) + "\n-----END PRIVATE KEY-----"
+        val idToken = "e30.${FakeIdentityProvider.b64("""{"sub":"$subject","aud":"${FakeIdentityProvider.APPLE_CLIENT_ID}"}""".toByteArray())}.sig"
+        idp.tokenResponse = 200 to """{"refresh_token":"r-late","id_token":"$idToken","token_type":"bearer"}"""
+        return HttpAppleTokenClient(
+            teamId = "TEAM123456",
+            keyId = "KEY1234567",
+            privateKeyPem = pem,
+            tokenUrl = "${idp.baseUrl}/auth/token",
+            revokeUrl = "${idp.baseUrl}/auth/revoke",
+        )
+    }
+
+    private fun serviceWithRealApple(subject: String): SocialAuthService {
+        val client = realAppleClient(subject)
+        return SocialAuthService(
+            verifiers = bothProviders,
+            nonceStore = nonces,
+            repository = JdbcSocialIdentityRepository(dataSource),
+            authService = authService,
+            tokenSeal = seal,
+            appleTokenClient = client,
+            appleGrantRevoker = AppleGrantRevoker(client, seal, work::launch),
+            launchBackground = work::launch,
+        )
+    }
+
+    @Test
+    fun aGrantThatArrivesAfterUnlinkIsRevokedAtOnce() =
+        testApplication {
+            serve(serviceWithRealApple("a-late"))
+            val member = authService.signUpVerified("member@example.com", PASSWORD, passwordHasher = hasher)
+            assertEquals(HttpStatusCode.OK, client.link(member.accessToken, SocialProvider.APPLE, "a-late", code = "late-code").status)
+            // Unlinked before the queued code exchange runs: there is no stored grant to revoke yet.
+            assertEquals(HttpStatusCode.OK, client.delete("/v1/auth/identities/apple") { bearerAuth(member.accessToken) }.status)
+            assertTrue(idp.revokeRequests.isEmpty())
+
+            work.runAll()
+
+            assertEquals(listOf("late-code"), idp.tokenRequests.map { it["code"] })
+            assertEquals(listOf("r-late"), idp.revokeRequests.map { it["token"] })
+            assertEquals(0, count("SELECT count(*) FROM auth_identities WHERE apple_refresh_token_sealed IS NOT NULL"))
+        }
+
+    @Test
+    fun aGrantThatArrivesAfterDeletionIsRevokedAtOnce() =
+        testApplication {
+            serve(serviceWithRealApple("a-gone"))
+            val userId = UUID.fromString(session(client.attempt(SocialProvider.APPLE, "a-gone", birthdate = ADULT, code = "gone-code")).user.userId)
+            AccountLifecycleService(JdbcAccountLifecycleRepository(dataSource, ContactBlockTokens.localDevelopment())).deleteAccount(userId, "DELETE")
+
+            work.runAll()
+
+            assertEquals(listOf("r-late"), idp.revokeRequests.map { it["token"] })
+            assertNull(bytes("SELECT apple_refresh_token_sealed FROM auth_identities WHERE user_id = ?", userId))
+        }
+
     @Test
     fun theRealAppleClientSignsItsSecretAndSendsWhatAppleDocuments() =
         runBlocking {
