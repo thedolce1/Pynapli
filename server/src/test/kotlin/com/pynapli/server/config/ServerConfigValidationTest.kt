@@ -3,6 +3,7 @@ package com.pynapli.server.config
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ServerConfigValidationTest {
@@ -77,6 +78,49 @@ class ServerConfigValidationTest {
         assertEquals(listOf("DEV_SIGNUP_SHORTCUTS_FORBIDDEN"), staging)
         assertEquals(listOf("DEV_SIGNUP_SHORTCUTS_FORBIDDEN"), production)
         assertEquals(emptyList(), localConfig().copy(devSignupShortcutsEnabled = true).startupValidationIssues())
+    }
+
+    @Test
+    fun socialSignInIsOffByDefaultAndEachProviderNeedsItsWholeConfig() {
+        assertFalse(localConfig().googleSignInConfigured())
+        assertFalse(localConfig().copy(googleClientIds = listOf("web")).googleSignInConfigured(), "the flag is off")
+        assertTrue(localConfig().copy(socialSignInEnabled = true, googleClientIds = listOf("web")).googleSignInConfigured())
+        val appleIdsOnly = localConfig().copy(socialSignInEnabled = true, appleClientIds = listOf("com.pynapli.app"))
+        assertFalse(appleIdsOnly.appleSignInConfigured(), "no revocation key, no Apple")
+        assertTrue(appleIdsOnly.copy(appleTeamId = "T", appleKeyId = "K", applePrivateKeyPem = "pem").appleSignInConfigured())
+    }
+
+    @Test
+    fun productionLikeEnvironmentsRefuseProviderOverridesPartialAppleAndAWeakSocialTokenKey() {
+        val overridden = validStagingConfig().copy(googleJwksUrl = "http://127.0.0.1/jwks").startupValidationIssues().map { it.code }
+        assertEquals(listOf("SOCIAL_PROVIDER_ENDPOINT_OVERRIDE_FORBIDDEN"), overridden)
+
+        val partialApple =
+            validStagingConfig()
+                .copy(socialSignInEnabled = true, appleClientIds = listOf("com.pynapli.app"), socialTokenKey = "socialtokenstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        assertEquals(listOf("APPLE_SIGN_IN_INCOMPLETE"), partialApple)
+
+        val defaultKey = validStagingConfig().copy(socialSignInEnabled = true, googleClientIds = listOf("web")).startupValidationIssues().map { it.code }
+        assertEquals(listOf("SOCIAL_TOKEN_KEY_REQUIRED"), defaultKey)
+
+        val sharedKey =
+            validStagingConfig()
+                .copy(socialSignInEnabled = true, googleClientIds = listOf("web"), socialTokenKey = "contactblockemailstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        assertEquals(listOf("SOCIAL_TOKEN_KEY_REQUIRED"), sharedKey)
+
+        assertEquals(emptyList(), localConfig().copy(socialSignInEnabled = true, googleJwksUrl = "http://127.0.0.1/jwks").startupValidationIssues())
+    }
+
+    @Test
+    fun appleRedirectUrisParseClientIdEqualsUri() {
+        assertEquals(
+            mapOf("com.pynapli.web" to "https://app.pynapli.com/auth/apple?x=1"),
+            appleRedirectUrisFrom(" com.pynapli.web=https://app.pynapli.com/auth/apple?x=1 , broken, =nope"),
+        )
     }
 
     @Test

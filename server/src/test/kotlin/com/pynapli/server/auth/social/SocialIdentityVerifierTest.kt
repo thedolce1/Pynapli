@@ -215,6 +215,17 @@ class SocialIdentityVerifierTest {
         assertEquals("x•••@privaterelay.appleid.com", maskEmail("x1@privaterelay.appleid.com"))
     }
 
+    @Test
+    fun aSealedTokenOpensOnlyForItsRowAndKey() {
+        val seal = SocialTokenSeal("seal-key-one-for-tests-0123456789abcdef")
+        val row = java.util.UUID.randomUUID()
+        val sealed = seal.seal(row, "refresh-token")
+        assertEquals("refresh-token", seal.open(row, sealed))
+        assertNull(seal.open(java.util.UUID.randomUUID(), sealed), "bound to its identity row")
+        assertNull(SocialTokenSeal("another-key-for-tests-0123456789abcdef").open(row, sealed))
+        assertNull(seal.open(row, sealed.copyOf(10)))
+    }
+
     private companion object {
         const val NONCE = "server-nonce-123"
     }
