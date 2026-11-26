@@ -63,7 +63,11 @@ class VerifiedSocialIdentity(
  * classpath through firebase-admin, also used for App Check). Its audience/issuer options are left
  * unset on purpose: they compare one string, and both checks need a set. It caches the key set for an
  * hour and never refetches on an unknown `kid`, so on that failure the verifier is rebuilt (a fresh
- * cache), at most once per [keyRefreshInterval], and the token is checked once more.
+ * cache) and the token is checked once more, at most once per [keyRefreshMinInterval]. A `kid` that is
+ * still unknown after a refresh goes on a small, expiring negative list ([UNKNOWN_KID_TTL], at most
+ * [MAX_UNKNOWN_KIDS]) and never triggers another refresh while listed. So bogus kids from an attacker
+ * cost at most one key fetch per interval and can delay a real rotation by at most that interval; they
+ * can never hold the refresh off. Per verifier, so per server instance.
  *
  * Email rules ([authoritativeEmail]):
  * - Google: `email_verified` true AND (an `@gmail.com` address OR an `hd` claim). Google's docs say only
@@ -78,12 +82,14 @@ class SocialIdentityVerifier(
     private val jwksUrl: String = defaultJwksUrl(provider),
     private val clock: Clock = Clock.systemUTC(),
     private val httpTransportFactory: HttpTransportFactory? = null,
-    private val keyRefreshInterval: Duration = Duration.ofMinutes(5),
+    private val keyRefreshMinInterval: Duration = Duration.ofSeconds(30),
 ) {
     private val audiences: Set<String> = acceptedAudiences.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     private val tokenVerifier = AtomicReference(buildTokenVerifier())
 
-    @Volatile private var lastRebuild: Instant = Instant.EPOCH
+    // Guarded by `this`.
+    private var lastRebuild: Instant = Instant.EPOCH
+    private val unknownKids = LinkedHashMap<String, Instant>()
 
     init {
         require(audiences.isNotEmpty()) { "A social identity verifier needs at least one accepted client id" }
@@ -108,11 +114,13 @@ class SocialIdentityVerifier(
         try {
             return tokenVerifier.get().verify(token)
         } catch (error: TokenVerifier.VerificationException) {
-            if (error.isUnknownKey() && mayRebuild()) {
+            val kid = if (error.isUnknownKey()) keyIdOf(token) else null
+            if (kid != null && mayRebuildFor(kid)) {
                 tokenVerifier.set(buildTokenVerifier())
                 return try {
                     tokenVerifier.get().verify(token)
                 } catch (retryError: TokenVerifier.VerificationException) {
+                    if (retryError.isUnknownKey()) rememberUnknown(kid)
                     throw translate(retryError)
                 }
             }
@@ -175,14 +183,42 @@ class SocialIdentityVerifier(
         return provider == SocialProvider.APPLE && constantTimeEquals(claim.lowercase(), sha256Hex(expected))
     }
 
-    private fun mayRebuild(): Boolean {
+    /** A refresh for [kid]: not while it is on the negative list, and at most once per interval. */
+    private fun mayRebuildFor(kid: String): Boolean {
         val now = clock.instant()
         synchronized(this) {
-            if (now.isBefore(lastRebuild.plus(keyRefreshInterval))) return false
+            unknownKids[kid]?.let { listedUntil ->
+                if (now.isBefore(listedUntil)) return false
+                unknownKids.remove(kid)
+            }
+            if (now.isBefore(lastRebuild.plus(keyRefreshMinInterval))) return false
             lastRebuild = now
             return true
         }
     }
+
+    private fun rememberUnknown(kid: String) {
+        val until = clock.instant().plus(UNKNOWN_KID_TTL)
+        synchronized(this) {
+            unknownKids.remove(kid)
+            unknownKids[kid] = until
+            while (unknownKids.size > MAX_UNKNOWN_KIDS) unknownKids.remove(unknownKids.keys.first())
+        }
+    }
+
+    /** The header's `kid`, or null for a token whose header can't be read (then it is just rejected). */
+    private fun keyIdOf(token: String): String? =
+        runCatching {
+            val header = java.util.Base64.getUrlDecoder().decode(token.substringBefore('.'))
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(header.toString(Charsets.UTF_8))
+                .let { it as? kotlinx.serialization.json.JsonObject }
+                ?.get("kid")
+                ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
+                ?.takeIf { it.isString }
+                ?.content
+                ?.takeIf { it.isNotEmpty() && it.length <= MAX_KID_LENGTH }
+        }.getOrNull()
 
     private fun buildTokenVerifier(): TokenVerifier {
         val builder =
@@ -221,6 +257,9 @@ class SocialIdentityVerifier(
         private const val MAX_SUBJECT_LENGTH = 255
         private const val MAX_EMAIL_LENGTH = 320
         private const val MAX_REASON_LENGTH = 80
+        private const val MAX_KID_LENGTH = 128
+        const val MAX_UNKNOWN_KIDS = 256
+        val UNKNOWN_KID_TTL: Duration = Duration.ofMinutes(10)
 
         fun defaultJwksUrl(provider: SocialProvider): String =
             when (provider) {

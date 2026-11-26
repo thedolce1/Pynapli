@@ -6,7 +6,11 @@ import com.pynapli.server.testsupport.FakeIdentityProvider.Companion.bool
 import com.pynapli.server.testsupport.FakeIdentityProvider.Companion.str
 import kotlinx.coroutines.runBlocking
 import java.security.KeyPairGenerator
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -127,6 +131,54 @@ class SocialIdentityVerifierTest {
         }
 
     @Test
+    fun bogusKidsCanNeitherHoldOffARealRotationNorForceRepeatedFetches() =
+        runBlocking {
+            val clock = MovableClock()
+            val verifier = provider.verifier(SocialProvider.GOOGLE, clock = clock)
+            val stranger = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair().private
+            fun bogus(kid: String) = provider.idToken(SocialProvider.GOOGLE, "g-x", NONCE, kid = kid, signWith = stranger)
+
+            verifier.verify(provider.idToken(SocialProvider.GOOGLE, "g-1", NONCE), NONCE)
+            assertEquals(1, provider.jwksFetches.get())
+
+            // An unknown kid refreshes once; still unknown afterwards, it goes on the negative list.
+            rejected { verifier.verify(bogus("bogus-1"), NONCE) }
+            assertEquals(2, provider.jwksFetches.get())
+
+            // Long after the interval, the listed kid never refreshes again...
+            clock.advance(Duration.ofSeconds(31))
+            rejected { verifier.verify(bogus("bogus-1"), NONCE) }
+            assertEquals(2, provider.jwksFetches.get())
+
+            // ...so it didn't use up the slot: a real rotation is picked up at once.
+            provider.addKey("kid-2", publish = true)
+            assertEquals("g-2", verifier.verify(provider.idToken(SocialProvider.GOOGLE, "g-2", NONCE, kid = "kid-2"), NONCE).subject)
+            assertEquals(3, provider.jwksFetches.get())
+
+            // Fresh bogus kids cost at most one fetch per interval, and delay a rotation by at most that.
+            rejected { verifier.verify(bogus("bogus-2"), NONCE) }
+            rejected { verifier.verify(bogus("bogus-3"), NONCE) }
+            assertEquals(3, provider.jwksFetches.get(), "within 30 s of the last refresh")
+            provider.addKey("kid-3", publish = true)
+            rejected { verifier.verify(provider.idToken(SocialProvider.GOOGLE, "g-3", NONCE, kid = "kid-3"), NONCE) }
+            clock.advance(Duration.ofSeconds(31))
+            assertEquals("g-3", verifier.verify(provider.idToken(SocialProvider.GOOGLE, "g-3", NONCE, kid = "kid-3"), NONCE).subject)
+            assertEquals(4, provider.jwksFetches.get())
+        }
+
+    @Test
+    fun anHs256TokenSignedWithThePublicKeyIsRejected() =
+        rejected {
+            // The classic algorithm-confusion forgery: HMAC keyed with the provider's public key bytes.
+            val parts = provider.idToken(SocialProvider.GOOGLE, "g-1", NONCE).split('.')
+            val header = FakeIdentityProvider.b64("""{"alg":"HS256","kid":"kid-1","typ":"JWT"}""".toByteArray())
+            val input = "$header.${parts[1]}"
+            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+            mac.init(javax.crypto.spec.SecretKeySpec(provider.publicKey("kid-1").encoded, "HmacSHA256"))
+            google.verify("$input.${FakeIdentityProvider.b64(mac.doFinal(input.toByteArray()))}", NONCE)
+        }
+
+    @Test
     fun aGoogleAddressIsAuthoritativeOnlyForGmailOrAHostedDomain() =
         runBlocking {
             fun token(
@@ -222,6 +274,21 @@ class SocialIdentityVerifierTest {
         assertNull(seal.open(java.util.UUID.randomUUID(), sealed), "bound to its identity row")
         assertNull(SocialTokenSeal("another-key-for-tests-0123456789abcdef").open(row, sealed))
         assertNull(seal.open(row, sealed.copyOf(10)))
+    }
+
+    /** Real time plus an offset the test moves forward (tokens stay valid for their 10 minutes). */
+    private class MovableClock : Clock() {
+        @Volatile private var offset: Duration = Duration.ZERO
+
+        fun advance(by: Duration) {
+            offset = offset.plus(by)
+        }
+
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId?): Clock = this
+
+        override fun instant(): Instant = Instant.now().plus(offset)
     }
 
     private companion object {

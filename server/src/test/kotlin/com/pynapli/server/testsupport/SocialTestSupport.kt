@@ -31,6 +31,9 @@ internal class FakeIdentityProvider : AutoCloseable {
 
     @Volatile var publishedKids: List<String> = emptyList()
 
+    /** How many times the JWKS was fetched. */
+    val jwksFetches = java.util.concurrent.atomic.AtomicInteger()
+
     /** Form bodies the fake Apple endpoints received, as decoded maps. */
     val tokenRequests: MutableList<Map<String, String>> = Collections.synchronizedList(mutableListOf())
     val revokeRequests: MutableList<Map<String, String>> = Collections.synchronizedList(mutableListOf())
@@ -41,6 +44,7 @@ internal class FakeIdentityProvider : AutoCloseable {
     private val server: HttpServer =
         HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
             createContext("/jwks") { exchange ->
+                jwksFetches.incrementAndGet()
                 val body = jwksJson().toByteArray()
                 exchange.responseHeaders.add("Content-Type", "application/json")
                 exchange.sendResponseHeaders(200, body.size.toLong())
@@ -124,6 +128,8 @@ internal class FakeIdentityProvider : AutoCloseable {
     }
 
     fun privateKey(kid: String): PrivateKey = keys.getValue(kid).private
+
+    fun publicKey(kid: String): java.security.PublicKey = keys.getValue(kid).public
 
     private fun jwksJson(): String {
         val entries =
