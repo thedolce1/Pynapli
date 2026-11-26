@@ -2,6 +2,7 @@ package com.pynapli.app.auth
 
 import android.app.Activity
 import android.content.Context
+import android.os.Build
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.Credential
 import androidx.credentials.CredentialManager
@@ -55,7 +56,12 @@ class AndroidGoogleSignInProvider(
         if (activityRef?.get() === activity) activityRef = null
     }
 
-    override fun supports(provider: SocialProvider): Boolean = provider == SocialProvider.Google && serverClientId.isNotBlank()
+    // googleid requires API 24 (the manifest overrides its minSdk so the app can keep API 23); below
+    // that, Google is unsupported and the button never shows.
+    override fun supports(provider: SocialProvider): Boolean =
+        provider == SocialProvider.Google &&
+            serverClientId.isNotBlank() &&
+            Build.VERSION.SDK_INT >= GOOGLE_ID_MIN_SDK
 
     override suspend fun requestIdToken(
         provider: SocialProvider,
@@ -109,6 +115,8 @@ class AndroidGoogleSignInProvider(
     }
 
     private companion object {
+        /** googleid's own minSdk (its manifest); below this Google sign-in is not offered. */
+        const val GOOGLE_ID_MIN_SDK = 24
         const val TRY_AGAIN = "Google sign-in didn't work. Try again."
     }
 }
