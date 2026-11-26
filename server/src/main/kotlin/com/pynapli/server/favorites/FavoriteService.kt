@@ -33,6 +33,9 @@ class FavoriteService internal constructor(
     // "Hide from people you know": someone hiding from the viewer can't be starred (same answer as a
     // missing account) and never shows in the viewer's list, nor as a partner mini on a card there.
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // The viewer's own hides: a hidden person never shows as a partner mini on a card here either, as
+    // on the Grid (the list itself already leaves hidden people out in SQL).
+    private val hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
 ) {
     suspend fun add(
         viewerUserId: UUID,
@@ -95,9 +98,11 @@ class FavoriteService internal constructor(
         val remaining = if (cursor == null) ordered else ordered.filter { (_, anchor) -> anchor.compareTo(cursor) > 0 }
         val page = remaining.take(limit)
         val hydration = repository.hydrate(viewerUserId, page.map { it.first.userId })
+        // Partners never shown on a card: people hiding from the viewer and people the viewer hid.
+        val partnerHidden = hiddenFromViewer + hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
         val cards =
             page.map { (row, _) ->
-                val h = hydration[row.userId]?.let { hydrated -> if (hydrated.linkedPartnerUserId in hiddenFromViewer) hydrated.withoutPartner() else hydrated }
+                val h = hydration[row.userId]?.let { hydrated -> if (hydrated.linkedPartnerUserId in partnerHidden) hydrated.withoutPartner() else hydrated }
                 GridCardRecord(
                     userId = row.userId,
                     displayName = row.displayName,
