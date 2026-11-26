@@ -18,6 +18,7 @@ import com.pynapli.shared.network.dto.LinkedIdentityDto
 import com.pynapli.shared.network.dto.SocialNonceDto
 import com.pynapli.shared.network.dto.SocialSignInConfigDto
 import com.pynapli.shared.network.dto.SocialSignInRequestDto
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 import java.time.Clock
@@ -170,7 +171,15 @@ class SocialAuthService(
         providerWire: String?,
         request: LinkSocialIdentityRequestDto,
     ): LinkedIdentitiesDto {
-        val identity = verifyAndSpend(providerWire, request.idToken, request.nonce)
+        // 400, not 401, on this signed-in route: a 401 makes clients refresh the session and replay the
+        // request, which would only resend a spent nonce (API_CONTRACT_SPEC "Section 5 contract").
+        val identity =
+            try {
+                verifyAndSpend(providerWire, request.idToken, request.nonce)
+            } catch (error: AuthException) {
+                if (error.code != "INVALID_SOCIAL_TOKEN") throw error
+                throw AuthException("INVALID_SOCIAL_TOKEN", status = HttpStatusCode.BadRequest)
+            }
         val identityId = UUID.randomUUID()
         when (repository.link(userId, identity.toNewIdentity(identityId))) {
             SocialLinkOutcome.Linked -> storeAppleTokenLater(identityId, identity, request.authorizationCode)

@@ -111,7 +111,8 @@ id, key id and key are all set (deletion must be able to revoke).
 
 - `GET /v1/auth/social/config` (public) → `SocialSignInConfigDto {google, apple}`. Show a button only
   when its flag is true.
-- `POST /v1/auth/social/nonce` (public, no body; `AUTH_SOCIAL_NONCE_IP` 120/h per IP) →
+- `POST /v1/auth/social/nonce` (public; any body, e.g. `{deviceId?}`, is accepted and ignored;
+  `AUTH_SOCIAL_NONCE_IP` 120/h per IP) →
   `SocialNonceDto {nonce, expiresInSeconds: 600}`. Single use; only its hash is stored (Redis). 404
   `SOCIAL_SIGN_IN_UNAVAILABLE` when no provider is on.
   - **Google**: pass the nonce as is (Credential Manager `setNonce`, GIS `nonce`).
@@ -148,7 +149,10 @@ id, key id and key are all set (deletion must be able to revoke).
   `LinkSocialIdentityRequestDto {idToken, nonce, authorizationCode?}` → `200 LinkedIdentitiesDto`
   (also when it was already linked to this account). `409 SOCIAL_IDENTITY_IN_USE` (the identity signs
   in to another account), `409 SOCIAL_PROVIDER_ALREADY_LINKED` (this account already has a different
-  Google/Apple identity), plus the token errors above.
+  Google/Apple identity), plus the token errors above, except that a bad/expired/wrong-nonce provider
+  token answers **`400 INVALID_SOCIAL_TOKEN`** here (not 401): a 401 on a signed-in route makes the
+  client refresh and replay, which would only resend a spent nonce. A 401 on this route always means
+  the bearer session.
 - `DELETE /v1/auth/identities/{google|apple}` (bearer; same limit) → `200 UnlinkedIdentityDto
   {unlinked: true}`; `409 LAST_SIGN_IN_METHOD`; `404 SOCIAL_IDENTITY_NOT_LINKED`. Works while the
   provider is switched off. Unlinking Apple revokes its grant.

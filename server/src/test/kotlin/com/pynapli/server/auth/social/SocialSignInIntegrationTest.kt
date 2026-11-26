@@ -372,6 +372,29 @@ class SocialSignInIntegrationTest {
         }
 
     @Test
+    fun aBadProviderTokenWhileLinkingIs400SoTheClientNeverReplaysIt() =
+        testApplication {
+            serve()
+            val member = authService.signUpVerified("member@example.com", PASSWORD, passwordHasher = hasher)
+            val nonce = client.nonce()
+            val response =
+                client.post("/v1/auth/identities/google") {
+                    bearerAuth(member.accessToken)
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        JSON.encodeToString(
+                            LinkSocialIdentityRequestDto.serializer(),
+                            LinkSocialIdentityRequestDto(idp.idToken(SocialProvider.GOOGLE, "g-x", "not-the-nonce"), nonce),
+                        ),
+                    )
+                }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertEquals("INVALID_SOCIAL_TOKEN", response.errorCode())
+            // The unauthenticated sign-in keeps 401 for the same failure.
+            assertEquals(HttpStatusCode.Unauthorized, client.signIn(SocialProvider.GOOGLE, idp.idToken(SocialProvider.GOOGLE, "g-x", "not-the-nonce"), client.nonce()).status)
+        }
+
+    @Test
     fun linkingNeedsASession() =
         testApplication {
             serve()

@@ -201,6 +201,8 @@ class AuthService(
 
 class AuthException(
     val code: String,
+    /** Overrides [authStatusFor] for this throw only (e.g. a bad provider token on a signed-in route). */
+    val status: io.ktor.http.HttpStatusCode? = null,
 ) : RuntimeException(code)
 
 private const val REVOCATION_CHANNEL = "pynapli:auth:revocations"
