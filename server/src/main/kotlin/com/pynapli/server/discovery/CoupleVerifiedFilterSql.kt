@@ -131,8 +131,10 @@ object CoupleVerifiedFilterSql {
                 $settings.partner_visibility = 'matches_only'
                 AND EXISTS (
                     SELECT 1 FROM matches pv_match
-                    WHERE LEAST(pv_match.user_a, pv_match.user_b) = LEAST(?::uuid, $owner)
-                      AND GREATEST(pv_match.user_a, pv_match.user_b) = GREATEST(?::uuid, $owner)
+                    -- Rows are stored user_a < user_b (matches_canonical_order_check), so this
+                    -- reads the unique (user_a, user_b) index instead of scanning matches.
+                    WHERE pv_match.user_a = LEAST(?::uuid, $owner)
+                      AND pv_match.user_b = GREATEST(?::uuid, $owner)
                 )
             )
         )
