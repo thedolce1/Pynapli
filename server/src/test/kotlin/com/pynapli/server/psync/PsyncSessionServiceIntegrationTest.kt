@@ -264,7 +264,7 @@ class PsyncSessionServiceIntegrationTest :
                         minimumAge = 27,
                         maximumAge = 41,
                         verifiedOnly = true,
-                        intents = listOf("together", "social"),
+                        intents = listOf("dating", "events"),
                         dealbreakers = setOf("age", "distance"),
                     )
                 val configuring =
@@ -284,7 +284,7 @@ class PsyncSessionServiceIntegrationTest :
                 assertEquals("ready", ready.status)
                 assertTrue(ready.participants.all { it.approved })
                 assertEquals(12_345, ready.filters.radiusMeters)
-                assertEquals(listOf("together", "social"), ready.filters.intents)
+                assertEquals(listOf("dating", "events"), ready.filters.intents)
                 assertTrue(ready.filters.verifiedOnly)
             }
         }

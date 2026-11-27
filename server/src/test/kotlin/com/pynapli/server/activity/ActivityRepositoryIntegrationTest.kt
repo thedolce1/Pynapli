@@ -530,7 +530,8 @@ class ActivityRepositoryIntegrationTest {
             dataSource.insertActivityEvent(likeId, recipient, likeActor, "swipe_like", Instant.parse("2026-05-18T17:01:00Z"))
             dataSource.insertActivityEvent(albumId, recipient, albumActor, "album_request", Instant.parse("2026-05-18T17:02:00Z"))
             dataSource.insertActivityEvent(inviteId, recipient, inviteActor, "partner_chat_invite", Instant.parse("2026-05-18T17:03:00Z"))
-            dataSource.insertActivityEvent(viewId, recipient, viewActor, "profile_view", Instant.parse("2026-05-18T17:04:00Z"))
+            // Viewed Me counts the last 7 days (G2-4), so the view is recent.
+            dataSource.insertActivityEvent(viewId, recipient, viewActor, "profile_view", Instant.now().minusSeconds(3_600))
             dataSource.insertActivityEvent(matchId, recipient, matchActor, "match", Instant.parse("2026-05-18T17:05:00Z"))
             val repository =
                 JdbcActivityRepository(
