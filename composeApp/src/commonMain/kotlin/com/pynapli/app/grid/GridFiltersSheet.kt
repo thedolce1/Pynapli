@@ -85,6 +85,8 @@ internal fun GridFiltersSheet(
                 onActiveTodayToggle = { draft = draft.copy(activeToday = !draft.activeToday) },
                 onFreshToggle = { draft = draft.copy(fresh = !draft.fresh) },
                 onTravelingHereToggle = { draft = draft.copy(travelingHere = !draft.travelingHere) },
+                haventChatted = draft.haventChatted,
+                onHaventChattedToggle = { draft = draft.copy(haventChatted = !draft.haventChatted) },
             )
             TonightSessionEntryRow(
                 sessionActive = tonightSessionActive,

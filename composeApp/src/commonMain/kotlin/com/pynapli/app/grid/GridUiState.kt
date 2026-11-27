@@ -91,6 +91,9 @@ data class GridFilters(
     val partnerVerified: Boolean = false,
     // "No single men" quick chip: hide men with no partner shown to this viewer (linked men still show).
     val noSingleMen: Boolean = false,
+    // "Haven't chatted" (Presence, Grid only): hide people this viewer exchanged a message with in the
+    // last 24 hours. The server decides who that is; nothing about the conversations is sent back.
+    val haventChatted: Boolean = false,
 ) {
     /** Any partner filter is chosen (whether or not the Who choice lets it apply). */
     val hasPartnerFilters: Boolean
@@ -149,6 +152,7 @@ data class GridFilters(
             if (radiusMeters != DEFAULT_RADIUS_METERS) count += 1
             if (minimumAge != null || maximumAge != null) count += 1
             if (noSingleMen) count += 1
+            if (haventChatted) count += 1
             if (partnerFiltersApply) {
                 if (partnerGenders.isNotEmpty()) count += 1
                 if (partnerMinimumAge != null || partnerMaximumAge != null) count += 1
@@ -207,6 +211,7 @@ data class GridFilters(
             partnerOrientations = partner.partnerOrientations.toList(),
             partnerVerifiedOnly = partner.partnerVerified,
             excludeSingleMen = noSingleMen,
+            haventChattedOnly = haventChatted,
         )
     }
 
@@ -280,6 +285,7 @@ data class GridFilters(
                 partnerOrientations = request.partnerOrientations.toSet(),
                 partnerVerified = request.partnerVerifiedOnly,
                 noSingleMen = request.excludeSingleMen,
+                haventChatted = request.haventChattedOnly,
             )
         }
     }

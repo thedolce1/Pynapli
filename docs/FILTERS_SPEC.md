@@ -84,6 +84,7 @@ Filters:
 - Nearby now
 - Traveling here
 - Attending event
+- Haven't chatted (24 h) (Grid, plan G2-4)
 
 Rules:
 
@@ -98,6 +99,20 @@ Rules:
   contact blocks. One row per member (their soonest qualifying trip). Ordered by arrival day, then
   the destination's L-08 order bucket, then id. Paged by keyset, and `visitingSoonOnly` is in the
   Grid cursor scope, so its cursors never continue Nearby. It never widens.
+- `Haven't chatted (24 h)` (Grid only, `haventChattedOnly`, plan G2-4; Grindr's "Haven't chatted
+  today"): hides people the viewer exchanged a **direct** message with in the last rolling 24 hours,
+  in either direction. Every message the viewer sent counts, whatever its moderation state; a message
+  the viewer received counts only once it is `visible` to them, so a held inbound message never makes
+  a card vanish (that would reveal it). Deleted messages never count. Group chats (partner chat
+  invites) do not count: the pair always has a direct conversation too when they talk one to one.
+  SQL: one `NOT EXISTS` in `GridFilterSql` over `idx_direct_conversations_pair` (LEAST/GREATEST)
+  then `idx_messages_conversation_created`, so no new index (no migration). Per viewer, so it keeps
+  the request off the shared rank cache (`isGridRankCacheEligible`), and it is in the rank-cache key
+  and the cursor scope (appended only when on, so older cursors keep their hash). Saved presets keep
+  it (the payload is the request). Visiting soon applies it too. Free. Nothing about the
+  conversations is sent to the client. Proof: `HaventChattedFilterIntegrationTest` (sent, received,
+  held inbound, older than 24 h, deleted, another viewer's chats, cursor scope, cache key),
+  `GridFilterBarParityTest`.
 - `Available tonight` requires explicit user state, not merely online status.
 - `Fresh` (was `Recently joined`) should not override safety/trust rules.
 - `Traveling here` should be based on declared travel/passport state.

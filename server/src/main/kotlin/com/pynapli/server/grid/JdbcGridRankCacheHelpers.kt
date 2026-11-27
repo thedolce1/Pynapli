@@ -88,9 +88,11 @@ internal fun Connection.viewerHasActiveTravelLocation(viewerUserId: UUID): Boole
  * couples also the owner's partner visibility toward this viewer and the viewer's hidden list)
  * into the linked-partner test, so the window is not shareable cross-viewer. The partner filters
  * and "No single men" (PartnerFilterSql) run the same per-viewer partner gate as linkedOnly, so
- * they never share a window either (plan G2-3).
+ * they never share a window either (plan G2-3). "Haven't chatted" tests this viewer's own messages, so
+ * it is per viewer too (plan G2-4).
  */
-internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly && !hasPartnerFilters && !excludeSingleMen
+internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean =
+    linkedOnly == null && !verifiedCouplesOnly && !hasPartnerFilters && !excludeSingleMen && !haventChattedOnly
 
 /**
  * Stable cache-class key for the FILTER properties that define the ranked
@@ -147,4 +149,6 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         append(verifiedCouplesOnly)
         // Never cached either; keyed for the same reason. Empty when unset.
         append(partnerScopeKey)
+        // Never cached either (per viewer); appended only when on.
+        if (haventChattedOnly) append(";haventChatted")
     }

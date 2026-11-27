@@ -92,6 +92,7 @@ class GridService(
                     partnerOrientations = request.partnerOrientations,
                     partnerVerifiedOnly = request.partnerVerifiedOnly,
                     excludeSingleMen = request.excludeSingleMen,
+                    haventChattedOnly = request.haventChattedOnly,
                 ) { _ -> GridException("INVALID_GRID_FILTER") }
             }
         profile("grid.lifestyleGate") { requireLifestyleFilterAccess(viewerUserId, filters) }
