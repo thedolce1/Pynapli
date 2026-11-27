@@ -1,5 +1,6 @@
 package com.pynapli.app.grid
 
+import com.pynapli.shared.network.dto.GridCountResponseDto
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,6 +56,31 @@ class GridFilterBarParityTest {
             assertEquals(listOf<String?>(null), repository.cursors)
         }
 
+    @Test
+    fun theApplyButtonSaysHowManyPeopleShowAndNeverInventsANumber() {
+        assertEquals("Apply", gridApplyLabel(null))
+        assertEquals("Show 0 people", gridApplyLabel(GridCountResponseDto(count = 0)))
+        assertEquals("Show 1 person", gridApplyLabel(GridCountResponseDto(count = 1)))
+        assertEquals("Show 12 people", gridApplyLabel(GridCountResponseDto(count = 12)))
+        assertEquals("Show 500+ people", gridApplyLabel(GridCountResponseDto(count = 500, atLeast = true)))
+    }
+
+    @Test
+    fun theCountAsksWithTheDraftAsTheGridWouldSendItAndAFailureIsNoNumber() =
+        runTest {
+            val repository = CountingFeedRepository(GridCountResponseDto(count = 7))
+            val holder = GridStateHolder(repository)
+            // Singles alone rules the partner filters out, exactly as the request leaves them out.
+            val draft = GridFilters(singles = true, partnerVerified = true, haventChatted = true)
+
+            assertEquals(GridCountResponseDto(count = 7), holder.countFor(draft))
+            assertEquals(draft.withPartnerFiltersReconciled(), repository.asked.single())
+            assertFalse(repository.asked.single().partnerVerified)
+
+            repository.fail = true
+            assertEquals(null, holder.countFor(draft))
+        }
+
     private fun card(id: String): GridProfileCardUi = GridProfileCardUi(id = id, displayName = id.uppercase(), online = false, distanceLabel = null)
 }
 
@@ -69,5 +95,23 @@ private class PagedGridFeedRepository(
     ): GridFeedUi {
         cursors += cursor
         return pages.getValue(cursor)
+    }
+}
+
+private class CountingFeedRepository(
+    private val answer: GridCountResponseDto,
+) : GridFeedRepository {
+    val asked = mutableListOf<GridFilters>()
+    var fail = false
+
+    override suspend fun loadGrid(
+        filters: GridFilters,
+        cursor: String?,
+    ): GridFeedUi = GridFeedUi(cards = emptyList())
+
+    override suspend fun countGrid(filters: GridFilters): GridCountResponseDto? {
+        asked += filters
+        if (fail) throw GridFeedException(code = "RATE_LIMITED", message = "Slow down")
+        return answer
     }
 }

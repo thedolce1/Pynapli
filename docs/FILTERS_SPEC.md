@@ -375,6 +375,12 @@ On Grid:
 - Do not reset scroll unless location/context changed significantly.
 - Active filter buttons should be visually obvious.
 - Filter count should be visible.
+- The sheet's apply button says how many people the Grid would show for the draft ("Show 12 people",
+  "Show 500+ people", plan G2-4): `POST /v1/grid/count`, asked 400 ms after the last change, from the
+  same filters and visibility as the Grid (API_CONTRACT_SPEC). Before an answer, or if it fails, it
+  just says "Apply". Proof: `GridCountIntegrationTest` (count equals the Grid's cards under blocks
+  both ways, hides, lifestyle, age and Linked; a hide is reflected at once; the age gate),
+  `GridServiceTest` (plan depth cap, `atLeast`, rate limit), `GridFilterBarParityTest`.
 
 Example:
 

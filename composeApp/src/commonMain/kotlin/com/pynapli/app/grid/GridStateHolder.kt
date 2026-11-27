@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.GridCountResponseDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.SubscriptionTier
@@ -599,6 +600,13 @@ class GridStateHolder(
             }
     }
 
+    /**
+     * The filter sheet's "Show N people" for a draft the viewer has not applied yet (plan G2-4). The
+     * server counts with the Grid's own filters and visibility rules; null when it cannot answer (the
+     * sheet then just says "Apply"). The sheet debounces the calls while the viewer edits.
+     */
+    suspend fun countFor(filters: GridFilters): GridCountResponseDto? = runCatchingCancellable { repository.countGrid(filters.withPartnerFiltersReconciled()) }.getOrNull()
+
     suspend fun removeCardById(userId: String) {
         val removedIndex = _state.value.cards.indexOfFirst { it.id == userId }
         if (removedIndex in 0 until pageOneSize) pageOneSize -= 1
@@ -796,6 +804,9 @@ interface GridFeedRepository {
         filters: GridFilters,
         cursor: String? = null,
     ): GridFeedUi
+
+    /** The filter sheet's "Show N people" (plan G2-4), or null when it is unavailable. */
+    suspend fun countGrid(filters: GridFilters): GridCountResponseDto? = null
 }
 
 class ApiGridFeedRepository(
@@ -812,6 +823,12 @@ class ApiGridFeedRepository(
                 code = result.error.code,
                 message = result.error.message,
             )
+        }
+
+    override suspend fun countGrid(filters: GridFilters): GridCountResponseDto? =
+        when (val result = apiClient.countGrid(filters.toGridFeedRequest(cursor = null))) {
+            is AppResult.Success -> result.value
+            is AppResult.Failure -> null
         }
 }
 

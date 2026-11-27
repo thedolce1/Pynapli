@@ -267,6 +267,39 @@ class GridServiceTest {
         }
 
     @Test
+    fun countGridStopsAtThePlansServedDepthAndSaysMoreMatch() =
+        runBlocking<Unit> {
+            val viewerId = UUID.randomUUID()
+            val cards = (1..70).map { GridCardRecord(userId = UUID.randomUUID(), displayName = "P$it", showDistance = true, distanceMeters = 500.0) }
+            val service =
+                GridService(
+                    repository = StaticGridRepository(GridQueryResult(viewerHadLocation = true, cards = cards)),
+                    subscriptionService = freeSubscriptionService(),
+                )
+
+            // Free without the locked-card opt-in: the Grid serves at most its depth (60), so the count
+            // never says more than that, and flags that more match.
+            val plain = service.countGrid(viewerId, GridQueryRequestDto())
+            assertEquals(60, plain.count)
+            assertTrue(plain.atLeast)
+            // With the opt-in the Grid serves locked cards up to the next plan's depth: all 70 are counted.
+            val withLocked = service.countGrid(viewerId, GridQueryRequestDto(acceptLockedCards = true))
+            assertEquals(70, withLocked.count)
+        }
+
+    @Test
+    fun countGridRefusesWhenTheCountBudgetIsSpent() =
+        runBlocking<Unit> {
+            val service =
+                GridService(
+                    repository = StaticGridRepository(GridQueryResult(viewerHadLocation = true, cards = emptyList())),
+                    rateLimitService = denyingRateLimitService(),
+                )
+            val error = assertFailsWith<GridException> { service.countGrid(UUID.randomUUID(), GridQueryRequestDto()) }
+            assertEquals("RATE_LIMITED", error.code)
+        }
+
+    @Test
     fun queryGridRejectsLifestyleFiltersForUnverifiedViewers() =
         runBlocking {
             val viewerId = UUID.randomUUID()

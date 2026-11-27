@@ -140,6 +140,7 @@ fun GridScreen(
 
     GridScreenContent(
         state = state,
+        countFor = { draft -> stateHolder.countFor(draft) },
         savedFiltersState = savedFiltersState,
         tonightSessionActive = tonightState.currentSession != null,
         lifestyleFiltersAllowed = lifestyleFiltersAllowed,

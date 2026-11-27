@@ -32,6 +32,26 @@ internal class JdbcGridRepository(
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
         hiddenFromViewerIds: Set<UUID>,
+    ): GridQueryResult = nearby(viewerUserId, radiusMeters, limit, filters, cursor, hiddenFromViewerIds, bypassSharedCache = false)
+
+    // The result count (plan G2-4): the same rank, filters and hydration as the first Grid page, ranked
+    // for this viewer directly. A count window is larger than a page, so it never fills the shared cache.
+    override suspend fun queryNearbyForCount(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        hiddenFromViewerIds: Set<UUID>,
+    ): GridQueryResult = nearby(viewerUserId, radiusMeters, limit, filters, null, hiddenFromViewerIds, bypassSharedCache = true)
+
+    private suspend fun nearby(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
+        bypassSharedCache: Boolean,
     ): GridQueryResult =
         withContext(Dispatchers.IO) {
             profileBlocking("grid.db.connectionWait") { dataSource.connection }.use { connection ->
@@ -57,6 +77,7 @@ internal class JdbcGridRepository(
                             filters = filters,
                             cursor = cursor,
                             hiddenFromViewerIds = hiddenFromViewerIds,
+                            bypassSharedCache = bypassSharedCache,
                         )
                     }
 
@@ -207,10 +228,12 @@ internal class JdbcGridRepository(
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
         hiddenFromViewerIds: Set<UUID>,
+        bypassSharedCache: Boolean = false,
     ): GridRankPage {
         val viewerTravelActive = viewerHasActiveTravelLocation(viewerUserId)
 
         if (
+            bypassSharedCache ||
             !filters.isGridRankCacheEligible() ||
             !candidateRankCache.isEnabled() ||
             viewerTravelActive

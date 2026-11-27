@@ -5,6 +5,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +16,8 @@ import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliSheetActionRow
 import com.pynapli.app.design.PynapliSheetColumn
 import com.pynapli.app.design.handCursor
+import com.pynapli.shared.network.dto.GridCountResponseDto
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun GridFiltersSheet(
@@ -22,6 +25,8 @@ internal fun GridFiltersSheet(
     savedState: SavedGridFiltersUiState = SavedGridFiltersUiState(),
     tonightSessionActive: Boolean = false,
     lifestyleFiltersAllowed: Boolean = true,
+    // Plan G2-4: "Show N people" for the draft, from the server (debounced here while editing).
+    countFor: suspend (GridFilters) -> GridCountResponseDto? = { null },
     onDismiss: () -> Unit,
     onApply: (GridFilters) -> Unit,
     onClearAll: () -> Unit,
@@ -37,6 +42,12 @@ internal fun GridFiltersSheet(
     var draft by remember(initialDraft) { mutableStateOf(initialDraft) }
     var saveName by remember { mutableStateOf("") }
     var glossaryVisible by remember { mutableStateOf(false) }
+    var count by remember { mutableStateOf<GridCountResponseDto?>(null) }
+    LaunchedEffect(draft) {
+        // Debounced: a run of taps asks once, and a newer draft cancels the older wait or request.
+        delay(COUNT_DEBOUNCE_MILLIS)
+        count = countFor(draft.withLifestyleAccess(lifestyleFiltersAllowed).withPartnerFiltersReconciled())
+    }
 
     PynapliBottomSheet(
         onDismiss = onDismiss,
@@ -201,7 +212,7 @@ internal fun GridFiltersSheet(
                 Button(
                     onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed).withPartnerFiltersReconciled()) },
                     modifier = Modifier.testTag(GridFilterTags.APPLY).handCursor(),
-                ) { Text(text = "Apply") }
+                ) { Text(text = gridApplyLabel(count)) }
             }
         }
     }
@@ -212,3 +223,12 @@ internal fun GridFiltersSheet(
 }
 
 private fun GridFilters.withLifestyleAccess(allowed: Boolean): GridFilters = if (allowed) this else copy(lifestyleTags = emptySet())
+
+private const val COUNT_DEBOUNCE_MILLIS = 400L
+
+/** The apply button: "Show 12 people", "Show 500+ people", "Show 1 person", or "Apply" before the count lands. */
+internal fun gridApplyLabel(count: GridCountResponseDto?): String {
+    if (count == null) return "Apply"
+    val number = if (count.atLeast) "${count.count}+" else count.count.toString()
+    return if (count.count == 1 && !count.atLeast) "Show 1 person" else "Show $number people"
+}

@@ -195,6 +195,17 @@ id, key id and key are all set (deletion must be able to revoke).
   `resultLimitReached` is true when a capped tier hit its depth and more candidates exist behind the
   paid gate.
 - Open messaging from the Grid is allowed when the recipient's settings and risk policy allow.
+- `haventChattedOnly: Boolean` (G2-4, Grid only, default false): leaves out people the viewer exchanged a
+  direct message with in the last 24 hours (FILTERS_SPEC "Presence").
+- **`POST /v1/grid/count`** (G2-4): body is a `GridQueryRequestDto`; answers `GridCountResponseDto`
+  (`count: Int`, `atLeast: Boolean`) for the filter sheet's "Show N people". Same auth, filter parse
+  (`gridFiltersFrom`), age gate (`AGE_VERIFICATION_REQUIRED`) and visibility (SQL rank for this
+  viewer, then `visibleToViewer` and online presence) as the Grid, so `count` never exceeds what the
+  Grid returns for the same request at that radius. Counts at most 500 and at most the plan's served
+  depth (locked cards only with `acceptLockedCards`); `atLeast` means more match. Rate limited
+  (`GRID_COUNT`, 360/h, `RATE_LIMITED`), cached per viewer for 15 s keyed on the sealed filter scope,
+  the plan's cap and the viewer's blocks and hides (a hide is reflected at once). It never widens a
+  sparse radius as the Grid's first page may.
 
 #### Section 2 contract (plan G2–G12, 2026-11-24)
 

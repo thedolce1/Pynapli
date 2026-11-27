@@ -175,3 +175,15 @@ data class CreateSavedGridFilterRequestDto(
     val name: String,
     val payload: GridQueryRequestDto,
 )
+
+/**
+ * `POST /v1/grid/count` (plan G2-4): how many people the Grid would show for these filters, for the
+ * filter sheet's "Show N people" button. The request is the Grid request itself. [count] never exceeds
+ * what the Grid would return under the same filters and visibility rules; [atLeast] means more match
+ * than were counted (show "N+"). Capped at 500 and at the plan's Grid depth.
+ */
+@Serializable
+data class GridCountResponseDto(
+    val count: Int,
+    val atLeast: Boolean = false,
+)
