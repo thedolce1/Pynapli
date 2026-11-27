@@ -1,6 +1,5 @@
 package com.pynapli.app.profile
 
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.app.media.MediaAlbumItemUi
 import com.pynapli.app.media.OwnPreviewPhoto
@@ -154,7 +153,6 @@ private fun sampleCard(userId: String): GridProfileCardUi =
         thumbnailUrl = null,
         online = false,
         distanceLabel = null,
-        tone = GridCardTone.entries.first(),
     )
 
 private class RecordingPublicProfileRepository : PublicProfileRepository {

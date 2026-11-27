@@ -18,7 +18,7 @@ import com.pynapli.shared.network.dto.SubscriptionTier
  * opens the same plans/store sheet, scrolled to what it sells.
  */
 enum class StorePaywallFocus {
-    /** The plan list: locked filters, Likes You reveal, read receipts, Psync limits, the profile menu. */
+    /** The plan list: saved filter presets, Likes You reveal, read receipts, Psync limits, the profile menu. */
     Plans,
 
     /** The Social plan: the Grid's locked cards when Social unlocks them. */

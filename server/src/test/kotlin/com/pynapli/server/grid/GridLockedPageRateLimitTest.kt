@@ -122,6 +122,7 @@ private class CountingGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         calls++
         val startIndex = cursor?.orderBucket?.plus(1) ?: 0

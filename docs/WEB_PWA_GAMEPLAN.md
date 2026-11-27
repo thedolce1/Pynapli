@@ -29,7 +29,8 @@ Every surface is designed per window size class. Large screens get desktop-nativ
 
 - `:shared` has a `wasmJs` target. DTOs, repositories, `PynapliApiClient` and validation reuse
   as-is; Ktor uses the JS engine. The session-token cipher is a documented pass-through on wasm
-  (browsers have no app-controlled keystore; mitigations are CSP + no third-party JS).
+  (browsers have no app-controlled keystore; mitigations are CSP + no third-party JS except the
+  sign-in providers below, which load only when switched on).
 - `:composeApp` has a `wasmJs` target. All screens, the token design system and state wiring
   compile to web; `MediaImageCodec` uses the skia decode-then-downscale path.
 - `:webApp` is the web mirror of `:androidApp`: `main()` + `ComposeViewport`, `index.html`, manifest
@@ -94,7 +95,9 @@ an endless splash; error handlers and a 45s watchdog guarantee a visible failure
 
 - **Opaque tokens, same server auth.** Access token in memory; refresh token in `localStorage`.
   `httpOnly` cookie sessions would be a server auth-model change and are out of scope. Mitigations:
-  strict CSP (`default-src 'self'`, no third-party scripts), no token in URLs, server-side refresh
+  strict CSP (`default-src 'self'`; the only third-party scripts are Google Identity Services and
+  Sign in with Apple JS, requested only when the server's social config switches that provider on),
+  no token in URLs, server-side refresh
   rotation + revocation. A refresh is idempotent for 60 s: a tab that retries after a lost response,
   or that loses a refresh race to another tab, gets the same rotated session back instead of being
   signed out (`docs/API_CONTRACT_SPEC.md`, Auth sessions).
@@ -103,6 +106,38 @@ an endless splash; error handlers and a 45s watchdog guarantee a visible failure
 - Client logging rules apply unchanged (no message bodies, private media URLs, exact location,
   sensitive tags).
 - Age gate and Terms/Privacy acceptance are the same server-enforced onboarding.
+
+### Response headers for `app.pynapli.com`
+
+The app's `index.html` carries no CSP of its own (its inline boot scripts and the wasm bundle make a
+meta policy easy to get wrong without a boot test). Set these on the hosting site for the app (a
+second Firebase Hosting site's `firebase.json`, separate from the marketing site's, whose
+`same-origin` COOP would break the sign-in popups):
+
+```
+Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' 'wasm-unsafe-eval' 'sha256-<boot script 1>' 'sha256-<boot script 2>'
+             https://accounts.google.com/gsi/client https://appleid.cdn-apple.com;
+  style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style;
+  frame-src https://accounts.google.com/gsi/ https://appleid.apple.com;
+  connect-src 'self' https://api.pynapli.com wss://api.pynapli.com https://storage.googleapis.com
+              https://accounts.google.com/gsi/ https://appleid.apple.com;
+  img-src 'self' data: blob: https://storage.googleapis.com;
+  font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'
+Cross-Origin-Opener-Policy: same-origin-allow-popups
+```
+
+- The Google entries are from Google's setup guide (developers.google.com/identity/gsi/web/guides/
+  get-google-api-clientid, "Content Security Policy" and "Cross Origin Opener Policy"): popup mode
+  needs `same-origin-allow-popups`, or the popup opens blank.
+- The Apple entries are **not** from an Apple document (Apple publishes none for Sign in with Apple
+  JS): the script origin is the documented SDK URL, and `appleid.apple.com` is the authorization
+  origin. Confirm both in the browser console (CSP violations are logged there) on the first live
+  run, and add whatever the console reports.
+- The two `sha256-` values are the hashes of `index.html`'s inline scripts; regenerate them on every
+  edit of those scripts (see `web/HOSTING.md`, "regenerating the script hashes"). The media origin
+  is the signed-URL bucket host; adjust if it differs.
 
 ## Open items
 

@@ -68,6 +68,19 @@ data class ServerConfig(
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val mediaCleanupEnabled: Boolean = false,
     val mediaCleanupIntervalMillis: Long = 60 * 60 * 1_000L,
+    // Grid thumbnails (G2-2, MediaThumbnailService): made on approval plus a rate-limited backfill
+    // and cleanup loop. Off in the bare constructor (tests); on by default from the environment.
+    val mediaThumbnailsEnabled: Boolean = false,
+    val mediaThumbnailIntervalMillis: Long = 30_000L,
+    val mediaThumbnailBackfillPerTick: Int = 20,
+    val mediaThumbnailSweepPerTick: Int = 500,
+    // G2-2 ticket 5: the shared Grid rank window. Safe to tune because owner visibility, blocks,
+    // hides, contact blocks and self are all applied after it on every path (GRID_IMPLEMENTATION_SPEC
+    // "Rank cache and visibility"). Defaults unchanged: 5 s, 128 rows.
+    val gridRankCacheTtlMillis: Long = 5_000L,
+    val gridRankCacheWindow: Int = 128,
+    // Local measurement only (G2-2 ticket 7): local media URLs change every second, like signed URLs.
+    val mediaLocalUrlChurn: Boolean = false,
     val accountDataExportEnabled: Boolean = false,
     val accountDataExportIntervalMillis: Long = 60_000L,
     val accountDataExportDirectory: String = ".pynapli-account-exports",
@@ -154,6 +167,32 @@ data class ServerConfig(
     // strong, distinct values. Rotating either orphans every stored code (founder setup item).
     val contactBlockEmailKey: String = "pynapli-local-dev-contact-block-email-key",
     val contactBlockTargetKey: String = "pynapli-local-dev-contact-block-target-key",
+    // Continue with Google / Apple (ONBOARDING_AUTH_SPEC "Social sign-in"). Off by default; each
+    // provider is served only when this is on AND that provider is fully configured (SocialSignInSettings).
+    val socialSignInEnabled: Boolean = false,
+    // PYNAPLI_GOOGLE_CLIENT_IDS: every OAuth client id whose ID tokens are accepted (web + Android).
+    val googleClientIds: List<String> = emptyList(),
+    // PYNAPLI_APPLE_CLIENT_IDS: the Services ID (web) and the bundle id (iOS).
+    val appleClientIds: List<String> = emptyList(),
+    // Apple's client-secret JWT (code exchange + revocation): team id, key id and the .p8 key's PEM
+    // text (PYNAPLI_APPLE_PRIVATE_KEY, from the secret manager only; never committed).
+    val appleTeamId: String? = null,
+    val appleKeyId: String? = null,
+    val applePrivateKeyPem: String? = null,
+    // PYNAPLI_APPLE_REDIRECT_URIS = "servicesId=https://...,...": the redirect_uri a web (Services ID)
+    // authorization used, which Apple's code exchange must repeat. Native (bundle id) codes need none.
+    val appleRedirectUris: Map<String, String> = emptyMap(),
+    // Test/local overrides of the provider endpoints. Refused at startup in staging/production.
+    val googleJwksUrl: String? = null,
+    val appleJwksUrl: String? = null,
+    val appleTokenUrl: String? = null,
+    val appleRevokeUrl: String? = null,
+    // Keys the at-rest encryption of Apple refresh tokens (PYNAPLI_SOCIAL_TOKEN_KEY). Production-like
+    // environments with social sign-in on refuse to start without an explicit, strong, distinct value.
+    val socialTokenKey: String = "pynapli-local-dev-social-token-key",
+    // K3: keys the "Met in person" voucher/pair/conversation tokens (PYNAPLI_MET_IN_PERSON_TOKEN_SECRET).
+    // Never rotate or lose it once confirmations exist: the tokens could no longer be matched.
+    val metInPersonTokenSecret: String = "pynapli-local-dev-met-in-person-token-secret",
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
@@ -317,6 +356,39 @@ data class ServerConfig(
                         ?.toLongOrNull()
                         ?.coerceAtLeast(60_000L)
                         ?: 60 * 60 * 1_000L,
+                mediaThumbnailsEnabled =
+                    System.getenv("PYNAPLI_MEDIA_THUMBNAILS_ENABLED")?.toBooleanStrictOrNull() ?: true,
+                mediaThumbnailIntervalMillis =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_INTERVAL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceAtLeast(5_000L)
+                        ?: 30_000L,
+                mediaThumbnailBackfillPerTick =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_BACKFILL_PER_TICK")
+                        ?.toIntOrNull()
+                        ?.coerceIn(0, 200)
+                        ?: 20,
+                mediaThumbnailSweepPerTick =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_SWEEP_PER_TICK")
+                        ?.toIntOrNull()
+                        ?.coerceIn(1, 5_000)
+                        ?: 500,
+                gridRankCacheTtlMillis =
+                    System
+                        .getenv("PYNAPLI_GRID_RANK_CACHE_TTL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceIn(0L, 120_000L)
+                        ?: 5_000L,
+                gridRankCacheWindow =
+                    System
+                        .getenv("PYNAPLI_GRID_RANK_CACHE_WINDOW")
+                        ?.toIntOrNull()
+                        ?.coerceIn(120, 1_000)
+                        ?: 128,
+                mediaLocalUrlChurn = System.getenv("PYNAPLI_MEDIA_LOCAL_URL_CHURN")?.toBooleanStrictOrNull() ?: false,
                 accountDataExportEnabled =
                     System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
@@ -552,6 +624,29 @@ data class ServerConfig(
                         ?.trim()
                         ?.takeIf { it.isNotEmpty() }
                         ?: "pynapli-local-dev-contact-block-target-key",
+                socialSignInEnabled =
+                    System
+                        .getenv("PYNAPLI_SOCIAL_SIGN_IN_ENABLED")
+                        ?.trim()
+                        ?.toBooleanStrictOrNull()
+                        ?: false,
+                googleClientIds = commaList(System.getenv("PYNAPLI_GOOGLE_CLIENT_IDS")),
+                appleClientIds = commaList(System.getenv("PYNAPLI_APPLE_CLIENT_IDS")),
+                appleTeamId = nonBlankEnv("PYNAPLI_APPLE_TEAM_ID"),
+                appleKeyId = nonBlankEnv("PYNAPLI_APPLE_KEY_ID"),
+                applePrivateKeyPem = nonBlankEnv("PYNAPLI_APPLE_PRIVATE_KEY"),
+                appleRedirectUris = appleRedirectUrisFrom(System.getenv("PYNAPLI_APPLE_REDIRECT_URIS")),
+                googleJwksUrl = nonBlankEnv("PYNAPLI_GOOGLE_JWKS_URL"),
+                appleJwksUrl = nonBlankEnv("PYNAPLI_APPLE_JWKS_URL"),
+                appleTokenUrl = nonBlankEnv("PYNAPLI_APPLE_TOKEN_URL"),
+                appleRevokeUrl = nonBlankEnv("PYNAPLI_APPLE_REVOKE_URL"),
+                socialTokenKey = nonBlankEnv("PYNAPLI_SOCIAL_TOKEN_KEY") ?: "pynapli-local-dev-social-token-key",
+                metInPersonTokenSecret =
+                    System
+                        .getenv("PYNAPLI_MET_IN_PERSON_TOKEN_SECRET")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "pynapli-local-dev-met-in-person-token-secret",
             )
         }
     }
@@ -586,3 +681,30 @@ internal fun corsAllowedOriginsFromEnvironment(
         else -> listOf("https://app.pynapli.com")
     }
 }
+
+private fun nonBlankEnv(name: String): String? = System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
+
+internal fun commaList(value: String?): List<String> = value?.split(",")?.mapNotNull { it.trim().takeIf(String::isNotEmpty) }.orEmpty()
+
+/** "clientId=uri,clientId=uri"; split on the first '=' so a query string in the URI survives. */
+internal fun appleRedirectUrisFrom(value: String?): Map<String, String> =
+    commaList(value)
+        .mapNotNull { pair ->
+            val clientId = pair.substringBefore('=', missingDelimiterValue = "").trim()
+            val uri = pair.substringAfter('=', missingDelimiterValue = "").trim()
+            if (clientId.isEmpty() || uri.isEmpty()) null else clientId to uri
+        }.toMap()
+
+/** Google is usable once the flag is on and at least one client id is accepted. */
+fun ServerConfig.googleSignInConfigured(): Boolean = socialSignInEnabled && googleClientIds.isNotEmpty()
+
+/**
+ * Apple is usable only when everything deletion needs is there too: Apple requires the grant to be
+ * revoked when the account is deleted, which needs the client-secret key.
+ */
+fun ServerConfig.appleSignInConfigured(): Boolean =
+    socialSignInEnabled &&
+        appleClientIds.isNotEmpty() &&
+        !appleTeamId.isNullOrBlank() &&
+        !appleKeyId.isNullOrBlank() &&
+        !applePrivateKeyPem.isNullOrBlank()

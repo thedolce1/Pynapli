@@ -33,10 +33,15 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.pynapliEntrance
+import com.pynapli.app.media.ImageLoadStats
 
 internal const val GRID_LOAD_MORE_RETRY_TAG = "grid-load-more-retry"
 
 private const val GRID_LOCKED_BANNER_KEY = "grid-locked-banner"
+
+// How long after the cards change the debug image line is written: long enough for the visible
+// tiles to load, short enough that the next 60 s live refresh gets its own line.
+private const val GRID_IMAGE_STATS_SETTLE_MILLIS = 5_000L
 
 /**
  * The card a lazy-grid item stands for when the boundary banner sits before card [bannerAt]: items
@@ -128,27 +133,39 @@ internal fun ProfileGrid(
         if (shouldLoadMore) onLoadMore()
     }
 
-    val prefetchUrls by remember(cards, gridState, bannerAt) {
+    val prefetchImages by remember(cards, gridState, bannerAt) {
         derivedStateOf {
             val lastVisibleIndex =
                 gridState.layoutInfo.visibleItemsInfo
                     .lastOrNull()
                     ?.index ?: -1
-            planThumbnailPrefetch(cards = cards, lastVisibleIndex = cardIndexForGridItem(lastVisibleIndex, bannerAt))
+            planThumbnailPrefetchImages(cards = cards, lastVisibleIndex = cardIndexForGridItem(lastVisibleIndex, bannerAt))
         }
     }
     val platformContext = LocalPlatformContext.current
-    LaunchedEffect(prefetchUrls) {
-        if (prefetchUrls.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(prefetchImages) {
+        if (prefetchImages.isEmpty()) return@LaunchedEffect
         val imageLoader = runCatching { SingletonImageLoader.get(platformContext) }.getOrNull() ?: return@LaunchedEffect
-        prefetchUrls.forEach { url ->
+        prefetchImages.forEach { image ->
+            // The tile's own stable key (G2-2): the prefetch fills the entry the tile reads.
             imageLoader.enqueue(
                 ImageRequest
                     .Builder(platformContext)
-                    .data(url)
-                    .build(),
+                    .data(image.url)
+                    .apply {
+                        image.cacheKey?.let { key ->
+                            memoryCacheKey(key)
+                            diskCacheKey(key)
+                        }
+                    }.build(),
             )
         }
+    }
+    // G2-2 ticket 7 (debug builds only): one line per settled grid refresh with how its tiles were
+    // served (memory / disk / network). Counts only; no URL, id or key.
+    LaunchedEffect(cards) {
+        kotlinx.coroutines.delay(GRID_IMAGE_STATS_SETTLE_MILLIS)
+        ImageLoadStats.grid.report()
     }
 
     // First-load reveal: tiles fade + lift in (staggered). Flips true once per grid entry; tiles

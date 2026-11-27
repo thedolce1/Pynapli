@@ -124,19 +124,6 @@ internal fun SwipeFilterRow(
                     text = filter.label,
                     selected = filter.active,
                     onClick = { onFilterSelected(filter.type) },
-                    leading =
-                        if (filter.locked) {
-                            {
-                                Icon(
-                                    imageVector = Icons.Filled.Lock,
-                                    contentDescription = null,
-                                    tint = PynapliColors.Accent,
-                                    modifier = Modifier.size(13.dp),
-                                )
-                            }
-                        } else {
-                            null
-                        },
                 )
             }
         }

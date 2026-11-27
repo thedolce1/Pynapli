@@ -97,4 +97,12 @@ private fun validatePayload(payload: GridQueryRequestDto): DiscoveryFilters =
         genders = payload.genders,
         orientations = payload.orientations,
         verifiedCouplesOnly = payload.verifiedCouplesOnly,
+        partnerGenders = payload.partnerGenders,
+        partnerMinimumAge = payload.partnerMinimumAge,
+        partnerMaximumAge = payload.partnerMaximumAge,
+        partnerOrientations = payload.partnerOrientations,
+        partnerVerifiedOnly = payload.partnerVerifiedOnly,
+        excludeSingleMen = payload.excludeSingleMen,
+        haventChattedOnly = payload.haventChattedOnly,
+        lifestyleMatchAll = payload.lifestyleMatchAll,
     ) { _ -> SavedFilterException("INVALID_SAVED_FILTER_PAYLOAD") }

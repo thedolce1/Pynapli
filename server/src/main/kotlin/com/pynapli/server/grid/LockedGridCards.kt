@@ -3,6 +3,7 @@ package com.pynapli.server.grid
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.MediaImageSet
 import com.pynapli.shared.network.dto.GridCardDto
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -74,11 +75,14 @@ internal fun GridCardRecord.toLockedGridCardDto(
     token: String,
     onlineUserIds: Set<UUID>,
     mediaAssetUrlResolver: MediaAssetUrlResolver?,
+    // G2-2: the Grid thumbnail when ready (fewer bytes). Never a cache key: a locked tile carries no
+    // stable identifier, so its bytes are cached by URL only.
+    images: MediaImageSet = MediaImageSet.originalsOnly(mediaAssetUrlResolver),
 ): GridCardDto =
     GridCardDto(
         userId = token,
         displayName = "",
-        thumbnailUrl = thumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+        thumbnailUrl = images.tile(thumbnailMediaAssetId)?.url,
         online = userId in onlineUserIds,
         distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,
         distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,

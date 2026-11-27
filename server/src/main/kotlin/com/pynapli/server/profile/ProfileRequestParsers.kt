@@ -32,6 +32,7 @@ internal fun UpdateDiscoverySettingsRequestDto.toDiscoverySettingsUpdate(): Disc
         visibleWhileTraveling = visibleWhileTraveling,
         sharePsyncSoloMatches = sharePsyncSoloMatches,
         partnerVisibility = normalizedPartnerVisibility,
+        showMetInPersonBadge = showMetInPersonBadge,
     )
 }
 

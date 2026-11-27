@@ -48,9 +48,11 @@ fun ConversationSheet(
     onRevealMedia: (String) -> Unit = {},
     onPickPhoto: () -> Unit = {},
     onOpenParticipantProfile: ((ConversationParticipantDto) -> Unit)? = null,
+    metInPersonCallbacks: MetInPersonCallbacks = MetInPersonCallbacks(),
     modifier: Modifier = Modifier,
 ) {
     if (!state.visible) return
+    MetInPersonSheetHost(state, metInPersonCallbacks)
 
     val title = state.conversationTitle()
 
@@ -70,6 +72,9 @@ fun ConversationSheet(
                 onDismiss = onDismiss,
                 participant = onOpenParticipantProfile?.let { state.detail?.conversation?.primaryOtherParticipant(state.viewerUserId) },
                 onOpenParticipantProfile = onOpenParticipantProfile ?: {},
+                metInPersonMenu = state.metInPersonMenuUi().takeIf { state.detail != null && !state.isViewerInvited },
+                onMetInPersonMenuOpened = metInPersonCallbacks.onMenuOpened,
+                onMetInPerson = metInPersonCallbacks.onOpen,
             )
 
             ConversationContent(
@@ -116,8 +121,10 @@ fun ConversationScreen(
     onSetExpiry: (Int?) -> Unit = {},
     onRevealMedia: (String) -> Unit = {},
     onPickPhoto: () -> Unit = {},
+    metInPersonCallbacks: MetInPersonCallbacks = MetInPersonCallbacks(),
     modifier: Modifier = Modifier,
 ) {
+    MetInPersonSheetHost(state, metInPersonCallbacks)
     PynapliMaxWidthColumn(
         maxWidth = PynapliContentWidth.Conversation,
         modifier = modifier,
@@ -127,6 +134,8 @@ fun ConversationScreen(
             state = state,
             onBack = onBack,
             onOpenParticipantProfile = onOpenParticipantProfile,
+            onMetInPerson = metInPersonCallbacks.onOpen,
+            onMetInPersonMenuOpened = metInPersonCallbacks.onMenuOpened,
         )
         ConversationContextStrip(conversation = state.detail?.conversation)
         ConversationContent(
@@ -336,6 +345,31 @@ private fun ColumnScope.ConversationContent(
             }
         }
     }
+}
+
+/** Callbacks for the "We've met in person" item and sheet; all default to no-ops. */
+class MetInPersonCallbacks(
+    val onMenuOpened: () -> Unit = {},
+    val onOpen: (subjectUserId: String) -> Unit = {},
+    val onIncludePartnerChange: (Boolean) -> Unit = {},
+    val onConfirm: () -> Unit = {},
+    val onTakeBack: () -> Unit = {},
+    val onDismiss: () -> Unit = {},
+)
+
+@Composable
+private fun MetInPersonSheetHost(
+    state: ConversationUiState,
+    callbacks: MetInPersonCallbacks,
+) {
+    val ui = state.metInPersonSheetUi() ?: return
+    MetInPersonSheet(
+        ui = ui,
+        onIncludePartnerChange = callbacks.onIncludePartnerChange,
+        onConfirm = callbacks.onConfirm,
+        onTakeBack = callbacks.onTakeBack,
+        onDismiss = callbacks.onDismiss,
+    )
 }
 
 object ConversationTestTags {

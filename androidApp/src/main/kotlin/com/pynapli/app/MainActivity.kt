@@ -149,6 +149,7 @@ class MainActivity : ComponentActivity() {
     private fun onAppGraphReady(graph: AndroidAppGraph) {
         appGraph = graph
         graph.attachBillingActivity(this)
+        graph.attachSignInActivity(this)
         activityScope.launch { graph.pushRegistrationSync.followSessionAndSettings() }
         // The notification ask waits for the first Grid (a short dwell) or the first conversation,
         // so it never lands on the sign-up Location step; Grid time counts only while started.
@@ -232,6 +233,7 @@ class MainActivity : ComponentActivity() {
         pendingLocationSignal?.cancel()
         pendingLocationSignal = null
         appGraph?.detachBillingActivity(this)
+        appGraph?.detachSignInActivity(this)
         activityScope.cancel()
         super.onDestroy()
     }

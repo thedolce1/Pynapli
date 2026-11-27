@@ -90,6 +90,82 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   `AuthSessionDto`, 409 `EMAIL_ALREADY_EXISTS` for an existing address) and `POST
   /v1/dev/auth/email/signup/latest-code` (`{email}` -> `DevSignupCodeDto {code?}`; codes only).
 
+### Continue with Google / Apple
+
+#### Section 5 contract (2026-11-26; server built, behind a flag)
+
+Rules and privacy analysis: [ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.md#social-sign-in-continue-with-google--apple).
+DTOs: `shared/.../network/dto/SocialAuthDtos.kt`. Off unless `PYNAPLI_SOCIAL_SIGN_IN_ENABLED=true`.
+
+**Config** (server env): `PYNAPLI_GOOGLE_CLIENT_IDS` (comma list of accepted `aud`: web + Android
+client ids); `PYNAPLI_APPLE_CLIENT_IDS` (Services ID + bundle id); `PYNAPLI_APPLE_TEAM_ID`,
+`PYNAPLI_APPLE_KEY_ID`, `PYNAPLI_APPLE_PRIVATE_KEY` (the .p8 PEM text, secret manager only);
+`PYNAPLI_APPLE_REDIRECT_URIS` (`servicesId=https://...`, the redirect_uri a web code exchange must
+repeat); `PYNAPLI_SOCIAL_TOKEN_KEY` (seals Apple refresh tokens; strong and distinct, required in
+staging/production when the flag is on). Test-only overrides, refused in staging/production:
+`PYNAPLI_GOOGLE_JWKS_URL`, `PYNAPLI_APPLE_JWKS_URL`, `PYNAPLI_APPLE_TOKEN_URL`, `PYNAPLI_APPLE_REVOKE_URL`.
+Google is on when the flag is on and a client id is set; Apple only when the client ids AND the team
+id, key id and key are all set (deletion must be able to revoke).
+
+**Endpoints**
+
+- `GET /v1/auth/social/config` (public) → `SocialSignInConfigDto {google, apple}`. Show a button only
+  when its flag is true.
+- `POST /v1/auth/social/nonce` (public; any body, e.g. `{deviceId?}`, is accepted and ignored;
+  `AUTH_SOCIAL_NONCE_IP` 120/h per IP) →
+  `SocialNonceDto {nonce, expiresInSeconds: 600}`. Single use; only its hash is stored (Redis). 404
+  `SOCIAL_SIGN_IN_UNAVAILABLE` when no provider is on.
+  - **Google**: pass the nonce as is (Credential Manager `setNonce`, GIS `nonce`).
+  - **Apple**: pass `lowercase hex SHA-256(nonce)` to Apple (iOS `ASAuthorizationAppleIDRequest.nonce`,
+    Sign in with Apple JS `nonce`); the token's `nonce` claim is then that hash. The raw value is also
+    accepted. Always send the raw nonce to Pynapli.
+- `POST /v1/auth/social/{google|apple}` (public; `AUTH_SOCIAL_IP` 100/h per IP, `AUTH_SOCIAL_SIGN_IN`
+  30/h per provider identity) with `SocialSignInRequestDto {idToken, nonce, authorizationCode?,
+  birthdate?, confirmedAdult, acceptedTerms, acceptedPrivacy, deviceId?, platform?, appVersion?}`. The
+  age-gate fields are exactly email sign-up's (`EmailSignupRequestDto`). There is no `displayName`: the
+  provider's name is never used (the Profile step sets one). Answers, in this order:
+  1. Provider off or unknown → `404 SOCIAL_SIGN_IN_UNAVAILABLE`.
+  2. Token fails any check (signature/JWKS, `iss`, `aud` not exactly one configured client id, `exp`
+     passed or missing, `iat` > 5 min ahead, no `sub`, `nonce` claim ≠ the nonce) or the nonce was
+     never issued / expired / already spent → `401 INVALID_SOCIAL_TOKEN`. Provider keys unreachable,
+     or the nonce store down → `503 SOCIAL_SIGN_IN_TEMPORARILY_UNAVAILABLE`.
+  3. **From here the nonce is spent, whatever the answer.** Every retry needs a fresh nonce AND a fresh
+     ID token (and, for Apple, the fresh authorization code that comes with it).
+  4. Known identity → `200 AuthSessionDto` (same as email sign-in); a suspended/banned/paused account
+     → `403 ACCOUNT_NOT_ACTIVE` (appeal below).
+  5. Unknown identity whose **provider-verified** address already belongs to an account →
+     `409 SOCIAL_EMAIL_HAS_ACCOUNT` ("sign in the way you usually do, then add Google/Apple in
+     Settings"). Checked before the age gate. Never linked automatically.
+  6. Unknown identity, `birthdate` null/blank → `422 SOCIAL_SIGNUP_NEEDS_AGE_GATE`; nothing created.
+     Client: run Birthday → Policies, then a fresh nonce + fresh provider sign-in, and send again with
+     the fields.
+  7. Unknown identity with the fields → `validateSignupAgeGate` exactly as email sign-up
+     (`400 AGE_RESTRICTED`, `BIRTHDATE_REQUIRED`, `INVALID_BIRTHDATE`, `ADULT_CONFIRMATION_REQUIRED`,
+     `TERMS_ACCEPTANCE_REQUIRED`, `PRIVACY_ACCEPTANCE_REQUIRED`), then the account is created and
+     `200 AuthSessionDto` (no email code). Apple: send `authorizationCode` so deletion can revoke.
+- `GET /v1/auth/identities` (bearer) → `LinkedIdentitiesDto {identities: [{provider: email|google|apple,
+  linkedAt, emailHint?}], hasPassword}`. `emailHint` is masked (`j•••@gmail.com`).
+- `POST /v1/auth/identities/{google|apple}` (bearer; `SOCIAL_IDENTITY_CHANGE` 20/h per account) with
+  `LinkSocialIdentityRequestDto {idToken, nonce, authorizationCode?}` → `200 LinkedIdentitiesDto`
+  (also when it was already linked to this account). `409 SOCIAL_IDENTITY_IN_USE` (the identity signs
+  in to another account), `409 SOCIAL_PROVIDER_ALREADY_LINKED` (this account already has a different
+  Google/Apple identity), plus the token errors above, except that a bad/expired/wrong-nonce provider
+  token answers **`400 INVALID_SOCIAL_TOKEN`** here (not 401): a 401 on a signed-in route makes the
+  client refresh and replay, which would only resend a spent nonce. A 401 on this route always means
+  the bearer session.
+- `DELETE /v1/auth/identities/{google|apple}` (bearer; same limit) → `200 UnlinkedIdentityDto
+  {unlinked: true}`; `409 LAST_SIGN_IN_METHOD`; `404 SOCIAL_IDENTITY_NOT_LINKED`. Works while the
+  provider is switched off. Unlinking Apple revokes its grant.
+- `POST /v1/auth/account-appeal/social/{google|apple}` (public; `ACCOUNT_APPEAL_IP`) with
+  `SocialAccountAppealRequestDto {idToken, nonce, reason}` → `AppealDto`, the social twin of
+  `/v1/auth/account-appeal`: `409 ACCOUNT_NOT_RESTRICTED` for an active account, `404
+  SOCIAL_ACCOUNT_NOT_FOUND` when the proven identity has no account, plus the token errors.
+- Email sign-up is unchanged: an address held by a Google/Apple account gets the same 202 and the
+  neutral "already has an account" notice email, never a code.
+- Account deletion revokes stored Apple grants (best-effort, after commit) and scrubs every identity;
+  the data export lists `signInMethods` (provider, linked_at, masked hint, email_verified,
+  last_used_at), never subjects or tokens.
+
 ### Grid (`POST /v1/grid/query`)
 
 - Cards stay minimal (id, name, thumbnail, online, distance label, linked-partner mini, `verified`,
@@ -98,6 +174,17 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   (`PublicProfileDto`) carries the same `coupleVerified`.
 - `verifiedCouplesOnly` (Grid query and Swipe deck request, default false) returns only people whose
   card would carry `coupleVerified` for this viewer. It does not set or change `linkedOnly`.
+- Partner filters (G2-3; Grid query, Swipe deck request and Psync filters; all optional, old clients
+  omit them): `partnerGenders: [String]` and `partnerOrientations: [String]` (structured
+  ProfileTaxonomies keys, self-describe rejected, at most 8), `partnerMinimumAge` /
+  `partnerMaximumAge: Int?` (18..99, min <= max), `partnerVerifiedOnly: Boolean`, and
+  `excludeSingleMen: Boolean` ("No single men"). Invalid values return `INVALID_GRID_FILTER` /
+  `INVALID_SWIPE_FILTER` / `INVALID_SAVED_FILTER_PAYLOAD`. Each is tested only against the linked
+  partner this viewer is shown (the `linkedOnly` gate), so a hidden partner never matches; any
+  partner filter implies Linked without setting `linkedOnly`. Free, and never relaxed on Swipe.
+- `LinkedPartnerMiniDto.age: Int?` and `gender: String?` (G2-3): the partner's own declared display
+  age and gender key, set only on a mini the server shows this viewer, on Grid cards and the public
+  profile's partner preview. Null on Swipe cards, Psync and the Tonight feed.
 - Blocks, privacy and risk apply before cards are returned.
 - Tier volume caps (page size and depth) are enforced server-side. **Cursor tokens carry scope and
   seen-count state**, so a client can't bypass tier depth by changing the requested limit. Grid
@@ -108,6 +195,17 @@ Membership-private and verified ([ONBOARDING_AUTH_SPEC.md](ONBOARDING_AUTH_SPEC.
   `resultLimitReached` is true when a capped tier hit its depth and more candidates exist behind the
   paid gate.
 - Open messaging from the Grid is allowed when the recipient's settings and risk policy allow.
+- `haventChattedOnly: Boolean` (G2-4, Grid only, default false): leaves out people the viewer exchanged a
+  direct message with in the last 24 hours (FILTERS_SPEC "Presence").
+- **`POST /v1/grid/count`** (G2-4): body is a `GridQueryRequestDto`; answers `GridCountResponseDto`
+  (`count: Int`, `atLeast: Boolean`) for the filter sheet's "Show N people". Same auth, filter parse
+  (`gridFiltersFrom`), age gate (`AGE_VERIFICATION_REQUIRED`) and visibility (SQL rank for this
+  viewer, then `visibleToViewer` and online presence) as the Grid, so `count` never exceeds what the
+  Grid returns for the same request at that radius. Counts at most 500 and at most the plan's served
+  depth (locked cards only with `acceptLockedCards`); `atLeast` means more match. Rate limited
+  (`GRID_COUNT`, 360/h, `RATE_LIMITED`), cached per viewer for 15 s keyed on the sealed filter scope,
+  the plan's cap and the viewer's blocks and hides (a hide is reflected at once). It never widens a
+  sparse radius as the Grid's first page may.
 
 #### Section 2 contract (plan G2–G12, 2026-11-24)
 
@@ -256,6 +354,23 @@ depth".
   `POST /v1/messages/threads/{id}/read` (opening the thread) clears a match on a thread with history
   for the opener; any message that becomes visible in the thread clears it for both, for good. Rules:
   [MESSAGING_SPEC.md](MESSAGING_SPEC.md) "New-matches rail".
+- "Met in person" (added 2026-11-19; routes moved 2026-11-24 so no id is in a path): `POST
+  /v1/met-in-person/offers` (`{ threadId }`) returns
+  `MetInPersonOffersDto { offers }`, the viewer's own actions, one `MetInPersonOfferDto` per other
+  participant they can confirm (`canConfirm`, with `partner` when they may tick that person's partner) or
+  take back (`canWithdraw`, within 30 days). Clients ask for it when the conversation menu opens, never on
+  open or refresh; it is not on the read mark, so it can never break opening a conversation. It depends
+  only on facts the viewer already knows (not their risk tier). `POST /v1/met-in-person/confirmations`
+  (`{ threadId, subjectUserId, includePartner, action: "confirm" | "withdraw" }`) answers with the
+  caller's own state for that person, never a count or anyone else's confirmation; a take-back answer
+  carries no name (`subjectDisplayName` is empty: clients keep the one they showed). Every refusal,
+  including a malformed body, an unknown action and nothing to take back, is `MET_IN_PERSON_NOT_AVAILABLE`
+  (403); a repeat confirm changes nothing; giving again after a withdrawal waits 180 days. The
+  conversation, the person and the action are never in the path, because request logs record paths.
+  Both routes share the per-user `met_in_person` rate limit (240 an hour). Nothing is notified. `PublicProfileDto.metInPerson` and
+  `metInPersonAsCouple` are batch-computed booleans shown only with the person's opt-in
+  (`DiscoverySettingsDto.showMetInPersonBadge`, default false). Rules:
+  [TRUST_AND_SAFETY_SPEC.md](TRUST_AND_SAFETY_SPEC.md) "Met in person".
 - Typing (`{ isTyping }`) is Select-only and silently no-ops without entitlement.
 - **Read receipts are server-masked:** a Social/Select sender sees `read` only when every active
   recipient is Social/Select eligible; Free viewers get `sent`.
@@ -297,7 +412,9 @@ separately.
 - A suspended or banned account appeals through `POST /v1/auth/account-appeal` with email and password
   (rate-limited like login). **The password is checked before account status**, there and at sign-in,
   so a wrong password never reveals that an account exists or is suspended. Sign-in answers
-  `ACCOUNT_NOT_ACTIVE` for such accounts; an active account gets `ACCOUNT_NOT_RESTRICTED` (409).
+  `ACCOUNT_NOT_ACTIVE` for such accounts; an active account gets `ACCOUNT_NOT_RESTRICTED` (409). An
+  account that signs in with Google or Apple appeals through `POST
+  /v1/auth/account-appeal/social/{provider}` with a fresh provider sign-in (Section 5 contract).
 
 ### Age verification
 
@@ -343,7 +460,9 @@ distinct valid ids; nothing is sent on subscribe. `lastActiveAt` is the emission
 All admin routes live under `/v1/admin`, require admin auth (roles, MFA) and are audited. They are
 never exposed to app clients. Only the moderation queues (reports, review queue, appeals, risk, age
 review, photo verification, pending profile photos) are active; the other admin endpoints (dashboard, user lookup, subscription support,
-partner-link review, metrics) are frozen. See
+partner-link review, metrics) are frozen. "Met in person" moderation (added 2026-11-19) is new routes
+under the same gate, built minimally: one read view and three actions (each with its undo) under
+`/v1/admin/met-in-person`, each senior + step-up MFA + `X-Admin-Reason` and audited (TRUST_AND_SAFETY_SPEC "Met in person"). See
 [ADMIN_MODERATION_CONSOLE_SPEC.md](ADMIN_MODERATION_CONSOLE_SPEC.md).
 
 ## Open items

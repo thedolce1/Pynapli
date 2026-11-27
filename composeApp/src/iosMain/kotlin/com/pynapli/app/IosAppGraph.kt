@@ -5,6 +5,7 @@ import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
+import com.pynapli.app.auth.UnavailableSocialSignInProvider
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
 import com.pynapli.app.grid.sqlDelightGridFilterStore
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
@@ -116,6 +117,11 @@ class IosAppGraph(
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
 
+    // TODO(plan D1/D2, Section 5 iOS): Sign in with Apple via ASAuthorizationController (request nonce =
+    // SHA-256 of the server nonce, see SocialProviderNonce) and Google via its iOS SDK, implemented on
+    // the iosApp side once the Xcode project and Keychain exist. Until then both buttons stay hidden.
+    private val socialSignInProvider = UnavailableSocialSignInProvider
+
     val authStateHolder =
         AuthStateHolder(
             authRepository = authRepository,
@@ -125,6 +131,7 @@ class IosAppGraph(
             // No beforeLogout hook yet: Android uses it to unregister the push device, which lands
             // with the APNs step of the plan.
             sessionInvalidations = sessionInvalidationBus.events,
+            socialSignInProvider = socialSignInProvider,
         )
 
     val appSettingsStateHolder =
@@ -173,6 +180,7 @@ class IosAppGraph(
                 realtimeStreams.activity,
             messageStreamClient =
                 realtimeStreams.message,
+            socialSignInProvider = socialSignInProvider,
         )
 
     /** Psync realtime channel; the per-viewer holder is built inside `PynapliApp`. */

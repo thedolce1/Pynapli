@@ -114,6 +114,8 @@ Recommended retention:
 
 - Free visible history: latest item/counts.
 - Paid visible history: 7-30 days depending tier.
+- Implemented (plan G2-4): every plan sees the last 7 days; the plan decides how many of those
+  viewers are revealed.
 - Internal fraud/safety retention can differ from product-visible retention.
 
 ### Repeat View
@@ -638,7 +640,18 @@ Avoid:
 - [x] Views require full profile opening.
 - [x] Grid impressions do not count as views.
 - [x] Swipe card appearances do not count as views.
-- [x] Repeat views aggregate with cooldown.
+- [x] Repeat views aggregate with cooldown: one row per viewer with a count, shown as "viewed you 3x"
+  (checked in code 2026-11-27, plan G2-4).
+- [x] Viewed Me is a 7-day list (plan G2-4, as Grindr, 2026-11-27): the Views feed, its gated "N more"
+  count (`gatedCount`, from the same query) and `profileViewCount` only take views whose latest
+  `occurred_at` is in the last 7 days (`JdbcActivityFeedSql`, `JdbcActivitySummarySql`). A row stays
+  stored until the retention worker removes it at 30 days (unchanged), but is never listed or counted.
+  A view more than 7 days after the previous one restarts the count at 1, so the count is about the
+  week shown. Reciprocity, incognito, blocks, contact blocks, risk suppression and the plan reveal
+  (Free 1, Social 10, Select all; gated viewers never sent) are unchanged. Proof:
+  `ActivityRepositoryIntegrationTest.viewedMeListsAndCountsOnlyTheLastSevenDays`,
+  `aRepeatViewAfterAWeekQuietStartsTheCountAgain`. Free still opens the latest viewer (kept on
+  purpose; Grindr shows but does not let Free act on it).
 - [x] Flirts appear in Activity, not Messages.
 - [x] Likes You appears in Activity.
 - [x] Likes You (Flirts) and Views render the Grid's own card in the Grid's 3-up layout, with the activity

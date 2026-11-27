@@ -7,6 +7,7 @@ import com.pynapli.server.account.JdbcAccountDataExportArchiver
 import com.pynapli.server.account.JdbcAccountLifecycleRepository
 import com.pynapli.server.activity.ActivityBroadcaster
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.BoundedWorkLauncher
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.JdbcDeviceFarmRepository
 import com.pynapli.server.auth.JdbcPasswordRecoveryRepository
@@ -15,6 +16,9 @@ import com.pynapli.server.auth.LocalFilePasswordResetMailer
 import com.pynapli.server.auth.PasswordRecoveryService
 import com.pynapli.server.auth.SignedInDevicesService
 import com.pynapli.server.auth.UnconfiguredPasswordResetMailer
+import com.pynapli.server.auth.social.AppleGrantRevoker
+import com.pynapli.server.auth.social.AppleTokenClient
+import com.pynapli.server.auth.social.SocialTokenSeal
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.contactblocks.ContactBlockResolver
 import com.pynapli.server.contactblocks.ContactBlockResolverWorker
@@ -101,6 +105,9 @@ internal class CoreDependencies(
     val contactBlockResolverWorker: ContactBlockResolverWorker,
     val contactBlockService: ContactBlockService,
     val contactBlockSettling: com.pynapli.server.contactblocks.ContactBlockSettling,
+    val socialTokenSeal: SocialTokenSeal,
+    val appleTokenClient: AppleTokenClient?,
+    val appleGrantRevoker: AppleGrantRevoker?,
 )
 
 internal fun buildCoreDependencies(
@@ -124,12 +131,26 @@ internal fun buildCoreDependencies(
     val contactBlockSettling =
         com.pynapli.server.contactblocks
             .ContactBlockSettling(contactBlockResolver, contactBlockResolverWorker)
-    val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)
+    val accountLifecycleRepository =
+        JdbcAccountLifecycleRepository(
+            database.dataSource,
+            contactBlockTokens,
+            metInPersonAccountData = metInPersonAccountData(config),
+        )
     val accountExportStorage = buildAccountExportStorage(config)
+    // Sign in with Apple: revocation on deletion works whenever the Apple key is configured, even if
+    // the sign-in flag was switched off later (stored grants must still be revoked).
+    val socialTokenSeal = SocialTokenSeal(config.socialTokenKey)
+    val appleTokenClient = buildAppleTokenClient(config)
+    val appleGrantRevoker =
+        appleTokenClient?.let { client ->
+            AppleGrantRevoker(client, socialTokenSeal, BoundedWorkLauncher(backgroundScope, label = "apple-revocation")::launch)
+        }
     val accountLifecycleService =
         AccountLifecycleService(
             repository = accountLifecycleRepository,
             exportStorage = accountExportStorage,
+            revokeAppleGrants = appleGrantRevoker?.let { revoker -> revoker::revokeLater },
         )
     val accountDataExportWorker =
         if (config.accountDataExportEnabled) {
@@ -137,7 +158,12 @@ internal fun buildCoreDependencies(
                 processor =
                     AccountDataExportProcessor(
                         repository = accountLifecycleRepository,
-                        archiver = JdbcAccountDataExportArchiver(database.dataSource, contactBlockTokens = contactBlockTokens),
+                        archiver =
+                            JdbcAccountDataExportArchiver(
+                                database.dataSource,
+                                contactBlockTokens = contactBlockTokens,
+                                metInPersonAccountData = metInPersonAccountData(config),
+                            ),
                         storage = accountExportStorage,
                     ),
                 intervalMillis = config.accountDataExportIntervalMillis,
@@ -329,6 +355,9 @@ internal fun buildCoreDependencies(
         contactBlockResolverWorker = contactBlockResolverWorker,
         contactBlockService = contactBlockService,
         contactBlockSettling = contactBlockSettling,
+        socialTokenSeal = socialTokenSeal,
+        appleTokenClient = appleTokenClient,
+        appleGrantRevoker = appleGrantRevoker,
     )
 }
 

@@ -152,6 +152,9 @@ internal object JdbcActivityFeedSql {
                   AND actor_settings.show_in_viewed_lists = true
               )
           )
+          -- Viewed Me shows the last 7 days only (plan G2-4): the list, its gated "N more" count and
+          -- the in-screen profileViewCount (JdbcActivitySummarySql) use the same window.
+          AND (ae.event_type <> 'profile_view' OR ae.occurred_at >= now() - interval '7 days')
         ORDER BY ae.occurred_at DESC, ae.id DESC
         LIMIT ?
         """.trimIndent()

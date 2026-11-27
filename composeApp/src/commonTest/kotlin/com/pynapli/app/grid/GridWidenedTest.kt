@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 /** A widened sparse first page shows "Showing people farther away"; a normal page clears it. */
 class GridWidenedTest {
-    private val someone = GridProfileCardUi(id = "a", displayName = "A", online = false, distanceLabel = null, tone = GridCardTone.Warm)
+    private val someone = GridProfileCardUi(id = "a", displayName = "A", online = false, distanceLabel = null)
 
     @Test
     fun theWidenedFlagFollowsEachFirstPage() =

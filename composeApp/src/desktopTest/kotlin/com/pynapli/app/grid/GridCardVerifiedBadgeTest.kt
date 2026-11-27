@@ -24,7 +24,6 @@ class GridCardVerifiedBadgeTest {
                     displayName = "Maya",
                     online = false,
                     distanceLabel = null,
-                    tone = GridCardTone.Warm,
                     linkedPartner = GridLinkedPartnerUi(userId = "alex", displayName = "Alex"),
                     linkedPartnerTone = LinkedPartnerTone.Gold,
                     verified = true,
@@ -36,7 +35,6 @@ class GridCardVerifiedBadgeTest {
                     displayName = "Una",
                     online = false,
                     distanceLabel = null,
-                    tone = GridCardTone.Slate,
                 )
 
             setContent {

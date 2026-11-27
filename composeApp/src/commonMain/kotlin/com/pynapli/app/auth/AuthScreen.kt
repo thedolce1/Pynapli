@@ -44,6 +44,7 @@ import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliPasswordVisibilityToggle
 import com.pynapli.app.design.handCursor
+import com.pynapli.shared.auth.SocialProvider
 
 /**
  * Signed-out surface: the welcome landing ([WelcomeScreen]) until the person picks Sign in, then
@@ -67,6 +68,8 @@ fun AuthScreen(
     onDevLogin: (() -> Unit)? = null,
     // Opens the onboarding stepper. Null hides Create account (no stepper in this shell).
     onStartCreateAccount: (() -> Unit)? = null,
+    // "Continue with Google / Apple"; the buttons show for [AuthUiState.socialProviders] only.
+    onContinueWithSocial: (SocialProvider) -> Unit = {},
     testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -79,6 +82,14 @@ fun AuthScreen(
             errorMessage = state.errorMessage,
             testerDiagnosticLabel = testerDiagnosticLabel,
             modifier = modifier,
+            socialSignIn = {
+                SocialSignInButtons(
+                    providers = state.socialProviders,
+                    inProgress = state.socialInProgress,
+                    enabled = !state.isSubmitting,
+                    onContinue = onContinueWithSocial,
+                )
+            },
         )
         return
     }
@@ -258,7 +269,8 @@ fun AuthScreen(
                     enabled = !state.isSubmitting,
                     modifier = Modifier.fillMaxWidth().handCursor(enabled = !state.isSubmitting),
                 ) {
-                    Text("Send appeal")
+                    // A Google / Apple account confirms itself with that provider once more.
+                    Text(state.socialAppealProvider?.let { "Continue with ${it.displayName} to send" } ?: "Send appeal")
                 }
             }
         }
@@ -295,6 +307,19 @@ fun AuthScreen(
             ) {
                 Text("Send a new code")
             }
+        }
+
+        // The sign-in form offers the providers too (a member who signed up with Google lands here
+        // after "Sign in"). Below the password button: the form's own action stays first.
+        if (!resetting && state.socialProviders.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            SocialSignInButtons(
+                providers = state.socialProviders,
+                inProgress = state.socialInProgress,
+                enabled = !state.isSubmitting,
+                onContinue = onContinueWithSocial,
+                dividerFirst = true,
+            )
         }
 
         Spacer(modifier = Modifier.height(14.dp))

@@ -6,6 +6,8 @@ import com.pynapli.shared.network.dto.SubscriptionTier
 data class EntitlementPolicy(
     val tier: String,
     val activityRevealLimit: Int,
+    // Saved filter presets (Grid and Swipe). Since founder decision 2 (2026-11-26) no live filter is
+    // paid, so this gates presets only; the name is kept for the entitlement payload.
     val advancedFiltersAllowed: Boolean,
     val gridPageLimit: Int,
     val gridResultDepthLimit: Int,

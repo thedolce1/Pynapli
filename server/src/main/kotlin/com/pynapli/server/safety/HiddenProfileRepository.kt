@@ -31,4 +31,7 @@ data class HiddenProfileSummaryRecord(
     val hiddenUserId: UUID,
     val hiddenDisplayName: String?,
     val createdAt: Instant,
+    // First approved profile photo, only while the account is active and visible and no block stands
+    // either way (the unhide list avatar). Null otherwise.
+    val photoMediaAssetId: UUID? = null,
 )

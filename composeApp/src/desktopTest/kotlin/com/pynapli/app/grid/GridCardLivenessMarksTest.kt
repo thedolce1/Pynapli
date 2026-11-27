@@ -24,7 +24,6 @@ class GridCardLivenessMarksTest {
                     displayName = "Noa",
                     online = false,
                     distanceLabel = "2 km",
-                    tone = GridCardTone.Rust,
                     fresh = true,
                     activeAgo = GridActiveAgo.HOURS_3,
                 )
@@ -34,7 +33,6 @@ class GridCardLivenessMarksTest {
                     displayName = "Maya",
                     online = true,
                     distanceLabel = "800 m",
-                    tone = GridCardTone.Warm,
                     activeAgo = GridActiveAgo.ONLINE,
                 )
 

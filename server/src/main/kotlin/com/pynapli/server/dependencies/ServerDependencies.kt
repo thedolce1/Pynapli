@@ -100,6 +100,7 @@ class ServerDependencies(
     val signedInDevicesService: SignedInDevicesService? = null,
     val emailSignupService: com.pynapli.server.auth.EmailSignupService? = null,
     val devSignupMailbox: com.pynapli.server.auth.LocalFileSignupMailer? = null,
+    val socialAuthService: com.pynapli.server.auth.social.SocialAuthService? = null,
     val profileService: ProfileService,
     val favoriteService: com.pynapli.server.favorites.FavoriteService? = null,
     val profileLinkService: ProfileLinkService,
@@ -127,6 +128,8 @@ class ServerDependencies(
     val dataRetentionWorker: DataRetentionWorker? = null,
     val rateLimitService: RateLimitService? = null,
     val mediaCleanupWorker: MediaCleanupWorker?,
+    val mediaThumbnailWorker: com.pynapli.server.media.MediaThumbnailWorker? = null,
+    val mediaThumbnailScheduler: com.pynapli.server.media.MediaThumbnailScheduler? = null,
     val accountDataExportWorker: AccountDataExportWorker?,
     val notificationService: NotificationService,
     val notificationDispatchWorker: NotificationDispatchWorker?,
@@ -160,6 +163,10 @@ class ServerDependencies(
     val photoVerificationService: PhotoVerificationService,
     val photoVerificationRetentionWorker: PhotoVerificationRetentionWorker? = null,
     val accountLifecycleService: AccountLifecycleService,
+    // K3-dependent: required, so a dropped wiring fails the build.
+    val metInPersonService: com.pynapli.server.metinperson.MetInPersonService,
+    val adminMetInPersonService: com.pynapli.server.metinperson.AdminMetInPersonService,
+    val metInPersonBadgeWorker: com.pynapli.server.metinperson.MetInPersonBadgeWorker,
     val requestProfilerFactory: RequestProfilerFactory = RequestProfilerFactory.disabled(),
     val contactBlockService: com.pynapli.server.contactblocks.ContactBlockService? = null,
     val contactBlockResolverWorker: com.pynapli.server.contactblocks.ContactBlockResolverWorker? = null,
@@ -175,7 +182,10 @@ class ServerDependencies(
         runCatching { activityRetentionWorker?.close() }
         runCatching { dataRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
+        runCatching { mediaThumbnailWorker?.close() }
+        runCatching { mediaThumbnailScheduler?.close() }
         runCatching { photoVerificationRetentionWorker?.close() }
+        runCatching { metInPersonBadgeWorker.close() }
         runCatching { accountDataExportWorker?.close() }
         runCatching { tonightSessionExpiryWorker.close() }
         runCatching { psyncSessionExpiryWorker?.close() }
@@ -263,6 +273,7 @@ class ServerDependencies(
                     activityBroadcaster = core.activityBroadcaster,
                     cursorCodec = ActivityCursorCodec(config.activityCursorSecret),
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
                 )
             val activityRetentionWorker =
                 if (config.activityRetentionEnabled) {
@@ -314,6 +325,8 @@ class ServerDependencies(
                     blockRepository = core.blockRepository,
                     rateLimitService = core.rateLimitService,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
+                    hiddenProfileRepository = core.hiddenProfileRepository,
                 )
             val profileService =
                 ProfileService(
@@ -332,6 +345,8 @@ class ServerDependencies(
                     profileViewRecordScope = profileActivityScope,
                     profileViewRecordConcurrency = 4,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
+                    hiddenProfileRepository = core.hiddenProfileRepository,
                 )
             val profileLinkService =
                 ProfileLinkService(
@@ -368,6 +383,7 @@ class ServerDependencies(
                     mediaRepository = JdbcMediaRepository(database.dataSource),
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     notificationPublisher = core.notificationService,
+                    profilePhotoApproved = media.thumbnailScheduler,
                 )
             val adminRequestAuditRecorder =
                 config.adminApiToken?.let { JdbcAdminRequestAuditRecorder(database.dataSource) }
@@ -383,6 +399,7 @@ class ServerDependencies(
                     subscriptionService = commerceTravel.subscriptionService,
                     rateLimitService = core.rateLimitService,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImageResolver = media.mediaImageResolver,
                 )
             val tonight =
                 buildTonightDependencies(
@@ -440,6 +457,8 @@ class ServerDependencies(
                 } else {
                     null
                 }
+            verifyMetInPersonKeyAtStartup(config, database.dataSource)
+            val metInPerson = buildMetInPersonDependencies(config, database.dataSource, core.contactBlockVisibility)
             val messaging =
                 buildMessagingDependencies(
                     dataSource = database.dataSource,
@@ -475,6 +494,7 @@ class ServerDependencies(
                     productMetrics = core.productMetrics,
                     matchConversationOpener = messaging.messagingService.matchConversationOpener,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImageResolver = media.mediaImageResolver,
                 )
             return ServerDependencies(
                 config = config,
@@ -485,6 +505,21 @@ class ServerDependencies(
                 signedInDevicesService = core.signedInDevicesService,
                 emailSignupService = emailSignup.service,
                 devSignupMailbox = emailSignup.devMailbox,
+                // Continue with Google / Apple: always built; with the flag off it serves no provider.
+                socialAuthService =
+                    buildSocialAuthService(
+                        config = config,
+                        database = database,
+                        redisCache = redisCache,
+                        authService = core.authService,
+                        rateLimitService = core.rateLimitService,
+                        backgroundScope = profileActivityScope,
+                        tokenSeal = core.socialTokenSeal,
+                        appleTokenClient = core.appleTokenClient,
+                        appleGrantRevoker = core.appleGrantRevoker,
+                        onAccountVerified = core.contactBlockSettling::atVerify,
+                        onSignInWithAccountAddress = core.contactBlockSettling::atSignIn,
+                    ),
                 profileService = profileService,
                 favoriteService = favoriteService,
                 profileLinkService = profileLinkService,
@@ -514,12 +549,21 @@ class ServerDependencies(
                 dataRetentionWorker = dataRetentionWorker,
                 rateLimitService = core.rateLimitService,
                 mediaCleanupWorker = mediaCleanupWorker,
+                mediaThumbnailWorker = media.thumbnailWorker,
+                mediaThumbnailScheduler = media.thumbnailScheduler,
                 accountDataExportWorker = core.accountDataExportWorker,
                 notificationService = core.notificationService,
                 notificationDispatchWorker = core.notificationDispatchWorker,
                 productMetrics = core.productMetrics,
                 blockService = core.blockService,
-                hiddenProfileService = core.hiddenProfileService,
+                // The unhide list shows small avatars (plan G2-4), so it needs the media resolvers.
+                hiddenProfileService =
+                    HiddenProfileService(
+                        repository = core.hiddenProfileRepository,
+                        mediaAssetUrlResolver = media.mediaAssetUrlResolver,
+                        mediaImages = media.mediaImageResolver,
+                        contactBlockVisibility = core.contactBlockVisibility,
+                    ),
                 appealService = core.appealService,
                 reportService = core.reportService,
                 swipeService = swipe.swipeService,
@@ -554,6 +598,9 @@ class ServerDependencies(
                 photoVerificationService = photoVerificationService,
                 photoVerificationRetentionWorker = photoVerificationRetentionWorker,
                 accountLifecycleService = core.accountLifecycleService,
+                metInPersonService = metInPerson.service,
+                adminMetInPersonService = metInPerson.adminService,
+                metInPersonBadgeWorker = metInPerson.badgeWorker,
                 requestProfilerFactory = requestProfilerFactory,
                 contactBlockService = core.contactBlockService,
                 contactBlockResolverWorker = core.contactBlockResolverWorker,

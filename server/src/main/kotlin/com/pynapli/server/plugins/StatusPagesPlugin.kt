@@ -43,7 +43,7 @@ fun Application.configureStatusPages() {
     install(StatusPages) {
         exception<AuthException> { call, cause ->
             call.respond(
-                status = authStatusFor(cause.code),
+                status = cause.status ?: authStatusFor(cause.code),
                 message =
                     ApiErrorDto(
                         code = cause.code,

@@ -177,6 +177,9 @@ class DiscoveryCursorCodec(
             // Section 3: the request opted in to locked cards. The request flag, never the tier, so an
             // entitlement change mid-scroll keeps the cursor valid. Appended only when set.
             acceptLockedCards: Boolean = false,
+            // "Visiting soon": a different list with its own keyset order (arrival day first), so its
+            // cursors must never continue Nearby or the reverse. Appended only when set.
+            visitingSoonOnly: Boolean = false,
         ): String {
             val normalized =
                 buildString {
@@ -220,8 +223,15 @@ class DiscoveryCursorCodec(
                     append(filters.orientations.sorted().joinToString(","))
                     // Appended only when set, so cursors issued without it keep their hash.
                     if (filters.verifiedCouplesOnly) append("|verifiedCouplesOnly=true")
+                    // Partner filters + "No single men" (plan G2-3): empty when unset, so older cursors keep
+                    // their hash.
+                    append(filters.partnerScopeKey)
+                    // "Haven't chatted" (plan G2-4): appended only when on, so older cursors keep their hash.
+                    if (filters.haventChattedOnly) append("|haventChatted=true")
+                    if (filters.lifestyleMatchAll) append("|lifestyleAllOf=true")
                     widenedFromRadiusMeters?.let { append("|widenedFrom=").append(it) }
                     if (acceptLockedCards) append("|lockedCards=true")
+                    if (visitingSoonOnly) append("|visitingSoon=true")
                 }
             return sha256Base64Url(normalized)
         }

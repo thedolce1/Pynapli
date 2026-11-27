@@ -238,6 +238,12 @@ internal fun ProfileDetailContent(
                     .map { it.url }
                     .toSet(),
             profilePhotoUrl = profilePhotoUrl,
+            // G2-2: the server's stable keys (never the owner's own preview, which has none), and the
+            // Grid tile's key so the first page paints the cached small photo while the original loads.
+            photoCacheKeys = if (state.ownPreviewPhotos.isEmpty()) profile?.photoCacheKeys.orEmpty() else emptyList(),
+            profilePhotoCacheKey = if (profile?.profilePhotoUrl != null) profile.profilePhotoCacheKey else card.thumbnailCacheKey,
+            firstPhotoPlaceholderCacheKey =
+                if (state.ownPreviewPhotos.isEmpty()) profile?.profilePhotoThumbnailCacheKey ?: card.thumbnailCacheKey else null,
             onDismiss = onDismiss,
             onHideClick = { showHideConfirm = true },
             onBlockClick = { showBlockConfirm = true },
@@ -275,6 +281,7 @@ internal fun ProfileDetailContent(
             }
 
             profile != null -> {
+                profile.metInPersonBadgeUi()?.let { badge -> MetInPersonBadgeRow(badge) }
                 ProfileFacts(profileState = state)
                 LinkedPartnerSection(
                     linkedPartner = profile.linkedPartner,

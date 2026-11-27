@@ -1,6 +1,5 @@
 package com.pynapli.app.profile
 
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridProfileCardUi
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -189,6 +188,5 @@ class ProfilePagerControllerTest {
             displayName = "User $id",
             online = false,
             distanceLabel = null,
-            tone = GridCardTone.entries.first(),
         )
 }

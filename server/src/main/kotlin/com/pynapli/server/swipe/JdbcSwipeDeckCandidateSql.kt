@@ -1,5 +1,7 @@
 package com.pynapli.server.swipe
 
+import com.pynapli.server.discovery.CoupleVerifiedFilterSql
+import com.pynapli.server.discovery.LinkedPartnerFilterSql
 import com.pynapli.server.distance.CoarseLocation
 import java.sql.Connection
 import java.util.UUID
@@ -46,9 +48,25 @@ internal fun Connection.findViewerLocationCacheKey(viewerUserId: UUID): DeckLoca
 internal fun Connection.listLinkedCandidateUserIdsNear(
     viewerUserId: UUID,
     radiusMeters: Int,
+    // People hiding from the viewer (contact blocks; for a Psync deck, from either partner).
+    hiddenFromViewerIds: Set<UUID> = emptySet(),
+    // A Psync deck's other partner (the partner must be shown to both), else null.
+    coViewerUserId: UUID? = null,
     limit: Int = 2_000,
-): Set<UUID> =
-    prepareStatement(
+): Set<UUID> {
+    // A Psync deck is shown to both partners: the partner must be shown to each (PSYNC_SPEC).
+    val partnerViewers = listOfNotNull(viewerUserId, coViewerUserId)
+    val partnerShown =
+        CoupleVerifiedFilterSql.partnerShownToViewer(
+            partnerUser = "linked_user",
+            partnerProfile = "linked_profile",
+            partnerSettings = "linked_settings",
+            partnerRisk = "linked_risk",
+            ownerSettings = "target_settings",
+            owner = "target.id",
+        )
+    val partnerShownToEveryViewer = partnerViewers.joinToString("\n") { "AND $partnerShown" }
+    return prepareStatement(
         """
         WITH viewer_location AS (
             SELECT cell.geom,
@@ -112,17 +130,11 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
           AND target_settings.incognito = false
           AND (target_travel.id IS NULL OR target_settings.visible_while_traveling = true)
           AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-          AND linked_user.status = 'active'
-          AND linked_user.deleted_at IS NULL
-          AND linked_profile.visibility_status = 'visible'
-          AND linked_settings.incognito = false
-          AND COALESCE(linked_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-          AND NOT EXISTS (
-              SELECT 1
-              FROM user_blocks ub
-              WHERE (ub.blocker_user_id = ? AND ub.blocked_user_id = linked_user.id)
-                 OR (ub.blocker_user_id = linked_user.id AND ub.blocked_user_id = ?)
-          )
+          -- The partner is the one the card's partner mini shows every viewer (LinkedPartnerFilterSql):
+          -- not hiding from a viewer (contact blocks), and CoupleVerifiedFilterSql.partnerShownToViewer
+          -- per viewer (status, blocks both ways, the viewer's hidden list, the owner's partner_visibility).
+          AND linked_user.id <> ALL(?::uuid[])
+          $partnerShownToEveryViewer
           -- Same membership as the deck: the effective location's cell within the radius step.
           AND pynapli_coarse_distance_m(v.geom, COALESCE(target_travel.geom, ul.geom)) <= ?
         -- Only matters past the limit: a stable, distance-independent cut (the deck's L-08 tiebreak).
@@ -131,16 +143,17 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
         """.trimIndent(),
     ).use { statement ->
         val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
-        statement.setObject(1, viewerUserId)
+        // Bound in SQL order; the running index keeps added placeholders from shifting the rest.
+        var index = 1
+        statement.setObject(index++, viewerUserId)
         // Index pre-filter radius (home GPS + travel point), padded by the cell slack.
-        statement.setDouble(2, paddedRadius)
-        statement.setDouble(3, paddedRadius)
-        // Partner block check, both directions.
-        statement.setObject(4, viewerUserId)
-        statement.setObject(5, viewerUserId)
+        statement.setDouble(index++, paddedRadius)
+        statement.setDouble(index++, paddedRadius)
+        // Partner shown to every viewer: hidden-from ids, then partnerShownToViewer's six ids per viewer.
+        index = LinkedPartnerFilterSql.bindVisiblePartner(statement, this, index, partnerViewers, hiddenFromViewerIds)
         // Exact cell-to-cell radius membership.
-        statement.setDouble(6, radiusMeters.toDouble())
-        statement.setInt(7, limit)
+        statement.setDouble(index++, radiusMeters.toDouble())
+        statement.setInt(index++, limit)
         statement.executeQuery().use { rs ->
             buildSet {
                 while (rs.next()) {
@@ -149,6 +162,7 @@ internal fun Connection.listLinkedCandidateUserIdsNear(
             }
         }
     }
+}
 
 internal fun Connection.listActiveSwipedTargetIds(
     actorUserId: UUID,

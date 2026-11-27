@@ -59,6 +59,7 @@ import com.pynapli.app.design.icons.filled.Star
 import com.pynapli.app.design.icons.filled.StarBorder
 import com.pynapli.app.design.icons.filled.VisibilityOff
 import com.pynapli.app.media.BEING_REVIEWED_LABEL
+import com.pynapli.app.media.rememberCachedImageModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -88,11 +89,26 @@ internal fun ProfileHero(
     photosByTap: Boolean = false,
     // Own preview only: photos the owner can see that others can't yet (moderation pending).
     beingReviewedPhotoUrls: Set<String> = emptySet(),
+    // G2-2: the server's stable cache keys for [photoUrls] (index for index) and [profilePhotoUrl];
+    // keys only name bytes, the URLs still guard access. Empty/null = cache by URL as before.
+    photoCacheKeys: List<String> = emptyList(),
+    profilePhotoCacheKey: String? = null,
+    // The key the first photo's small Grid version may already be cached under: painted while the
+    // original loads, so opening a profile from the Grid shows the face at once.
+    firstPhotoPlaceholderCacheKey: String? = null,
 ) {
     val lastSeen = lastActiveLabel?.takeUnless { online }
     val photos =
         remember(photoUrls, profilePhotoUrl) {
             photoUrls.ifEmpty { listOfNotNull(profilePhotoUrl) }
+        }
+    val photoKeys =
+        remember(photoUrls, photoCacheKeys, profilePhotoCacheKey) {
+            when {
+                photoUrls.isEmpty() -> listOf(profilePhotoCacheKey)
+                photoCacheKeys.size == photoUrls.size -> photoCacheKeys
+                else -> photoUrls.map { null }
+            }
         }
     val pagerState = rememberPagerState(pageCount = { photos.size.coerceAtLeast(1) })
     val photoScope = rememberCoroutineScope()
@@ -112,7 +128,12 @@ internal fun ProfileHero(
                 userScrollEnabled = !photosByTap,
             ) { page ->
                 AsyncImage(
-                    model = photos[page],
+                    model =
+                        rememberCachedImageModel(
+                            url = photos[page],
+                            cacheKey = photoKeys.getOrNull(page),
+                            placeholderCacheKey = firstPhotoPlaceholderCacheKey?.takeIf { page == 0 && it != photoKeys.getOrNull(0) },
+                        ),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),

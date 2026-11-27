@@ -90,6 +90,21 @@ class AuthService(
         return session
     }
 
+    /**
+     * A session for an existing account that just proved a linked Google/Apple identity
+     * (SocialAuthService, which has already refused non-active accounts). Same tail as email sign-in.
+     */
+    internal suspend fun startSocialSignInSession(
+        user: UserRecord,
+        deviceId: String?,
+        platform: String?,
+        appVersion: String?,
+    ): AuthSessionDto {
+        val session = sessionManager.createSession(user, deviceId, platform, appVersion)
+        productMetrics?.record(ProductMetrics.LOGIN)
+        return session
+    }
+
     suspend fun loginEmail(
         email: String,
         password: String,
@@ -186,6 +201,8 @@ class AuthService(
 
 class AuthException(
     val code: String,
+    /** Overrides [authStatusFor] for this throw only (e.g. a bad provider token on a signed-in route). */
+    val status: io.ktor.http.HttpStatusCode? = null,
 ) : RuntimeException(code)
 
 private const val REVOCATION_CHANNEL = "pynapli:auth:revocations"

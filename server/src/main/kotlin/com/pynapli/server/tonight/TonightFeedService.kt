@@ -10,7 +10,6 @@ import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
-import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
 import com.pynapli.shared.network.dto.TonightFeedItemDto
@@ -38,9 +37,10 @@ class TonightFeedService(
     private val blockRepository: BlockRepository? = null,
     private val hiddenProfileRepository: HiddenProfileRepository? = null,
     private val clock: Clock = Clock.systemUTC(),
-    // Same gates the Grid applies to lifestyle filters, so Tonight is never a bypass.
+    // The age gate the Grid applies to lifestyle filters, so Tonight is never a bypass.
     private val viewerTrustRepository: GridViewerTrustRepository? = null,
-    private val subscriptionService: SubscriptionService? = null,
+    // No longer read (every filter is free since founder decision 2); kept so the wiring is unchanged.
+    subscriptionService: SubscriptionService? = null,
     // "Hide from people you know": someone hiding from the viewer drops like a blocked owner (and
     // their partner mini like a blocked partner). Aggregate counts elsewhere are untouched.
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
@@ -158,10 +158,7 @@ class TonightFeedService(
         if (filters.lifestyleTags.isEmpty()) return
         val ageVerified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
         if (!ageVerified) throw TonightSessionException("AGE_VERIFICATION_REQUIRED")
-        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
-        if (filters.requiresAdvancedEntitlement && !policy.advancedFiltersAllowed) {
-            throw TonightSessionException("ENTITLEMENT_REQUIRED")
-        }
+        // Founder decision 2 (2026-11-26): no plan gate on filters; age verification is the only one.
     }
 
     private suspend fun onlineUserIdsFor(userIds: Set<UUID>): Set<UUID> = runCatching { presenceService?.onlineUserIds(userIds).orEmpty() }.getOrDefault(emptySet())

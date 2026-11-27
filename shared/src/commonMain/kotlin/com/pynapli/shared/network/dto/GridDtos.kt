@@ -39,6 +39,25 @@ data class GridQueryRequestDto(
     // "Verified couples only": only people whose couple-verified badge shows for this viewer (both
     // linked partners selfie-verified, partner visible). Independent of linkedOnly. Old clients omit it.
     val verifiedCouplesOnly: Boolean = false,
+    // Partner filters (FILTERS_SPEC "Partner"): matched against the visibly linked partner's OWN declared
+    // profile (gender key, age, orientation key, photo verification), only through the partner gate
+    // behind linkedOnly, so a partner hidden from this viewer never matches. Any of them implies Linked.
+    // Same taxonomies and age bounds as genders / orientations / minimumAge. Free. Old clients omit them.
+    val partnerGenders: List<String> = emptyList(),
+    val partnerMinimumAge: Int? = null,
+    val partnerMaximumAge: Int? = null,
+    val partnerOrientations: List<String> = emptyList(),
+    val partnerVerifiedOnly: Boolean = false,
+    // "No single men": drop people whose own gender is "man" or "trans_man" with no linked partner shown
+    // to this viewer (gender identity, founder decision 2026-11-27).
+    val excludeSingleMen: Boolean = false,
+    // "Haven't chatted" (Grindr's "Haven't chatted today"): drop people the viewer exchanged a direct
+    // message with in the last 24 hours (either direction; an inbound message counts only once it is
+    // visible to the viewer). Grid only, per viewer, never from a shared cache. Old clients omit it.
+    val haventChattedOnly: Boolean = false,
+    // Lifestyle "All of" (G2-4, Grid only): every one of [lifestyleTags] must match (at most 3, and one
+    // experience level), instead of any one per group. Old clients omit it.
+    val lifestyleMatchAll: Boolean = false,
     // Section 3 opt-in: this client renders locked cards (GridCardDto.locked) as paywall tiles, never
     // as profiles. Without it the server keeps the old behaviour: the grid stops at the tier depth with
     // resultLimitReached. With it the grid keeps paging past the depth with locked cards up to the next
@@ -62,6 +81,9 @@ data class GridQueryResponseDto(
     val lockedFromIndex: Int? = null,
     // The plan that unlocks the locked cards ("social" or "select"), set whenever lockedFromIndex is.
     val unlockTier: String? = null,
+    // G2-2: the page size the server used for this viewer's plan (Free 60, Social 90, Select 120).
+    // The app asks for the most and the server clamps. 0 from an older server.
+    val pageSize: Int = 0,
 )
 
 @Serializable
@@ -69,6 +91,10 @@ data class GridCardDto(
     val userId: String,
     val displayName: String,
     val thumbnailUrl: String? = null,
+    // G2-2: the stable key that names [thumbnailUrl]'s bytes ("<assetId>:v1-thumb-480" for the
+    // server-made thumbnail, "<assetId>:orig" for the original). Clients cache by it, so a re-signed
+    // URL is a cache hit; the URL still guards access. Null on locked cards (no identity, Section 3).
+    val thumbnailCacheKey: String? = null,
     val online: Boolean,
     val distanceLabel: String? = null,
     val distanceMeters: Int? = null,
@@ -117,6 +143,8 @@ data class LinkedPartnerMiniDto(
     val userId: String,
     val displayName: String? = null,
     val thumbnailUrl: String? = null,
+    // G2-2: stable cache key for [thumbnailUrl] (same meaning as GridCardDto.thumbnailCacheKey).
+    val thumbnailCacheKey: String? = null,
     val online: Boolean = false,
     // Partner preview only (public profile detail): the partner's own orientation, experience
     // level and swap/room tags. Always null/empty on Grid cards and the Tonight feed.
@@ -124,6 +152,12 @@ data class LinkedPartnerMiniDto(
     val orientationDetail: String? = null,
     val experienceLevel: String? = null,
     val lifestyleTags: List<String> = emptyList(),
+    // The partner's own declared age and gender key (plan G2-3), for the tile's partner mini and the
+    // partner preview. Filled only where this mini is shown at all (the same partner gate), on Grid
+    // cards and the public profile; null on Swipe cards, Psync and the Tonight feed. A self-describe
+    // gender comes back as "self_describe" and shows no mark.
+    val age: Int? = null,
+    val gender: String? = null,
 )
 
 @Serializable
@@ -144,4 +178,16 @@ data class SavedGridFiltersListDto(
 data class CreateSavedGridFilterRequestDto(
     val name: String,
     val payload: GridQueryRequestDto,
+)
+
+/**
+ * `POST /v1/grid/count` (plan G2-4): how many people the Grid would show for these filters, for the
+ * filter sheet's "Show N people" button. The request is the Grid request itself. [count] never exceeds
+ * what the Grid would return under the same filters and visibility rules; [atLeast] means more match
+ * than were counted (show "N+"). Capped at 500 and at the plan's Grid depth.
+ */
+@Serializable
+data class GridCountResponseDto(
+    val count: Int,
+    val atLeast: Boolean = false,
 )
