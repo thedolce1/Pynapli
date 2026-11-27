@@ -13,14 +13,14 @@ internal class GridCountCache(
     private val ttl: Duration = Duration.ofSeconds(15),
     private val maxEntries: Int = 4_096,
 ) {
-    private class Entry(
+    private class CachedCount(
         val response: GridCountResponseDto,
         val storedAt: Instant,
     )
 
     private val entries =
-        object : LinkedHashMap<String, Entry>(64, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>?): Boolean = size > maxEntries
+        object : LinkedHashMap<String, CachedCount>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedCount>?): Boolean = size > maxEntries
         }
 
     @Synchronized
@@ -42,6 +42,6 @@ internal class GridCountCache(
         response: GridCountResponseDto,
         now: Instant,
     ) {
-        entries[key] = Entry(response, now)
+        entries[key] = CachedCount(response, now)
     }
 }

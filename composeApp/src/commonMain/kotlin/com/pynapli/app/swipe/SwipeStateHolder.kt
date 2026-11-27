@@ -83,8 +83,15 @@ class SwipeStateHolder(
                 }
                 if (ageGated) {
                     load(ownerUserId)
-                    // Say why the lifestyle tags went, unless the re-ask failed for another reason.
-                    _state.update { if (it.errorCode == null) it.copy(errorCode = AGE_VERIFICATION_REQUIRED, errorMessage = LIFESTYLE_AGE_GATE_MESSAGE) else it }
+                    // Say why the lifestyle tags went, as the inline notice over the deck, unless the re-ask failed
+                    // for another reason or came back empty (an error there would replace the empty deck).
+                    _state.update {
+                        if (it.errorCode == null && it.cards.isNotEmpty()) {
+                            it.copy(errorCode = AGE_VERIFICATION_REQUIRED, errorMessage = LIFESTYLE_AGE_GATE_MESSAGE)
+                        } else {
+                            it
+                        }
+                    }
                     return
                 }
             }

@@ -14,8 +14,9 @@ enum class PynapliFeature(
     SupportContact(false),
     SafetyCenter(false),
     AgeVerification(false),
-    GridAdvancedFilters(true),
-    SwipeAdvancedFilters(true),
+    // Every filter is free (founder decision 2, 2026-11-26); saved filter presets are the paid part.
+    GridSavedFilterPresets(true),
+    SwipeSavedFilterPresets(true),
     ActivityDeepReveal(true),
     PineappleLike(true),
     Boost(true),

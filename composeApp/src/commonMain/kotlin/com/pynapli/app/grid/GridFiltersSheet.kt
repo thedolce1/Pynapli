@@ -45,6 +45,8 @@ internal fun GridFiltersSheet(
     var count by remember { mutableStateOf<GridCountResponseDto?>(null) }
     LaunchedEffect(draft) {
         // Debounced: a run of taps asks once, and a newer draft cancels the older wait or request.
+        // The old number never stands for a changed draft: the button says "Apply" until the new one.
+        count = null
         delay(COUNT_DEBOUNCE_MILLIS)
         count = countFor(draft.withLifestyleAccess(lifestyleFiltersAllowed).withPartnerFiltersReconciled())
     }

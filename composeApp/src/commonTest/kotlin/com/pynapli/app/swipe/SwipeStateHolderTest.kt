@@ -38,7 +38,7 @@ class SwipeStateHolderTest {
     @Test
     fun anAgeRefusedLifestyleFilterIsTakenOutAndTheRestIsAskedAgain() =
         runTest {
-            val repository = FakeSwipeRepository(deck = SwipeDeckUi(cards = emptyList()), refuseLifestyle = true)
+            val repository = FakeSwipeRepository(deck = SwipeDeckUi(cards = listOf(swipeCard(userId = "t-1"))), refuseLifestyle = true)
             val stateHolder = SwipeStateHolder(repository)
 
             stateHolder.applyFilters(

@@ -86,8 +86,9 @@ fun PynapliApp(
         // Blocked, hidden or reported anywhere: the Grid and Favorites (kept across tabs) drop them.
         LaunchedEffect(graph.profileDetailStateHolder) {
             graph.profileDetailStateHolder.removedProfiles.collect { userId ->
-                graph.gridStateHolder.removeCardById(userId)
+                // Favorites first: the Grid's removal may wait on a backfill page (plan G2-4).
                 graph.favoritesStateHolder?.removeCardById(userId)
+                graph.gridStateHolder.removeCardById(userId)
             }
         }
         // A plan change (a purchase or restore in the Store, or a lapse picked up by the Profile Hub on

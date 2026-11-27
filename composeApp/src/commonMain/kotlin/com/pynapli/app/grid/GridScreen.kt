@@ -274,8 +274,9 @@ fun GridScreen(
             }
         },
         onRemoveCard = { userId ->
-            stateHolder.removeCardById(userId)
+            // Favorites first: the Grid's removal may wait on a backfill page (plan G2-4).
             favoritesStateHolder?.removeCardById(userId)
+            stateHolder.removeCardById(userId)
         },
         viewerUserId = viewerUserId,
         profileLinkActionFor = { targetUserId ->
