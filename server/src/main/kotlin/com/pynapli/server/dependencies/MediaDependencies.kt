@@ -1,5 +1,6 @@
 package com.pynapli.server.dependencies
 
+import com.google.auth.oauth2.GoogleCredentials
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.media.AutoApproveMediaModerationScanner
@@ -20,10 +21,14 @@ import com.pynapli.server.media.ManualReviewMediaModerationScanner
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaModerationScanner
 import com.pynapli.server.media.MediaObjectDeleter
+import com.pynapli.server.media.MediaScanScope
 import com.pynapli.server.media.MediaService
 import com.pynapli.server.media.MediaServiceMessageMediaGateway
 import com.pynapli.server.media.MediaVerificationSelfieGateway
+import com.pynapli.server.media.SafeSearchLikelihood
+import com.pynapli.server.media.SafeSearchPolicy
 import com.pynapli.server.media.StaticMediaUploadSigner
+import com.pynapli.server.media.toLikelihood
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.JdbcReportRepository
 import com.pynapli.server.safety.MediaModerationEscalationService
@@ -53,6 +58,11 @@ internal class MediaDependencies(
     val selfieMediaGateway: SelfieMediaGateway,
     // Face counting for verification selfies; only when Cloud Vision moderation is configured.
     val selfieFaceDetector: SelfieFaceDetector?,
+    // Grid thumbnails (G2-2). The resolver is always present when media URLs are; the scheduler and
+    // worker only when thumbnails are enabled and the storage can hold them.
+    val mediaImageResolver: com.pynapli.server.media.MediaImageResolver? = null,
+    val thumbnailScheduler: com.pynapli.server.media.MediaThumbnailScheduler? = null,
+    val thumbnailWorker: com.pynapli.server.media.MediaThumbnailWorker? = null,
 )
 
 internal fun buildMediaDependencies(
@@ -112,7 +122,7 @@ internal fun buildMediaDependencies(
         }
     val mediaAssetUrlResolver: MediaAssetUrlResolver? =
         when (config.mediaStorageProvider.lowercase()) {
-            "local" -> LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl)
+            "local" -> LocalMediaAssetUrlResolver(config.mediaUploadBaseUrl, churnUrls = config.mediaLocalUrlChurn)
             "gcs" ->
                 if (cdnSignedUrlFactory != null) {
                     CdnMediaAssetUrlResolver(
@@ -156,7 +166,11 @@ internal fun buildMediaDependencies(
                 )
         }
     val mediaRepository = JdbcMediaRepository(dataSource)
+    val thumbnails = buildThumbnails(config, dataSource, gcsSignedUrlFactory, localMediaUploadStorage)
     val moderationScanner = createMediaModerationScanner(config, mediaSigningCredentials)
+    // Founder decision: Vision sees public profile photos (and, via the face detector below,
+    // verification selfies) only, unless private-media scanning is switched on.
+    val scanScope = MediaScanScope(scanPrivateMedia = config.mediaModerationScanPrivateMedia)
     val mediaService =
         MediaService(
             repository = mediaRepository,
@@ -171,6 +185,8 @@ internal fun buildMediaDependencies(
                 ),
             rateLimitService = rateLimitService,
             contactBlockVisibility = contactBlockVisibility,
+            scanScope = scanScope,
+            profilePhotoApproved = thumbnails?.scheduler,
         )
     // Chat photo media reuses the same signer/asset/scanner/resolver as album media.
     val messageMediaGateway =
@@ -180,6 +196,7 @@ internal fun buildMediaDependencies(
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             moderationScanner = moderationScanner,
             rateLimitService = rateLimitService,
+            scanScope = scanScope,
         )
     // Verification selfies ride the same signer/asset rows; unlike album media the app deletes their
     // objects itself after the retention window (PhotoVerificationService.purgeExpiredSelfies).
@@ -206,15 +223,7 @@ internal fun buildMediaDependencies(
             mediaAssetUrlResolver = mediaAssetUrlResolver,
             objectDeleter = mediaObjectDeleter,
         )
-    val selfieFaceDetector =
-        if (config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) && mediaSigningCredentials != null) {
-            CloudVisionSelfieFaceDetector(
-                credentials = mediaSigningCredentials,
-                endpoint = config.mediaModerationVisionEndpoint,
-            )
-        } else {
-            null
-        }
+    val selfieFaceDetector = createSelfieFaceDetector(config, mediaSigningCredentials)
     return MediaDependencies(
         mediaAssetUrlResolver = mediaAssetUrlResolver,
         localMediaUploadStorage = localMediaUploadStorage,
@@ -222,6 +231,62 @@ internal fun buildMediaDependencies(
         messageMediaGateway = messageMediaGateway,
         selfieMediaGateway = selfieMediaGateway,
         selfieFaceDetector = selfieFaceDetector,
+        mediaImageResolver =
+            mediaAssetUrlResolver?.let {
+                com.pynapli.server.media
+                    .MediaImageResolver(it, thumbnails?.repository)
+            },
+        thumbnailScheduler = thumbnails?.scheduler,
+        thumbnailWorker = thumbnails?.worker,
+    )
+}
+
+private class ThumbnailParts(
+    val repository: com.pynapli.server.media.MediaThumbnailRepository,
+    val scheduler: com.pynapli.server.media.MediaThumbnailScheduler,
+    val worker: com.pynapli.server.media.MediaThumbnailWorker,
+)
+
+// Thumbnails live in the same storage as the originals: GCS through the shared signing factory, or
+// the local upload directory. Any other provider (or thumbnails switched off) serves originals only.
+private fun buildThumbnails(
+    config: ServerConfig,
+    dataSource: DataSource,
+    gcsSignedUrlFactory: GcsV4SignedUrlFactory?,
+    localMediaUploadStorage: LocalMediaUploadStorage?,
+): ThumbnailParts? {
+    if (!config.mediaThumbnailsEnabled) return null
+    val store: com.pynapli.server.media.MediaThumbnailStore =
+        when {
+            gcsSignedUrlFactory != null ->
+                com.pynapli.server.media
+                    .GcsMediaThumbnailStore(gcsSignedUrlFactory)
+            localMediaUploadStorage != null ->
+                com.pynapli.server.media
+                    .LocalMediaThumbnailStore(localMediaUploadStorage)
+            else -> return null
+        }
+    val repository =
+        com.pynapli.server.media
+            .JdbcMediaThumbnailRepository(dataSource)
+    val service =
+        com.pynapli.server.media
+            .MediaThumbnailService(repository = repository, store = store)
+    return ThumbnailParts(
+        repository = repository,
+        scheduler =
+            com.pynapli.server.media
+                .MediaThumbnailScheduler(service),
+        worker =
+            com.pynapli.server.media.MediaThumbnailWorker(
+                service = service,
+                intervalMillis = config.mediaThumbnailIntervalMillis,
+                backfillPerTick = config.mediaThumbnailBackfillPerTick,
+                sweepPerTick = config.mediaThumbnailSweepPerTick,
+                jobLock =
+                    com.pynapli.server.db
+                        .PostgresJobLock(dataSource),
+            ),
     )
 }
 
@@ -246,21 +311,50 @@ internal fun loadMediaSigningCredentials(config: ServerConfig): ServiceAccountCr
     )
 }
 
-// Upload-complete moderation: dev auto-approve wins first, then the configured provider.
-// "cloud_vision" needs the media signing credentials; if they're absent we fall back to
-// manual review rather than silently auto-approving (fail-safe).
-private fun createMediaModerationScanner(
+// Upload-complete moderation: dev auto-approve wins first (refused at startup outside local/test),
+// then the configured provider. "cloud_vision" needs the media signing credentials:
+// loadMediaSigningCredentials throws without them, and startup validation names the gap
+// (MEDIA_SIGNING_CREDENTIALS_REQUIRED) in staging/prod, so nothing silently degrades to manual.
+internal fun createMediaModerationScanner(
     config: ServerConfig,
     mediaSigningCredentials: ServiceAccountCredentials?,
 ): MediaModerationScanner =
     when {
         config.mediaDevAutoApproveUploads -> AutoApproveMediaModerationScanner()
-        config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) &&
-            mediaSigningCredentials != null ->
+        config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) ->
             CloudVisionMediaModerationScanner(
-                credentials = mediaSigningCredentials,
+                credentials =
+                    checkNotNull(mediaSigningCredentials) {
+                        "Cloud Vision moderation requires PYNAPLI_MEDIA_GCS_SIGNING_SA_JSON/PATH (or a Firebase service account)."
+                    },
                 endpoint = config.mediaModerationVisionEndpoint,
+                policy = config.safeSearchPolicy(),
             )
 
         else -> ManualReviewMediaModerationScanner()
     }
+
+// Verification selfies go to Vision face counting whenever Cloud Vision is the provider; the
+// private-media scan flag has no say here (selfies are a deliberate verification submission).
+internal fun createSelfieFaceDetector(
+    config: ServerConfig,
+    credentials: GoogleCredentials?,
+): SelfieFaceDetector? =
+    if (config.mediaModerationProvider.equals("cloud_vision", ignoreCase = true) && credentials != null) {
+        CloudVisionSelfieFaceDetector(
+            credentials = credentials,
+            endpoint = config.mediaModerationVisionEndpoint,
+        )
+    } else {
+        null
+    }
+
+/** The configured auto-approve ceilings; startup validation has already refused unknown names. */
+internal fun ServerConfig.safeSearchPolicy(): SafeSearchPolicy =
+    SafeSearchPolicy(
+        maxAdult = mediaModerationMaxAdult.toCeiling(SafeSearchPolicy.DEFAULT_MAX_ADULT),
+        maxViolence = mediaModerationMaxViolence.toCeiling(SafeSearchPolicy.DEFAULT_MAX_VIOLENCE),
+        maxRacy = mediaModerationMaxRacy.toCeiling(SafeSearchPolicy.DEFAULT_MAX_RACY),
+    )
+
+private fun String.toCeiling(default: SafeSearchLikelihood): SafeSearchLikelihood = toLikelihood().takeIf { it in SafeSearchPolicy.CONFIGURABLE_CEILINGS } ?: default

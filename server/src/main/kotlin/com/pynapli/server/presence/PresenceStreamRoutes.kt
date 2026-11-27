@@ -23,6 +23,22 @@ import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
+/**
+ * Most ids one presence socket may watch. A Grid screen subscribes to its visible cards (a few pages at
+ * most); a longer list is cut to the first [MAX_PRESENCE_SUBSCRIPTION] distinct valid ids, so the
+ * stream can't be used to watch a large list of members at once. Nothing is sent on subscribe: the
+ * stream only carries transitions, and only for broadcastable members (PresenceVisibility).
+ */
+const val MAX_PRESENCE_SUBSCRIPTION: Int = 200
+
+internal fun parseSubscription(userIds: List<String>): Set<UUID> =
+    userIds
+        .asSequence()
+        .mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+        .distinct()
+        .take(MAX_PRESENCE_SUBSCRIPTION)
+        .toSet()
+
 fun Application.configurePresenceStreamRoutes(
     authService: AuthService,
     broadcaster: PresenceBroadcaster,
@@ -67,8 +83,7 @@ fun Application.configurePresenceStreamRoutes(
                         runCatching {
                             streamJson.decodeFromString(PresenceStreamSubscribeDto.serializer(), frame.readText())
                         }.getOrNull() ?: continue
-                    val parsed = payload.userIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.toSet()
-                    subscription.set(parsed)
+                    subscription.set(parseSubscription(payload.userIds))
                 }
             } catch (_: ClosedReceiveChannelException) {
                 // Client disconnected; fall through.

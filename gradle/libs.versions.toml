@@ -36,6 +36,12 @@ androidxFragment = "1.8.9"
 # Already on the Android classpath transitively at this version; pinned here so the
 # androidx.core.content.edit usages depend on it explicitly rather than by accident.
 androidxCore = "1.16.0"
+# "Continue with Google" through Credential Manager (developer.android.com/jetpack/androidx/releases/
+# credentials): 1.6.0 is the latest stable (2026-04-08). The SIWG guide's snippet shows 1.7.0-alpha03;
+# alphas are out by policy. credentials-play-services-auth is required for API <= 33.
+androidxCredentials = "1.6.0"
+# Sign in with Google library (developers.google.com/identity/android-credential-manager/releases).
+googleId = "1.2.1"
 spotless = "8.6.0"
 ktlint = "1.7.1"
 
@@ -99,6 +105,9 @@ compose-ui-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", v
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "androidxFragment" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "androidxCredentials" }
+androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "androidxCredentials" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleId" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }

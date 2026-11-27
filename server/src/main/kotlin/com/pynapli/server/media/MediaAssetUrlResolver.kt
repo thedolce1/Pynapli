@@ -5,17 +5,35 @@ import java.util.UUID
 
 interface MediaAssetUrlResolver {
     fun publicContentUrl(mediaAssetId: UUID): String?
+
+    /**
+     * The grid thumbnail (MediaThumbnails) of an asset, signed the same way as [publicContentUrl].
+     * Only [MediaImageSet] calls it, and only for assets whose thumbnail is ready and still eligible.
+     * Null where a resolver has no thumbnail route.
+     */
+    fun thumbnailContentUrl(mediaAssetId: UUID): String? = null
 }
 
 class LocalMediaAssetUrlResolver(
     private val fallbackBaseUrl: String,
+    // G2-2 ticket 7, local measurement only: append a per-second query so local URLs change on every
+    // response like production's signed URLs do (PYNAPLI_MEDIA_LOCAL_URL_CHURN). The route ignores it.
+    private val churnUrls: Boolean = false,
+    private val clock: java.time.Clock = java.time.Clock.systemUTC(),
 ) : MediaAssetUrlResolver {
+    private fun churn(url: String): String = if (churnUrls) "$url?v=${clock.instant().epochSecond}" else url
+
     // Prefer the per-request host (set by configureRequestMediaBaseUrl) so the emulator, a physical
     // device, and localhost each get a media URL they can actually reach; fall back to the static
     // configured base outside a request (background jobs / tests).
     override fun publicContentUrl(mediaAssetId: UUID): String {
         val base = (requestMediaBaseUrl.get() ?: fallbackBaseUrl).trimEnd('/')
-        return "$base/v1/media/uploads/local/$mediaAssetId"
+        return churn("$base/v1/media/uploads/local/$mediaAssetId")
+    }
+
+    override fun thumbnailContentUrl(mediaAssetId: UUID): String {
+        val base = (requestMediaBaseUrl.get() ?: fallbackBaseUrl).trimEnd('/')
+        return churn("$base/v1/media/uploads/local/$mediaAssetId/thumb")
     }
 }
 
@@ -38,6 +56,15 @@ class GcsV4MediaAssetUrlResolver(
                 objectKey = mediaObjectKey(mediaAssetId),
                 ttl = ttl,
             ).url
+
+    override fun thumbnailContentUrl(mediaAssetId: UUID): String =
+        signedUrlFactory
+            .sign(
+                method = "GET",
+                bucket = storageBucket,
+                objectKey = mediaThumbnailObjectKey(mediaAssetId),
+                ttl = ttl,
+            ).url
 }
 
 /**
@@ -58,6 +85,13 @@ class CdnMediaAssetUrlResolver(
         signedUrlFactory
             .sign(
                 baseUrl = "$normalizedBaseUrl/${mediaObjectKey(mediaAssetId)}",
+                ttl = ttl,
+            ).url
+
+    override fun thumbnailContentUrl(mediaAssetId: UUID): String =
+        signedUrlFactory
+            .sign(
+                baseUrl = "$normalizedBaseUrl/${mediaThumbnailObjectKey(mediaAssetId)}",
                 ttl = ttl,
             ).url
 }

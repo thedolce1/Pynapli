@@ -5,7 +5,9 @@ import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
+import com.pynapli.app.auth.UnavailableSocialSignInProvider
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
+import com.pynapli.app.grid.sqlDelightGridFilterStore
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.store.UnavailableStorePurchaseGateway
@@ -14,6 +16,7 @@ import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.KeychainSessionTokenCipher
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.auth.createPlatformSessionTokenCipher
@@ -25,6 +28,7 @@ import com.pynapli.shared.network.iosRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.settings.SqlDelightPendingSignupStore
+import com.pynapli.shared.settings.SqlDelightUnderageStopStore
 import com.pynapli.shared.storage.IosPynapliDatabaseFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -87,6 +91,10 @@ class IosAppGraph(
     private val sessionRefresher = SessionRefresherHolder()
     private val sessionInvalidationBus = SessionInvalidationBus()
 
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
+
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -101,12 +109,18 @@ class IosAppGraph(
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                 )
         }
 
-    private val authRepository = AuthRepository(apiClient = apiClient, sessionStore = sessionStore)
+    private val authRepository = AuthRepository(apiClient = apiClient, sessionStore = sessionStore, sessionLock = sessionLock)
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
+
+    // TODO(plan D1/D2, Section 5 iOS): Sign in with Apple via ASAuthorizationController (request nonce =
+    // SHA-256 of the server nonce, see SocialProviderNonce) and Google via its iOS SDK, implemented on
+    // the iosApp side once the Xcode project and Keychain exist. Until then both buttons stay hidden.
+    private val socialSignInProvider = UnavailableSocialSignInProvider
 
     val authStateHolder =
         AuthStateHolder(
@@ -117,6 +131,7 @@ class IosAppGraph(
             // No beforeLogout hook yet: Android uses it to unregister the push device, which lands
             // with the APNs step of the plan.
             sessionInvalidations = sessionInvalidationBus.events,
+            socialSignInProvider = socialSignInProvider,
         )
 
     val appSettingsStateHolder =
@@ -138,6 +153,8 @@ class IosAppGraph(
             // The platform default cipher (pass-through on iOS until the Keychain phase, like the
             // session default); never the shell's Keychain cipher, whose single slot is the session's.
             pendingSignupStore = SqlDelightPendingSignupStore(database),
+            // The 18+ stop sticks for a day on this device (a time only, nothing personal).
+            underageStopStore = SqlDelightUnderageStopStore(database),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */
@@ -147,6 +164,12 @@ class IosAppGraph(
         PynapliCommonGraph(
             apiClient = apiClient,
             gridSnapshotStore = SqlDelightGridSnapshotStore(database),
+            // Bound to the signed-in account: another account never restores these filters.
+            gridFilterStore =
+                sqlDelightGridFilterStore(database) {
+                    authStateHolder.state.value.session
+                        ?.userId
+                },
             swipeQueueStore = SqlDelightSwipeActionQueueStore(database),
             swipeRepository = ApiSwipeRepository(apiClient),
             // Read-only Store for the first iOS release; StoreKit 2 is a later slice.
@@ -157,6 +180,7 @@ class IosAppGraph(
                 realtimeStreams.activity,
             messageStreamClient =
                 realtimeStreams.message,
+            socialSignInProvider = socialSignInProvider,
         )
 
     /** Psync realtime channel; the per-viewer holder is built inside `PynapliApp`. */

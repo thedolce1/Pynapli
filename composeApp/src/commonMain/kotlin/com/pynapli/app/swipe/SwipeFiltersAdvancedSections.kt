@@ -14,12 +14,11 @@ import com.pynapli.app.design.handCursor
 internal fun SwipeAdvancedFilterControls(
     draft: SwipeFilters,
     onDraftChange: (SwipeFilters) -> Unit,
-    onSubscribe: () -> Unit,
+    // Lifestyle tags need an age-verified viewer (safety, not payment; every filter is free since
+    // founder decision 2). False hides them, as on the Grid; the server refuses them either way.
+    lifestyleFiltersAllowed: Boolean = true,
 ) {
     SectionTitle("Advanced")
-    if (draft.requiresAdvancedEntitlement) {
-        AdvancedPaywallBanner(onSubscribe = onSubscribe)
-    }
     FacePhotoAndAgeVerifiedSection(
         facePhotoVerified = draft.facePhotoVerified,
         ageVerified = draft.ageVerified,
@@ -35,7 +34,14 @@ internal fun SwipeAdvancedFilterControls(
         onHasPrivateAlbumToggle = { onDraftChange(draft.copy(hasPrivateAlbum = !draft.hasPrivateAlbum)) },
     )
     SectionTitle("Lifestyle")
-    LifestyleTagsSection(draft = draft, onDraftChange = onDraftChange)
+    if (lifestyleFiltersAllowed) {
+        LifestyleTagsSection(draft = draft, onDraftChange = onDraftChange)
+    } else {
+        Text(
+            text = "Verify your age in profile settings to access lifestyle filters.",
+            modifier = Modifier.testTag(SwipeFilterTags.LIFESTYLE_AGE_GATE),
+        )
+    }
     BoundariesSection(draft = draft, onDraftChange = onDraftChange)
     LogisticsTagsSection(
         selected = draft.logisticsTags,

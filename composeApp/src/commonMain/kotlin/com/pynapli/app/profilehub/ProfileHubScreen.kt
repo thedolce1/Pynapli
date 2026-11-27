@@ -63,6 +63,8 @@ fun ProfileHubScreen(
     onPickVerificationSelfie: (() -> Unit)? = null,
     // "Hide from people you know" (Privacy); null hides the entry.
     contactBlocksStateHolder: ContactBlocksStateHolder? = null,
+    // Settings > Sign-in methods; null (or nothing to offer) hides the row.
+    signInMethodsStateHolder: SignInMethodsStateHolder? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     var showHideFromPeopleYouKnow by remember { mutableStateOf(false) }
@@ -76,6 +78,11 @@ fun ProfileHubScreen(
     var deleteAccountConfirmation by remember { mutableStateOf("") }
     var showChangePassword by remember { mutableStateOf(false) }
     var showSignedInDevices by remember { mutableStateOf(false) }
+    var showSignInMethods by remember { mutableStateOf(false) }
+    val signInMethodsState = signInMethodsStateHolder?.state?.collectAsState()?.value
+    LaunchedEffect(signInMethodsStateHolder) {
+        signInMethodsStateHolder?.load()
+    }
 
     LaunchedEffect(stateHolder) {
         stateHolder.load()
@@ -120,6 +127,7 @@ fun ProfileHubScreen(
             onShowDistanceChanged = stateHolder::updateShowDistance,
             onVisibleWhileTravelingChanged = stateHolder::updateVisibleWhileTraveling,
             onSharePsyncSoloMatchesChanged = stateHolder::updateSharePsyncSoloMatches,
+            onShowMetInPersonBadgeChanged = stateHolder::updateShowMetInPersonBadge,
             onSave = { scope.launch { stateHolder.savePrivacySettings() } },
             onOpenHideFromPeopleYouKnow = contactBlocksStateHolder?.let { { showHideFromPeopleYouKnow = true } },
             modifier = modifier,
@@ -255,6 +263,16 @@ fun ProfileHubScreen(
                 showSignedInDevices = true
                 scope.launch { stateHolder.loadSignedInDevices() }
             },
+            onSignInMethodsClick =
+                signInMethodsStateHolder?.takeIf { signInMethodsState?.visible == true }?.let { holder ->
+                    {
+                        holder.clearMessages()
+                        showSignInMethods = true
+                        scope.launch { holder.load() }
+                    }
+                },
+            signInMethodsSummary = signInMethodsState?.summary.orEmpty(),
+            changePasswordVisible = signInMethodsState?.showChangePassword == true,
             onChangePasswordClick = {
                 stateHolder.clearMessage()
                 showChangePassword = true
@@ -307,6 +325,15 @@ fun ProfileHubScreen(
             onDismiss = { showSignedInDevices = false },
             onSignOut = { sessionId -> scope.launch { stateHolder.signOutDevice(sessionId) } },
             onSignOutOthers = { scope.launch { stateHolder.signOutOtherDevices() } },
+        )
+    }
+
+    if (showSignInMethods && signInMethodsStateHolder != null && signInMethodsState != null) {
+        SignInMethodsSheet(
+            state = signInMethodsState,
+            onDismiss = { showSignInMethods = false },
+            onLink = { provider -> scope.launch { signInMethodsStateHolder.link(provider) } },
+            onUnlink = { provider -> scope.launch { signInMethodsStateHolder.unlink(provider) } },
         )
     }
 

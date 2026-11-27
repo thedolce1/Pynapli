@@ -8,7 +8,12 @@ param(
     [string]$GoldenSpec = "scripts\web-qa-goldens.json",
     [switch]$SkipSeed,
     [switch]$SkipBuild,
-    [switch]$SkipGoldenAssertions
+    [switch]$SkipGoldenAssertions,
+    # The sign-up + sign-in walk (run.mjs authWalk): on = with the surfaces, only = just the walk,
+    # off = the surfaces alone. It signs up a new account per run and reads the emailed code from the
+    # server's local-only dev lookup, so the server needs PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true.
+    [ValidateSet("on", "off", "only")]
+    [string]$AuthWalk = "on"
 )
 
 # Browser QA for the web companion (app.pynapli.com), the counterpart of the android-*-qa.ps1
@@ -21,7 +26,11 @@ param(
 # Why it exists: the web shell once hid Playing Tonight while the Grid still showed its moon button,
 # so that button did nothing on web, and every Android gate was green. Only a browser run sees that.
 #
-# Needs: the local server running (gradlew :server:run) with docker up, Chrome, Node 22+.
+# It also walks sign-up -> first grid -> Log out -> sign in -> grid through the real UI (-AuthWalk) and
+# prints time from Create account to the first grid card.
+#
+# Needs: the local server running (gradlew :server:run) with docker up, Chrome, Node 22+. With the
+# walk on (the default) the server also needs PYNAPLI_DEV_SIGNUP_SHORTCUTS_ENABLED=true.
 # Not part of the pre-push hook (it needs a running server); run it for any web-facing change.
 
 $ErrorActionPreference = "Stop"
@@ -48,6 +57,12 @@ try {
     Write-Host "[ok] Ktor health: $BaseUrl/health/deep"
 } catch {
     throw "Ktor is not healthy at $BaseUrl/health/deep. Start the local server first. $($_.Exception.Message)"
+}
+
+if ($AuthWalk -ne "off") {
+    # The walk's emailed code comes from the local-only dev lookup, which is off by default.
+    Import-Module (Join-Path $PSScriptRoot "lib\PynapliDevSignup.psm1") -Force -DisableNameChecking
+    Assert-DevSignupShortcuts -BaseUrl $BaseUrl
 }
 
 if (-not $SkipSeed) {
@@ -80,10 +95,16 @@ try {
     if (-not $ready) { throw "The static server did not start on port $AppPort (is something else using it?). See $serveLog" }
 
     Write-Host "[step] Driving Chrome ($Viewports)"
-    & node scripts/web-qa/run.mjs --out $artifactDir --app "http://localhost:$AppPort" --api $BaseUrl --viewports $Viewports
+    & node scripts/web-qa/run.mjs --out $artifactDir --app "http://localhost:$AppPort" --api $BaseUrl --viewports $Viewports --auth-walk $AuthWalk
     $runExit = $LASTEXITCODE
 
     $results = Get-Content (Join-Path $artifactDir "results.json") -Raw | ConvertFrom-Json
+    if ($null -ne $results.timings.createAccountTapToFirstCardMs) {
+        Write-Host "[perf] Create account (landing) -> first grid card: $($results.timings.createAccountTapToFirstCardMs) ms"
+    }
+    if ($null -ne $results.timings.accountSubmitToFirstCardMs) {
+        Write-Host "[perf] Create account (Account step) -> first grid card: $($results.timings.accountSubmitToFirstCardMs) ms"
+    }
     $failures += @($results.checks | Where-Object { -not $_.pass } | ForEach-Object { "$($_.name): $($_.detail)" })
 
     if (-not $SkipGoldenAssertions) {

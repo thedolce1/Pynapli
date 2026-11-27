@@ -27,7 +27,21 @@ class SwipeStateHolder(
     private var isFlushingActions = false
     private var restoredQueueOwnerUserId: String? = null
 
+    private val _deckStale = MutableStateFlow(false)
+
+    /**
+     * True when the deck describes a place the viewer has left (Travel switched on or off, from the
+     * Grid or from here). The Swipe screen reloads when it sees it; any [load] clears it.
+     */
+    val deckStale: StateFlow<Boolean> = _deckStale.asStateFlow()
+
+    fun markStale() {
+        _deckStale.value = true
+    }
+
     suspend fun load(ownerUserId: String? = restoredQueueOwnerUserId) {
+        // First, before any suspension, so a screen effect racing this load sees it already handled.
+        _deckStale.value = false
         val effectiveOwnerUserId = ownerUserId.normalizedOwnerUserId() ?: restoredQueueOwnerUserId
         restorePendingActions(effectiveOwnerUserId)
         val current = _state.value
@@ -49,38 +63,38 @@ class SwipeStateHolder(
                         deckSessionId = result.value.deckSessionId,
                         cards = result.value.cards.filterNotPending(),
                         nextCursor = result.value.nextCursor,
-                        filters = it.filters.withPaidLocks(result.value.advancedFiltersAllowed),
                         paywallMessage = null,
                         isLoading = false,
                     )
                 }
-            is AppResult.Failure ->
+            is AppResult.Failure -> {
+                // Every filter is free (founder decision 2, 2026-11-26). The one filter gate left is
+                // age verification for lifestyle tags: take out only those and ask again, once (the
+                // re-ask carries none, so it cannot be refused for them).
+                val ageGated = result.error.code == AGE_VERIFICATION_REQUIRED && swipeFilters.lifestyleTags.isNotEmpty()
                 _state.update {
-                    val entitlementRequired = result.error.code == "ENTITLEMENT_REQUIRED"
                     it.copy(
                         isLoading = false,
                         nextCursor = null,
-                        filters =
-                            if (entitlementRequired) {
-                                it.filters.withPaidLocks(advancedFiltersAllowed = false).withActiveFilter(SwipeFilterType.ForYou)
-                            } else {
-                                it.filters
-                            },
-                        paywallMessage =
-                            if (entitlementRequired) {
-                                "Social or Select unlocks this swipe filter."
-                            } else {
-                                it.paywallMessage
-                            },
+                        swipeFilters = if (ageGated) swipeFilters.copy(lifestyleTags = emptySet()) else it.swipeFilters,
                         errorCode = result.error.code,
-                        errorMessage =
-                            if (entitlementRequired && it.cards.isNotEmpty()) {
-                                null
-                            } else {
-                                result.error.message
-                            },
+                        errorMessage = result.error.message,
                     )
                 }
+                if (ageGated) {
+                    load(ownerUserId)
+                    // Say why the lifestyle tags went, as the inline notice over the deck, unless the re-ask failed
+                    // for another reason or came back empty (an error there would replace the empty deck).
+                    _state.update {
+                        if (it.errorCode == null && it.cards.isNotEmpty()) {
+                            it.copy(errorCode = AGE_VERIFICATION_REQUIRED, errorMessage = LIFESTYLE_AGE_GATE_MESSAGE)
+                        } else {
+                            it
+                        }
+                    }
+                    return
+                }
+            }
         }
         if (pendingActions.isNotEmpty()) {
             flushPendingActions()
@@ -122,16 +136,6 @@ class SwipeStateHolder(
 
     suspend fun selectFilter(type: SwipeFilterType) {
         val selected = _state.value.filters.firstOrNull { it.type == type } ?: return
-        if (selected.locked) {
-            _state.update {
-                it.copy(
-                    paywallMessage = "${selected.label} is included with Social or Select.",
-                    errorCode = null,
-                    errorMessage = null,
-                )
-            }
-            return
-        }
         if (selected.active) {
             _state.update { it.copy(paywallMessage = null) }
             return
@@ -447,3 +451,7 @@ private fun MatchDto.withCardDetails(card: SwipeCardDto): MatchDto =
         matchedDisplayName = matchedDisplayName ?: card.displayName.takeIf { matchedUserId == card.userId },
         matchedPhotoUrl = matchedPhotoUrl ?: card.photoUrl.takeIf { matchedUserId == card.userId },
     )
+
+private const val AGE_VERIFICATION_REQUIRED = "AGE_VERIFICATION_REQUIRED"
+
+internal const val LIFESTYLE_AGE_GATE_MESSAGE: String = "Verify your age to use lifestyle filters. Your other filters still apply."

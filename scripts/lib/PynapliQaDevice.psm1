@@ -131,6 +131,21 @@ function Get-QaDeviceApiLevel {
     return $value.Trim()
 }
 
+# The app asks for POST_NOTIFICATIONS about 20 s into the Grid (or on the first conversation), not at
+# sign-in (NotificationAskTiming). An OS dialog arriving mid-run would swallow a script's taps, so
+# every sign-in QA except android-notification-permission-qa.ps1 grants it up front. Call after
+# install / pm clear and before launch. Android 13 (API 33) introduced the runtime permission;
+# below that there is nothing to grant, so it is skipped. Best effort: pm grant is idempotent.
+function Grant-QaNotificationPermission {
+    param([Parameter(Mandatory)][string]$PackageName)
+
+    $apiLevel = 0
+    $reported = Get-QaDeviceApiLevel -Adb $script:QaAdb -DeviceId $script:QaDeviceId
+    if (-not [int]::TryParse($reported, [ref]$apiLevel) -or $apiLevel -lt 33) { return }
+    Invoke-AdbBestEffort @("shell", "pm", "grant", $PackageName, "android.permission.POST_NOTIFICATIONS")
+    Write-Host "[ok] granted POST_NOTIFICATIONS up front (the in-app ask would land mid-run)"
+}
+
 function Invoke-Adb {
     param([string[]]$Arguments)
 
@@ -402,6 +417,7 @@ Export-ModuleMember -Function @(
     "Find-Adb",
     "Resolve-QaDeviceId",
     "Get-QaDeviceApiLevel",
+    "Grant-QaNotificationPermission",
     "Invoke-Adb",
     "Invoke-AdbBestEffort",
     "Save-Screen",

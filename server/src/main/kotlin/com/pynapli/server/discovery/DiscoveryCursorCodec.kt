@@ -170,6 +170,16 @@ class DiscoveryCursorCodec(
             limit: Int,
             filters: DiscoveryFilters,
             onlineOnly: Boolean,
+            // Set on a sparse-area widened scope (GridService): [radiusMeters] is then the widened
+            // radius and this is the radius the viewer asked for, so a widened cursor only ever
+            // continues the exact request that produced it. Appended only when set.
+            widenedFromRadiusMeters: Int? = null,
+            // Section 3: the request opted in to locked cards. The request flag, never the tier, so an
+            // entitlement change mid-scroll keeps the cursor valid. Appended only when set.
+            acceptLockedCards: Boolean = false,
+            // "Visiting soon": a different list with its own keyset order (arrival day first), so its
+            // cursors must never continue Nearby or the reverse. Appended only when set.
+            visitingSoonOnly: Boolean = false,
         ): String {
             val normalized =
                 buildString {
@@ -196,7 +206,9 @@ class DiscoveryCursorCodec(
                     append(filters.logisticsTags.sorted().joinToString(","))
                     append("|tonightAvailableOnly=").append(filters.tonightAvailableOnly)
                     append("|activeTodayOnly=").append(filters.activeTodayOnly)
-                    append("|recentlyJoinedOnly=").append(filters.recentlyJoinedOnly)
+                    // Fresh replaced "Recently joined" in the same slot; the label is kept so cursors
+                    // issued before the change keep their hash.
+                    append("|recentlyJoinedOnly=").append(filters.freshOnly)
                     append("|travelingHereOnly=").append(filters.travelingHereOnly)
                     append("|withPhotosOnly=").append(filters.withPhotosOnly)
                     append("|hasPrivateAlbumOnly=").append(filters.hasPrivateAlbumOnly)
@@ -211,6 +223,15 @@ class DiscoveryCursorCodec(
                     append(filters.orientations.sorted().joinToString(","))
                     // Appended only when set, so cursors issued without it keep their hash.
                     if (filters.verifiedCouplesOnly) append("|verifiedCouplesOnly=true")
+                    // Partner filters + "No single men" (plan G2-3): empty when unset, so older cursors keep
+                    // their hash.
+                    append(filters.partnerScopeKey)
+                    // "Haven't chatted" (plan G2-4): appended only when on, so older cursors keep their hash.
+                    if (filters.haventChattedOnly) append("|haventChatted=true")
+                    if (filters.lifestyleMatchAll) append("|lifestyleAllOf=true")
+                    widenedFromRadiusMeters?.let { append("|widenedFrom=").append(it) }
+                    if (acceptLockedCards) append("|lockedCards=true")
+                    if (visitingSoonOnly) append("|visitingSoon=true")
                 }
             return sha256Base64Url(normalized)
         }

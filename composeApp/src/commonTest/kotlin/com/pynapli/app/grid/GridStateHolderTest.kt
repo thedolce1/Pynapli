@@ -70,14 +70,37 @@ class GridStateHolderTest {
     }
 
     @Test
-    fun recentlyJoinedAndTravelingHereFiltersSerializeAndRoundTrip() {
-        val request = GridFilters(recentlyJoined = true, travelingHere = true).toGridQueryRequest(cursor = null)
-        assertEquals(true, request.recentlyJoinedOnly)
+    fun freshAndTravelingHereFiltersSerializeAndRoundTrip() {
+        val request = GridFilters(fresh = true, travelingHere = true).toGridQueryRequest(cursor = null)
+        assertEquals(true, request.freshOnly)
+        assertEquals(false, request.recentlyJoinedOnly, "Fresh replaced Recently joined")
         assertEquals(true, request.travelingHereOnly)
         val restored = GridFilters.fromGridQueryRequest(request)
-        assertEquals(true, restored.recentlyJoined)
+        assertEquals(true, restored.fresh)
         assertEquals(true, restored.travelingHere)
+        assertEquals(2, restored.activeCount)
     }
+
+    @Test
+    fun aPresetSavedWithRecentlyJoinedRestoresAsFresh() {
+        val legacy =
+            com.pynapli.shared.network.dto
+                .GridQueryRequestDto(recentlyJoinedOnly = true)
+        assertTrue(GridFilters.fromGridQueryRequest(legacy).fresh)
+    }
+
+    @Test
+    fun togglingFreshSetsFreshOnlyOnRequest() =
+        runTest {
+            val repository = FakeGridFeedRepository(GridFeedUi(cards = emptyList()))
+            val stateHolder = GridStateHolder(repository)
+
+            stateHolder.load()
+            stateHolder.toggleQuickFilter(QuickFilterId.Fresh)
+
+            assertEquals(true, repository.lastFilters!!.toGridQueryRequest(cursor = null).freshOnly)
+            assertEquals(1, stateHolder.state.value.filters.activeCount)
+        }
 
     @Test
     fun hasPrivateAlbumFilterSerializesAndRoundTrips() {
@@ -225,12 +248,14 @@ class GridStateHolderTest {
             val stateHolder = GridStateHolder(repository)
 
             stateHolder.load()
+            // Who (Singles / Linked) comes from the sheet; the quick chips keep it.
+            stateHolder.applyFilters(GridFilters(singles = true, linked = true))
             stateHolder.toggleQuickFilter(QuickFilterId.Online)
-            stateHolder.toggleQuickFilter(QuickFilterId.Linked)
-            stateHolder.toggleQuickFilter(QuickFilterId.Singles)
+            stateHolder.toggleQuickFilter(QuickFilterId.Verified)
 
             val request = repository.lastFilters!!.toGridQueryRequest(cursor = null)
             assertEquals(true, request.onlineOnly)
+            assertEquals(true, request.verifiedOnly)
             assertEquals(true, request.linkedOnly)
             assertEquals(listOf(GridFilters.SINGLES_CONTEXT), request.relationshipContexts)
         }
@@ -252,6 +277,10 @@ class GridStateHolderTest {
 
             stateHolder.setRadiusMeters(meters = 0)
             assertEquals(GridFilters.MIN_RADIUS_METERS, repository.lastFilters!!.radiusMeters)
+
+            // An off-step radius is held as the server's step (26 km searches 50 km).
+            stateHolder.setRadiusMeters(meters = 26_000)
+            assertEquals(50_000, repository.lastFilters!!.radiusMeters)
         }
 
     @Test
@@ -276,7 +305,7 @@ class GridStateHolderTest {
 
             stateHolder.load()
             stateHolder.toggleQuickFilter(QuickFilterId.Online)
-            stateHolder.toggleQuickFilter(QuickFilterId.Linked)
+            stateHolder.toggleQuickFilter(QuickFilterId.Verified)
             stateHolder.setRadiusMeters(2_000)
             val callsBefore = repository.loadCount
 
@@ -308,7 +337,6 @@ class GridStateHolderTest {
                     displayName = "One",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val repository =
                 FakeGridFeedRepository(
@@ -346,7 +374,6 @@ class GridStateHolderTest {
                     displayName = "First",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val secondCard =
                 GridProfileCardUi(
@@ -354,7 +381,6 @@ class GridStateHolderTest {
                     displayName = "Second",
                     online = false,
                     distanceLabel = "2 km",
-                    tone = GridCardTone.Slate,
                 )
             val gate = CompletableDeferred<Unit>()
             val repository =
@@ -416,7 +442,6 @@ class GridStateHolderTest {
                     displayName = "First",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val repository =
                 ScriptedGridFeedRepository(
@@ -484,7 +509,6 @@ class GridStateHolderTest {
                     displayName = "One",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val repository =
                 ScriptedGridFeedRepository(
@@ -541,7 +565,6 @@ class GridStateHolderTest {
                     displayName = "First",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val secondCard =
                 GridProfileCardUi(
@@ -549,7 +572,6 @@ class GridStateHolderTest {
                     displayName = "Second",
                     online = false,
                     distanceLabel = "2 km",
-                    tone = GridCardTone.Slate,
                 )
             val gate = CompletableDeferred<Unit>()
             val repository =
@@ -574,6 +596,8 @@ class GridStateHolderTest {
                         .launchIn(this)
 
                 val selectJob = async { stateHolder.toggleQuickFilter(QuickFilterId.Online) }
+                // A chip tap waits out the debounce (G2-2) before it loads.
+                testScheduler.advanceTimeBy(LatestFilterRequest.CHIP_DEBOUNCE.inWholeMilliseconds)
                 // Deterministic: run everything runnable on the test scheduler, which parks the load
                 // on the gate. (A real-thread async + yield() could assert before the load started.)
                 runCurrent()
@@ -600,9 +624,9 @@ class GridStateHolderTest {
         runTest {
             val cards =
                 listOf(
-                    GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null, tone = GridCardTone.Warm),
-                    GridProfileCardUi(id = "b", displayName = "B", online = true, distanceLabel = null, tone = GridCardTone.Slate),
-                    GridProfileCardUi(id = "c", displayName = "C", online = false, distanceLabel = null, tone = GridCardTone.Rust),
+                    GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null),
+                    GridProfileCardUi(id = "b", displayName = "B", online = true, distanceLabel = null),
+                    GridProfileCardUi(id = "c", displayName = "C", online = false, distanceLabel = null),
                 )
             val repository = FakeGridFeedRepository(GridFeedUi(cards = cards))
             val stateHolder = GridStateHolder(repository)
@@ -630,7 +654,7 @@ class GridStateHolderTest {
         runTest {
             val cards =
                 listOf(
-                    GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null, tone = GridCardTone.Warm),
+                    GridProfileCardUi(id = "a", displayName = "A", online = true, distanceLabel = null),
                 )
             val repository = FakeGridFeedRepository(GridFeedUi(cards = cards))
             val stateHolder = GridStateHolder(repository)
@@ -653,7 +677,6 @@ class GridStateHolderTest {
                     displayName = "First",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val duplicateFirst = first.copy(displayName = "First duplicate")
             val second =
@@ -662,7 +685,6 @@ class GridStateHolderTest {
                     displayName = "Second",
                     online = false,
                     distanceLabel = "2 km",
-                    tone = GridCardTone.Slate,
                 )
             val repository =
                 FakeGridFeedRepository(
@@ -745,7 +767,6 @@ class GridStateHolderTest {
                     displayName = "Cached",
                     online = false,
                     distanceLabel = "5 km",
-                    tone = GridCardTone.Slate,
                 )
             val fresh =
                 GridProfileCardUi(
@@ -753,7 +774,6 @@ class GridStateHolderTest {
                     displayName = "Fresh",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val gate = CompletableDeferred<Unit>()
             val repository =
@@ -798,7 +818,6 @@ class GridStateHolderTest {
                     displayName = "Fresh",
                     online = true,
                     distanceLabel = "1 km",
-                    tone = GridCardTone.Warm,
                 )
             val repository = FakeGridFeedRepository(GridFeedUi(cards = listOf(fresh)))
             val snapshotStore = FakeGridSnapshotStore(initial = emptyList())
@@ -814,10 +833,134 @@ class GridStateHolderTest {
             assertEquals(1, repository.loadCount)
             assertEquals(listOf("fresh"), snapshotStore.saved.last().map { it.id })
         }
+
+    // Section 0 repro B4 (onboarding + first grid plan), fixed in Section 1: the compose-time prime
+    // joins the load already on the wire instead of superseding it.
+    @Test
+    fun theGridScreenReusesTheLoadTheLocationStepStarted() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                GatedGridFeedRepository(
+                    feeds = listOf(GridFeedUi(cards = listOf(card("nearby")))),
+                    gateBeforeIndex = 0,
+                    gate = gate,
+                )
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore(initial = emptyList()))
+
+            // Location step: the shared fix's submitAndRefresh starts the first grid load.
+            val prefetch = async { stateHolder.load() }
+            runCurrent()
+            assertTrue(repository.parkedAtGate, "the Location step's load must be in flight")
+
+            // The member reaches the grid before it answers: GridScreen composes and primes. That
+            // used to start a second request and bump the generation, dropping the first answer.
+            val priming = async { stateHolder.primeFromCacheThenLoad() }
+            runCurrent()
+            gate.complete(Unit)
+            prefetch.await()
+            priming.await()
+
+            assertEquals(1, repository.loadCount, "one grid request for one first grid")
+            assertEquals(
+                listOf("nearby"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun aFilterChangeStillSupersedesTheLoadTheGridJoined() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                GatedGridFeedRepository(
+                    feeds = listOf(GridFeedUi(cards = listOf(card("unfiltered"))), GridFeedUi(cards = listOf(card("online")))),
+                    gateBeforeIndex = 0,
+                    gate = gate,
+                )
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore(initial = emptyList()))
+
+            val prefetch = async { stateHolder.load() }
+            runCurrent()
+            val priming = async { stateHolder.primeFromCacheThenLoad() }
+            runCurrent()
+            // The member taps Online before the first answer: the old request must lose.
+            val filtered = async { stateHolder.toggleQuickFilter(QuickFilterId.Online) }
+            runCurrent()
+            gate.complete(Unit)
+            prefetch.await()
+            priming.await()
+            filtered.await()
+
+            assertEquals(2, repository.loadCount, "the prime starts no request of its own")
+            assertEquals(
+                listOf("online"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
+            assertTrue(stateHolder.state.value.filters.online)
+            assertFalse(stateHolder.state.value.isRefreshing)
+        }
+
+    @Test
+    fun theGridLoadsItselfWhenTheLoadItJoinedIsCancelled() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                GatedGridFeedRepository(
+                    feeds = listOf(GridFeedUi(cards = listOf(card("nearby")))),
+                    gateBeforeIndex = 0,
+                    gate = gate,
+                )
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore(initial = emptyList()))
+
+            val prefetch = async { stateHolder.load() }
+            runCurrent()
+            val priming = async { stateHolder.primeFromCacheThenLoad() }
+            runCurrent()
+            prefetch.cancel()
+            runCurrent()
+            gate.complete(Unit)
+            priming.await()
+
+            assertEquals(2, repository.loadCount)
+            assertEquals(
+                listOf("nearby"),
+                stateHolder.state.value.cards
+                    .map { it.id },
+            )
+            assertFalse(stateHolder.state.value.isRefreshing)
+        }
 }
 
 class GridInstantLoadTest {
-    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km", tone = GridCardTone.Warm)
+    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km")
+
+    @Test
+    fun serverHasLocationFollowsLiveAnswersOnlyAndResetsOnSignOut() =
+        runTest {
+            val repository =
+                ScriptedGridFeedRepository(
+                    listOf(
+                        GridFeedOutcome.Failure(GridFeedException(code = "LOCATION_REQUIRED", message = "Share your location.")),
+                        GridFeedOutcome.Success(GridFeedUi(cards = listOf(card("a")))),
+                        GridFeedOutcome.Failure(GridFeedException(code = "NETWORK_ERROR", message = "No connection.")),
+                    ),
+                )
+            val stateHolder = GridStateHolder(repository, FakeGridSnapshotStore(initial = listOf(card("cached"))))
+            assertNull(stateHolder.serverHasLocation.value, "cached cards say nothing about the server")
+
+            stateHolder.load()
+            assertEquals(false, stateHolder.serverHasLocation.value)
+            stateHolder.load()
+            assertEquals(true, stateHolder.serverHasLocation.value)
+            stateHolder.load()
+            assertEquals(true, stateHolder.serverHasLocation.value, "a network error changes nothing")
+
+            stateHolder.clearForSignOut()
+            assertNull(stateHolder.serverHasLocation.value)
+        }
 
     @Test
     fun returningToTheGridTabKeepsFreshCardsWithoutARefetch() =
@@ -924,7 +1067,8 @@ private class GatedGridFeedRepository(
     private val gateBeforeIndex: Int,
     private val gate: CompletableDeferred<Unit>,
 ) : GridFeedRepository {
-    private var loadCount = 0
+    var loadCount = 0
+        private set
 
     /** True once a load is waiting on [gate]: lets a test prove it observed the in-flight state. */
     var parkedAtGate = false
@@ -994,4 +1138,4 @@ private class CursorGatedGridFeedRepository(
     }
 }
 
-private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null, tone = GridCardTone.Slate)
+private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null)

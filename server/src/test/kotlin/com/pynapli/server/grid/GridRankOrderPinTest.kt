@@ -1,7 +1,10 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.server.testsupport.PynapliTestDatabase
+import com.pynapli.server.testsupport.StaticSubscriptionRepository
+import com.pynapli.shared.network.dto.GridQueryRequestDto
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.runBlocking
 import java.time.Duration
@@ -42,6 +45,27 @@ class GridRankOrderPinTest :
         val outOfRange = id(10)
         val inRange = listOf(shownNear, shownMid, shownFar, shownVerified, boosted, hiddenOne, hiddenTwo, travellerHere)
 
+        // Plan G3 (2026-11-24) added a demotion tier, deliberately re-pinned here: the first keyset
+        // column (boost_bucket) is now 0 boosted, 1 normal, 2 demoted, where demoted means no
+        // activity for 30 days or no approved public photo. Before G3 everyone unboosted was 1. The
+        // seed below gives everyone a photo except [hiddenTwo] and [boosted], makes [shownNear] dormant
+        // (40-day-old account, no activity since), and keeps [shownMid] in tier 1 despite an old
+        // account because it was active two days ago. So the nearest person now ranks near the end,
+        // and a boost still outranks demotion (boosted has no photo and stays first).
+        val demotedSet = setOf(shownNear, hiddenTwo)
+
+        fun seedTiers() {
+            (inRange - hiddenTwo - boosted).forEach { dataSource.insertApprovedProfilePhoto(it) }
+            dataSource.setUserCreatedDaysAgo(shownNear, days = 40)
+            dataSource.setUserCreatedDaysAgo(shownMid, days = 40)
+            dataSource.setLastActive(
+                shownMid,
+                java.time.Instant
+                    .now()
+                    .minus(Duration.ofDays(2)),
+            )
+        }
+
         fun seed() {
             dataSource.insertDiscoverableUser(viewer, "Viewer", age = 30, longitude = -122.0797, latitude = 37.4203)
             dataSource.insertDiscoverableUser(shownNear, "Near", age = 30, longitude = -122.0803, latitude = 37.4297)
@@ -63,6 +87,7 @@ class GridRankOrderPinTest :
             dataSource.insertDiscoverableUser(travellerAway, "Away", age = 30, longitude = -122.0797, latitude = 37.4303)
             dataSource.insertActiveTravelLocation(travellerAway, "Elsewhere", latitude = 37.8003, longitude = -122.2697)
             dataSource.insertDiscoverableUser(outOfRange, "Out", age = 30, longitude = -122.0797, latitude = 37.7303)
+            seedTiers()
         }
 
         data class Pinned(
@@ -131,7 +156,12 @@ class GridRankOrderPinTest :
                                             Pinned(
                                                 userId = userId,
                                                 showDistance = rs.getBoolean("show_distance"),
-                                                boostBucket = if (userId == boosted) 0 else 1,
+                                                boostBucket =
+                                                    when (userId) {
+                                                        boosted -> 0
+                                                        in demotedSet -> 2
+                                                        else -> 1
+                                                    },
                                                 orderBucket = rs.getInt("bucket"),
                                                 orderTiebreak = rs.getLong("tiebreak"),
                                                 distanceMeters = rs.getDouble("d"),
@@ -167,6 +197,8 @@ class GridRankOrderPinTest :
 
                 // Order-independent facts first, so a wrong reference cannot hide a wrong answer.
                 assertEquals(boosted, want.first().userId)
+                // Demoted people come last, after every normal-tier card.
+                assertEquals(demotedSet, want.takeLast(demotedSet.size).map { it.userId }.toSet())
                 val shown = want.filter { it.showDistance && it.boostBucket == 1 }.map { it.orderBucket }
                 assertEquals(shown.sorted(), shown, "shown-distance users must ascend by whole-km bucket")
                 val visitor = want.single { it.userId == travellerHere }
@@ -184,6 +216,36 @@ class GridRankOrderPinTest :
                 assertEquals(want, cached.queryNearby(viewer, radius, 120).cards.map { it.pinned() }, "cached")
                 assertEquals(want, uncached.walk(pageSize = 3), "uncached, paged 3 at a time")
                 assertEquals(want, cachedSmallWindow.walk(pageSize = 3), "cached window of 4, paged 3 at a time")
+            }
+        }
+
+        // Section 3 (2026-11-25), added deliberately; the pins above are unchanged because locking never
+        // touches the rank. A client's opt-in to locked cards must not move a single card: through the
+        // service, opted in or not, a Free viewer gets the repository's order (this sparse set widens to
+        // 100 km, so the reference is the 100 km rank), and nothing this shallow is locked. Locked-tail
+        // order across the depth is pinned on 1,300 people in GridLockedCardsIntegrationTest.
+        "the locked-card opt-in never changes the served order" {
+            runBlocking {
+                seed()
+                val reference =
+                    JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
+                        .queryNearby(viewer, 100_000, 120)
+                        .cards
+                        .map { it.userId.toString() }
+                val service =
+                    GridService(
+                        JdbcGridRepository(dataSource, rankCacheTtl = Duration.ofMinutes(5)),
+                        subscriptionService = SubscriptionService(StaticSubscriptionRepository()),
+                    )
+
+                val optedIn = service.queryGrid(viewer, GridQueryRequestDto(radiusMeters = radius, limit = 60, acceptLockedCards = true))
+                val old = service.queryGrid(viewer, GridQueryRequestDto(radiusMeters = radius, limit = 60))
+
+                assertTrue(optedIn.widened)
+                assertEquals(reference, optedIn.items.map { it.userId })
+                assertEquals(reference, old.items.map { it.userId })
+                assertFalse(optedIn.items.any { it.locked })
+                assertEquals(null, optedIn.lockedFromIndex)
             }
         }
     })

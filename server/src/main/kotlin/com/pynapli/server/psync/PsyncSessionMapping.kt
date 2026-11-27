@@ -47,6 +47,15 @@ internal fun SwipeDeckRequestDto.toPsyncFiltersSummary(): String {
             }
             if (verifiedOnly) add("verified only")
             if (verifiedCouplesOnly) add("verified couples only")
+            if (excludeSingleMen) add("no single men")
+            val partnerFilterCount =
+                listOf(
+                    partnerGenders.isNotEmpty(),
+                    partnerMinimumAge != null || partnerMaximumAge != null,
+                    partnerOrientations.isNotEmpty(),
+                    partnerVerifiedOnly,
+                ).count { it }
+            if (partnerFilterCount > 0) add("$partnerFilterCount partner filters")
             if (discoveryStyles.isNotEmpty()) add(discoveryStyles.joinToString("/"))
             if (intents.isNotEmpty()) add(intents.joinToString("/"))
             val tagCount = lifestyleTags.size + logisticsTags.size + boundaryItems.size

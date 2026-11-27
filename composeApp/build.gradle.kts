@@ -72,3 +72,12 @@ kotlin {
         }
     }
 }
+
+// Compose resources hold only the sign-in providers' own logo files, which the founder drops into
+// src/commonMain/composeResources/files/brand/ (PATH_TO_TESTERS A10; none is committed). The Res
+// class is generated even while that folder is empty, so the code that reads the files compiles
+// before they exist; a missing file just means no mark (and the launch guards keep the buttons off).
+compose.resources {
+    packageOfResClass = "com.pynapli.app.resources"
+    generateResClass = always
+}

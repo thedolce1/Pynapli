@@ -10,18 +10,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.location.TravelLocationUiState
-import com.pynapli.app.profile.ProfileDetailSheet
+import com.pynapli.app.profile.GridProfileBrowser
 import com.pynapli.app.profile.ProfileDetailStateHolder
 import com.pynapli.app.profilelink.ProfileLinksStateHolder
+import com.pynapli.app.swipe.TravelModeSheet
 import com.pynapli.app.tonight.PlayingTonightStateHolder
 import com.pynapli.app.tonight.PlayingTonightUiState
 import com.pynapli.shared.settings.AppSettings
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 
 @Composable
 fun GridScreen(
@@ -46,7 +49,15 @@ fun GridScreen(
     onOpenTonight: () -> Unit = {},
     travelLocationStateHolder: TravelLocationStateHolder? = null,
     favoritesStateHolder: FavoritesStateHolder? = null,
+    // The profile's "Verify to message" opens the existing photo-verification flow.
+    onOpenPhotoVerification: (() -> Unit)? = null,
+    // Travel mode is a Select perk, so its paywall opens on Select rather than the plan list.
+    onOpenTravelStore: () -> Unit = onOpenStore,
+    // Section 3: a locked tile, the boundary banner and a locked pager page open the plans sheet on
+    // the server's unlockTier ("social" or "select").
+    onOpenUnlockStore: (unlockTier: String?) -> Unit = { onOpenStore() },
 ) {
+    var travelSheetVisible by remember { mutableStateOf(false) }
     val state by stateHolder.state.collectAsState()
     val favoritesState by favoritesStateHolder?.state?.collectAsState()
         ?: remember { mutableStateOf<FavoritesUiState?>(null) }
@@ -70,6 +81,26 @@ fun GridScreen(
         if (leftWith != null && leftWith != travelState.current.travelKey()) stateHolder.invalidate()
         stateHolder.primeFromCacheThenLoad()
     }
+
+    // On screen for as long as this is composed: the notification ask waits for some Grid time, and
+    // the 60 s liveness refresh runs only then.
+    DisposableEffect(stateHolder) {
+        stateHolder.setOnScreen(true)
+        onDispose { stateHolder.setOnScreen(false) }
+    }
+
+    // A plan change reloaded the order from page one: show it from the top.
+    LaunchedEffect(stateHolder, gridState) {
+        stateHolder.events.collect { event ->
+            when (event) {
+                GridEvent.ScrollToTop -> gridState.scrollToItem(0)
+            }
+        }
+    }
+
+    // The Favorites view covers Nearby: pause Nearby's liveness refresh meanwhile.
+    val nearbyShowing = favoritesState?.showing != true
+    LaunchedEffect(stateHolder, nearbyShowing) { stateHolder.setNearbyShowing(nearbyShowing) }
 
     // Leaving the tab disposes this screen; keep both grids' scroll for the way back.
     DisposableEffect(gridState, favoritesGridState) {
@@ -109,6 +140,7 @@ fun GridScreen(
 
     GridScreenContent(
         state = state,
+        countFor = { draft -> stateHolder.countFor(draft) },
         savedFiltersState = savedFiltersState,
         tonightSessionActive = tonightState.currentSession != null,
         lifestyleFiltersAllowed = lifestyleFiltersAllowed,
@@ -122,14 +154,22 @@ fun GridScreen(
         onSavePreset = { name, filters ->
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.save(name, filters) } }
         },
-        onApplySavedPreset = { dto ->
-            scope.launch { stateHolder.applyFilters(GridFilters.fromGridQueryRequest(dto.payload)) }
-        },
         onDeleteSavedPreset = { id ->
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.delete(id) } }
         },
         onLoadMore = { scope.launch { stateHolder.loadMore() } },
-        onRefresh = { scope.launch { stateHolder.refresh() } },
+        // An explicit refresh applies the new order, so it lands at the top (pull-to-refresh is
+        // already there; the wide-window Refresh button may not be).
+        onRefresh = {
+            scope.launch {
+                stateHolder.refresh()
+                gridState.scrollToItem(0)
+            }
+        },
+        onShowNewNearby = {
+            scope.launch { if (stateHolder.applyNewNearby()) gridState.scrollToItem(0) }
+        },
+        onOpenTravel = travelLocationStateHolder?.let { { travelSheetVisible = true } },
         travelCityName = travelState.current?.city,
         onTurnOffTravel = {
             travelLocationStateHolder?.let { holder ->
@@ -139,8 +179,12 @@ fun GridScreen(
                 }
             }
         },
+        // A locked tile sells the plan that unlocks it; it never opens (or fetches) a profile.
         onProfileSelected = { card ->
-            scope.launch { profileDetailStateHolder.open(card) }
+            when (val tap = routeGridTileTap(card, state.unlockTier)) {
+                is GridTileTap.OpenPaywall -> onOpenUnlockStore(tap.unlockTier)
+                is GridTileTap.OpenProfile -> scope.launch { profileDetailStateHolder.open(tap.card) }
+            }
         },
         onUseCurrentLocation = onUseCurrentLocation,
         onProfileIconClick = onProfileIconClick,
@@ -154,75 +198,98 @@ fun GridScreen(
         onShowFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.show() } } },
         onRefreshFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.refresh() } } },
         onLoadMoreFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.loadMore() } } },
+        onOpenUnlockStore = onOpenUnlockStore,
     )
 
-    LaunchedEffect(profileState.blockedTargetUserId) {
-        val blockedId = profileDetailStateHolder.consumeBlockedTargetUserId() ?: return@LaunchedEffect
-        stateHolder.removeCardById(blockedId)
-        favoritesStateHolder?.removeCardById(blockedId)
-        profileDetailStateHolder.dismiss()
-    }
-
-    LaunchedEffect(profileState.hiddenTargetUserId) {
-        val hiddenId = profileDetailStateHolder.consumeHiddenTargetUserId() ?: return@LaunchedEffect
-        stateHolder.removeCardById(hiddenId)
-        favoritesStateHolder?.removeCardById(hiddenId)
-        profileDetailStateHolder.dismiss()
-    }
-
-    if (profileState.visible) {
-        ProfileDetailSheet(
-            state = profileState,
-            onDismiss = profileDetailStateHolder::dismiss,
-            onSpark = {
-                scope.launch { profileDetailStateHolder.sendSpark() }
-            },
-            onRequestAlbum = {
-                scope.launch { profileDetailStateHolder.requestAlbumAccess() }
-            },
-            onViewPrivateAlbum = {
-                scope.launch { profileDetailStateHolder.loadPrivateAlbum() }
-            },
-            onMessage = {
-                val card = profileState.selectedCard
-                if (card != null) {
-                    profileDetailStateHolder.dismiss()
-                    scope.launch {
-                        conversationStateHolder.openDirect(
-                            card = card,
-                            viewerUserId = viewerUserId,
-                        )
+    // Travel mode from the Grid header (plan G8): the same picker and holder Swipe uses, no new travel
+    // logic. Every change reloads the Grid for the new place (a held-back page is another place's).
+    if (travelSheetVisible && travelLocationStateHolder != null) {
+        val reloadForNewPlace: suspend () -> Unit = {
+            stateHolder.invalidate()
+            stateHolder.refresh()
+            gridState.scrollToItem(0)
+        }
+        LaunchedEffect(Unit) { travelLocationStateHolder.loadTrips() }
+        TravelModeSheet(
+            state = travelState,
+            onDismiss = { travelSheetVisible = false },
+            onSearchQueryChange = { query -> travelLocationStateHolder.updateSearchQuery(query) },
+            onRunSearch = { scope.launch { travelLocationStateHolder.runSearch() } },
+            onPickPlace = { place ->
+                scope.launch {
+                    // Close only once the trip is on: a refusal stays in the sheet with its reason.
+                    if (travelLocationStateHolder.setActive(place)) {
+                        travelSheetVisible = false
+                        reloadForNewPlace()
                     }
                 }
             },
-            onBlock = { reason ->
-                scope.launch { profileDetailStateHolder.blockUser(reason) }
-            },
-            onHide = {
-                scope.launch { profileDetailStateHolder.hideProfile() }
-            },
-            onReportAlbum = { albumId, category -> scope.launch { profileDetailStateHolder.submitAlbumReport(albumId, category) } },
-            onReport = { category, note ->
-                scope.launch { profileDetailStateHolder.submitReport(category, note) }
-            },
-            profileLinkAction =
-                profileLinksState?.profileLinkActionFor(
-                    targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id,
-                    viewerUserId = viewerUserId,
-                ),
-            onInviteProfileLink = {
-                val targetUserId = profileState.profile?.userId ?: profileState.selectedCard?.id
-                if (targetUserId != null) {
-                    scope.launch { profileLinksStateHolder?.createInvitation(targetUserId) }
+            onClear = {
+                travelSheetVisible = false
+                scope.launch {
+                    travelLocationStateHolder.clear()
+                    reloadForNewPlace()
                 }
             },
-            onOpenLinkedPartner = { partner ->
-                scope.launch { profileDetailStateHolder.openLinkedPartner(partner) }
+            onOpenStore = {
+                travelSheetVisible = false
+                onOpenTravelStore()
             },
-            distanceUnit = distanceUnit,
-            onToggleFavorite = { scope.launch { profileDetailStateHolder.toggleFavorite() } },
+            onOpenAgeVerification = {
+                travelSheetVisible = false
+                onOpenAgeVerification()
+            },
+            onSelectPlace = { place -> travelLocationStateHolder.selectPlace(place) },
+            onPlanTrip = { place, startsOn, endsOn, announce ->
+                scope.launch {
+                    val zone = TimeZone.currentSystemDefault().id
+                    // A trip starting today is already on: the Grid moves with it.
+                    if (travelLocationStateHolder.planTrip(place, startsOn, endsOn, zone, announce)) reloadForNewPlace()
+                }
+            },
+            onCancelTrip = { tripId ->
+                scope.launch {
+                    travelLocationStateHolder.cancelTrip(tripId)
+                    reloadForNewPlace()
+                }
+            },
         )
     }
+
+    // Profile open (GRID_IMPLEMENTATION_SPEC "Profile open"): swipe through the list on show, in its
+    // order; block/hide drops the card here and the pager moves on.
+    val browsingFavorites = favoritesState?.showing == true && favoritesStateHolder != null
+    GridProfileBrowser(
+        profileState = profileState,
+        profileDetailStateHolder = profileDetailStateHolder,
+        conversationStateHolder = conversationStateHolder,
+        cards = if (browsingFavorites) favoritesState?.cards.orEmpty() else state.cards,
+        hasMore = if (browsingFavorites) favoritesState?.nextCursor != null else state.nextCursor != null,
+        isLoadingMore = if (browsingFavorites) favoritesState?.isLoadingMore == true else state.isLoadingMore,
+        onLoadMore = {
+            if (browsingFavorites) {
+                favoritesStateHolder?.let { holder -> scope.launch { holder.loadMore() } }
+            } else {
+                scope.launch { stateHolder.loadMore() }
+            }
+        },
+        onRemoveCard = { userId ->
+            // Favorites first: the Grid's removal may wait on a backfill page (plan G2-4).
+            favoritesStateHolder?.removeCardById(userId)
+            stateHolder.removeCardById(userId)
+        },
+        viewerUserId = viewerUserId,
+        profileLinkActionFor = { targetUserId ->
+            profileLinksState?.profileLinkActionFor(targetUserId = targetUserId, viewerUserId = viewerUserId)
+        },
+        onInviteProfileLink = { targetUserId ->
+            scope.launch { profileLinksStateHolder?.createInvitation(targetUserId) }
+        },
+        distanceUnit = distanceUnit,
+        onOpenPhotoVerification = onOpenPhotoVerification,
+        // The pager's locked "See plans" page: the same plan the banner sells.
+        onOpenStore = { onOpenUnlockStore(state.unlockTier) },
+    )
 }
 
 private fun com.pynapli.shared.network.dto.TravelLocationDto?.travelKey(): String = this?.let { "${it.city}|${it.latitude}|${it.longitude}|${it.activeFrom}" } ?: "none"

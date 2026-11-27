@@ -152,6 +152,8 @@ if (-not $KeepAppData) {
     Invoke-Adb @("shell", "pm", "clear", $PackageName) | Out-Null
 }
 
+Grant-QaNotificationPermission -PackageName $PackageName
+
 $component = "$PackageName/$LaunchActivity"
 Write-Host "[step] Launching $component"
 Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
@@ -162,8 +164,15 @@ Assert-NoAppErrorText $loginXml "Login"
 $loginShot = Save-Screen "00_login"
 Tap-Text "Dev login"
 
-Wait-ForAnyText @("Allow Pynapli", "Don", "Current location", "Filters", "Grid Load", "Dense") 45 | Out-Null
+Wait-ForAnyText @("Allow Pynapli", "Don", "Nearby", "Filters", "Grid Load", "Dense", "Keep swiping") 45 | Out-Null
 Start-Sleep -Milliseconds 1200
+# A fresh database shows the dev account's seeded match moment once, before the Grid; dismiss it
+# the way a person would.
+if ($null -ne (Find-NodeByText (Dump-Ui "after_login_match_check") "Keep swiping")) {
+    Tap-Text "Keep swiping" 5
+    Wait-ForAnyText @("Allow Pynapli", "Don", "Nearby", "Filters", "Grid Load", "Dense") 45 | Out-Null
+    Start-Sleep -Milliseconds 1200
+}
 $afterLoginXml = Dump-Ui "after_login"
 if ($null -ne (Find-NodeByText $afterLoginXml "Don")) {
     $promptXml = Dump-Ui "01_notification_prompt" -Keep
@@ -174,7 +183,8 @@ if ($null -ne (Find-NodeByText $afterLoginXml "Don")) {
     $promptShot = $null
 }
 
-Wait-ForAnyText @("Grid Load", "Dense") 45 | Out-Null
+# Real cards: load-test accounts on a long-lived dev database, or the seeded members on a fresh one.
+Wait-ForAnyText @("Grid Load", "Dense", "Maya", "Alex", "Nico", "Jules", "Kai", "Rae", "Theo", "Noa") 45 | Out-Null
 $gridXml = Dump-Ui "02_grid_initial" -Keep
 Assert-NoAppErrorText $gridXml "Initial Grid"
 Assert-TextPresent $gridXml "Filters" "Initial Grid"
@@ -198,7 +208,8 @@ $filterSheetSignature = Assert-GoldenStage "filtersSheet" $filterSheetXml $filte
 # the tonight/travel presence chips). So assert them by scrolling rather than off the initial dump —
 # otherwise every new filter silently invalidates this stage. Order matters: Trust sits above Intent
 # in the sheet, so reach it first, then continue down to the deepest Intent chip ("Together").
-$filterSheetTrustXml = Scroll-SheetToText "Trust"
+# "Partner's trust" (G2-3) also contains "Trust", so scroll to a chip only the main Trust section has.
+$filterSheetTrustXml = Scroll-SheetToText "Age verified"
 Assert-NoAppErrorText $filterSheetTrustXml "Filter sheet (trust)"
 Assert-TextPresent $filterSheetTrustXml "Trust" "Filter sheet (trust)"
 # The Trust chips moved off the filtersSheet golden with the section itself; assert them here so the
@@ -251,7 +262,7 @@ Wait-ForAnyText @("Spark") 45 | Out-Null
 $profileXml = Dump-Ui "06_profile_detail" -Keep
 Assert-NoAppErrorText $profileXml "Profile detail"
 Assert-TextPresent $profileXml $firstCardText "Profile detail"
-Assert-TextPresent $profileXml "Message" "Profile detail"
+Assert-TextPresent $profileXml "Send message" "Profile detail"
 $profileShot = Save-Screen "06_profile_detail"
 $profileSignature = Assert-GoldenStage "profileDetail" $profileXml $profileShot
 

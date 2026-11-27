@@ -17,7 +17,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FavoritesStateHolderTest {
-    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null, tone = GridCardTone.Warm)
+    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null)
 
     @Test
     fun showLoadsOnceThenRefreshesQuietlyKeepingCards() =

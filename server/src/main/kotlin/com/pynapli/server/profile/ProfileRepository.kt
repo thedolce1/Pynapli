@@ -71,6 +71,7 @@ data class DiscoverySettingsRecord(
     val visibleWhileTraveling: Boolean,
     val sharePsyncSoloMatches: Boolean,
     val partnerVisibility: String = "public",
+    val showMetInPersonBadge: Boolean = false,
 )
 
 data class PublicProfileRecord(
@@ -87,8 +88,14 @@ data class PublicProfileRecord(
     val linkedPartnerOrientationDetail: String? = null,
     val linkedPartnerExperienceLevel: String? = null,
     val linkedPartnerLifestyleTags: List<String> = emptyList(),
+    // The visible linked partner's own declared age and gender key (plan G2-3).
+    val linkedPartnerAge: Int? = null,
+    val linkedPartnerGender: String? = null,
     // Both this profile and its visible linked partner are photo-verified.
     val coupleVerified: Boolean = false,
+    // "Met in person" badges as the viewer may see them (batch-computed, opt-in gated in SQL).
+    val metInPerson: Boolean = false,
+    val metInPersonAsCouple: Boolean = false,
     val displayAge: Int?,
     val bio: String? = null,
     val neighborhood: String? = null,
@@ -108,6 +115,8 @@ data class PublicProfileRecord(
     val allowGridMessages: Boolean,
     val allowFlirts: Boolean,
     val allowAlbumRequests: Boolean,
+    // The owner's Grid message policy is verified_only (and Grid messages are on).
+    val gridMessageVerifiedOnly: Boolean = false,
 )
 
 data class ProfileUpdate(
@@ -151,4 +160,5 @@ data class DiscoverySettingsUpdate(
     val visibleWhileTraveling: Boolean?,
     val sharePsyncSoloMatches: Boolean?,
     val partnerVisibility: String? = null,
+    val showMetInPersonBadge: Boolean? = null,
 )

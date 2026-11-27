@@ -10,15 +10,18 @@ import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
+import com.pynapli.app.auth.AndroidGoogleSignInProvider
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
 import com.pynapli.app.debug.DebugQaFlags
 import com.pynapli.app.grid.SqlDelightGridSnapshotStore
+import com.pynapli.app.grid.sqlDelightGridFilterStore
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.app.notifications.AndroidFirebasePushTokenProvider
 import com.pynapli.app.notifications.AndroidPushRegistrationStore
 import com.pynapli.app.notifications.ApiPushDeviceRegistrationRepository
+import com.pynapli.app.notifications.NotificationAskTiming
 import com.pynapli.app.notifications.PushRegistrationCoordinator
 import com.pynapli.app.notifications.PushRegistrationSync
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
@@ -30,6 +33,7 @@ import com.pynapli.app.swipe.DebugFaultInjectingSwipeRepository
 import com.pynapli.app.swipe.SqlDelightSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.SqlDelightSessionStore
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.network.KtorPynapliApiClient
@@ -38,9 +42,13 @@ import com.pynapli.shared.network.androidRealtimeStreams
 import com.pynapli.shared.settings.SqlDelightAppSettingsStore
 import com.pynapli.shared.settings.SqlDelightOnboardingProgressStore
 import com.pynapli.shared.settings.SqlDelightPendingSignupStore
+import com.pynapli.shared.settings.SqlDelightUnderageStopStore
+import com.pynapli.shared.settings.deleteRetiredLocationConsentKeys
 import com.pynapli.shared.storage.AndroidPynapliDatabaseFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import java.util.Locale
 import java.util.TimeZone
 
@@ -60,6 +68,10 @@ class AndroidAppGraph(
     // Terminal mid-session invalidation (revoked session / suspended account) flows from the
     // refresher to the auth state holder through this bus, dropping the app back to sign-in.
     private val sessionInvalidationBus = SessionInvalidationBus()
+
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -72,12 +84,14 @@ class AndroidAppGraph(
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                 )
         }
     private val authRepository =
         AuthRepository(
             apiClient = apiClient,
             sessionStore = sessionStore,
+            sessionLock = sessionLock,
         )
     private val playBillingPurchaseGateway =
         AndroidPlayBillingPurchaseGateway(
@@ -91,6 +105,14 @@ class AndroidAppGraph(
         } else {
             playBillingPurchaseGateway
         }
+
+    init {
+        // G2-2 ticket 7: debug builds log one line per settled Grid refresh with how its tile images
+        // were served (memory / disk / network counts only; no URL, id or key). Release builds never set it.
+        if (DebugQaFlags.isDebuggable(appContext)) {
+            com.pynapli.app.media.ImageLoadStats.grid.sink = { line -> android.util.Log.d("PynapliGridImages", line) }
+        }
+    }
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
 
@@ -110,6 +132,14 @@ class AndroidAppGraph(
             },
         )
 
+    // "Continue with Google": one instance for sign-in and Settings > Sign-in methods. Hidden unless
+    // the build carries a server client id and the server's social config says Google is on.
+    private val socialSignInProvider =
+        AndroidGoogleSignInProvider(
+            context = appContext,
+            serverClientId = BuildConfig.PYNAPLI_GOOGLE_SERVER_CLIENT_ID,
+        )
+
     val authStateHolder =
         AuthStateHolder(
             authRepository = authRepository,
@@ -118,6 +148,7 @@ class AndroidAppGraph(
             deviceId = stableInstallId(appContext),
             beforeLogout = { pushRegistrationCoordinator.unregisterCurrentDevice() },
             sessionInvalidations = sessionInvalidationBus.events,
+            socialSignInProvider = socialSignInProvider,
         )
 
     val appSettingsStateHolder =
@@ -143,6 +174,8 @@ class AndroidAppGraph(
             progressStore = SqlDelightOnboardingProgressStore(database),
             // A sign-up waiting for its code: encrypted with the session tokens' Keystore cipher.
             pendingSignupStore = SqlDelightPendingSignupStore(database),
+            // The 18+ stop sticks for a day on this device (a time only, nothing personal).
+            underageStopStore = SqlDelightUnderageStopStore(database),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */
@@ -164,6 +197,12 @@ class AndroidAppGraph(
         PynapliCommonGraph(
             apiClient = apiClient,
             gridSnapshotStore = SqlDelightGridSnapshotStore(database),
+            // Bound to the signed-in account: another account never restores these filters.
+            gridFilterStore =
+                sqlDelightGridFilterStore(database) {
+                    authStateHolder.state.value.session
+                        ?.userId
+                },
             swipeQueueStore = SqlDelightSwipeActionQueueStore(database),
             // Debug builds inject swipe failures for the connected QA (android-swipe-queue-qa.ps1).
             swipeRepository =
@@ -178,6 +217,7 @@ class AndroidAppGraph(
                 realtimeStreams.activity,
             messageStreamClient =
                 realtimeStreams.message,
+            socialSignInProvider = socialSignInProvider,
         )
 
     /** Routes a picked photo to its album, the open conversation, or a verification selfie. */
@@ -189,8 +229,27 @@ class AndroidAppGraph(
         )
     }
 
+    /** Set by MainActivity's onStart/onStop, so Grid time only counts while the app is in front. */
+    val appInForeground = MutableStateFlow(false)
+
+    /** After the first Grid (a short dwell) or the first conversation, never during sign-up. */
+    val notificationAskTiming =
+        NotificationAskTiming(
+            gridOnScreen = common.gridStateHolder.onScreen,
+            conversationOpen = common.conversationStateHolder.state.map { it.visible },
+            appInForeground = appInForeground,
+            // Reset on sign-out, so the next account's sign-up never inherits a reached moment.
+            signedIn = authStateHolder.state.map { it.authenticated },
+        )
+
     /** Keeps the device's push registration in step with the session and settings. */
-    val pushRegistrationSync = PushRegistrationSync(pushRegistrationCoordinator, authStateHolder, appSettingsStateHolder)
+    val pushRegistrationSync =
+        PushRegistrationSync(
+            pushRegistrationCoordinator,
+            authStateHolder,
+            appSettingsStateHolder,
+            askMomentReached = notificationAskTiming.ready,
+        )
 
     /** The object MainActivity hands to `PynapliApp`: every common holder plus this shell's pieces. */
     val pynapliAppGraph: PynapliAppGraph =
@@ -202,11 +261,25 @@ class AndroidAppGraph(
             psyncStreamClient = psyncStreamClient,
         )
 
+    init {
+        // The retired location-sharing consent record held account ids; nothing reads it now.
+        runCatching { database.deleteRetiredLocationConsentKeys() }
+    }
+
     /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */
     fun startRealtime(scope: CoroutineScope): List<Job> = common.startRealtime(scope)
 
     fun attachBillingActivity(activity: Activity) {
         playBillingPurchaseGateway.attachActivity(activity)
+    }
+
+    /** Credential Manager shows its account picker over the foreground Activity. */
+    fun attachSignInActivity(activity: Activity) {
+        socialSignInProvider.attachActivity(activity)
+    }
+
+    fun detachSignInActivity(activity: Activity) {
+        socialSignInProvider.detachActivity(activity)
     }
 
     /** Confirms purchases finished while the app was away; see StorePurchaseGateway.syncUnfinishedPurchases. */

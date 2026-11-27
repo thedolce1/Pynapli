@@ -63,9 +63,20 @@ export async function launch({ width, height, defaultFontPx } = {}) {
   const pending = new Map();
   const problems = [];
   const sockets = [];
+  // Every request the page makes (API calls included), so a walk can wait on what the app actually
+  // sent and got back instead of on pixels. Bodies are fetched on demand, never logged here.
+  const requests = [];
+  const requestsById = new Map();
   ws.onmessage = event => {
     const m = JSON.parse(event.data);
     if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
+    if (m.method === 'Network.requestWillBeSent') {
+      const entry = { requestId: m.params.requestId, url: m.params.request.url, method: m.params.request.method, postData: m.params.request.postData, status: null, finished: false };
+      requests.push(entry);
+      requestsById.set(entry.requestId, entry);
+    }
+    if (m.method === 'Network.responseReceived') { const e = requestsById.get(m.params.requestId); if (e) e.status = m.params.response.status; }
+    if (m.method === 'Network.loadingFinished' || m.method === 'Network.loadingFailed') { const e = requestsById.get(m.params.requestId); if (e) e.finished = true; }
     if (m.method === 'Runtime.exceptionThrown') problems.push(`exception: ${m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text}`.slice(0, 300));
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') problems.push(`console.error: ${m.params.args.map(a => a.value ?? a.description).join(' ')}`.slice(0, 300));
     if (m.method === 'Network.webSocketCreated') sockets.push(m.params.url.replace(/\?.*/, ''));
@@ -85,8 +96,64 @@ export async function launch({ width, height, defaultFontPx } = {}) {
   return {
     problems,
     sockets,
+    requests,
     send,
     evaluate,
+    /**
+     * Waits for a finished request matching [method] and a URL ending in [pathSuffix] that started at
+     * or after index [since] in `requests` (take `requests.length` before the action). Returns it, or
+     * null on timeout. CORS preflights are OPTIONS, so a POST match never picks one up.
+     */
+    async waitForRequest(method, pathSuffix, { since = 0, timeoutMs = 15000 } = {}) {
+      for (const end = Date.now() + timeoutMs; Date.now() < end;) {
+        const hit = requests.slice(since).find(r => r.method === method && r.finished && new URL(r.url).pathname.endsWith(pathSuffix));
+        if (hit) return hit;
+        await sleep(200);
+      }
+      return null;
+    },
+    /** The request body the page sent (from the event, or fetched when Chrome left it out). */
+    async requestBody(entry) {
+      if (entry.postData) return entry.postData;
+      return (await send('Network.getRequestPostData', { requestId: entry.requestId })).result?.postData ?? null;
+    },
+    async responseBody(entry) {
+      const r = (await send('Network.getResponseBody', { requestId: entry.requestId })).result;
+      if (!r) return null;
+      return r.base64Encoded ? Buffer.from(r.body, 'base64').toString('utf8') : r.body;
+    },
+    /** A left click the way a user makes one (press + release at one point). */
+    async click(x, y) {
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    },
+    /** Types [text] one key at a time into whatever has focus (a real keyDown/keyUp pair per char). */
+    async typeText(text, perKeyMs = 40) {
+      for (const ch of text) {
+        const upper = ch.toUpperCase();
+        const code = /[0-9]/.test(ch) ? `Digit${ch}` : /[a-z]/i.test(ch) ? `Key${upper}` : undefined;
+        const vk = /[0-9a-z]/i.test(ch) ? upper.charCodeAt(0) : undefined;
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: ch, text: ch, unmodifiedText: ch, code, windowsVirtualKeyCode: vk });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch, code, windowsVirtualKeyCode: vk });
+        await sleep(perKeyMs);
+      }
+    },
+    /** Ctrl+A then Backspace in the focused field (Compose text fields handle both on the web). */
+    async clearFocusedField() {
+      const ctrl = 2; // CDP modifier bit for Control
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17, modifiers: ctrl });
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: ctrl });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: ctrl });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17 });
+      await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+      await sleep(100);
+    },
+    /** Scrolls whatever sits under (x, y) with the mouse wheel. */
+    async wheel(x, y, deltaY) {
+      await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY });
+    },
     async navigate(url, settleMs = 0) {
       await send('Page.navigate', { url });
       if (settleMs) await sleep(settleMs);
@@ -110,9 +177,9 @@ export async function launch({ width, height, defaultFontPx } = {}) {
       writeFileSync(file, Buffer.from(r.result.data, 'base64'));
     },
     /** The CSS cursor Compose set at (x, y), read through the shadow root it renders into. */
-    async cursorAt(x, y) {
+    async cursorAt(x, y, settleMs = 300) {
       await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-      await sleep(300);
+      await sleep(settleMs);
       return evaluate(`(() => { let el = document.elementFromPoint(${x}, ${y}); while (el && el.shadowRoot) { const inner = el.shadowRoot.elementFromPoint(${x}, ${y}); if (!inner || inner === el) break; el = inner; } return el ? getComputedStyle(el).cursor : 'none'; })()`);
     },
     /** The browser's default font size (what `font-size: medium` resolves to). */

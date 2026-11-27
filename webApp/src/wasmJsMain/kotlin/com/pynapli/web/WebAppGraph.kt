@@ -9,26 +9,33 @@ import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
-import com.pynapli.app.grid.NoOpGridSnapshotStore
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.store.UnavailableStorePurchaseGateway
 import com.pynapli.app.swipe.NoOpSwipeActionQueueStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorPynapliApiClient
 import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.webRealtimeStreams
+import com.pynapli.shared.settings.RetiredLocationConsentKeys
 import com.pynapli.web.auth.LocalStorageSessionStore
+import com.pynapli.web.auth.WebSocialSignInProvider
 import com.pynapli.web.platform.BrowserLocalStorage
+import com.pynapli.web.platform.onOtherTabStorageChange
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
 import com.pynapli.web.settings.LocalStorageOnboardingProgressStore
 import com.pynapli.web.settings.SessionStoragePendingSignupStore
+import com.pynapli.web.settings.SessionStorageUnderageStopStore
+import com.pynapli.web.settings.localStorageGridFilterStore
+import com.pynapli.web.settings.sessionStorageGridSnapshotStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlin.random.Random
 
@@ -37,8 +44,8 @@ import kotlin.random.Random
  * adapters. The web is a full companion to the phone app (many members use it on tablets and
  * desktops), so it ships every surface, Playing Tonight and Psync included. Deliberately absent
  * (WEB_PWA_GAMEPLAN.md): push registration (Web Push is post-v1), billing (Store is read-only),
- * and the swipe/grid local caches (NoOp stores until a localStorage snapshot store earns its
- * place in W2/W4). Realtime streams authenticate over WebSockets with a first frame since
+ * and the swipe action queue (a NoOp store). The Grid snapshot lives in `sessionStorage` only
+ * (plan G12: gone with the tab) and the Grid filters in `localStorage`. Realtime streams authenticate over WebSockets with a first frame since
  * browsers cannot set WS headers (W3); presence/activity/messages start from `Main.kt`, and the
  * Psync stream connects only while the Psync overlay is open.
  */
@@ -52,6 +59,10 @@ class WebAppGraph {
 
     // Terminal mid-session invalidation (revoked session / suspended account) routes back to sign-in.
     private val sessionInvalidationBus = SessionInvalidationBus()
+
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
     private val apiClient =
         KtorPynapliApiClient(
             config = pynapliConfig,
@@ -64,6 +75,7 @@ class WebAppGraph {
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                     // Tabs share the localStorage session but not the refresh mutex: give a tab that
                     // lost a refresh race time to see the winning tab's saved session.
                     settleAttempts = 5,
@@ -74,9 +86,14 @@ class WebAppGraph {
         AuthRepository(
             apiClient = apiClient,
             sessionStore = sessionStore,
+            sessionLock = sessionLock,
         )
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
+
+    // "Continue with Google / Apple": one instance for sign-in and Settings > Sign-in methods. Client
+    // ids come from index.html; the provider scripts load only once the server switches one on.
+    private val socialSignInProvider = WebSocialSignInProvider()
 
     val authStateHolder =
         AuthStateHolder(
@@ -85,6 +102,7 @@ class WebAppGraph {
             appVersion = "0.1.0",
             deviceId = stableWebInstallId(),
             sessionInvalidations = sessionInvalidationBus.events,
+            socialSignInProvider = socialSignInProvider,
         )
 
     val appSettingsStateHolder =
@@ -108,6 +126,8 @@ class WebAppGraph {
             progressStore = LocalStorageOnboardingProgressStore(),
             // sessionStorage: gone when the tab closes, so a shared computer never reopens it.
             pendingSignupStore = SessionStoragePendingSignupStore(),
+            // The 18+ stop sticks for the tab's session (sessionStorage, like the pending sign-up).
+            underageStopStore = SessionStorageUnderageStopStore(),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */
@@ -121,8 +141,21 @@ class WebAppGraph {
     private val common =
         PynapliCommonGraph(
             apiClient = apiClient,
-            // NoOp stores until a localStorage snapshot store earns its place (WEB_PWA_GAMEPLAN W2/W4).
-            gridSnapshotStore = NoOpGridSnapshotStore,
+            // Instant first paint on a reload, kept in sessionStorage only: gone when the tab closes.
+            // Bound to the signed-in account, so a cross-tab account switch never paints the old cards.
+            gridSnapshotStore =
+                sessionStorageGridSnapshotStore(
+                    currentUserId = {
+                        authStateHolder.state.value.session
+                            ?.userId
+                    },
+                ),
+            // Filter choices only, kept across browser sessions; sign-out clears them.
+            gridFilterStore =
+                localStorageGridFilterStore(currentUserId = {
+                    authStateHolder.state.value.session
+                        ?.userId
+                }),
             swipeQueueStore = NoOpSwipeActionQueueStore,
             // Store is founder-locked read-only on web.
             storePurchaseGateway = UnavailableStorePurchaseGateway(),
@@ -133,6 +166,7 @@ class WebAppGraph {
                 realtimeStreams.activity,
             messageStreamClient =
                 realtimeStreams.message,
+            socialSignInProvider = socialSignInProvider,
         )
 
     /** The object the web entry point hands to `PynapliApp`. */
@@ -145,11 +179,27 @@ class WebAppGraph {
             psyncStreamClient = realtimeStreams.psync,
         )
 
+    init {
+        // The retired location-sharing consent record held account ids; nothing reads it now.
+        RetiredLocationConsentKeys.webStorageKeys.forEach(BrowserLocalStorage::remove)
+    }
+
     /** Starts grid presence, activity and messages realtime; see [PynapliCommonGraph.startRealtime]. */
     fun startRealtime(scope: CoroutineScope): List<Job> = common.startRealtime(scope)
 
     /** Refetches every surface after the app was away; see [PynapliCommonGraph.onAppForegrounded]. */
     suspend fun onAppForegrounded() = common.onAppForegrounded(signedIn = authStateHolder.state.value.authenticated)
+
+    /**
+     * Tabs share one localStorage session. When another tab signs out, or out and back in as someone
+     * else, this tab must end its own session rather than carry on with the other account's tokens
+     * under its own account's cached state (AuthStateHolder.onStoredSessionChanged decides). Call once.
+     */
+    fun followSessionChangesFromOtherTabs(scope: CoroutineScope) {
+        onOtherTabStorageChange(LocalStorageSessionStore.SESSION_KEY) {
+            scope.launch { authStateHolder.onStoredSessionChanged(sessionStore.currentSession()) }
+        }
+    }
 
     val devLoginCredentials: DevLoginCredentials? =
         if (pynapliConfig.environment == PynapliEnvironment.Local) {

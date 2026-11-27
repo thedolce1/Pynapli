@@ -18,10 +18,13 @@ import com.pynapli.shared.network.dto.SubscriptionTier
  * opens the same plans/store sheet, scrolled to what it sells.
  */
 enum class StorePaywallFocus {
-    /** The plan list: locked filters, Likes You reveal, read receipts, Psync limits, the profile menu. */
+    /** The plan list: saved filter presets, Likes You reveal, read receipts, Psync limits, the profile menu. */
     Plans,
 
-    /** The Select plan: Travel mode. */
+    /** The Social plan: the Grid's locked cards when Social unlocks them. */
+    Social,
+
+    /** The Select plan: Travel mode, and the Grid's locked cards when only Select unlocks them. */
     Select,
 
     /** Pineapple Likes: out of Pineapple Likes. */
@@ -46,14 +49,30 @@ internal fun storeListIndexFor(
     val firstProduct = firstTier + state.tiers.size + 1
     return when (focus) {
         StorePaywallFocus.Plans -> partnerBenefit
-        StorePaywallFocus.Select ->
-            state.tiers
-                .indexOfFirst { it.tier == SubscriptionTier.SELECT }
-                .takeIf { it >= 0 }
-                ?.let { firstTier + it }
+        StorePaywallFocus.Social -> tierIndex(state, SubscriptionTier.SOCIAL)?.let { firstTier + it }
+        StorePaywallFocus.Select -> tierIndex(state, SubscriptionTier.SELECT)?.let { firstTier + it }
         StorePaywallFocus.PineappleLikes -> productIndex(state, PremiumInventoryType.PINEAPPLE_LIKE)?.let { firstProduct + it }
     }
 }
+
+private fun tierIndex(
+    state: StoreUiState,
+    tier: String,
+): Int? = state.tiers.indexOfFirst { it.tier == tier }.takeIf { it >= 0 }
+
+/**
+ * The plans sheet focus for the Grid's locked cards, from the server's `unlockTier`: Social or
+ * Select's row, or the plan list when the server named neither.
+ */
+fun storePaywallFocusForUnlockTier(unlockTier: String?): StorePaywallFocus =
+    when (unlockTier) {
+        // A free viewer lands on the plan list, where "one subscription covers you both" is in view:
+        // the 2-for-1 benefit is the strongest reason a couple upgrades. Social members (who already
+        // have it) are sent straight to Select.
+        SubscriptionTier.SOCIAL -> StorePaywallFocus.Plans
+        SubscriptionTier.SELECT -> StorePaywallFocus.Select
+        else -> StorePaywallFocus.Plans
+    }
 
 private fun productIndex(
     state: StoreUiState,

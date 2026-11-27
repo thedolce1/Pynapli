@@ -11,8 +11,8 @@ import androidx.compose.ui.graphics.Color
  */
 object PynapliPlaceholderGradients {
     /**
-     * The 12 grid/avatar tone gradients. Order is load-bearing: it mirrors `GridCardTone` (indexed
-     * by `ordinal`) and the first six are reused by the Activity FOMO grid tiles. Do not reorder.
+     * The 12 grid/avatar tone gradients. Order is load-bearing: callers index it by position
+     * (the Messages new-matches rail picks fixed indexes). Do not reorder.
      */
     val cardTones: List<Brush> =
         listOf(

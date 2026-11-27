@@ -148,7 +148,7 @@ internal fun Connection.loadParticipants(
         if (withDisplayNames) {
             """
             SELECT p.user_id, p.role, p.consent_status, p.approved, p.started,
-                   COALESCE(NULLIF(TRIM(pr.display_name), ''), 'Pynapli User') AS display_name
+                   COALESCE(NULLIF(TRIM(pr.display_name), ''), 'New member') AS display_name
             FROM psync_session_participants p
             LEFT JOIN profiles pr ON pr.user_id = p.user_id
             WHERE p.session_id = ?

@@ -1,7 +1,7 @@
 package com.pynapli.server.account
 
 import com.pynapli.server.auth.AuthService
-import com.pynapli.server.auth.authenticatedUser
+import com.pynapli.server.auth.authenticatedUserWithoutActivity
 import com.pynapli.server.auth.requiredBearerToken
 import com.pynapli.shared.network.dto.DeleteAccountRequestDto
 import io.ktor.http.ContentType
@@ -23,7 +23,7 @@ fun Application.configureAccountLifecycleRoutes(
 ) {
     routing {
         get("/v1/account/data-export") {
-            val user = call.authenticatedUser(authService)
+            val user = call.authenticatedUserWithoutActivity(authService)
             val latest = accountLifecycleService.latestDataExportRequest(user.id)
             if (latest == null) {
                 call.respond(HttpStatusCode.NoContent)
@@ -33,7 +33,7 @@ fun Application.configureAccountLifecycleRoutes(
         }
 
         post("/v1/account/data-export") {
-            val user = call.authenticatedUser(authService)
+            val user = call.authenticatedUserWithoutActivity(authService)
             call.respond(accountLifecycleService.requestDataExport(user.id))
         }
 
@@ -50,10 +50,12 @@ fun Application.configureAccountLifecycleRoutes(
 
         post("/v1/account/delete") {
             val token = call.requiredBearerToken()
-            val user = authService.authenticate(token)
+            // Deleting the account is not activity, and it ends presence at once (privacy review F3).
+            val user = authService.authenticateWithoutActivity(token)
             val request = call.receive<DeleteAccountRequestDto>()
             val response = accountLifecycleService.deleteAccount(user.id, request.confirmation)
             authService.invalidateCachedSessionsForUser(user.id)
+            authService.endPresence(user.id)
             call.respond(response)
         }
     }

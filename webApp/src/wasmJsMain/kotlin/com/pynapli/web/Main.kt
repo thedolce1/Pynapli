@@ -14,28 +14,50 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeViewport
 import com.pynapli.app.PynapliApp
 import com.pynapli.app.PynapliPlatform
+import com.pynapli.app.PynapliRoutes
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.design.pynapliTextScaleForBrowserFont
+import com.pynapli.app.location.LocationSettingsAccess
+import com.pynapli.app.location.ProvideLocationSettingsAccess
+import com.pynapli.app.location.silentLocationRefreshAllowed
 import com.pynapli.app.media.PickedMediaRouter
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.web.platform.browserDefaultFontSizePx
+import com.pynapli.web.platform.documentVisible
+import com.pynapli.web.platform.onDocumentVisibilityChange
 import com.pynapli.web.platform.onDocumentVisible
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     val graph = WebAppGraph()
-    val router = WebUrlRouter(graph.deepLinkStateHolder)
-    router.start()
     val appScope = MainScope()
+    val onboarding = graph.onboardingStateHolder
+    val router =
+        WebUrlRouter(
+            deepLinks = graph.deepLinkStateHolder,
+            // Browser back inside the sign-up stepper (B6). UNDISPATCHED runs stepBack's state change
+            // before this returns (it changes state before its first suspension), so the router reads
+            // the resulting step right away; the store cleanup finishes on its own.
+            signupStepBack = {
+                appScope.launch(start = CoroutineStart.UNDISPATCHED) { onboarding.stepBack() }
+                onboarding.state.value
+                    .takeIf { it.active }
+                    ?.let { PynapliRoutes.signupPath(it.step) }
+            },
+        )
+    router.start()
     val locationAdapter =
         WebLocationAdapter(
             locationStateHolder = graph.pynapliAppGraph.locationStateHolder,
             gridStateHolder = graph.pynapliAppGraph.gridStateHolder,
             scope = appScope,
+            silentRefreshAllowed = { granted -> graph.pynapliAppGraph.silentLocationRefreshAllowed(granted) },
         )
     val mediaPicker =
         WebMediaPicker(
@@ -58,12 +80,32 @@ fun main() {
     // shells: appScope is app-lifetime today, and a swallowed cancellation would be a silent trap
     // the moment that stops being true.
     graph.startRealtime(appScope)
+    // The Grid's 60 s liveness refresh is one of those jobs; a hidden tab pauses it, since a browser
+    // never cancels the jobs the way Android and iOS do in the background.
+    graph.pynapliAppGraph.gridStateHolder.setAppVisible(documentVisible())
+    onDocumentVisibilityChange { visible -> graph.pynapliAppGraph.gridStateHolder.setAppVisible(visible) }
+
+    // Another tab signing out (or in as someone else) ends this tab's session, never hands it over.
+    graph.followSessionChangesFromOtherTabs(appScope)
 
     // Tab wake: HTTP stays canonical, so returning to a backgrounded tab refetches
     // state the throttled socket may have missed (the stream clients reconnect on
     // their own backoff).
     onDocumentVisible {
         appScope.launch { graph.onAppForegrounded() }
+        // Moved while the tab was hidden? Silent, granted-only, sent only on a new cell.
+        if (graph.authStateHolder.state.value.authenticated) locationAdapter.refreshIfAlreadyGranted()
+    }
+    // A page load signed in counts as a return too (the same silent, granted-only refresh).
+    appScope.launch {
+        val settled = graph.authStateHolder.state.first { !it.isCheckingSession }
+        if (!settled.authenticated) return@launch
+        // Bounded wait for the first live Grid answer: the only signal that the server holds a location.
+        withTimeoutOrNull(20_000L) {
+            graph.pynapliAppGraph.gridStateHolder.serverHasLocation
+                .first { it != null }
+        }
+        locationAdapter.refreshIfAlreadyGranted()
     }
 
     // A direct /signup link starts the create-account stepper — but only once the
@@ -140,20 +182,30 @@ private fun WebAppContent(
     locationAdapter: WebLocationAdapter,
     mediaPicker: WebMediaPicker,
 ) {
-    PynapliApp(
-        graph = graph.pynapliAppGraph,
-        platform =
-            PynapliPlatform(
-                onUseCurrentLocation = locationAdapter::requestCurrentLocation,
-                onPickMediaForAlbum = mediaPicker::pickForAlbum,
-                onPickConversationPhoto = mediaPicker::pickConversationPhoto,
-                onPickVerificationSelfie = mediaPicker::pickVerificationSelfie,
-                // Founder-locked web behavior: Store is read-only; browsers have no launcher icon.
-                storePurchasesAvailable = false,
-                discreetIconSupported = false,
-                devLoginCredentials = graph.devLoginCredentials,
-                testerDiagnosticLabel = graph.testerDiagnosticLabel,
-                onNavigationRouteChanged = router::onRouteChanged,
-            ),
-    )
+    // A page cannot open the browser's site settings, so a blocked location gets directions instead.
+    ProvideLocationSettingsAccess(WebLocationSettingsAccess) {
+        PynapliApp(
+            graph = graph.pynapliAppGraph,
+            platform =
+                PynapliPlatform(
+                    onUseCurrentLocation = locationAdapter::requestCurrentLocation,
+                    onPickMediaForAlbum = mediaPicker::pickForAlbum,
+                    onPickConversationPhoto = mediaPicker::pickConversationPhoto,
+                    onPickVerificationSelfie = mediaPicker::pickVerificationSelfie,
+                    // Founder-locked web behavior: Store is read-only; browsers have no launcher icon.
+                    storePurchasesAvailable = false,
+                    discreetIconSupported = false,
+                    devLoginCredentials = graph.devLoginCredentials,
+                    testerDiagnosticLabel = graph.testerDiagnosticLabel,
+                    onNavigationRouteChanged = router::onRouteChanged,
+                ),
+        )
+    }
 }
+
+private val WebLocationSettingsAccess =
+    LocationSettingsAccess(
+        blockedHint =
+            "Your browser is blocking location for this site. Allow it in the site settings " +
+                "(the icon beside the address), then tap Share my location again.",
+    )

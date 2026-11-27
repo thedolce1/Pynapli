@@ -38,6 +38,16 @@ fun Application.configureMediaRoutes(
                     )
                 }
 
+                // Local/test only (this block exists only with local storage): the server-made grid
+                // thumbnail. Read-only; no route writes it.
+                get("/local/{assetId}/thumb") {
+                    val assetId = call.parameters["assetId"] ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
+                    call.respondBytes(
+                        bytes = storage.loadThumbnail(assetId),
+                        contentType = ContentType.Image.JPEG,
+                    )
+                }
+
                 put("/local/{assetId}") {
                     val assetId = call.parameters["assetId"] ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
                     call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()?.let { contentLength ->

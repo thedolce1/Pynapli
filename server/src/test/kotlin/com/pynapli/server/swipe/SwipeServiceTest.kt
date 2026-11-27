@@ -900,6 +900,64 @@ class SwipeServiceTest {
         }
 
     @Test
+    fun deckQueryAcceptsLifestyleAndLogisticsFiltersForFreeAgeVerifiedUsers() =
+        runBlocking<Unit> {
+            // Founder decision 2 (2026-11-26): every Swipe filter is free. Lifestyle tags only need an
+            // age-verified viewer; no plan is asked for, and shipped clients are told nothing is locked.
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000163")
+            val target = UUID.fromString("00000000-0000-0000-0000-000000000164")
+            val service =
+                SwipeService(
+                    repository =
+                        InMemorySwipeRepository(
+                            seededCards =
+                                listOf(
+                                    SwipeCardRecord(
+                                        userId = target,
+                                        displayName = "Maya",
+                                        displayAge = 37,
+                                        thumbnailMediaAssetId = null,
+                                        showDistance = true,
+                                        distanceMeters = 850.0,
+                                    ),
+                                ),
+                        ),
+                    subscriptionService = freeSubscriptionService(),
+                    viewerTrustRepository = FixedAgeVerification(verified = true),
+                )
+
+            val deck =
+                service.queryDeck(
+                    viewer,
+                    SwipeDeckRequestDto(lifestyleTags = listOf("soft_swap"), logisticsTags = listOf("hosts")),
+                )
+
+            assertEquals(listOf(target.toString()), deck.items.map { it.userId })
+            assertEquals(true, deck.advancedFiltersAllowed)
+            assertEquals(false, deck.advancedFiltersApplied)
+        }
+
+    @Test
+    fun deckQueryKeepsTheAgeVerificationGateOnLifestyleFilters() =
+        runBlocking<Unit> {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000166")
+            val service =
+                SwipeService(
+                    repository = InMemorySwipeRepository(seededCards = emptyList()),
+                    subscriptionService = paidSubscriptionService(viewer, SubscriptionTier.SELECT),
+                    viewerTrustRepository = FixedAgeVerification(verified = false),
+                )
+
+            val error =
+                assertFailsWith<SwipeException> {
+                    service.queryDeck(viewer, SwipeDeckRequestDto(lifestyleTags = listOf("soft_swap")))
+                }
+            assertEquals("AGE_VERIFICATION_REQUIRED", error.code)
+            // Logistics is not age-gated.
+            service.queryDeck(viewer, SwipeDeckRequestDto(logisticsTags = listOf("hosts")))
+        }
+
+    @Test
     fun deckQueryAllowsBasicFiltersForPaidUsersWithoutAdvancedFlag() =
         runBlocking {
             val viewer = UUID.fromString("00000000-0000-0000-0000-000000000161")
@@ -1746,6 +1804,8 @@ private class InMemorySwipeRepository(
         limit: Int,
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
+        coViewerUserId: UUID?,
     ): SwipeDeckResult {
         recordedQueryDeckFilters += filters
         recordedQueryDeckRadii += radiusMeters
@@ -2221,4 +2281,10 @@ private class StaticPresenceRepository(
     override suspend fun heartbeat(userId: UUID): PresenceState = PresenceState(online = true, expiresInSeconds = 300)
 
     override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = userIds.filterTo(mutableSetOf()) { it in onlineIds }
+}
+
+private class FixedAgeVerification(
+    private val verified: Boolean,
+) : com.pynapli.server.grid.GridViewerTrustRepository {
+    override suspend fun isAgeVerified(userId: UUID): Boolean = verified
 }

@@ -2,8 +2,11 @@ package com.pynapli.server.media
 
 import com.google.auth.oauth2.GoogleCredentials
 import com.pynapli.shared.network.dto.ReportCategory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -15,34 +18,99 @@ import java.net.http.HttpResponse
 import java.time.Duration
 
 /**
- * Production automated moderation: scans a freshly-uploaded image with Google Cloud Vision
+ * Production automated pre-screening: scans a freshly-uploaded image with Google Cloud Vision
  * SafeSearch (`images:annotate` with feature `SAFE_SEARCH_DETECTION`) and maps the returned
- * likelihoods to a [MediaModerationDecision].
+ * likelihoods to a [MediaModerationDecision] through [SafeSearchPolicy].
  *
- * No new dependency: the call uses the JDK [HttpClient] + kotlinx.serialization, and the OAuth2
- * bearer token is minted from the same [GoogleCredentials] (`google-auth`, already on the classpath
- * via firebase-admin) used for GCS signing. The image is referenced by its `gs://bucket/key` URI, so
- * no bytes leave Pynapli's own infrastructure to reach Vision.
+ * No new dependency: [HttpSafeSearchClient] uses the JDK [HttpClient] + kotlinx.serialization, and
+ * the OAuth2 bearer token is minted from the same [GoogleCredentials] (`google-auth`, already on the
+ * classpath via firebase-admin) used for GCS signing. The image is referenced by its
+ * `gs://bucket/key` URI, so Vision reads the object straight from Pynapli's bucket.
  *
- * Fail-safe by construction: any error (network, auth, quota, parse, non-image asset) returns
- * [MediaModerationDecision.PendingReview], never Approved — a scan we cannot trust holds the asset
- * for a human, matching the [ManualReviewMediaModerationScanner] fallback. Public discovery only
- * surfaces ready+approved assets, so a held asset stays invisible until a moderator acts.
+ * Fail closed by construction: any error (network, auth, quota, parse, a per-image `error` in the
+ * response, a missing annotation, a non-image asset) or a scan slower than [scanTimeout] returns
+ * [MediaModerationDecision.PendingReview], never Approved. A profile photo then waits in the human
+ * queue (`GET /v1/admin/media/pending`); public discovery only surfaces ready+approved assets.
  *
- * Likelihood thresholds (per category) are configurable; defaults reject the two strongest
- * likelihoods and hold the middle one for review.
- *
- * Vision SafeSearch reference:
- * https://cloud.google.com/vision/docs/detecting-safe-search
+ * Vision SafeSearch reference: https://cloud.google.com/vision/docs/detecting-safe-search
  */
 class CloudVisionMediaModerationScanner(
-    private val credentials: GoogleCredentials,
-    private val httpClient: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
-    private val endpoint: String = "https://vision.googleapis.com/v1/images:annotate",
-    private val requestTimeout: Duration = Duration.ofSeconds(10),
+    private val client: SafeSearchClient,
     private val policy: SafeSearchPolicy = SafeSearchPolicy(),
+    // Whole-scan budget (token refresh + HTTP). The upload-complete request waits on it, so keep it
+    // short; a slow Vision answer only means the photo waits for a person instead.
+    private val scanTimeout: Duration = DEFAULT_SCAN_TIMEOUT,
 ) : MediaModerationScanner {
+    constructor(
+        credentials: GoogleCredentials,
+        endpoint: String = "https://vision.googleapis.com/v1/images:annotate",
+        policy: SafeSearchPolicy = SafeSearchPolicy(),
+    ) : this(
+        client = HttpSafeSearchClient(credentials = credentials, endpoint = endpoint),
+        policy = policy,
+    )
+
     private val logger = LoggerFactory.getLogger(CloudVisionMediaModerationScanner::class.java)
+
+    // The JDK HttpClient.send and the credential refresh both block. scan() runs on the
+    // upload-complete request path, so the call runs on the IO pool, and runInterruptible lets the
+    // timeout interrupt a blocked send instead of waiting it out.
+    override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision {
+        // Only image assets are SafeSearch-scannable; anything else stays human-reviewed.
+        if (!asset.contentType.startsWith("image/")) return MediaModerationDecision.PendingReview
+        if (asset.storageBucket.isBlank() || asset.storageObjectKey.isBlank()) return MediaModerationDecision.PendingReview
+        val gcsUri = "gs://${asset.storageBucket}/${asset.storageObjectKey}"
+
+        val annotation =
+            try {
+                withTimeout(scanTimeout.toMillis()) {
+                    runInterruptible(Dispatchers.IO) { client.annotate(gcsUri) }
+                }
+            } catch (timeout: TimeoutCancellationException) {
+                logger.warn("Vision SafeSearch timed out for asset {}; holding for review", asset.mediaAssetId)
+                return MediaModerationDecision.PendingReview
+            } catch (cancelled: CancellationException) {
+                // The caller was cancelled (not our timeout): let it propagate.
+                throw cancelled
+            } catch (error: Exception) {
+                // Never auto-approve on failure; the human queue is the safe default. Log the error
+                // type only: messages can echo request details.
+                logger.warn(
+                    "Vision SafeSearch failed for asset {} ({}); holding for review",
+                    asset.mediaAssetId,
+                    error.javaClass.simpleName,
+                )
+                return MediaModerationDecision.PendingReview
+            }
+        if (annotation == null) {
+            logger.warn("Vision SafeSearch gave no usable answer for asset {}; holding for review", asset.mediaAssetId)
+            return MediaModerationDecision.PendingReview
+        }
+        return policy.decide(annotation)
+    }
+
+    companion object {
+        val DEFAULT_SCAN_TIMEOUT: Duration = Duration.ofSeconds(8)
+    }
+}
+
+/**
+ * The one network call the scanner makes, behind an interface so tests fake Vision without a
+ * network. Returns the SafeSearch annotation, or null when the answer can't be trusted (non-2xx, a
+ * per-image error, no annotation). May throw; the scanner treats a throw like null.
+ */
+fun interface SafeSearchClient {
+    fun annotate(gcsUri: String): SafeSearchAnnotation?
+}
+
+/** Calls Vision `images:annotate` over the JDK HTTP client with a cloud-platform-scoped token. */
+class HttpSafeSearchClient(
+    credentials: GoogleCredentials,
+    private val endpoint: String = "https://vision.googleapis.com/v1/images:annotate",
+    private val httpClient: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build(),
+    private val requestTimeout: Duration = Duration.ofSeconds(6),
+) : SafeSearchClient {
+    private val logger = LoggerFactory.getLogger(HttpSafeSearchClient::class.java)
 
     // The credentials need the cloud-platform scope to call Vision; scope once, refresh per call.
     private val scopedCredentials: GoogleCredentials =
@@ -52,61 +120,28 @@ class CloudVisionMediaModerationScanner(
             credentials
         }
 
-    // The JDK HttpClient.send and the credential refresh both block (up to the 10s request timeout).
-    // scan() runs on the upload-complete request path, so do the work on the IO pool rather than tie
-    // up a Ktor worker thread — the same split PlayStorePurchaseVerifier uses.
-    override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = withContext(Dispatchers.IO) { scanBlocking(asset) }
-
-    private fun scanBlocking(asset: MediaAssetRecord): MediaModerationDecision {
-        // Only image assets are SafeSearch-scannable; anything else stays human-reviewed.
-        if (!asset.contentType.startsWith("image/")) {
-            return MediaModerationDecision.PendingReview
+    override fun annotate(gcsUri: String): SafeSearchAnnotation? {
+        scopedCredentials.refreshIfExpired()
+        val token = scopedCredentials.accessToken?.tokenValue ?: return null
+        val request =
+            HttpRequest
+                .newBuilder()
+                .uri(URI.create(endpoint))
+                .timeout(requestTimeout)
+                .header("Authorization", "Bearer $token")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(JSON.encodeToString(AnnotateRequest.safeSearch(gcsUri))))
+                .build()
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        if (response.statusCode() !in 200..299) {
+            logger.warn("Vision SafeSearch returned HTTP {}", response.statusCode())
+            return null
         }
-        if (asset.storageBucket.isBlank() || asset.storageObjectKey.isBlank()) {
-            return MediaModerationDecision.PendingReview
-        }
-
-        return runCatching {
-            val token = freshAccessToken() ?: return MediaModerationDecision.PendingReview
-            val gcsUri = "gs://${asset.storageBucket}/${asset.storageObjectKey}"
-            val body = JSON.encodeToString(AnnotateRequest.safeSearch(gcsUri))
-
-            val request =
-                HttpRequest
-                    .newBuilder()
-                    .uri(URI.create(endpoint))
-                    .timeout(requestTimeout)
-                    .header("Authorization", "Bearer $token")
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build()
-
-            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-            if (response.statusCode() !in 200..299) {
-                logger.warn("Vision SafeSearch returned HTTP {} for asset {}; holding for review", response.statusCode(), asset.mediaAssetId)
-                return MediaModerationDecision.PendingReview
-            }
-
-            val parsed = JSON.decodeFromString<AnnotateResponse>(response.body())
-            val annotation =
-                parsed.responses.firstOrNull()?.safeSearchAnnotation
-                    ?: return MediaModerationDecision.PendingReview
-            policy.decide(annotation)
-        }.getOrElse { error ->
-            // Never auto-approve on failure; the human queue is the safe default.
-            logger.warn("Vision SafeSearch failed for asset {}; holding for review", asset.mediaAssetId, error)
-            MediaModerationDecision.PendingReview
-        }
+        return parseSafeSearchResponse(response.body())
     }
 
-    private fun freshAccessToken(): String? =
-        runCatching {
-            scopedCredentials.refreshIfExpired()
-            scopedCredentials.accessToken?.tokenValue
-        }.getOrNull()
-
-    companion object {
-        private val JSON =
+    private companion object {
+        val JSON =
             Json {
                 ignoreUnknownKeys = true
                 encodeDefaults = true
@@ -114,57 +149,80 @@ class CloudVisionMediaModerationScanner(
     }
 }
 
+private val RESPONSE_JSON = Json { ignoreUnknownKeys = true }
+
 /**
- * Maps Vision SafeSearch likelihoods to a moderation decision. A category counts as a "reject" when
- * its likelihood is at or above [rejectAtOrAbove], and "hold for review" at or above [reviewAtOrAbove].
- * Reject wins over review wins over approve. Defaults: reject on LIKELY/VERY_LIKELY, hold on POSSIBLE.
+ * Reads the first image response. Vision reports a per-image failure (unreadable object, missing
+ * permission) as an `error` object on an HTTP 200, so an `error` (or no annotation) is null: hold.
+ */
+internal fun parseSafeSearchResponse(body: String): SafeSearchAnnotation? {
+    val first = RESPONSE_JSON.decodeFromString<AnnotateResponse>(body).responses.firstOrNull() ?: return null
+    if (first.error != null) return null
+    return first.safeSearchAnnotation
+}
+
+/**
+ * Maps Vision SafeSearch likelihoods to a pre-screening decision (TRUST_AND_SAFETY_SPEC "Photo
+ * pre-screening"). Public photos may be suggestive but not explicit, so:
+ *
+ * - **Approved** only when adult <= [maxAdult], violence <= [maxViolence] and racy <= [maxRacy]
+ *   (defaults UNLIKELY / POSSIBLE / LIKELY), and each of the three is a known likelihood.
+ * - **PendingReview** for anything above a ceiling, and for an UNKNOWN or missing category (fail
+ *   closed). Nothing is removed on these signals; a person decides.
+ * - **Rejected(SEVERE)** only when violence >= [severeViolenceAtOrAbove] (default LIKELY). This keeps
+ *   the shipped private-album safety path (remove + system report) and the chat-media refusal, which
+ *   only run when `PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA=true` lets those uploads reach the
+ *   scanner at all ([MediaScanScope]). For
+ *   a profile photo `MediaUploadActions` treats any Rejected as a hold for the human queue: no
+ *   removal, no automatic report.
+ *
+ * `medical` and `spoof` are ignored.
  */
 data class SafeSearchPolicy(
-    val rejectAtOrAbove: SafeSearchLikelihood = SafeSearchLikelihood.LIKELY,
-    val reviewAtOrAbove: SafeSearchLikelihood = SafeSearchLikelihood.POSSIBLE,
-    // Categories that participate in the decision. `adult` and `racy` are the lifestyle-relevant ones;
-    // `violence` guards against disallowed content. `medical`/`spoof` are ignored by default.
-    val evaluatedCategories: Set<SafeSearchCategory> =
-        setOf(SafeSearchCategory.ADULT, SafeSearchCategory.RACY, SafeSearchCategory.VIOLENCE),
+    val maxAdult: SafeSearchLikelihood = DEFAULT_MAX_ADULT,
+    val maxViolence: SafeSearchLikelihood = DEFAULT_MAX_VIOLENCE,
+    val maxRacy: SafeSearchLikelihood = DEFAULT_MAX_RACY,
+    val severeViolenceAtOrAbove: SafeSearchLikelihood = SafeSearchLikelihood.LIKELY,
 ) {
     fun decide(annotation: SafeSearchAnnotation): MediaModerationDecision {
-        val likelihoods =
-            buildList {
-                if (SafeSearchCategory.ADULT in evaluatedCategories) add(SafeSearchCategory.ADULT to annotation.adult.toLikelihood())
-                if (SafeSearchCategory.RACY in evaluatedCategories) add(SafeSearchCategory.RACY to annotation.racy.toLikelihood())
-                if (SafeSearchCategory.VIOLENCE in evaluatedCategories) add(SafeSearchCategory.VIOLENCE to annotation.violence.toLikelihood())
-                if (SafeSearchCategory.MEDICAL in evaluatedCategories) add(SafeSearchCategory.MEDICAL to annotation.medical.toLikelihood())
-                if (SafeSearchCategory.SPOOF in evaluatedCategories) add(SafeSearchCategory.SPOOF to annotation.spoof.toLikelihood())
-            }
-
-        val worst = likelihoods.maxByOrNull { it.second.ordinal }
-        return when {
-            worst == null -> MediaModerationDecision.PendingReview
-            worst.second.ordinal >= rejectAtOrAbove.ordinal ->
-                MediaModerationDecision.Rejected(
-                    reason = "safe_search_${worst.first.name.lowercase()}_${worst.second.name.lowercase()}",
-                    severity = worst.first.toModerationSeverity(),
-                    reportCategory = worst.first.toReportCategory(),
-                )
-            worst.second.ordinal >= reviewAtOrAbove.ordinal -> MediaModerationDecision.PendingReview
-            else -> MediaModerationDecision.Approved
+        val adult = annotation.adult.toLikelihood()
+        val violence = annotation.violence.toLikelihood()
+        val racy = annotation.racy.toLikelihood()
+        if (violence != SafeSearchLikelihood.UNKNOWN && violence.ordinal >= severeViolenceAtOrAbove.ordinal) {
+            return MediaModerationDecision.Rejected(
+                reason = "safe_search_violence_${violence.name.lowercase()}",
+                severity = MediaModerationSeverity.SEVERE,
+                reportCategory = ReportCategory.HARASSMENT_OR_THREATS,
+            )
         }
+        val withinCeilings =
+            adult.isKnownAtMost(maxAdult) &&
+                violence.isKnownAtMost(maxViolence) &&
+                racy.isKnownAtMost(maxRacy)
+        return if (withinCeilings) MediaModerationDecision.Approved else MediaModerationDecision.PendingReview
+    }
+
+    companion object {
+        val DEFAULT_MAX_ADULT = SafeSearchLikelihood.UNLIKELY
+        val DEFAULT_MAX_VIOLENCE = SafeSearchLikelihood.POSSIBLE
+        val DEFAULT_MAX_RACY = SafeSearchLikelihood.LIKELY
+
+        /**
+         * Ceilings an operator may configure. VERY_LIKELY would switch a category's screening off and
+         * UNKNOWN is not a level, so neither is accepted. Violence is further capped at POSSIBLE by
+         * startup validation: LIKELY is always the severe signal, so a LIKELY ceiling would do nothing.
+         */
+        val CONFIGURABLE_CEILINGS: Set<SafeSearchLikelihood> =
+            setOf(
+                SafeSearchLikelihood.VERY_UNLIKELY,
+                SafeSearchLikelihood.UNLIKELY,
+                SafeSearchLikelihood.POSSIBLE,
+                SafeSearchLikelihood.LIKELY,
+            )
     }
 }
 
-private fun SafeSearchCategory.toModerationSeverity(): MediaModerationSeverity =
-    when (this) {
-        SafeSearchCategory.VIOLENCE -> MediaModerationSeverity.SEVERE
-        else -> MediaModerationSeverity.POLICY
-    }
-
-private fun SafeSearchCategory.toReportCategory(): String =
-    when (this) {
-        SafeSearchCategory.VIOLENCE -> ReportCategory.HARASSMENT_OR_THREATS
-        else -> ReportCategory.EXPLICIT_PUBLIC_CONTENT
-    }
-
-enum class SafeSearchCategory { ADULT, RACY, VIOLENCE, MEDICAL, SPOOF }
+private fun SafeSearchLikelihood.isKnownAtMost(ceiling: SafeSearchLikelihood): Boolean = this != SafeSearchLikelihood.UNKNOWN && ordinal <= ceiling.ordinal
 
 /** Vision likelihood scale, ordered weakest → strongest. */
 enum class SafeSearchLikelihood {
@@ -176,8 +234,9 @@ enum class SafeSearchLikelihood {
     VERY_LIKELY,
 }
 
-private fun String?.toLikelihood(): SafeSearchLikelihood =
-    when (this?.uppercase()) {
+/** Parses a Vision likelihood name; anything unrecognised (or null) is UNKNOWN. */
+fun String?.toLikelihood(): SafeSearchLikelihood =
+    when (this?.trim()?.uppercase()) {
         "VERY_UNLIKELY" -> SafeSearchLikelihood.VERY_UNLIKELY
         "UNLIKELY" -> SafeSearchLikelihood.UNLIKELY
         "POSSIBLE" -> SafeSearchLikelihood.POSSIBLE
@@ -235,6 +294,13 @@ private data class AnnotateResponse(
 @Serializable
 private data class AnnotateImageResponse(
     val safeSearchAnnotation: SafeSearchAnnotation? = null,
+    val error: AnnotateError? = null,
+)
+
+// google.rpc.Status. Only its presence matters; the message can name the object, so it is not read.
+@Serializable
+private data class AnnotateError(
+    val code: Int? = null,
 )
 
 @Serializable

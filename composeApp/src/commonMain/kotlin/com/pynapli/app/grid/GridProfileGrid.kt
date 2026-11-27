@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,8 +33,25 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.pynapliEntrance
+import com.pynapli.app.media.ImageLoadStats
 
 internal const val GRID_LOAD_MORE_RETRY_TAG = "grid-load-more-retry"
+
+private const val GRID_LOCKED_BANNER_KEY = "grid-locked-banner"
+
+// How long after the cards change the debug image line is written: long enough for the visible
+// tiles to load, short enough that the next 60 s live refresh gets its own line.
+private const val GRID_IMAGE_STATS_SETTLE_MILLIS = 5_000L
+
+/**
+ * The card a lazy-grid item stands for when the boundary banner sits before card [bannerAt]: items
+ * after the banner are one further along than their card. The banner itself counts as the card it
+ * precedes. Keeps the load-more trigger and the thumbnail prefetch counting cards, not grid items.
+ */
+internal fun cardIndexForGridItem(
+    itemIndex: Int,
+    bannerAt: Int?,
+): Int = if (bannerAt != null && itemIndex > bannerAt) itemIndex - 1 else itemIndex
 
 /**
  * Minimum tile side once the grid's own pane grows past phone width. Keeps wide-window
@@ -95,14 +111,21 @@ internal fun ProfileGrid(
     // The last page request failed: stop auto-paging (it would retry in a tight loop) and offer a
     // Retry at the end of the list instead.
     loadMoreFailed: Boolean = false,
+    // Section 3: the full-width "See everyone nearby" banner goes before this card (the first locked
+    // one); null draws no banner. [onOpenUnlockStore] opens the plans on [unlockTier].
+    lockedBannerIndex: Int? = null,
+    unlockTier: String? = null,
+    onOpenUnlockStore: (unlockTier: String?) -> Unit = {},
 ) {
-    val shouldLoadMore by remember(cards.size, gridState, isLoadingMore, canLoadMore, loadMoreFailed) {
+    val bannerAt = lockedBannerIndex?.takeIf { it in cards.indices }
+    val shouldLoadMore by remember(cards.size, gridState, isLoadingMore, canLoadMore, loadMoreFailed, bannerAt) {
         derivedStateOf {
             val lastVisibleIndex =
                 gridState.layoutInfo.visibleItemsInfo
                     .lastOrNull()
                     ?.index ?: return@derivedStateOf false
-            canLoadMore && !loadMoreFailed && !isLoadingMore && cards.isNotEmpty() && lastVisibleIndex >= cards.lastIndex - 9
+            val lastVisibleCard = cardIndexForGridItem(lastVisibleIndex, bannerAt)
+            canLoadMore && !loadMoreFailed && !isLoadingMore && cards.isNotEmpty() && lastVisibleCard >= cards.lastIndex - 9
         }
     }
 
@@ -110,27 +133,39 @@ internal fun ProfileGrid(
         if (shouldLoadMore) onLoadMore()
     }
 
-    val prefetchUrls by remember(cards, gridState) {
+    val prefetchImages by remember(cards, gridState, bannerAt) {
         derivedStateOf {
             val lastVisibleIndex =
                 gridState.layoutInfo.visibleItemsInfo
                     .lastOrNull()
                     ?.index ?: -1
-            planThumbnailPrefetch(cards = cards, lastVisibleIndex = lastVisibleIndex)
+            planThumbnailPrefetchImages(cards = cards, lastVisibleIndex = cardIndexForGridItem(lastVisibleIndex, bannerAt))
         }
     }
     val platformContext = LocalPlatformContext.current
-    LaunchedEffect(prefetchUrls) {
-        if (prefetchUrls.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(prefetchImages) {
+        if (prefetchImages.isEmpty()) return@LaunchedEffect
         val imageLoader = runCatching { SingletonImageLoader.get(platformContext) }.getOrNull() ?: return@LaunchedEffect
-        prefetchUrls.forEach { url ->
+        prefetchImages.forEach { image ->
+            // The tile's own stable key (G2-2): the prefetch fills the entry the tile reads.
             imageLoader.enqueue(
                 ImageRequest
                     .Builder(platformContext)
-                    .data(url)
-                    .build(),
+                    .data(image.url)
+                    .apply {
+                        image.cacheKey?.let { key ->
+                            memoryCacheKey(key)
+                            diskCacheKey(key)
+                        }
+                    }.build(),
             )
         }
+    }
+    // G2-2 ticket 7 (debug builds only): one line per settled grid refresh with how its tiles were
+    // served (memory / disk / network). Counts only; no URL, id or key.
+    LaunchedEffect(cards) {
+        kotlinx.coroutines.delay(GRID_IMAGE_STATS_SETTLE_MILLIS)
+        ImageLoadStats.grid.report()
     }
 
     // First-load reveal: tiles fade + lift in (staggered). Flips true once per grid entry; tiles
@@ -156,17 +191,43 @@ internal fun ProfileGrid(
             horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            itemsIndexed(
-                items = cards,
-                key = { _, card -> card.id },
-                contentType = { _, _ -> "grid-card" },
-            ) { index, card ->
+            // Before the banner (all of them when there is none), then the banner, then the rest.
+            val beforeBanner = bannerAt ?: cards.size
+            items(
+                count = beforeBanner,
+                key = { index -> cards[index].id },
+                contentType = { "grid-card" },
+            ) { index ->
+                val card = cards[index]
                 GridProfileTile(
                     card = card,
                     distanceUnit = distanceUnit,
                     onClick = { onProfileSelected(card) },
                     modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
                 )
+            }
+            if (bannerAt != null) {
+                item(
+                    key = GRID_LOCKED_BANNER_KEY,
+                    span = { GridItemSpan(maxLineSpan) },
+                    contentType = "grid-locked-banner",
+                ) {
+                    GridLockedBanner(unlockTier = unlockTier, onOpenStore = { onOpenUnlockStore(unlockTier) })
+                }
+                items(
+                    count = cards.size - bannerAt,
+                    key = { offset -> cards[bannerAt + offset].id },
+                    contentType = { "grid-card" },
+                ) { offset ->
+                    val index = bannerAt + offset
+                    val card = cards[index]
+                    GridProfileTile(
+                        card = card,
+                        distanceUnit = distanceUnit,
+                        onClick = { onProfileSelected(card) },
+                        modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
+                    )
+                }
             }
 
             if (isLoadingMore) {

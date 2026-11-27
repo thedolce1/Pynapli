@@ -502,7 +502,7 @@ function Invoke-DemoSql {
         Write-Host "  [skip] Docker not found; $Action was not seeded."
         return $false
     }
-    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $Sql 2>&1
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -v ON_ERROR_STOP=1 -c $Sql 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "$Action failed: $output"
     }

@@ -59,4 +59,6 @@ data class AccountDeletionResult(
     val purgedLocationCount: Int = 0,
     val endedPartnerLinkCount: Int = 0,
     val softDeletedMediaCount: Int = 0,
+    /** Apple grants to revoke after the commit (read in the deleting transaction, then scrubbed). */
+    val appleTokens: List<com.pynapli.server.auth.social.SealedAppleToken> = emptyList(),
 )

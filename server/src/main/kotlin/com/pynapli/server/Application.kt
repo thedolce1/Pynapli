@@ -10,6 +10,7 @@ import com.pynapli.server.admin.configureAdminSubscriptionSupportRoutes
 import com.pynapli.server.admin.configureAdminUserLookupRoutes
 import com.pynapli.server.auth.configureAuthRoutes
 import com.pynapli.server.auth.configureEmailSignupRoutes
+import com.pynapli.server.auth.social.configureSocialAuthRoutes
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.contactblocks.configureContactBlockRoutes
 import com.pynapli.server.dependencies.ServerDependencies
@@ -23,6 +24,8 @@ import com.pynapli.server.media.configureMediaRoutes
 import com.pynapli.server.media.configureRequestMediaBaseUrl
 import com.pynapli.server.messaging.configureMessageStreamRoutes
 import com.pynapli.server.messaging.configureMessagingRoutes
+import com.pynapli.server.metinperson.configureAdminMetInPersonRoutes
+import com.pynapli.server.metinperson.configureMetInPersonRoutes
 import com.pynapli.server.metrics.OperationalMetricsSources
 import com.pynapli.server.metrics.configureProductMetricsRoutes
 import com.pynapli.server.metrics.configurePrometheusMetrics
@@ -41,6 +44,7 @@ import com.pynapli.server.plugins.configureSecurityHeaders
 import com.pynapli.server.plugins.configureSerialization
 import com.pynapli.server.plugins.configureStatusPages
 import com.pynapli.server.plugins.selectAppCheckVerifier
+import com.pynapli.server.presence.configurePresenceHeartbeatRoutes
 import com.pynapli.server.presence.configurePresenceStreamRoutes
 import com.pynapli.server.profile.configureProfileRoutes
 import com.pynapli.server.profilelink.configureProfileLinkRoutes
@@ -96,7 +100,9 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.activityRetentionWorker?.start()
     dependencies.dataRetentionWorker?.start()
     dependencies.mediaCleanupWorker?.start()
+    dependencies.mediaThumbnailWorker?.start()
     dependencies.photoVerificationRetentionWorker?.start()
+    dependencies.metInPersonBadgeWorker.start()
     dependencies.tonightSessionExpiryWorker.start()
     dependencies.psyncSessionExpiryWorker?.start()
     dependencies.matchSideEffectDrainWorker?.start()
@@ -117,7 +123,8 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
             trustedProxyHops = dependencies.config.trustedProxyHops,
             perIpLimits = dependencies.config.environment != "local",
             // Signed-in limits follow the account, so a fresh sign-in doesn't reset them.
-            resolveUserId = { token -> runCatching { dependencies.authService.authenticate(token).id }.getOrNull() },
+            // A budget lookup, not activity: it runs for logout and deletion too (privacy review F3).
+            resolveUserId = { token -> runCatching { dependencies.authService.authenticateWithoutActivity(token).id }.getOrNull() },
         )
     }
     configureRequestMediaBaseUrl()
@@ -162,6 +169,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureAgeVerificationAdminRoutes(dependencies.config, dependencies.ageVerificationService)
     configureAgeVerificationCallbackRoute(dependencies.config, dependencies.ageVerificationService)
     configureAdminPhotoVerificationRoutes(dependencies.config, dependencies.photoVerificationService)
+    configureAdminMetInPersonRoutes(dependencies.config, dependencies.adminMetInPersonService)
     configureSubscriptionAdminRoutes(dependencies.config, dependencies.subscriptionService)
     configurePlayStoreRtdnRoutes(dependencies.config, dependencies.subscriptionService)
     configureAuthRoutes(
@@ -177,6 +185,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
             devMailbox = dependencies.devSignupMailbox,
         )
     }
+    dependencies.socialAuthService?.let { social -> configureSocialAuthRoutes(dependencies.authService, social) }
     configureAccountLifecycleRoutes(dependencies.authService, dependencies.accountLifecycleService)
     configureProfileRoutes(dependencies.authService, dependencies.profileService, dependencies.requestProfilerFactory)
     configureAgeVerificationRoutes(dependencies.authService, dependencies.ageVerificationService)
@@ -195,6 +204,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
         blockRepository = dependencies.blockRepository,
         contactBlockVisibility = dependencies.contactBlockVisibility,
     )
+    configurePresenceHeartbeatRoutes(dependencies.authService, dependencies.presenceService)
     configureGridRoutes(dependencies.authService, dependencies.gridService, dependencies.requestProfilerFactory)
     dependencies.favoriteService?.let { service -> configureFavoriteRoutes(dependencies.authService, service) }
     configureSavedGridFilterRoutes(dependencies.authService, dependencies.savedGridFilterService)
@@ -208,6 +218,7 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     configureSubscriptionRoutes(dependencies.config, dependencies.authService, dependencies.subscriptionService)
     configureMessagingRoutes(dependencies.authService, dependencies.messagingService)
     configureMessageStreamRoutes(dependencies.authService, dependencies.messageBroadcaster)
+    configureMetInPersonRoutes(dependencies.authService, dependencies.metInPersonService)
     configureMediaRoutes(
         authService = dependencies.authService,
         mediaService = dependencies.mediaService,
@@ -222,7 +233,12 @@ fun Application.module(dependencies: ServerDependencies = ServerDependencies.fro
     dependencies.contactBlockService?.let { service ->
         configureContactBlockRoutes(dependencies.authService, service)
     }
-    configureAppealRoutes(dependencies.authService, dependencies.appealService, dependencies.config.trustedProxyHops)
+    configureAppealRoutes(
+        dependencies.authService,
+        dependencies.appealService,
+        dependencies.config.trustedProxyHops,
+        socialAuthService = dependencies.socialAuthService,
+    )
     configureSwipeRoutes(
         authService = dependencies.authService,
         swipeService = dependencies.swipeService,

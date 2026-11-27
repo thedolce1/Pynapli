@@ -14,18 +14,29 @@ import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
 import com.pynapli.shared.network.dto.PasswordResetDto
 import com.pynapli.shared.network.dto.PasswordResetRequestDto
 import com.pynapli.shared.network.dto.PasswordResetRequestedDto
+import com.pynapli.shared.network.dto.SocialAccountAppealRequestDto
+import com.pynapli.shared.network.dto.SocialNonceDto
+import com.pynapli.shared.network.dto.SocialSignInConfigDto
+import com.pynapli.shared.network.dto.SocialSignInRequestDto
 
 class AuthRepository(
     private val authApi: AuthApi,
     private val profileApi: ProfileApi,
     private val sessionStore: SessionStore,
+    // The same instance the shell gives this store's StoredSessionRefresher (see [logout]).
+    private val sessionLock: SessionMutationLock = SessionMutationLock(),
 ) {
     // Convenience for production call sites that hold the aggregate client; the
     // primary constructor takes only the segments this repository actually uses.
-    constructor(apiClient: PynapliApiClient, sessionStore: SessionStore) : this(
+    constructor(
+        apiClient: PynapliApiClient,
+        sessionStore: SessionStore,
+        sessionLock: SessionMutationLock = SessionMutationLock(),
+    ) : this(
         authApi = apiClient,
         profileApi = apiClient,
         sessionStore = sessionStore,
+        sessionLock = sessionLock,
     )
 
     suspend fun currentSession(): StoredSession? = sessionStore.currentSession()
@@ -163,9 +174,65 @@ class AuthRepository(
             is AppResult.Failure -> reset
         }
 
+    /** Which providers the server has switched on (ONBOARDING_AUTH_SPEC, "Continue with Google / Apple"). */
+    suspend fun socialSignInConfig(): AppResult<SocialSignInConfigDto> = authApi.socialSignInConfig()
+
+    /** A fresh single-use nonce. Fetch one per provider attempt: the server consumes it on use. */
+    suspend fun socialNonce(deviceId: String? = null): AppResult<SocialNonceDto> = authApi.socialNonce(deviceId)
+
+    /**
+     * Appeal from a suspended account that signs in with [provider] (it has no password to prove
+     * itself with): a fresh nonce + provider sign-in, the same [AppealDto] as the email appeal.
+     */
+    suspend fun submitSocialAccountAppeal(
+        provider: SocialProvider,
+        idToken: String,
+        nonce: String,
+        reason: String,
+    ): AppResult<com.pynapli.shared.network.dto.AppealDto> =
+        authApi.submitSocialAccountAppeal(
+            providerWireName = provider.wireName,
+            request = SocialAccountAppealRequestDto(idToken = idToken, nonce = nonce, reason = reason),
+        )
+
+    /**
+     * Signs in with a provider ID token; with [ageGate] it also creates the account (the server asked
+     * for it with `SOCIAL_SIGNUP_NEEDS_AGE_GATE`). The session is stored exactly like an email login.
+     */
+    suspend fun signInSocial(
+        provider: SocialProvider,
+        idToken: String,
+        nonce: String,
+        authorizationCode: String?,
+        ageGate: SocialAgeGate?,
+        platform: String,
+        appVersion: String,
+        deviceId: String? = null,
+    ): AppResult<StoredSession> =
+        authApi
+            .socialSignIn(
+                providerWireName = provider.wireName,
+                request =
+                    SocialSignInRequestDto(
+                        idToken = idToken,
+                        nonce = nonce,
+                        authorizationCode = authorizationCode,
+                        birthdate = ageGate?.birthdate,
+                        confirmedAdult = ageGate?.confirmedAdult ?: false,
+                        acceptedTerms = ageGate?.acceptedTerms ?: false,
+                        acceptedPrivacy = ageGate?.acceptedPrivacy ?: false,
+                        deviceId = deviceId,
+                        platform = platform,
+                        appVersion = appVersion,
+                    ),
+            ).persistSession()
+
     suspend fun logout() {
+        // Outside the lock: the logout call is authenticated and may itself need a refresh.
         authApi.logout()
-        sessionStore.clear()
+        // Inside it: a refresh still on the wire finishes (and saves) first, then this clear wins,
+        // instead of the refresh saving its rotated session after the clear and signing back in.
+        sessionLock.withLock { sessionStore.clear() }
     }
 
     private suspend fun AppResult<AuthSessionDto>.persistSession(): AppResult<StoredSession> =

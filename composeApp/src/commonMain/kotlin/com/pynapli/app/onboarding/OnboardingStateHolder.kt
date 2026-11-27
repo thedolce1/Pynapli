@@ -2,14 +2,20 @@ package com.pynapli.app.onboarding
 
 import androidx.compose.runtime.Immutable
 import com.pynapli.app.auth.AuthStateHolder
+import com.pynapli.app.auth.SocialSignInOutcome
+import com.pynapli.shared.auth.PasswordRules
+import com.pynapli.shared.auth.SocialAgeGate
+import com.pynapli.shared.auth.SocialProvider
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
 import com.pynapli.shared.network.dto.MeDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import com.pynapli.shared.settings.InMemoryUnderageStopStore
 import com.pynapli.shared.settings.OnboardingProgressStore
 import com.pynapli.shared.settings.PendingSignup
 import com.pynapli.shared.settings.PendingSignupStore
+import com.pynapli.shared.settings.UnderageStopStore
 import com.pynapli.shared.settings.maskEmailAddress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +43,13 @@ import kotlin.time.ExperimentalTime
  * Everything after VerifyEmail is skippable — "do it all later" lands on the grid in seconds.
  * Sign-in mode bypasses the stepper entirely.
  *
+ * Continue with Google / Apple ([continueWithSocial]): a known identity signs straight in. An
+ * unknown one runs Dob -> (UnderageStop) -> Policies, and Accept finishes the sign-up with the
+ * provider ([acceptPoliciesAndContinue]: fresh nonce, fresh token) -> Location -> Profile -> grid.
+ * No email, password or code step. Only the provider is kept ([OnboardingUiState.socialProvider],
+ * in memory; never a token or nonce), so back, cancel, sign-out and the 18+ stop reset it like
+ * every other answer.
+ *
  * Resume (spec "app closed mid-signup"): before the code, [resumePendingSignupIfNeeded]
  * reopens the code step for the address that started, shown masked (the [PendingSignupStore]
  * keeps the address and the server's sign-up token, never the password: encrypted on Android,
@@ -53,13 +66,24 @@ class OnboardingStateHolder(
     private val pendingSignupStore: PendingSignupStore,
     private val todayProvider: () -> LocalDate = ::systemToday,
     private val nowEpochMillis: () -> Long = ::systemNowEpochMillis,
+    // When this device last stopped a sign-up at the 18+ screen (sticky for UNDERAGE_STOP_MILLIS).
+    private val underageStopStore: UnderageStopStore = InMemoryUnderageStopStore(),
 ) {
     private val _state = MutableStateFlow(OnboardingUiState())
+
+    // The last 18+ stop on this device, mirrored from [underageStopStore] so the non-suspending
+    // [startCreateAccount] can honour it ([loadUnderageStop] fills it at the signed-out settle).
+    private var underageStoppedAtMs: Long? = null
     val state: StateFlow<OnboardingUiState> = _state.asStateFlow()
 
     // Per-process guard so a nudge impression counts one settings session, not one
     // per recomposition of the banner.
     private var photoNudgeCountedThisSession = false
+
+    // Set once a sign-up's code is submitted (or a resume re-enters the stepper) in this process. The
+    // add-a-photo nudge never arms in the session the stepper ran (spec: the first nudge lands a
+    // session later). A wrong code also sets it; that only defers the nudge, never shows it early.
+    private var signupRanThisSession = false
 
     // The started sign-up's token (random, from the server): needed with the code. Kept out of
     // the UI state; persisted only in the device-local progress store for resume.
@@ -70,69 +94,337 @@ class OnboardingStateHolder(
     // step stops offering Verify and offers "Start again" instead.
     private var failedCodeSubmissions = 0
 
+    /** A new sign-up always starts empty: nothing a previous person typed on this device carries over. */
     fun startCreateAccount() {
-        _state.update {
-            it.copy(
-                active = true,
-                step = OnboardingStep.Dob,
-                errorMessage = null,
-            )
-        }
-    }
-
-    /** Back to sign-in; a sign-up still waiting for its code is dropped so the next launch doesn't reopen it. */
-    suspend fun cancelToSignIn() {
+        // A Google / Apple attempt is in flight: it may sign a known identity in at any moment, which
+        // must not happen under a freshly opened email stepper. (The welcome buttons are off too.)
+        if (authStateHolder.state.value.socialInProgress != null) return
         pendingSignupToken = null
         failedCodeSubmissions = 0
+        // A sticky 18+ stop on this device sends Create account straight back to it.
+        val firstStep = if (underageStopActive()) OnboardingStep.UnderageStop else OnboardingStep.Dob
+        _state.update { freshState(it).copy(active = true, step = firstStep) }
+    }
+
+    /**
+     * Signed out (App.kt's signed-out effect, through [resumePendingSignupIfNeeded]): forget the
+     * last sign-up's answers so the next person on this device never sees them.
+     */
+    fun resetForSignOut() {
+        if (_state.value.active) return
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
+        _state.update { freshState(it).copy(photoNudgeEligible = false, sessionSettledFor = null) }
+    }
+
+    // A blank stepper. Keeps only what belongs to this device session rather than to a person: this
+    // session's add-a-photo nudge decision and which session the shell already decided.
+    private fun freshState(current: OnboardingUiState): OnboardingUiState =
+        OnboardingUiState(
+            photoNudgeEligible = current.photoNudgeEligible,
+            sessionSettledFor = current.sessionSettledFor,
+        )
+
+    /**
+     * The stepper's "Sign in" links: straight to the sign-in form. A sign-up still waiting for its
+     * code is dropped so the next launch doesn't reopen it. An address typed in this session is
+     * carried over to the sign-in form; a resumed (masked) one never is.
+     */
+    suspend fun cancelToSignIn() {
+        val current = _state.value
+        val typedEmail = current.email.trim().takeIf { it.isNotEmpty() && !current.emailShownMasked }
+        leaveStepper()
+        authStateHolder.showSignIn(prefillEmail = typedEmail)
         clearPendingSignup()
+    }
+
+    /** Back from the first step: to the welcome landing, dropping any waiting sign-up. */
+    suspend fun cancelToWelcome() {
+        leaveStepper()
+        authStateHolder.showWelcome()
+        clearPendingSignup()
+    }
+
+    // State first, store second: the web router reads the step synchronously after a back press.
+    private fun leaveStepper() {
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
         _state.update {
             it.copy(
                 active = false,
                 step = OnboardingStep.Dob,
+                email = if (it.emailShownMasked) "" else it.email,
+                emailShownMasked = false,
+                password = "",
                 signupCode = "",
                 signupAttemptsSpent = false,
                 signupNotice = null,
                 accountNotice = null,
+                socialProvider = null,
+                isSubmitting = false,
                 errorMessage = null,
             )
         }
     }
 
+    /**
+     * "Continue with Google / Apple" from the welcome landing or the sign-in form. A known identity
+     * signs in (the shell moves on as for any sign-in). An unknown one opens the stepper on the
+     * birthday with the provider remembered, unless this device's 18+ stop is live, which opens on
+     * the stop as Create account does. Every other outcome (cancelled, an error, the "already has an
+     * account" notice) is on the auth screen already.
+     */
+    suspend fun continueWithSocial(provider: SocialProvider) {
+        if (_state.value.active) return
+        val outcome = authStateHolder.continueWithSocial(provider)
+        if (outcome != SocialSignInOutcome.NeedsAgeGate) return
+        // Something else took over meanwhile (a sign-in in another tab, a resumed stepper).
+        if (_state.value.active || authStateHolder.state.value.session != null) return
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
+        if (underageStopActive()) {
+            _state.update { freshState(it).copy(active = true, step = OnboardingStep.UnderageStop) }
+            return
+        }
+        _state.update { freshState(it).copy(active = true, step = OnboardingStep.Dob, socialProvider = provider) }
+    }
+
+    /**
+     * The Policies step's Accept. An email sign-up moves on to email + password ([acceptPolicies]).
+     * A Google / Apple sign-up finishes here: a new provider attempt carrying the birthday and both
+     * acceptances, then Location. The account exists only once the server answers.
+     */
+    suspend fun acceptPoliciesAndContinue() {
+        val current = _state.value
+        val provider = current.socialProvider
+        if (provider == null) {
+            acceptPolicies()
+            return
+        }
+        if (current.isSubmitting) return
+        val dob = current.dob
+        if (dob == null) {
+            _state.update { it.copy(step = OnboardingStep.Dob, errorMessage = "Enter your date of birth.") }
+            return
+        }
+        _state.update { it.copy(acceptedTerms = true, acceptedPrivacy = true, isSubmitting = true, errorMessage = null) }
+        // Before the session can exist (continueWithSocial publishes it): see evaluatePhotoNudge.
+        signupRanThisSession = true
+        try {
+            val outcome =
+                authStateHolder.continueWithSocial(
+                    provider = provider,
+                    ageGate =
+                        SocialAgeGate(
+                            birthdate = dob.toString(),
+                            // The Dob step gated 18+; sent explicitly, as the email sign-up does.
+                            confirmedAdult = true,
+                            acceptedTerms = true,
+                            acceptedPrivacy = true,
+                        ),
+                )
+            when (outcome) {
+                SocialSignInOutcome.SignedIn -> {
+                    markOnboardingInProgress(
+                        authStateHolder.state.value.session
+                            ?.userId,
+                    )
+                    _state.update { it.copy(isSubmitting = false, errorMessage = null, step = OnboardingStep.Location) }
+                }
+
+                // The auth screen is already on the sign-in form with the neutral notice.
+                SocialSignInOutcome.EmailHasAccount -> leaveStepper()
+
+                SocialSignInOutcome.Cancelled, SocialSignInOutcome.Busy ->
+                    _state.update { it.copy(isSubmitting = false) }
+
+                // The provider can't run here after all: carry on with email, answers kept.
+                SocialSignInOutcome.ProviderUnavailable ->
+                    _state.update {
+                        it.copy(
+                            isSubmitting = false,
+                            socialProvider = null,
+                            step = OnboardingStep.Account,
+                            accountNotice = "${provider.displayName} sign-in isn't available right now. Use your email instead.",
+                        )
+                    }
+
+                // The server asked for the birthday again: it already has it, so this is a failure.
+                SocialSignInOutcome.NeedsAgeGate ->
+                    _state.update { it.copy(isSubmitting = false, errorMessage = AuthStateHolder.SOCIAL_TRY_AGAIN) }
+
+                is SocialSignInOutcome.Failed ->
+                    _state.update { it.copy(isSubmitting = false, errorMessage = outcome.message) }
+            }
+        } finally {
+            // A cancelled scope while the provider UI was up must not leave Accept spinning.
+            _state.update { if (it.isSubmitting) it.copy(isSubmitting = false) else it }
+        }
+    }
+
     fun updateDobDay(value: String) {
-        _state.update { it.copy(dobDay = value.digits(2), errorMessage = null) }
+        _state.update { it.copy(dobDay = value.digits(2), dobWheelUntouched = false, errorMessage = null) }
     }
 
     fun updateDobMonth(value: String) {
-        _state.update { it.copy(dobMonth = value.digits(2), errorMessage = null) }
+        _state.update { it.copy(dobMonth = value.digits(2), dobWheelUntouched = false, errorMessage = null) }
     }
 
     fun updateDobYear(value: String) {
-        _state.update { it.copy(dobYear = value.digits(4), errorMessage = null) }
+        _state.update { it.copy(dobYear = value.digits(4), dobWheelUntouched = false, errorMessage = null) }
+    }
+
+    /**
+     * The phone birthday wheel is showing. It needs a date to sit on: the one already entered if it
+     * fits the wheel, else a neutral starting date ([neutralWheelDate], deliberately not "exactly 18
+     * years ago"). A neutral start is not an answer: Next stays off until a wheel is moved
+     * ([OnboardingUiState.dobComplete]), so nobody signs up on the default by accident.
+     */
+    fun showBirthdayWheel() {
+        val today = todayProvider()
+        val years = wheelYears(today)
+        _state.update { current ->
+            val withYears = current.copy(wheelFirstYear = years.first, wheelLastYear = years.last)
+            if (wheelDateOf(current, years) != null) {
+                withYears
+            } else {
+                val neutral = neutralWheelDate(today)
+                withYears.copy(
+                    dobDay = neutral.day.twoDigits(),
+                    dobMonth = neutral.month.number.twoDigits(),
+                    dobYear = neutral.year.toString(),
+                    dobWheelUntouched = true,
+                )
+            }
+        }
+    }
+
+    /**
+     * A wheel moved. The day is clamped to the month (31 -> 30 for April, 29 -> 28 out of a leap
+     * year); the date then goes through the same fields, so [confirmDob] validates it like a typed one.
+     */
+    fun selectWheelDate(
+        day: Int,
+        month: Int,
+        year: Int,
+    ) {
+        val clampedMonth = month.coerceIn(1, 12)
+        val clampedDay = clampWheelDay(year, clampedMonth, day)
+        _state.update {
+            it.copy(
+                dobDay = clampedDay.twoDigits(),
+                dobMonth = clampedMonth.twoDigits(),
+                dobYear = year.toString(),
+                dobWheelUntouched = false,
+                errorMessage = null,
+            )
+        }
+    }
+
+    /** "Type it instead": an untouched neutral date is not the person's, so the fields start empty. */
+    fun useTypedBirthday() {
+        _state.update {
+            if (it.dobWheelUntouched) {
+                it.copy(dobDay = "", dobMonth = "", dobYear = "", dobWheelUntouched = false, errorMessage = null)
+            } else {
+                it
+            }
+        }
     }
 
     /** Validates the typed date, then gates 18+ before any account data is collected. */
-    fun confirmDob() {
+    suspend fun confirmDob() {
         val current = _state.value
+        // The wheel's neutral start was never chosen: nothing to confirm yet (Next is off too).
+        if (current.dobWheelUntouched) return
         val dob = parseDob(current.dobDay, current.dobMonth, current.dobYear, todayProvider())
         if (dob == null) {
             _state.update { it.copy(errorMessage = "Enter a valid date of birth.") }
             return
         }
-        val nextStep =
-            if (dob.isAtLeastYearsOld(MINIMUM_AGE_YEARS, todayProvider())) {
-                OnboardingStep.Policies
-            } else {
-                OnboardingStep.UnderageStop
-            }
-        _state.update { it.copy(dob = dob, step = nextStep, errorMessage = null) }
+        if (dob.isAtLeastYearsOld(MINIMUM_AGE_YEARS, todayProvider())) {
+            _state.update { it.copy(dob = dob, step = OnboardingStep.Policies, errorMessage = null) }
+            return
+        }
+        // Underage: the stop sticks on this device for a day, so the birthday can't just be retyped
+        // older (Sign in stays available). State first, then the store.
+        val stoppedAt = nowEpochMillis()
+        underageStoppedAtMs = stoppedAt
+        _state.update { freshState(it).copy(active = true, step = OnboardingStep.UnderageStop) }
+        runCatchingCancellable { underageStopStore.save(stoppedAt) }
     }
 
+    /** Back to the birthday (the Policies step's Back). Never out of a sticky 18+ stop. */
     fun backToDob() {
+        if (_state.value.step == OnboardingStep.UnderageStop) return
         _state.update { it.copy(step = OnboardingStep.Dob, errorMessage = null) }
+    }
+
+    /** True while this device's last 18+ stop is less than [UNDERAGE_STOP_MILLIS] old. */
+    private fun underageStopActive(): Boolean {
+        val stoppedAt = underageStoppedAtMs ?: return false
+        if (isUnderageStopLive(stoppedAt)) return true
+        underageStoppedAtMs = null
+        return false
+    }
+
+    // Live only for 0 <= elapsed < 24 h. A clock set back before the stop (negative elapsed) counts
+    // as expired: otherwise the stop would last until real time caught up, possibly for days.
+    private fun isUnderageStopLive(stoppedAt: Long): Boolean {
+        val elapsed = nowEpochMillis() - stoppedAt
+        return elapsed in 0 until UNDERAGE_STOP_MILLIS
+    }
+
+    /**
+     * Reads this device's last 18+ stop (an expired one is cleared). Run at the signed-out settle;
+     * if Create account was tapped (or a /signup link opened) before it finished, the stepper moves
+     * to the stop now.
+     */
+    suspend fun loadUnderageStop() {
+        val stored = runCatchingCancellable { underageStopStore.load() }.getOrNull()
+        if (stored != null && !isUnderageStopLive(stored)) {
+            runCatchingCancellable { underageStopStore.clear() }
+            underageStoppedAtMs = null
+            return
+        }
+        if (stored != null) underageStoppedAtMs = stored
+        if (underageStopActive()) {
+            _state.update {
+                if (it.active && it.step == OnboardingStep.Dob) freshState(it).copy(active = true, step = OnboardingStep.UnderageStop) else it
+            }
+        }
     }
 
     fun backToPolicies() {
         _state.update { it.copy(step = OnboardingStep.Policies, errorMessage = null) }
+    }
+
+    /**
+     * System back (Android) and browser back (web) inside the stepper (B6): one step back, never out
+     * of the app mid-sign-up.
+     *
+     * Dob -> the welcome landing; UnderageStop and Policies -> Dob; Account -> Policies; VerifyEmail
+     * -> Account, dropping the started sign-up like "Use a different email". Location and Profile
+     * come after the code (the account exists), so back is consumed there and nothing changes.
+     * Ignored while a request is in flight.
+     *
+     * Every state change happens before the first suspension point: the web router reads the
+     * resulting step synchronously (see [com.pynapli.app.PynapliHistoryPlanner]).
+     *
+     * @return true when the step changed (or the stepper closed); false when back was consumed.
+     */
+    suspend fun stepBack(): Boolean {
+        val current = _state.value
+        if (!current.active || current.isSubmitting) return false
+        when (current.step) {
+            // The 18+ stop is sticky: back leaves the stepper instead of reopening the birthday.
+            OnboardingStep.Dob, OnboardingStep.UnderageStop -> cancelToWelcome()
+            OnboardingStep.Policies -> backToDob()
+            OnboardingStep.Account -> backToPolicies()
+            OnboardingStep.VerifyEmail -> useDifferentEmail()
+            OnboardingStep.Location, OnboardingStep.Profile -> return false
+        }
+        return true
     }
 
     /**
@@ -180,8 +472,10 @@ class OnboardingStateHolder(
             _state.update { it.copy(errorMessage = "Enter a valid email address.") }
             return
         }
-        if (current.password.length < MIN_PASSWORD_LENGTH) {
-            _state.update { it.copy(errorMessage = "Password must be at least $MIN_PASSWORD_LENGTH characters.") }
+        // The shared new-password rule (length + common-password list); the server checks the same
+        // before it looks at the address, so the copy never differs between addresses.
+        PasswordRules.messageFor(current.password)?.let { message ->
+            _state.update { it.copy(errorMessage = message) }
             return
         }
         if (!current.acceptedTerms || !current.acceptedPrivacy) {
@@ -215,6 +509,7 @@ class OnboardingStateHolder(
                     signupNotice = null,
                     accountNotice = null,
                     signupAttemptsSpent = false,
+                    resendAvailableAtEpochMs = nowEpochMillis() + RESEND_COOLDOWN_MILLIS,
                     step = OnboardingStep.VerifyEmail,
                 )
             }
@@ -228,8 +523,26 @@ class OnboardingStateHolder(
         }
     }
 
-    fun updateSignupCode(value: String) {
-        _state.update { it.copy(signupCode = value.digits(SIGNUP_CODE_LENGTH), errorMessage = null) }
+    /**
+     * Takes the typed (or pasted, or autofilled) code. Returns true exactly when this change completed
+     * the code (it just reached [SIGNUP_CODE_LENGTH] digits) and a verify may go out, so the screen
+     * submits it on its own once per entry: never again for the same digits, never while a verify is
+     * in flight (and [verifySignupCode] guards that too), never once the guesses are spent.
+     */
+    fun updateSignupCode(value: String): Boolean {
+        val before = _state.value
+        val code = value.digits(SIGNUP_CODE_LENGTH)
+        _state.update { it.copy(signupCode = code, errorMessage = null) }
+        return code.length == SIGNUP_CODE_LENGTH &&
+            before.signupCode.length < SIGNUP_CODE_LENGTH &&
+            !before.isSubmitting &&
+            !before.signupAttemptsSpent
+    }
+
+    /** Whole seconds until "Send a new code" is offered again (0 when it is). The same for every address. */
+    fun resendCooldownSecondsLeft(): Int {
+        val left = _state.value.resendAvailableAtEpochMs - nowEpochMillis()
+        return if (left <= 0) 0 else ((left + 999) / 1_000).toInt()
     }
 
     /** Checks the emailed code; on success the account and session exist and the skippable steps start. */
@@ -246,6 +559,8 @@ class OnboardingStateHolder(
             return
         }
         _state.update { it.copy(isSubmitting = true, errorMessage = null, signupNotice = null) }
+        // Before the session can exist (verifySignup publishes it): see evaluatePhotoNudge.
+        signupRanThisSession = true
         val verified = authStateHolder.verifySignup(email = current.email, code = current.signupCode, signupToken = token)
         if (verified) {
             pendingSignupToken = null
@@ -290,6 +605,8 @@ class OnboardingStateHolder(
     suspend fun resendSignupCode() {
         val current = _state.value
         if (current.isSubmitting || current.signupAttemptsSpent) return
+        // Client-side pacing only (the server has its own silent caps); identical for every address.
+        if (resendCooldownSecondsLeft() > 0) return
         val token = pendingSignupToken
         if (token == null) {
             restartSignup(SIGNUP_EXPIRED_MESSAGE)
@@ -299,7 +616,12 @@ class OnboardingStateHolder(
         val sent = authStateHolder.resendSignupCode(email = current.email, signupToken = token)
         _state.update {
             if (sent) {
-                it.copy(isSubmitting = false, signupCode = "", signupNotice = RESENT_NOTICE)
+                it.copy(
+                    isSubmitting = false,
+                    signupCode = "",
+                    signupNotice = RESENT_NOTICE,
+                    resendAvailableAtEpochMs = nowEpochMillis() + RESEND_COOLDOWN_MILLIS,
+                )
             } else {
                 it.copy(isSubmitting = false, errorMessage = authStateHolder.state.value.errorMessage)
             }
@@ -316,6 +638,11 @@ class OnboardingStateHolder(
      * that address. A sign-up older than the server keeps it restarts cleanly (nothing to do).
      */
     suspend fun resumePendingSignupIfNeeded() {
+        // Signed out: the next session (even the same account's) is decided afresh, and nothing the
+        // last person entered stays in memory.
+        _state.update { it.copy(sessionSettledFor = null) }
+        resetForSignOut()
+        loadUnderageStop()
         if (_state.value.active) return
         if (authStateHolder.state.value.session != null) return
         val pending = runCatchingCancellable { pendingSignupStore.load() }.getOrNull() ?: return
@@ -335,6 +662,7 @@ class OnboardingStateHolder(
                 password = "",
                 signupCode = "",
                 signupNotice = null,
+                resendAvailableAtEpochMs = pending.startedAtEpochMs + RESEND_COOLDOWN_MILLIS,
                 errorMessage = null,
             )
         }
@@ -376,7 +704,8 @@ class OnboardingStateHolder(
     /** Releases the user to the grid and marks onboarding complete. */
     suspend fun finish() {
         markOnboardingCompleted()
-        _state.update { it.copy(active = false, errorMessage = null) }
+        // Done with this person's answers (birthday, address, name, acceptances): drop them all.
+        _state.update { freshState(it) }
     }
 
     /**
@@ -387,9 +716,27 @@ class OnboardingStateHolder(
      * non-naggy).
      */
     suspend fun onSessionReady() {
-        resumeIfNeeded()
-        evaluatePhotoNudge()
+        try {
+            resumeIfNeeded()
+            evaluatePhotoNudge()
+        } finally {
+            // Fail open: whatever happened above, the shell may now draw the main surfaces.
+            _state.update {
+                it.copy(
+                    sessionSettledFor =
+                        authStateHolder.state.value.session
+                            ?.userId,
+                )
+            }
+        }
     }
+
+    /**
+     * The shell holds the main surfaces (no grid composed, so no grid load) until [onSessionReady]
+     * has decided this session: otherwise a sign-up resume shows the grid for a frame or more before
+     * the stepper takes the screen (B3). Signed-out, nothing is held.
+     */
+    fun holdsMainSurfaces(sessionUserId: String?): Boolean = _state.value.holdsMainSurfaces(sessionUserId)
 
     /**
      * Re-enters the consolidated Profile step after a mid-signup app close. No-op
@@ -408,24 +755,26 @@ class OnboardingStateHolder(
         // Anyone else signing in on this device skips straight to the grid.
         if (progress.userId != sessionUserId) return
 
-        val me = profileRepository.getMe()
-        val displayName =
-            when (me) {
-                is AppResult.Success ->
-                    me.value.profile.displayName
-                        .orEmpty()
-                // Offline resume: an empty prefill is harmless — saving again later
-                // is idempotent.
-                is AppResult.Failure -> ""
-            }
+        // Take the screen first (B3): the stepper holds it while /me is in flight, so the grid never
+        // shows in between. The saved name arrives after.
+        signupRanThisSession = true
         _state.update {
             it.copy(
                 active = true,
-                displayName = displayName,
                 step = OnboardingStep.Profile,
                 errorMessage = null,
             )
         }
+        val savedName =
+            when (val me = profileRepository.getMe()) {
+                is AppResult.Success ->
+                    me.value.profile.displayName
+                        .orEmpty()
+                // Offline resume: no prefill, which is harmless (saving again later is idempotent).
+                is AppResult.Failure -> ""
+            }
+        // Never overwrite what the person started typing while /me was in flight.
+        _state.update { if (it.displayName.isEmpty()) it.copy(displayName = savedName) else it }
     }
 
     /**
@@ -435,6 +784,13 @@ class OnboardingStateHolder(
      * live media state, not settings.
      */
     suspend fun evaluatePhotoNudge() {
+        // The stepper ran (or is running) in this process: the first nudge lands a session later. An
+        // in-memory flag, set before the session can exist, so a slow "in progress" store write can't
+        // let this read the stale `completed = true` default and arm the banner.
+        if (signupRanThisSession || _state.value.active) {
+            _state.update { it.copy(photoNudgeEligible = false) }
+            return
+        }
         val progress = runCatchingCancellable { progressStore.load() }.getOrNull() ?: return
         val eligible =
             progress.completed &&
@@ -480,13 +836,16 @@ class OnboardingStateHolder(
         runCatchingCancellable { pendingSignupStore.clear() }
     }
 
+    // State first, store second: the web router reads the step synchronously after a back press.
     private suspend fun restartSignup(errorMessage: String?) {
         pendingSignupToken = null
         failedCodeSubmissions = 0
-        clearPendingSignup()
         _state.update {
             it.copy(
                 step = OnboardingStep.Account,
+                // A resumed address was only ever shown masked: never put it in full into the field
+                // (whoever opened the app may not be the person who started).
+                email = if (it.emailShownMasked) "" else it.email,
                 emailShownMasked = false,
                 password = "",
                 signupCode = "",
@@ -497,6 +856,7 @@ class OnboardingStateHolder(
                 errorMessage = errorMessage,
             )
         }
+        clearPendingSignup()
     }
 
     private suspend fun markOnboardingCompleted() {
@@ -511,7 +871,7 @@ class OnboardingStateHolder(
 
     companion object {
         const val MINIMUM_AGE_YEARS = 18
-        const val MIN_PASSWORD_LENGTH = 12
+        const val MIN_PASSWORD_LENGTH = PasswordRules.MIN_LENGTH
         const val MAX_PHOTO_NUDGE_SESSIONS = 3
         const val DISPLAY_NAME_MAX_LENGTH = 15
         const val SIGNUP_CODE_LENGTH = 6
@@ -519,6 +879,12 @@ class OnboardingStateHolder(
         /** The server keeps a started sign-up this long (EmailSignupService.PENDING_LIFETIME). */
         const val PENDING_SIGNUP_LIFETIME_MILLIS = 24L * 60 * 60 * 1_000
         const val RESENT_NOTICE = "If this address can be used, a new code is on its way. Use the newest one."
+
+        /** How long "Send a new code" waits after a code went out. Client pacing, the same for every address. */
+        const val RESEND_COOLDOWN_MILLIS = 30_000L
+
+        /** How long an 18+ stop sticks on this device (Create account goes straight back to it). */
+        const val UNDERAGE_STOP_MILLIS = 24L * 60 * 60 * 1_000
         const val SIGNUP_EXPIRED_MESSAGE = "That sign-up has expired. Enter your email again to get a new code."
 
         /** The server's guess budget per sign-up (EmailSignupService.MAX_ATTEMPTS). */
@@ -560,6 +926,39 @@ class OnboardingStateHolder(
         internal fun isLeapYear(year: Int): Boolean = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 
         private const val MAX_AGE_YEARS = 120
+
+        /** How far back the wheel's neutral start sits: an adult age, but not the 18-year boundary. */
+        const val NEUTRAL_WHEEL_AGE_YEARS = 25
+
+        /** The birthday wheel's years: the same window [parseDob] accepts, oldest first. */
+        fun wheelYears(today: LocalDate): IntRange = (today.year - MAX_AGE_YEARS)..today.year
+
+        /** Where the wheel starts: 1 January, [NEUTRAL_WHEEL_AGE_YEARS] years back. */
+        fun neutralWheelDate(today: LocalDate): LocalDate = LocalDate(today.year - NEUTRAL_WHEEL_AGE_YEARS, 1, 1)
+
+        /** Keeps a wheel day inside the month: the last day when the month (or a leap year) is shorter. */
+        fun clampWheelDay(
+            year: Int,
+            month: Int,
+            day: Int,
+        ): Int = day.coerceIn(1, daysInMonth(year, month))
+
+        /** The date the fields hold if the wheel can show it as is, else null. */
+        internal fun wheelDateOf(
+            state: OnboardingUiState,
+            years: IntRange,
+        ): LocalDate? {
+            val year =
+                state.dobYear
+                    .takeIf { it.length == 4 }
+                    ?.toIntOrNull()
+                    ?.takeIf { it in years } ?: return null
+            val month = state.dobMonth.toIntOrNull()?.takeIf { it in 1..12 } ?: return null
+            val day = state.dobDay.toIntOrNull()?.takeIf { it in 1..daysInMonth(year, month) } ?: return null
+            return LocalDate(year, month, day)
+        }
+
+        private fun Int.twoDigits(): String = toString().padStart(2, '0')
     }
 }
 
@@ -602,6 +1001,11 @@ data class OnboardingUiState(
     val dobMonth: String = "",
     val dobYear: String = "",
     val dob: LocalDate? = null,
+    // The phone wheel is sitting on its neutral start and nobody has moved it yet: not an answer.
+    val dobWheelUntouched: Boolean = false,
+    // The wheel's year window, set when it is shown (the holder knows today; the screen doesn't).
+    val wheelFirstYear: Int = 0,
+    val wheelLastYear: Int = 0,
     val email: String = "",
     val password: String = "",
     // On a resumed code step the address is shown masked ([verifyEmailLabel]).
@@ -611,17 +1015,27 @@ data class OnboardingUiState(
     val signupNotice: String? = null,
     // The code step's guesses for this sign-up are used up: offer "Start again" instead of Verify.
     val signupAttemptsSpent: Boolean = false,
+    // When "Send a new code" is offered again (epoch ms); see OnboardingStateHolder.resendCooldownSecondsLeft.
+    val resendAvailableAtEpochMs: Long = 0L,
     // A neutral line on the Account step after "Start again".
     val accountNotice: String? = null,
     val acceptedTerms: Boolean = false,
     val acceptedPrivacy: Boolean = false,
+    // A Google / Apple sign-up in progress: which provider finishes it at Policies. Null for email.
+    val socialProvider: SocialProvider? = null,
     val displayName: String = "",
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val photoNudgeEligible: Boolean = false,
+    // The account [OnboardingStateHolder.onSessionReady] last decided (resume + nudge) for; see
+    // [OnboardingStateHolder.holdsMainSurfaces].
+    val sessionSettledFor: String? = null,
 ) {
     val dobComplete: Boolean
-        get() = dobDay.isNotEmpty() && dobMonth.isNotEmpty() && dobYear.length == 4
+        get() = dobDay.isNotEmpty() && dobMonth.isNotEmpty() && dobYear.length == 4 && !dobWheelUntouched
+
+    /** See [OnboardingStateHolder.holdsMainSurfaces]. */
+    fun holdsMainSurfaces(sessionUserId: String?): Boolean = sessionUserId != null && !active && sessionSettledFor != sessionUserId
 
     /** The address the code step names: in full right after sign-up, masked after a resume. */
     val verifyEmailLabel: String

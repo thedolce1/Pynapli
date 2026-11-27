@@ -1,8 +1,9 @@
 package com.pynapli.app.profile
 
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.GridProfileCardUi
+import com.pynapli.app.grid.isLockedCard
+import com.pynapli.app.media.OwnPreviewPhoto
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ReportTargetType
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,7 +31,16 @@ class ProfileDetailStateHolder(
         flirtSource: String? = null,
         isOwnProfile: Boolean = false,
         likeBackEventId: String? = null,
+        // Own preview only (openOwnPreview): the owner's photos incl. ones being reviewed.
+        ownPreviewPhotos: List<OwnPreviewPhoto> = emptyList(),
     ) {
+        // A locked Grid card (Section 3) has no profile for this viewer: its token is not a user id,
+        // and the server refuses it anyway. Never fetch, never select it, so block, hide, favourite
+        // and message have nothing to act on. Callers route a locked tap to the plans instead.
+        if (card.isLockedCard) return
+        // Moving on from someone reported in this sheet (the Grid profile pager swipes to the next
+        // person without closing) hands them to the same removal path closing would.
+        val reportedBefore = _state.value.reportedTargetUserId?.takeIf { it != card.id }
         _state.update {
             ProfileDetailUiState(
                 selectedCard = card,
@@ -38,10 +48,16 @@ class ProfileDetailStateHolder(
                 flirtSource = flirtSource,
                 isOwnProfile = isOwnProfile,
                 likeBackEventId = likeBackEventId,
+                ownPreviewPhotos = if (isOwnProfile) ownPreviewPhotos else emptyList(),
             )
         }
+        reportedBefore?.let { _removedProfiles.tryEmit(it) }
 
-        when (val result = repository.loadProfile(card.id)) {
+        val result = repository.loadProfile(card.id)
+        // A newer open (a fast swipe to the next profile) owns the sheet now: drop this answer so
+        // one person's profile never shows under another person's card.
+        if (_state.value.selectedCard?.id != card.id) return
+        when (result) {
             is AppResult.Success -> {
                 _state.update { current ->
                     current.copy(
@@ -74,7 +90,6 @@ class ProfileDetailStateHolder(
                 thumbnailUrl = partner.thumbnailUrl,
                 online = false,
                 distanceLabel = null,
-                tone = GridCardTone.entries[partner.userId.stableIndex(GridCardTone.entries.size)],
             ),
             flirtSource = flirtSource,
         )
@@ -101,6 +116,7 @@ class ProfileDetailStateHolder(
         userId: String,
         displayName: String?,
         profilePhotoUrl: String?,
+        ownPhotos: List<OwnPreviewPhoto> = emptyList(),
     ) {
         open(
             GridProfileCardUi(
@@ -109,9 +125,9 @@ class ProfileDetailStateHolder(
                 thumbnailUrl = profilePhotoUrl,
                 online = false,
                 distanceLabel = null,
-                tone = GridCardTone.entries[userId.stableIndex(GridCardTone.entries.size)],
             ),
             isOwnProfile = true,
+            ownPreviewPhotos = ownPhotos,
         )
     }
 

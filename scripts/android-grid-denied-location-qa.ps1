@@ -28,7 +28,7 @@ function Invoke-PostgresSql {
         throw "Docker was not found; cannot prepare denied-location server state."
     }
 
-    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $Sql 2>&1
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -v ON_ERROR_STOP=1 -c $Sql 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Postgres SQL failed: $output"
     }
@@ -140,7 +140,9 @@ try {
 
     Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, "android.permission.ACCESS_FINE_LOCATION")
     Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, "android.permission.ACCESS_COARSE_LOCATION")
-    Invoke-AdbBestEffort @("shell", "pm", "revoke", $PackageName, "android.permission.POST_NOTIFICATIONS")
+    # Granted, not revoked: the in-app ask now lands ~20 s into the Grid and would cover this run's
+    # location dialog. The denied-notification path has its own QA (android-notification-permission-qa).
+    Grant-QaNotificationPermission -PackageName $PackageName
     Invoke-AdbBestEffort @("shell", "pm", "clear-permission-flags", $PackageName, "android.permission.ACCESS_FINE_LOCATION", "user-set", "user-fixed")
     Invoke-AdbBestEffort @("shell", "pm", "clear-permission-flags", $PackageName, "android.permission.ACCESS_COARSE_LOCATION", "user-set", "user-fixed")
     Invoke-AdbBestEffort @("shell", "appops", "set", $PackageName, "android:fine_location", "default")

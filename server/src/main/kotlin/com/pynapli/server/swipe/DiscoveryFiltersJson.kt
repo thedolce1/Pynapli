@@ -25,6 +25,15 @@ internal fun DiscoveryFilters.toPersistedJson(): String =
         append(",\"intents\":").append(intents.toJsonArray())
         // Written only when set, so payloads of decks dealt without it are unchanged.
         if (verifiedCouplesOnly) append(",\"verifiedCouplesOnly\":true")
+        // Partner filters + "No single men" (plan G2-3): written only when set, like verifiedCouplesOnly.
+        if (hasPartnerFilters) {
+            append(",\"partnerGenders\":").append(partnerGenders.toJsonArray())
+            append(",\"partnerMinimumAge\":").append(partnerMinimumAge?.toString() ?: "null")
+            append(",\"partnerMaximumAge\":").append(partnerMaximumAge?.toString() ?: "null")
+            append(",\"partnerOrientations\":").append(partnerOrientations.toJsonArray())
+            append(",\"partnerVerifiedOnly\":").append(partnerVerifiedOnly)
+        }
+        if (excludeSingleMen) append(",\"excludeSingleMen\":true")
         append("}")
     }
 

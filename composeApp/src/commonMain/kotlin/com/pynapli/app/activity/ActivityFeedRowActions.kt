@@ -29,6 +29,7 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
+import com.pynapli.app.media.rememberCachedImageModel
 import com.pynapli.shared.network.dto.ActivityEventDto
 
 @Composable
@@ -215,7 +216,11 @@ internal fun ActivityPrimaryAction(
 }
 
 @Composable
-internal fun ActivityAvatar(photoUrl: String?) {
+internal fun ActivityAvatar(
+    photoUrl: String?,
+    // G2-2: the server's stable key for [photoUrl]'s bytes.
+    photoCacheKey: String? = null,
+) {
     Box(
         modifier =
             Modifier
@@ -230,7 +235,7 @@ internal fun ActivityAvatar(photoUrl: String?) {
     ) {
         if (photoUrl != null) {
             AsyncImage(
-                model = photoUrl,
+                model = rememberCachedImageModel(photoUrl, photoCacheKey),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

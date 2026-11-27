@@ -97,7 +97,7 @@ internal fun TravelModeSheet(
             PynapliSheetTitle(text = "Travel mode")
             PynapliSectionIntro(
                 text =
-                    "Type a city or ZIP/postal code and your deck shows people there. " +
+                    "Type a city or ZIP/postal code and your Grid and deck show people there. " +
                         "One location at a time. Clear it to go back to local.",
             )
 

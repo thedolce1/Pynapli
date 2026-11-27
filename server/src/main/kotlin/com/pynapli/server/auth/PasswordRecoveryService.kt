@@ -92,7 +92,7 @@ class PasswordRecoveryService(
         newPassword: String,
     ) {
         rateLimitGuard.enforce(RateLimitedAction.AUTH_PASSWORD_RESET_VERIFY, email)
-        validator.validateEmailPassword(email, newPassword)
+        validator.validateNewPassword(email, newPassword)
         val identity =
             repository
                 .findEmailIdentity(Sha256.hash(normalizeEmail(email)))
@@ -130,7 +130,7 @@ class PasswordRecoveryService(
         newPassword: String,
     ) {
         rateLimitGuard.enforce(RateLimitedAction.AUTH_PASSWORD_CHANGE, userId.toString())
-        if (newPassword.length < MIN_PASSWORD_LENGTH) throw AuthException("PASSWORD_TOO_SHORT")
+        validator.validateNewPassword(newPassword)
         val stored = repository.findPasswordHash(userId) ?: throw AuthException("PASSWORD_CHANGE_NOT_AVAILABLE")
         if (!passwordHasher.verify(currentPassword, stored)) throw AuthException("WRONG_CURRENT_PASSWORD")
         repository.changePassword(
@@ -151,7 +151,6 @@ class PasswordRecoveryService(
         private val logger = LoggerFactory.getLogger(PasswordRecoveryService::class.java)
         val CODE_LIFETIME: Duration = Duration.ofMinutes(30)
         const val MAX_FAILED_ATTEMPTS = 5
-        private const val MIN_PASSWORD_LENGTH = 12
         private val random = SecureRandom()
 
         fun newResetCode(): String = (random.nextInt(1_000_000)).toString().padStart(6, '0')

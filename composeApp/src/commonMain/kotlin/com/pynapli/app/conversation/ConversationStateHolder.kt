@@ -47,6 +47,11 @@ class ConversationStateHolder(
             refreshOpenConversation = { refreshOpenConversation() },
             dismissConversation = { dismiss() },
         )
+    private val metInPersonActions =
+        ConversationMetInPersonActions(
+            repository = repository,
+            state = stateAccess,
+        )
 
     suspend fun openDirect(
         card: GridProfileCardUi,
@@ -60,6 +65,29 @@ class ConversationStateHolder(
             ),
         )
         openWithResult(resultProvider = { repository.createDirectConversation(card.id) })
+    }
+
+    /**
+     * The Grid profile's "Say something…" send (MESSAGING_SPEC "Starting from a profile"): gets or
+     * creates the Grid direct conversation (the same server gate as the Message button, so the
+     * recipient's first-message setting still decides) and posts [body] with the caller's
+     * [idempotencyKey]. Leaves the open-conversation state alone; the caller opens the returned
+     * conversation id afterwards, which refetches it over HTTP.
+     */
+    suspend fun sendFirstGridMessage(
+        targetUserId: String,
+        body: String,
+        idempotencyKey: String,
+    ): AppResult<String> {
+        val conversationId =
+            when (val opened = repository.createDirectConversation(targetUserId)) {
+                is AppResult.Success -> opened.value.conversation.conversationId
+                is AppResult.Failure -> return opened
+            }
+        return when (val sent = repository.sendMessage(conversationId, body, idempotencyKey)) {
+            is AppResult.Success -> AppResult.Success(conversationId)
+            is AppResult.Failure -> sent
+        }
     }
 
     suspend fun openSwipeMatch(
@@ -220,6 +248,22 @@ class ConversationStateHolder(
     suspend fun leaveConversation() = partnerActions.leaveConversation()
 
     suspend fun setExpiry(expirySeconds: Int?) = partnerActions.setExpiry(expirySeconds)
+
+    /**
+     * "We've met in person" sheet: open for one person the server offered, tick their partner, act.
+     * Called when the overflow menu opens; a failure only leaves the menu empty.
+     */
+    suspend fun loadMetInPersonOffers() = metInPersonActions.load()
+
+    fun openMetInPerson(subjectUserId: String) = metInPersonActions.open(subjectUserId)
+
+    fun setMetInPersonIncludePartner(include: Boolean) = metInPersonActions.setIncludePartner(include)
+
+    fun dismissMetInPerson() = metInPersonActions.dismiss()
+
+    suspend fun confirmMetInPerson() = metInPersonActions.confirm()
+
+    suspend fun takeBackMetInPerson() = metInPersonActions.takeBack()
 
     suspend fun sendDraft() = messageActions.sendDraft()
 

@@ -409,6 +409,8 @@ private class FakeApiClient(
 
     override suspend fun updateCurrentLocation(request: UpdateCurrentLocationRequestDto): AppResult<CurrentLocationDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
+    override suspend fun sendPresenceHeartbeat(): AppResult<Unit> = AppResult.Success(Unit)
+
     override suspend fun queryGrid(request: GridQueryRequestDto): AppResult<GridQueryResponseDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 
     override suspend fun listSavedGridFilters(): AppResult<com.pynapli.shared.network.dto.SavedGridFiltersListDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))

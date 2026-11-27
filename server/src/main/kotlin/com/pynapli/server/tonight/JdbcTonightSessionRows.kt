@@ -151,7 +151,7 @@ private fun Connection.loadTonightParticipants(
         if (withDisplayNames) {
             """
             SELECT p.user_id, p.role, p.approval_status, p.approved_at,
-                   COALESCE(NULLIF(TRIM(pr.display_name), ''), 'Pynapli User') AS display_name
+                   COALESCE(NULLIF(TRIM(pr.display_name), ''), 'New member') AS display_name
             FROM tonight_session_participants p
             LEFT JOIN profiles pr ON pr.user_id = p.user_id
             WHERE p.session_id = ?

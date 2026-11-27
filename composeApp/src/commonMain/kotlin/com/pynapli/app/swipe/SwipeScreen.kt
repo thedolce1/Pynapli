@@ -35,6 +35,8 @@ fun SwipeScreen(
     // Opens the plans/store sheet on the section this paywall sells.
     onOpenStore: (StorePaywallFocus) -> Unit = {},
     onOpenAgeVerification: () -> Unit = {},
+    // Age verified: false hides the Lifestyle tags in the filter sheet.
+    lifestyleFiltersAllowed: Boolean = true,
     onOpenPsync: (() -> Unit)? = null,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
@@ -71,6 +73,14 @@ fun SwipeScreen(
 
     LaunchedEffect(stateHolder, viewerUserId) {
         stateHolder.load(ownerUserId = viewerUserId)
+    }
+
+    // Travel switched on or off elsewhere (the Grid header) while this deck was built: reload it.
+    // Reads the live value, so a load that already ran (entry, or this screen's own travel sheet)
+    // is not repeated.
+    val deckStale by stateHolder.deckStale.collectAsState()
+    LaunchedEffect(stateHolder, deckStale) {
+        if (stateHolder.deckStale.value) stateHolder.load(ownerUserId = viewerUserId)
     }
 
     LaunchedEffect(stateHolder, state.cards.size, state.nextCursor) {
@@ -303,7 +313,7 @@ fun SwipeScreen(
                 filtersSheetVisible = false
                 scope.launch { stateHolder.applyFilters(SwipeFilters.defaults) }
             },
-            onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
+            lifestyleFiltersAllowed = lifestyleFiltersAllowed,
             onOpenAgeVerification = onOpenAgeVerification,
             savedState = savedSwipeFiltersState,
             onSavePreset = { name, filters ->

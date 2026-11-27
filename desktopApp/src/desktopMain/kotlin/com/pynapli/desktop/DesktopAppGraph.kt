@@ -9,6 +9,8 @@ import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
+import com.pynapli.app.auth.UnavailableSocialSignInProvider
+import com.pynapli.app.grid.AccountBoundGridFilterStore
 import com.pynapli.app.grid.NoOpGridSnapshotStore
 import com.pynapli.app.onboarding.ApiOnboardingProfileRepository
 import com.pynapli.app.onboarding.OnboardingStateHolder
@@ -21,6 +23,7 @@ import com.pynapli.desktop.settings.DesktopAppSettingsStore
 import com.pynapli.desktop.settings.DesktopOnboardingProgressStore
 import com.pynapli.shared.auth.AuthRepository
 import com.pynapli.shared.auth.SessionInvalidationBus
+import com.pynapli.shared.auth.SessionMutationLock
 import com.pynapli.shared.auth.StoredSessionRefresher
 import com.pynapli.shared.core.config.PynapliEnvironment
 import com.pynapli.shared.network.KtorPynapliApiClient
@@ -28,6 +31,7 @@ import com.pynapli.shared.network.NoAppCheckTokenProvider
 import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.jvmRealtimeStreams
 import com.pynapli.shared.settings.InMemoryPendingSignupStore
+import com.pynapli.shared.settings.InMemoryUnderageStopStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.datetime.TimeZone
@@ -50,12 +54,22 @@ import kotlin.random.Random
  */
 class DesktopAppGraph {
     private val pynapliConfig = DesktopRuntimeConfig.pynapliConfig
+
+    init {
+        // Dev-only shell: always log the Grid image line (counts only, G2-2 ticket 7).
+        com.pynapli.app.media.ImageLoadStats.grid.sink = { line -> println(line) }
+    }
+
     private val sessionStore = DesktopSessionStore()
 
     // Same construction cycle as every other shell: the client needs a refresher to survive the
     // access-token TTL, and the refresher needs the client to call /v1/auth/refresh.
     private val sessionRefresher = SessionRefresherHolder()
     private val sessionInvalidationBus = SessionInvalidationBus()
+
+    // One lock for this store, shared by the refresher and AuthRepository: sign-out waits for a
+    // refresh in flight rather than being overwritten by it.
+    private val sessionLock = SessionMutationLock()
 
     private val apiClient =
         KtorPynapliApiClient(
@@ -70,10 +84,11 @@ class DesktopAppGraph {
                     authApi = client,
                     sessionStore = sessionStore,
                     invalidationBus = sessionInvalidationBus,
+                    lock = sessionLock,
                 )
         }
 
-    private val authRepository = AuthRepository(apiClient = apiClient, sessionStore = sessionStore)
+    private val authRepository = AuthRepository(apiClient = apiClient, sessionStore = sessionStore, sessionLock = sessionLock)
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
 
@@ -84,6 +99,8 @@ class DesktopAppGraph {
             appVersion = "0.1.0",
             deviceId = stableDesktopInstallId(),
             sessionInvalidations = sessionInvalidationBus.events,
+            // Dev-only shell: no provider integration, so the social buttons never show here.
+            socialSignInProvider = UnavailableSocialSignInProvider,
         )
 
     val appSettingsStateHolder =
@@ -104,6 +121,7 @@ class DesktopAppGraph {
             progressStore = DesktopOnboardingProgressStore(),
             // Dev-only shell: memory only (a restart before the code starts the sign-up over).
             pendingSignupStore = InMemoryPendingSignupStore(),
+            underageStopStore = InMemoryUnderageStopStore(),
         )
 
     /** All realtime WebSocket streams, sharing one client and connection pool. */
@@ -113,6 +131,17 @@ class DesktopAppGraph {
         PynapliCommonGraph(
             apiClient = apiClient,
             gridSnapshotStore = NoOpGridSnapshotStore,
+            // No SQLDelight on desktop (see DesktopStorage): the filters go in a plain file.
+            gridFilterStore =
+                AccountBoundGridFilterStore(
+                    currentUserId = {
+                        authStateHolder.state.value.session
+                            ?.userId
+                    },
+                    read = { DesktopStorage.get(GRID_FILTERS_KEY) },
+                    write = { value -> DesktopStorage.set(GRID_FILTERS_KEY, value) },
+                    remove = { DesktopStorage.remove(GRID_FILTERS_KEY) },
+                ),
             swipeQueueStore = NoOpSwipeActionQueueStore,
             swipeRepository = ApiSwipeRepository(apiClient),
             storePurchaseGateway = UnavailableStorePurchaseGateway(),
@@ -122,6 +151,7 @@ class DesktopAppGraph {
                 realtimeStreams.activity,
             messageStreamClient =
                 realtimeStreams.message,
+            socialSignInProvider = UnavailableSocialSignInProvider,
         )
 
     /** Psync realtime channel; the per-viewer holder is built inside `PynapliApp`. */
@@ -153,6 +183,7 @@ class DesktopAppGraph {
 
     private companion object {
         private const val INSTALL_ID_KEY = "install-id-v1"
+        private const val GRID_FILTERS_KEY = "grid-filters-v1"
         private const val HEX_CHARS = "0123456789abcdef"
 
         /**

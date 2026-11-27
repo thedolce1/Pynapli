@@ -1,5 +1,6 @@
 package com.pynapli.server.account
 
+import com.pynapli.server.metinperson.MetInPersonAccountData
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -10,9 +11,11 @@ class JdbcAccountLifecycleRepository(
     // The server's contact block keys. Required on purpose: built without the configured keys,
     // deletion would release nothing (CoreDependencies passes them; tests pass the local ones).
     contactBlockTokens: com.pynapli.server.contactblocks.ContactBlockTokens,
+    // K3-dependent: required for the same reason.
+    metInPersonAccountData: MetInPersonAccountData,
 ) : AccountLifecycleRepository {
     private val exportActions = JdbcAccountDataExportActions(dataSource)
-    private val deletionActions = JdbcAccountDeletionActions(dataSource, contactBlockTokens)
+    private val deletionActions = JdbcAccountDeletionActions(dataSource, contactBlockTokens, metInPersonAccountData)
 
     override suspend fun latestDataExportRequest(userId: UUID): AccountDataExportRecord? = exportActions.latestDataExportRequest(userId)
 

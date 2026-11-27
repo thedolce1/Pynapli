@@ -1,6 +1,7 @@
 package com.pynapli.app.auth
 
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.PasswordRules
 import com.pynapli.shared.auth.SessionStore
 import com.pynapli.shared.auth.StoredSession
 import com.pynapli.shared.core.result.AppError
@@ -24,11 +25,13 @@ import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -98,7 +101,12 @@ class AuthStateHolderTest {
             holder.updateResetCode("12-34 56x")
             holder.updatePassword("short")
             holder.submit()
-            assertEquals("Password must be at least 12 characters.", holder.state.value.errorMessage)
+            assertEquals("Password must be at least 10 characters.", holder.state.value.errorMessage)
+
+            holder.updatePassword("Password1234")
+            holder.submit()
+            assertEquals(PasswordRules.TOO_COMMON_MESSAGE, holder.state.value.errorMessage)
+            assertTrue(api.resets.isEmpty(), "a common new password never reaches the server")
 
             holder.updatePassword("a-new-password-123")
             holder.submit()
@@ -165,6 +173,100 @@ class AuthStateHolderTest {
         }
 
     @Test
+    fun anInvalidationDuringTheMembersOwnLogoutShowsTheWelcomeNotTheNotice() =
+        runTest {
+            val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            var observedDuringLogout = false
+            lateinit var holder: AuthStateHolder
+            val api =
+                FakeAuthApi(
+                    loginResult = AppResult.Success(session()),
+                    onLogout = {
+                        // The server revoked the session; a request racing the logout hit a terminal
+                        // refresh rejection, and the observer handles it before the logout finishes.
+                        invalidations.emit(Unit)
+                        yield()
+                        observedDuringLogout = holder.state.value.errorMessage != null
+                    },
+                )
+            holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                    sessionInvalidations = invalidations,
+                )
+            val observer = launch(start = CoroutineStart.UNDISPATCHED) { holder.observeSessionInvalidations() }
+            holder.submitDevLogin(DevLoginCredentials("dev@pynapli.local", "PynapliDevPass123!"))
+
+            holder.logout()
+            runCurrent()
+
+            assertFalse(observedDuringLogout, "no 'session ended' flash while logging out")
+            assertEquals(null, holder.state.value.errorMessage)
+            assertTrue(holder.state.value.showWelcome, "logout's welcome landing is what shows")
+            assertFalse(holder.state.value.authenticated)
+            observer.cancel()
+        }
+
+    // Another browser tab changed the shared stored session (the web shell's `storage` listener).
+
+    @Test
+    fun anotherTabSigningOutEndsThisTabsSession() =
+        runTest {
+            val holder = restoringHolder(FakeProfileApi())
+            holder.restoreSession()
+
+            holder.onStoredSessionChanged(null)
+
+            assertFalse(holder.state.value.authenticated)
+            assertFalse(holder.state.value.showWelcome)
+            assertEquals("Your session ended. Please sign in again.", holder.state.value.errorMessage)
+        }
+
+    @Test
+    fun anotherTabSigningInAsSomeoneElseIsNeverAdopted() =
+        runTest {
+            val holder = restoringHolder(FakeProfileApi())
+            holder.restoreSession()
+
+            holder.onStoredSessionChanged(StoredSession(accessToken = "b-access", refreshToken = "b-refresh", userId = "user-2", userStatus = "active"))
+
+            assertFalse(holder.state.value.authenticated, "this tab shows A's state: it must not carry B's tokens")
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+        }
+
+    @Test
+    fun anotherTabRefreshingTheSameAccountIsCarried() =
+        runTest {
+            val holder = restoringHolder(FakeProfileApi())
+            holder.restoreSession()
+            val rotated = StoredSession(accessToken = "access-2", refreshToken = "refresh-2", userId = "user-1", userStatus = "active")
+
+            holder.onStoredSessionChanged(rotated)
+
+            assertEquals(rotated, holder.state.value.session)
+            assertEquals(null, holder.state.value.errorMessage)
+        }
+
+    @Test
+    fun aSignedOutTabDoesNotPickUpAnotherTabsSignIn() =
+        runTest {
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = FakeAuthApi(), profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+            holder.restoreSession()
+
+            holder.onStoredSessionChanged(StoredSession(accessToken = "b-access", refreshToken = "b-refresh", userId = "user-2", userStatus = "active"))
+
+            assertFalse(holder.state.value.authenticated)
+            assertEquals(null, holder.state.value.errorMessage)
+        }
+
+    @Test
     fun invalidationWhileSignedOutIsANoOp() =
         runTest {
             val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -192,32 +294,240 @@ class AuthStateHolderTest {
         }
 
     @Test
-    fun theLegacyInlineCreateAccountFormNeverStartsASignUp() =
+    fun aSignedOutVisitorStartsOnTheWelcomeLandingInSignInMode() =
+        runTest {
+            val holder = holder(FakeAuthApi())
+
+            assertTrue(holder.state.value.showWelcome)
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+
+            // "Sign in" on the landing opens the form; back returns to the landing.
+            holder.switchMode(AuthMode.SignIn)
+            assertFalse(holder.state.value.showWelcome)
+            holder.showWelcome()
+            assertTrue(holder.state.value.showWelcome)
+        }
+
+    @Test
+    fun theSignInScreenNeverStartsASignUp() =
         runTest {
             val api = FakeAuthApi()
-            val holder =
-                AuthStateHolder(
-                    authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
-                    platform = "test",
-                    appVersion = "0.0.0",
-                )
-            holder.switchMode(AuthMode.CreateAccount)
+            val holder = holder(api)
+            holder.switchMode(AuthMode.SignIn)
             holder.updateEmail("new@pynapli.local")
             holder.updatePassword("a-long-password-1")
-            holder.updateBirthdate("1990-01-01")
-            holder.updateAcceptedAgeAndTerms(true)
 
             holder.submit()
 
-            // It has no code step, so it must not send anyone a code it can't take back.
+            // Creating an account is the stepper's job (it has the birthday gate and the code step).
             assertEquals(0, api.signups)
-            assertFalse(holder.state.value.authenticated)
-            assertTrue(
-                holder.state.value.errorMessage
-                    .orEmpty()
-                    .isNotEmpty(),
-            )
+            assertEquals(1, api.logins.size)
         }
+
+    @Test
+    fun logOutReturnsToTheWelcomeLandingWithNothingLeftOver() =
+        runTest {
+            val holder = holder(FakeAuthApi(loginResult = AppResult.Success(session())))
+            holder.switchMode(AuthMode.ResetPassword)
+            holder.updateEmail("maya@pynapli.local")
+            holder.submit()
+            holder.switchMode(AuthMode.SignIn)
+            holder.updatePassword("a-long-password-1")
+            holder.submit()
+            assertTrue(holder.state.value.authenticated)
+
+            holder.logout()
+
+            val state = holder.state.value
+            assertFalse(state.authenticated)
+            assertTrue(state.showWelcome)
+            assertEquals(AuthMode.SignIn, state.mode)
+            assertEquals("", state.password)
+            assertFalse(state.resetCodeSent)
+            assertEquals(null, state.errorMessage)
+            // On a shared device the next person must not see whose account this was.
+            assertEquals("", state.email)
+        }
+
+    @Test
+    fun showSignInOpensTheFormWithTheGivenAddressAndClearsOldErrors() =
+        runTest {
+            val holder = holder(FakeAuthApi(loginResult = AppResult.Failure(AppError("INVALID_CREDENTIALS", "Invalid email or password."))))
+            holder.switchMode(AuthMode.SignIn)
+            holder.updateEmail("old@pynapli.local")
+            holder.updatePassword("wrong-password-123")
+            holder.submit()
+            assertEquals("Invalid email or password.", holder.state.value.errorMessage)
+
+            holder.showSignIn(prefillEmail = "typed@pynapli.local")
+
+            val state = holder.state.value
+            assertFalse(state.showWelcome)
+            assertEquals("typed@pynapli.local", state.email)
+            assertEquals("", state.password)
+            assertEquals(null, state.errorMessage)
+        }
+
+    @Test
+    fun aSessionThatDiesLandsOnTheSignInFormNotTheWelcome() =
+        runTest {
+            val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            val holder =
+                AuthStateHolder(
+                    authRepository =
+                        AuthRepository(
+                            authApi = FakeAuthApi(loginResult = AppResult.Success(session())),
+                            profileApi = FakeProfileApi(),
+                            sessionStore = InMemoryStore(),
+                        ),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                    sessionInvalidations = invalidations,
+                )
+            val observer = launch(start = CoroutineStart.UNDISPATCHED) { holder.observeSessionInvalidations() }
+            holder.submitDevLogin(DevLoginCredentials("dev@pynapli.local", "PynapliDevPass123!"))
+
+            invalidations.emit(Unit)
+            runCurrent()
+
+            // The reason ("Your session ended") must be visible, so not behind the landing.
+            assertFalse(holder.state.value.showWelcome)
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+            // Whoever holds the device when the session dies may not be its owner: no address.
+            assertEquals("", holder.state.value.email)
+            observer.cancel()
+        }
+
+    private fun holder(api: FakeAuthApi): AuthStateHolder =
+        AuthStateHolder(
+            authRepository = AuthRepository(authApi = api, profileApi = FakeProfileApi(), sessionStore = InMemoryStore()),
+            platform = "test",
+            appVersion = "0.0.0",
+        )
+    // Returning members (plan G1): the stored session goes straight to the shell; /me checks it after.
+
+    @Test
+    fun aStoredSessionReachesTheShellWithoutWaitingOnMe() =
+        runTest {
+            val meGate = CompletableDeferred<Unit>()
+            val profileApi = FakeProfileApi(meGate = meGate)
+            val holder = restoringHolder(profileApi)
+
+            val restoring = launch { holder.restoreSession() }
+            runCurrent()
+
+            assertTrue(profileApi.meCalls == 1 && !meGate.isCompleted, "/me must still be on the wire")
+            assertFalse(holder.state.value.isCheckingSession, "the splash must not wait on /me")
+            assertTrue(holder.state.value.authenticated)
+
+            meGate.complete(Unit)
+            restoring.join()
+            assertTrue(holder.state.value.authenticated)
+        }
+
+    @Test
+    fun aTerminalAnswerFromTheBackgroundCheckSignsOut() =
+        runTest {
+            val profileApi = FakeProfileApi(meResult = AppResult.Failure(AppError("ACCOUNT_NOT_ACTIVE", "Account not active.")))
+            val holder = restoringHolder(profileApi)
+
+            holder.restoreSession()
+
+            assertFalse(holder.state.value.isCheckingSession)
+            assertFalse(holder.state.value.authenticated, "a revoked or inactive session returns to welcome")
+            assertEquals("Your session ended. Please sign in again.", holder.state.value.errorMessage)
+        }
+
+    @Test
+    fun aNetworkErrorFromTheBackgroundCheckKeepsTheMemberIn() =
+        runTest {
+            val profileApi = FakeProfileApi(meResult = AppResult.Failure(AppError("NETWORK_ERROR", "No connection.")))
+            val holder = restoringHolder(profileApi)
+
+            holder.restoreSession()
+
+            assertTrue(holder.state.value.authenticated, "offline is not signed out: the cached grid stays")
+            assertEquals(null, holder.state.value.errorMessage)
+        }
+
+    @Test
+    fun aSignOutDuringTheBackgroundCheckIsNotUndone() =
+        runTest {
+            val meGate = CompletableDeferred<Unit>()
+            val holder = restoringHolder(FakeProfileApi(meGate = meGate))
+
+            val restoring = launch { holder.restoreSession() }
+            runCurrent()
+            holder.logout()
+            meGate.complete(Unit)
+            restoring.join()
+
+            assertFalse(holder.state.value.authenticated)
+            assertEquals(null, holder.state.value.errorMessage, "a deliberate sign-out shows no 'session ended' notice")
+        }
+
+    @Test
+    fun noStoredSessionSettlesSignedOutWithoutCallingMe() =
+        runTest {
+            val profileApi = FakeProfileApi()
+            val holder =
+                AuthStateHolder(
+                    authRepository = AuthRepository(authApi = FakeAuthApi(), profileApi = profileApi, sessionStore = InMemoryStore()),
+                    platform = "test",
+                    appVersion = "0.0.0",
+                )
+
+            holder.restoreSession()
+
+            assertFalse(holder.state.value.isCheckingSession)
+            assertFalse(holder.state.value.authenticated)
+            assertEquals(0, profileApi.meCalls)
+        }
+
+    @Test
+    fun anotherAccountSignedInMeanwhileEndsThisSessionInsteadOfAdoptingIt() =
+        runTest {
+            // Tab 1 restores account A; meanwhile tab 2 signs out and signs in as B (shared store).
+            val meGate = CompletableDeferred<Unit>()
+            val store = InMemoryStore()
+            val holder = restoringHolder(FakeProfileApi(meResult = AppResult.Failure(AppError("HTTP_401", "Unauthorized")), meGate = meGate), store)
+
+            val restoring = launch { holder.restoreSession() }
+            runCurrent()
+            store.save(AuthSessionDto(accessToken = "b-access", refreshToken = "b-refresh", user = AuthUserDto(userId = "user-2", status = "active")))
+            meGate.complete(Unit)
+            restoring.join()
+
+            val state = holder.state.value
+            assertFalse(state.authenticated, "tab 1 shows A's cached state: it must never carry B's tokens")
+            assertEquals(AuthMode.SignIn, state.mode)
+            assertFalse(state.showWelcome)
+            assertEquals("Your session ended. Please sign in again.", state.errorMessage)
+        }
+
+    @Test
+    fun aTerminalBackgroundCheckLandsOnTheSignInFormWithTheReason() =
+        runTest {
+            val holder = restoringHolder(FakeProfileApi(meResult = AppResult.Failure(AppError("ACCOUNT_NOT_ACTIVE", "Account not active."))))
+            holder.showWelcome()
+
+            holder.restoreSession()
+
+            assertEquals(AuthMode.SignIn, holder.state.value.mode)
+            assertFalse(holder.state.value.showWelcome, "the welcome landing would hide 'Your session ended'")
+        }
+
+    private suspend fun restoringHolder(
+        profileApi: FakeProfileApi,
+        store: InMemoryStore = InMemoryStore(),
+    ): AuthStateHolder {
+        store.save(session())
+        return AuthStateHolder(
+            authRepository = AuthRepository(authApi = FakeAuthApi(), profileApi = profileApi, sessionStore = store),
+            platform = "test",
+            appVersion = "0.0.0",
+        )
+    }
 
     private fun session(): AuthSessionDto =
         AuthSessionDto(
@@ -250,6 +560,7 @@ private class InMemoryStore : SessionStore {
 private class FakeAuthApi(
     private val loginResult: AppResult<AuthSessionDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "no")),
     private val resetResult: AppResult<PasswordChangedDto> = AppResult.Success(PasswordChangedDto(changed = true)),
+    private val onLogout: suspend () -> Unit = {},
 ) : AuthApi {
     val logins = mutableListOf<EmailLoginRequestDto>()
     val resetRequests = mutableListOf<String>()
@@ -286,13 +597,27 @@ private class FakeAuthApi(
 
     override suspend fun refreshSession(request: RefreshSessionRequestDto): AppResult<AuthSessionDto> = fail()
 
-    override suspend fun logout(): AppResult<LogoutResponseDto> = AppResult.Success(LogoutResponseDto(loggedOut = true))
+    override suspend fun logout(): AppResult<LogoutResponseDto> {
+        onLogout()
+        return AppResult.Success(LogoutResponseDto(loggedOut = true))
+    }
 
     private fun <T> fail(): AppResult<T> = AppResult.Failure(AppError("UNIMPLEMENTED", "no"))
 }
 
-private class FakeProfileApi : ProfileApi {
-    override suspend fun getMe(): AppResult<MeDto> = fail()
+private class FakeProfileApi(
+    // Non-terminal by default, so a session restored in a test that ignores /me stays signed in.
+    private val meResult: AppResult<MeDto> = AppResult.Failure(AppError("UNIMPLEMENTED", "no")),
+    private val meGate: CompletableDeferred<Unit>? = null,
+) : ProfileApi {
+    var meCalls = 0
+        private set
+
+    override suspend fun getMe(): AppResult<MeDto> {
+        meCalls += 1
+        meGate?.await()
+        return meResult
+    }
 
     override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> = fail()
 

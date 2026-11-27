@@ -37,7 +37,10 @@ class PsyncSessionServiceIntegrationTest :
 
         // PS-6a: service whose deck size is gated by the initiator's tier. With no subscription
         // rows the initiator is Free (psyncMaxDeckSize = 10).
-        fun freeTierService(clock: Clock = Clock.systemUTC()): PsyncSessionService =
+        fun freeTierService(
+            clock: Clock = Clock.systemUTC(),
+            ageVerified: Boolean = true,
+        ): PsyncSessionService =
             PsyncSessionService(
                 repository = JdbcPsyncSessionRepository(dataSource),
                 subscriptionService =
@@ -46,6 +49,10 @@ class PsyncSessionServiceIntegrationTest :
                             .JdbcSubscriptionRepository(dataSource),
                     ),
                 clock = clock,
+                viewerTrustRepository =
+                    object : com.pynapli.server.grid.GridViewerTrustRepository {
+                        override suspend fun isAgeVerified(userId: UUID): Boolean = ageVerified
+                    },
             )
 
         // PS-2 service with a fake deck ranker (returns the given candidates in order) + real
@@ -257,7 +264,7 @@ class PsyncSessionServiceIntegrationTest :
                         minimumAge = 27,
                         maximumAge = 41,
                         verifiedOnly = true,
-                        intents = listOf("together", "social"),
+                        intents = listOf("dating", "events"),
                         dealbreakers = setOf("age", "distance"),
                     )
                 val configuring =
@@ -277,7 +284,7 @@ class PsyncSessionServiceIntegrationTest :
                 assertEquals("ready", ready.status)
                 assertTrue(ready.participants.all { it.approved })
                 assertEquals(12_345, ready.filters.radiusMeters)
-                assertEquals(listOf("together", "social"), ready.filters.intents)
+                assertEquals(listOf("dating", "events"), ready.filters.intents)
                 assertTrue(ready.filters.verifiedOnly)
             }
         }
@@ -1758,12 +1765,30 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
-        // ---- PS-6e: advanced-filter gating ---------------------------------------------
+        // ---- Filter gating: every filter is free (founder decision 2, 2026-11-26); lifestyle tags
+        // still need an age-verified suggester.
 
-        "create rejects advanced Psync filters on the Free tier" {
+        "create accepts lifestyle and logistics Psync filters on the Free tier" {
             runBlocking {
                 val (initiator, _) = seedLinkedPair()
                 val svc = freeTierService()
+
+                val session =
+                    svc.create(
+                        initiator,
+                        CreatePsyncSessionRequestDto(
+                            deckSize = 5,
+                            filters = SwipeDeckRequestDto(lifestyleTags = listOf("soft_swap"), logisticsTags = listOf("hosts")),
+                        ),
+                    )
+                assertEquals("invited", session.status)
+            }
+        }
+
+        "create refuses lifestyle Psync filters from a viewer who is not age verified" {
+            runBlocking {
+                val (initiator, _) = seedLinkedPair()
+                val svc = freeTierService(ageVerified = false)
 
                 val error =
                     assertFailsWith<PsyncException> {
@@ -1775,7 +1800,7 @@ class PsyncSessionServiceIntegrationTest :
                             ),
                         )
                     }
-                assertEquals("PSYNC_ADVANCED_FILTERS_NOT_ALLOWED", error.code)
+                assertEquals("AGE_VERIFICATION_REQUIRED", error.code)
             }
         }
 

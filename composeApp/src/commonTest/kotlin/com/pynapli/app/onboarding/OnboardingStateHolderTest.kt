@@ -1,7 +1,9 @@
 package com.pynapli.app.onboarding
 
+import com.pynapli.app.auth.AuthMode
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.shared.auth.AuthRepository
+import com.pynapli.shared.auth.PasswordRules
 import com.pynapli.shared.auth.SessionStore
 import com.pynapli.shared.auth.StoredSession
 import com.pynapli.shared.core.result.AppError
@@ -25,10 +27,14 @@ import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
 import com.pynapli.shared.network.dto.UpdateProfileRequestDto
 import com.pynapli.shared.settings.InMemoryPendingSignupStore
+import com.pynapli.shared.settings.InMemoryUnderageStopStore
 import com.pynapli.shared.settings.OnboardingProgress
 import com.pynapli.shared.settings.OnboardingProgressStore
 import com.pynapli.shared.settings.PendingSignup
 import com.pynapli.shared.settings.maskEmailAddress
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -75,12 +81,89 @@ class OnboardingStateHolderTest {
             fixture.enterDob(day = "11", month = "06", year = "2008")
             fixture.onboarding.confirmDob()
             assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+            // The typed birthday is not kept on the stop screen.
+            assertEquals("", fixture.onboarding.state.value.dobYear)
 
-            // Exactly 18 today passes.
-            fixture.onboarding.backToDob()
-            fixture.enterDob(day = "10", month = "06", year = "2008")
+            // Exactly 18 today passes (a separate device: the stop above is sticky).
+            val adult = Fixture()
+            adult.onboarding.startCreateAccount()
+            adult.enterDob(day = "10", month = "06", year = "2008")
+            adult.onboarding.confirmDob()
+            assertEquals(OnboardingStep.Policies, adult.onboarding.state.value.step)
+        }
+
+    @Test
+    fun theUnderageStopIsStickyForADayButSignInStaysOpen() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.enterDob(day = "01", month = "01", year = "2015")
             fixture.onboarding.confirmDob()
-            assertEquals(OnboardingStep.Policies, fixture.onboarding.state.value.step)
+            assertEquals(NOW_MILLIS, fixture.underageStore.load())
+
+            // "Go back" / system back leaves the stepper; it never reopens the birthday.
+            fixture.onboarding.backToDob()
+            assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+            assertTrue(fixture.onboarding.stepBack())
+            assertFalse(fixture.onboarding.state.value.active)
+
+            // Create account goes straight back to the stop.
+            fixture.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+
+            // Sign in stays available.
+            fixture.onboarding.cancelToSignIn()
+            assertFalse(fixture.onboarding.state.value.active)
+            assertFalse(fixture.auth.state.value.showWelcome)
+
+            // A day later the birthday step is back.
+            fixture.clockMillis += OnboardingStateHolder.UNDERAGE_STOP_MILLIS
+            fixture.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun aClockSetBackBeforeTheStopCountsAsExpired() =
+        runTest {
+            // Stored "in the future" relative to the device clock (the clock went backwards).
+            val stored = Fixture(underageStore = InMemoryUnderageStopStore(NOW_MILLIS + 3 * OnboardingStateHolder.UNDERAGE_STOP_MILLIS))
+            stored.onboarding.resumePendingSignupIfNeeded()
+            stored.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, stored.onboarding.state.value.step)
+            assertNull(stored.underageStore.load(), "the stale stop is cleared")
+
+            // The same in memory: a stop made, then the clock moved back before it.
+            val live = Fixture()
+            live.onboarding.startCreateAccount()
+            live.enterDob(day = "01", month = "01", year = "2015")
+            live.onboarding.confirmDob()
+            live.clockMillis -= 60_000
+            live.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, live.onboarding.state.value.step)
+        }
+
+    @Test
+    fun theUnderageStopSurvivesARestartUntilItExpires() =
+        runTest {
+            // A new process on the same device: the stored stop is read at the signed-out settle.
+            val fixture = Fixture(underageStore = InMemoryUnderageStopStore(NOW_MILLIS - 60 * 60 * 1_000))
+            fixture.onboarding.resumePendingSignupIfNeeded()
+            fixture.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+
+            // Create account tapped (or a /signup link opened) before the read finished: moved on read.
+            val early = Fixture(underageStore = InMemoryUnderageStopStore(NOW_MILLIS - 1_000))
+            early.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, early.onboarding.state.value.step)
+            early.onboarding.loadUnderageStop()
+            assertEquals(OnboardingStep.UnderageStop, early.onboarding.state.value.step)
+
+            // An expired stop is cleared and ignored.
+            val expired = Fixture(underageStore = InMemoryUnderageStopStore(NOW_MILLIS - OnboardingStateHolder.UNDERAGE_STOP_MILLIS))
+            expired.onboarding.resumePendingSignupIfNeeded()
+            expired.onboarding.startCreateAccount()
+            assertEquals(OnboardingStep.Dob, expired.onboarding.state.value.step)
+            assertNull(expired.underageStore.load())
         }
 
     @Test
@@ -241,6 +324,7 @@ class OnboardingStateHolderTest {
             assertNull(fixture.auth.state.value.session)
             assertEquals("signup-token", fixture.pendingStore.load()?.signupToken)
 
+            fixture.clockMillis += OnboardingStateHolder.RESEND_COOLDOWN_MILLIS
             fixture.onboarding.resendSignupCode()
 
             assertEquals(EmailSignupResendRequestDto("new@pynapli.local", "signup-token", null), fixture.authApi.resendRequests.single())
@@ -542,6 +626,7 @@ class OnboardingStateHolderTest {
             val fixture = Fixture()
             fixture.startSignup()
             // The email work may have been dropped: a new code can't help, a new sign-up can.
+            fixture.clockMillis += OnboardingStateHolder.RESEND_COOLDOWN_MILLIS
             fixture.onboarding.resendSignupCode()
             assertEquals(OnboardingStateHolder.RESENT_NOTICE, fixture.onboarding.state.value.signupNotice)
 
@@ -633,6 +718,539 @@ class OnboardingStateHolderTest {
             assertTrue(fixture.progressStore.progress.photoNudgeDismissed)
         }
 
+    // Section 0 repros (onboarding + first grid plan), un-ignored by the Section 1 fixes.
+
+    // Section 0 repro: B1 auth mode not reset after sign-out — fixed in Section 1
+    @Test
+    fun signingOutAfterASignUpLeavesTheAuthScreenInSignInMode() =
+        runTest {
+            val fixture = Fixture()
+            fixture.completeSignupToGrid()
+            // signupWithDetails used to flip the auth mode to a legacy create-account form (now
+            // removed); nothing flipped it back after sign-out.
+            fixture.auth.logout()
+
+            assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
+            assertTrue(fixture.auth.state.value.showWelcome)
+        }
+
+    // Section 0 repro: B1 auth mode not reset after cancelling a sign-up — fixed in Section 1
+    @Test
+    fun cancellingASignUpLeavesTheAuthScreenInSignInMode() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            fixture.onboarding.cancelToSignIn()
+
+            assertFalse(fixture.onboarding.state.value.active)
+            assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
+        }
+
+    @Test
+    fun signInFromTheStepperOpensTheFormWithTheTypedAddressAndNoStaleError() =
+        runTest {
+            val fixture =
+                Fixture(
+                    authApi = FakeAuthApi(verifyResult = { AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right.")) }),
+                )
+            fixture.startSignup()
+            fixture.onboarding.updateSignupCode("000000")
+            fixture.onboarding.verifySignupCode()
+            // The failed verify left its message in the auth state too.
+            assertNotNull(fixture.auth.state.value.errorMessage)
+
+            fixture.onboarding.cancelToSignIn()
+
+            val auth = fixture.auth.state.value
+            assertFalse(auth.showWelcome)
+            assertEquals("new@pynapli.local", auth.email)
+            assertNull(auth.errorMessage)
+        }
+
+    @Test
+    fun aResumedAddressIsNeverCarriedIntoTheSignInForm() =
+        runTest {
+            val fixture =
+                Fixture(
+                    pendingStore = InMemoryPendingSignupStore(PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS)),
+                )
+            fixture.onboarding.resumePendingSignupIfNeeded()
+            assertTrue(fixture.onboarding.state.value.emailShownMasked)
+
+            fixture.onboarding.cancelToSignIn()
+
+            // Whoever opened the app may not be the person who started: the address stays hidden.
+            assertEquals("", fixture.auth.state.value.email)
+            assertEquals("", fixture.onboarding.state.value.email)
+            assertNull(fixture.pendingStore.load())
+        }
+
+    @Test
+    fun theNextPersonsSignUpStartsEmptyAfterTheLastOneFinishedAndSignedOut() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            fixture.onboarding.updateSignupCode("123456")
+            fixture.onboarding.verifySignupCode()
+            fixture.onboarding.continueFromLocation()
+            fixture.onboarding.updateDisplayName("Alex")
+            fixture.onboarding.finishProfile()
+
+            // Finishing already forgets A's answers...
+            assertEquals(
+                OnboardingUiState(),
+                fixture.onboarding.state.value
+                    .copy(photoNudgeEligible = false, sessionSettledFor = null),
+            )
+
+            fixture.auth.logout()
+            fixture.onboarding.resumePendingSignupIfNeeded() // App.kt's signed-out effect
+            fixture.onboarding.startCreateAccount()
+
+            // ...and B's Create account starts on an empty birthday, with nothing of A's anywhere.
+            val state = fixture.onboarding.state.value
+            assertEquals(OnboardingUiState(active = true, step = OnboardingStep.Dob), state)
+            assertEquals("", fixture.auth.state.value.email)
+        }
+
+    @Test
+    fun aNewSignUpNeverReusesAnAbandonedOnesAnswers() =
+        runTest {
+            val fixture = Fixture()
+            fixture.advanceToAccount(day = "15", month = "08", year = "1990")
+            fixture.onboarding.updateEmail("someone@pynapli.local")
+            fixture.onboarding.cancelToWelcome()
+
+            fixture.onboarding.startCreateAccount()
+
+            val state = fixture.onboarding.state.value
+            assertEquals(listOf("", "", ""), listOf(state.dobDay, state.dobMonth, state.dobYear))
+            assertNull(state.dob)
+            assertEquals("", state.email)
+            assertFalse(state.acceptedTerms)
+            assertFalse(state.acceptedPrivacy)
+        }
+
+    @Test
+    fun cancellingFromTheFirstStepReturnsToTheWelcomeLanding() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+
+            fixture.onboarding.cancelToWelcome()
+
+            assertFalse(fixture.onboarding.state.value.active)
+            assertTrue(fixture.auth.state.value.showWelcome)
+            assertEquals(AuthMode.SignIn, fixture.auth.state.value.mode)
+        }
+
+    // Section 0 repro: B3 grid shows while a sign-up resume waits for /me — fixed in Section 1
+    @Test
+    fun aResumedSignUpHoldsTheStepperWhileTheProfileLoads() =
+        runTest {
+            val meGate = CompletableDeferred<Unit>()
+            val fixture =
+                Fixture(
+                    progressStore = InMemoryProgressStore(OnboardingProgress(completed = false, userId = "user-1")),
+                    profileRepository = FakeOnboardingProfileRepository(getMeGate = meGate),
+                )
+            fixture.signIn("user-1")
+
+            val ready = launch { fixture.onboarding.onSessionReady() }
+            runCurrent()
+
+            // App.kt draws the main shell (and composes GridScreen, which starts a grid load) whenever
+            // the session is settled, authenticated and the stepper is not active. While /me is in
+            // flight that is exactly this state, so the grid shows before the Profile step does.
+            assertNotNull(fixture.auth.state.value.session)
+            assertTrue(fixture.onboarding.state.value.active, "the stepper must hold the screen while the resume is decided")
+
+            meGate.complete(Unit)
+            ready.join()
+            assertEquals(OnboardingStep.Profile, fixture.onboarding.state.value.step)
+        }
+
+    // Section 0 repro: photo nudge can arm in the sign-up session — fixed in Section 1
+    @Test
+    fun thePhotoNudgeNeverArmsInTheSignUpSession() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            fixture.onboarding.updateSignupCode("123456")
+            // Hold the "onboarding in progress" write, the way a device store slower than a frame does.
+            val saveGate = CompletableDeferred<Unit>()
+            fixture.progressStore.saveGate = saveGate
+
+            val verifying = launch { fixture.onboarding.verifySignupCode() }
+            runCurrent()
+            // The session is already live, so App.kt's session effect calls onSessionReady() here,
+            // while the stored progress still reads completed = true (its default).
+            assertNotNull(fixture.auth.state.value.session)
+            fixture.onboarding.onSessionReady()
+
+            saveGate.complete(Unit)
+            verifying.join()
+            fixture.onboarding.continueFromLocation()
+            fixture.onboarding.finishProfile()
+
+            // Spec: the first nudge lands a session later, never in the session the stepper ran.
+            assertFalse(fixture.onboarding.state.value.active)
+            assertFalse(fixture.onboarding.state.value.photoNudgeEligible)
+        }
+
+    @Test
+    fun theMainSurfacesWaitUntilTheSessionIsDecided() =
+        runTest {
+            val fixture = Fixture()
+            assertFalse(fixture.onboarding.holdsMainSurfaces(sessionUserId = null), "signed out: nothing to hold")
+
+            fixture.signIn("user-1")
+            // Before onSessionReady has run, a resume may still be coming: no grid yet.
+            assertTrue(fixture.onboarding.holdsMainSurfaces("user-1"))
+
+            fixture.onboarding.onSessionReady()
+            assertFalse(fixture.onboarding.holdsMainSurfaces("user-1"))
+            // Another account on this device is decided afresh.
+            assertTrue(fixture.onboarding.holdsMainSurfaces("user-2"))
+
+            // Signed out, then back in as the same account: decided afresh too.
+            fixture.onboarding.resumePendingSignupIfNeeded()
+            assertTrue(fixture.onboarding.holdsMainSurfaces("user-1"))
+        }
+
+    @Test
+    fun monthLengthsAndLeapYearsFollowTheCalendar() {
+        assertEquals(31, OnboardingStateHolder.daysInMonth(2001, 1))
+        assertEquals(28, OnboardingStateHolder.daysInMonth(2001, 2))
+        assertEquals(29, OnboardingStateHolder.daysInMonth(2000, 2), "divisible by 400: leap")
+        assertEquals(28, OnboardingStateHolder.daysInMonth(1900, 2), "divisible by 100, not 400: not leap")
+        assertEquals(29, OnboardingStateHolder.daysInMonth(2004, 2))
+        assertEquals(30, OnboardingStateHolder.daysInMonth(2001, 4))
+        assertEquals(30, OnboardingStateHolder.daysInMonth(2001, 11))
+        assertEquals(31, OnboardingStateHolder.daysInMonth(2001, 12))
+    }
+
+    @Test
+    fun theWheelDayIsClampedToTheMonth() {
+        assertEquals(30, OnboardingStateHolder.clampWheelDay(2001, 4, 31))
+        assertEquals(28, OnboardingStateHolder.clampWheelDay(2001, 2, 30))
+        assertEquals(29, OnboardingStateHolder.clampWheelDay(2000, 2, 31))
+        assertEquals(15, OnboardingStateHolder.clampWheelDay(2001, 2, 15))
+        assertEquals(1, OnboardingStateHolder.clampWheelDay(2001, 2, 0))
+    }
+
+    @Test
+    fun theWheelStartsOnANeutralDateThatIsNotAnAnswer() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+
+            fixture.onboarding.showBirthdayWheel()
+
+            val state = fixture.onboarding.state.value
+            val neutral = OnboardingStateHolder.neutralWheelDate(today)
+            assertEquals(LocalDate(today.year - OnboardingStateHolder.NEUTRAL_WHEEL_AGE_YEARS, 1, 1), neutral)
+            assertFalse(neutral == LocalDate(today.year - OnboardingStateHolder.MINIMUM_AGE_YEARS, today.month, today.day))
+            assertEquals(listOf("01", "01", neutral.year.toString()), listOf(state.dobDay, state.dobMonth, state.dobYear))
+            assertEquals(OnboardingStateHolder.wheelYears(today), state.wheelFirstYear..state.wheelLastYear)
+            assertTrue(today.year in state.wheelFirstYear..state.wheelLastYear, "an underage year is reachable, so the stop screen is too")
+            // Untouched: Next is off and confirming does nothing.
+            assertTrue(state.dobWheelUntouched)
+            assertFalse(state.dobComplete)
+            fixture.onboarding.confirmDob()
+            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun movingAWheelChoosesTheDateAndClampsTheDayWhenTheMonthShrinks() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.onboarding.showBirthdayWheel()
+
+            fixture.onboarding.selectWheelDate(day = 31, month = 1, year = 2000)
+            assertTrue(fixture.onboarding.state.value.dobComplete)
+            // January 31 -> February: 29 in a leap year...
+            fixture.onboarding.selectWheelDate(day = 31, month = 2, year = 2000)
+            assertEquals("29", fixture.onboarding.state.value.dobDay)
+            // ...and 28 once the year is not one.
+            fixture.onboarding.selectWheelDate(day = 29, month = 2, year = 2001)
+            assertEquals("28", fixture.onboarding.state.value.dobDay)
+            assertEquals("02", fixture.onboarding.state.value.dobMonth)
+
+            fixture.onboarding.confirmDob()
+            assertEquals(LocalDate(2001, 2, 28), fixture.onboarding.state.value.dob)
+            assertEquals(OnboardingStep.Policies, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun theWheelKeepsADateAlreadyEntered() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.enterDob(day = "15", month = "08", year = "1990")
+
+            fixture.onboarding.showBirthdayWheel()
+
+            val state = fixture.onboarding.state.value
+            assertEquals(listOf("15", "08", "1990"), listOf(state.dobDay, state.dobMonth, state.dobYear))
+            assertFalse(state.dobWheelUntouched)
+        }
+
+    @Test
+    fun typingInsteadClearsAnUntouchedNeutralDateButKeepsAChosenOne() =
+        runTest {
+            val untouched = Fixture()
+            untouched.onboarding.startCreateAccount()
+            untouched.onboarding.showBirthdayWheel()
+            untouched.onboarding.useTypedBirthday()
+            assertEquals(
+                listOf("", "", ""),
+                untouched.onboarding.state.value
+                    .let { listOf(it.dobDay, it.dobMonth, it.dobYear) },
+            )
+
+            val chosen = Fixture()
+            chosen.onboarding.startCreateAccount()
+            chosen.onboarding.showBirthdayWheel()
+            chosen.onboarding.selectWheelDate(day = 3, month = 4, year = 1995)
+            chosen.onboarding.useTypedBirthday()
+            assertEquals(
+                listOf("03", "04", "1995"),
+                chosen.onboarding.state.value
+                    .let { listOf(it.dobDay, it.dobMonth, it.dobYear) },
+            )
+        }
+
+    @Test
+    fun backStepsThroughThePreCodeStepsAndFromTheFirstToTheWelcome() =
+        runTest {
+            val fixture = Fixture()
+            fixture.advanceToAccount()
+            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+
+            assertTrue(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Policies, fixture.onboarding.state.value.step)
+            assertTrue(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Dob, fixture.onboarding.state.value.step)
+            assertTrue(fixture.onboarding.stepBack())
+
+            assertFalse(fixture.onboarding.state.value.active, "back from the birthday leaves the stepper")
+            assertTrue(fixture.auth.state.value.showWelcome, "...for the welcome landing, not out of the app")
+        }
+
+    @Test
+    fun backFromTheUnderageStopLeavesForTheWelcomeNotTheBirthday() =
+        runTest {
+            val fixture = Fixture()
+            fixture.onboarding.startCreateAccount()
+            fixture.enterDob(day = "01", month = "01", year = "2020")
+            fixture.onboarding.confirmDob()
+            assertEquals(OnboardingStep.UnderageStop, fixture.onboarding.state.value.step)
+
+            assertTrue(fixture.onboarding.stepBack())
+
+            assertFalse(fixture.onboarding.state.value.active)
+            assertTrue(fixture.auth.state.value.showWelcome)
+        }
+
+    @Test
+    fun backFromTheCodeStepDropsTheStartedSignUpAndKeepsATypedAddress() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            assertTrue(fixture.onboarding.stepBack())
+
+            val state = fixture.onboarding.state.value
+            assertEquals(OnboardingStep.Account, state.step)
+            assertEquals("new@pynapli.local", state.email)
+            assertNull(fixture.pendingStore.load())
+        }
+
+    @Test
+    fun backFromAResumedCodeStepNeverRevealsTheMaskedAddress() =
+        runTest {
+            val fixture =
+                Fixture(
+                    pendingStore = InMemoryPendingSignupStore(PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS)),
+                )
+            fixture.onboarding.resumePendingSignupIfNeeded()
+
+            fixture.onboarding.stepBack()
+
+            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+            assertEquals("", fixture.onboarding.state.value.email)
+        }
+
+    @Test
+    fun backIsConsumedAfterTheCodeBecauseTheAccountExists() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            fixture.onboarding.updateSignupCode("123456")
+            fixture.onboarding.verifySignupCode()
+            assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
+
+            assertFalse(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Location, fixture.onboarding.state.value.step)
+
+            fixture.onboarding.continueFromLocation()
+            assertFalse(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Profile, fixture.onboarding.state.value.step)
+            assertTrue(fixture.onboarding.state.value.active)
+        }
+
+    @Test
+    fun backIsIgnoredWhileARequestIsInFlightAndOutsideTheStepper() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val fixture = Fixture(authApi = FakeAuthApi(signupGate = gate))
+            assertFalse(fixture.onboarding.stepBack(), "nothing to step back from")
+
+            fixture.advanceToAccount()
+            fixture.onboarding.updateEmail("new@pynapli.local")
+            fixture.onboarding.updatePassword("LongEnoughPassword1!")
+            val submitting = launch { fixture.onboarding.submitAccount() }
+            runCurrent()
+            assertTrue(fixture.onboarding.state.value.isSubmitting)
+
+            assertFalse(fixture.onboarding.stepBack())
+            assertEquals(OnboardingStep.Account, fixture.onboarding.state.value.step)
+
+            gate.complete(Unit)
+            submitting.join()
+            assertEquals(OnboardingStep.VerifyEmail, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun tenCharactersIsEnoughButACommonPasswordIsRefusedBeforeTheServer() =
+        runTest {
+            val fixture = Fixture()
+            fixture.advanceToAccount()
+            fixture.onboarding.updateEmail("new@pynapli.local")
+
+            fixture.onboarding.updatePassword("QWERTY12345")
+            fixture.onboarding.submitAccount()
+            assertEquals(PasswordRules.TOO_COMMON_MESSAGE, fixture.onboarding.state.value.errorMessage)
+            assertNull(fixture.authApi.lastSignupRequest)
+
+            fixture.onboarding.updatePassword("ten-chars!")
+            fixture.onboarding.submitAccount()
+            assertEquals(OnboardingStep.VerifyEmail, fixture.onboarding.state.value.step)
+        }
+
+    @Test
+    fun theCodeAsksToSubmitOnceWhenItReachesSixDigits() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+
+            assertFalse(fixture.onboarding.updateSignupCode("12345"))
+            assertTrue(fixture.onboarding.updateSignupCode("123456"), "the sixth digit completes the code")
+            // The same six digits again (a recomposition, an autofill echo) never submit twice.
+            assertFalse(fixture.onboarding.updateSignupCode("123456"))
+            assertFalse(fixture.onboarding.updateSignupCode("1234567"))
+        }
+
+    @Test
+    fun aPastedCodeCompletesInOneGoAndAWrongOneCanBeRetyped() =
+        runTest {
+            val fixture =
+                Fixture(
+                    authApi = FakeAuthApi(verifyResult = { AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right.")) }),
+                )
+            fixture.startSignup()
+
+            assertTrue(fixture.onboarding.updateSignupCode("12 34 56"))
+            fixture.onboarding.verifySignupCode()
+            // The failure clears the field, so the next complete entry submits again.
+            assertEquals("", fixture.onboarding.state.value.signupCode)
+            assertTrue(fixture.onboarding.updateSignupCode("654321"))
+        }
+
+    @Test
+    fun theCodeNeverAsksToSubmitWhileAVerifyIsInFlightOrTheGuessesAreSpent() =
+        runTest {
+            val fixture =
+                Fixture(
+                    authApi = FakeAuthApi(verifyResult = { AppResult.Failure(AppError("INVALID_SIGNUP_CODE", "That code isn't right.")) }),
+                )
+            fixture.startSignup()
+            repeat(OnboardingStateHolder.CODE_ATTEMPTS_PER_SIGNUP) {
+                fixture.onboarding.updateSignupCode("000000")
+                fixture.onboarding.verifySignupCode()
+            }
+            assertTrue(fixture.onboarding.state.value.signupAttemptsSpent)
+
+            assertFalse(fixture.onboarding.updateSignupCode("123456"))
+        }
+
+    @Test
+    fun aNewCodeWaitsOutTheCooldownTheSameForEveryAddress() =
+        runTest {
+            val fixture = Fixture()
+            fixture.startSignup()
+            assertEquals(30, fixture.onboarding.resendCooldownSecondsLeft())
+
+            fixture.onboarding.resendSignupCode()
+            assertTrue(fixture.authApi.resendRequests.isEmpty(), "nothing goes out during the cooldown")
+
+            fixture.clockMillis += 12_500
+            assertEquals(18, fixture.onboarding.resendCooldownSecondsLeft())
+            fixture.clockMillis += 17_500
+            assertEquals(0, fixture.onboarding.resendCooldownSecondsLeft())
+            fixture.onboarding.resendSignupCode()
+            assertEquals(1, fixture.authApi.resendRequests.size)
+            // Each new code starts the wait again.
+            assertEquals(30, fixture.onboarding.resendCooldownSecondsLeft())
+        }
+
+    @Test
+    fun aResumedCodeStepCountsTheCooldownFromWhenTheSignUpStarted() =
+        runTest {
+            val fixture =
+                Fixture(
+                    pendingStore = InMemoryPendingSignupStore(PendingSignup("new@pynapli.local", "stored-token", NOW_MILLIS - 10_000)),
+                )
+
+            fixture.onboarding.resumePendingSignupIfNeeded()
+
+            assertEquals(20, fixture.onboarding.resendCooldownSecondsLeft())
+        }
+
+    @Test
+    fun aFailingProgressStoreNeverHoldsTheMainSurfacesForever() =
+        runTest {
+            val fixture = Fixture(progressStore = InMemoryProgressStore().apply { failLoads = true })
+            fixture.signIn("user-1")
+
+            runCatching { fixture.onboarding.onSessionReady() }
+
+            assertFalse(fixture.onboarding.holdsMainSurfaces("user-1"))
+        }
+
+    @Test
+    fun aResumeKeepsANameTypedWhileTheProfileLoads() =
+        runTest {
+            val meGate = CompletableDeferred<Unit>()
+            val fixture =
+                Fixture(
+                    progressStore = InMemoryProgressStore(OnboardingProgress(completed = false, userId = "user-1")),
+                    profileRepository = FakeOnboardingProfileRepository(getMeResult = { AppResult.Success(meDto("Saved")) }, getMeGate = meGate),
+                )
+            fixture.signIn("user-1")
+            val ready = launch { fixture.onboarding.onSessionReady() }
+            runCurrent()
+
+            fixture.onboarding.updateDisplayName("Typed")
+            meGate.complete(Unit)
+            ready.join()
+
+            assertEquals("Typed", fixture.onboarding.state.value.displayName)
+        }
+
     private inner class Fixture(
         val progressStore: InMemoryProgressStore = InMemoryProgressStore(),
         val pendingStore: InMemoryPendingSignupStore = InMemoryPendingSignupStore(),
@@ -640,7 +1258,11 @@ class OnboardingStateHolderTest {
         val authApi: FakeAuthApi = FakeAuthApi(),
         val profileRepository: FakeOnboardingProfileRepository = FakeOnboardingProfileRepository(),
         val sessionStore: InMemorySessionStore = InMemorySessionStore(),
+        val underageStore: InMemoryUnderageStopStore = InMemoryUnderageStopStore(),
     ) {
+        /** The holder's clock; starts at [nowMillis] and tests move it forward (resend cooldown). */
+        var clockMillis: Long = nowMillis
+
         val auth =
             AuthStateHolder(
                 authRepository =
@@ -658,8 +1280,9 @@ class OnboardingStateHolderTest {
                 profileRepository = profileRepository,
                 progressStore = progressStore,
                 todayProvider = { today },
-                nowEpochMillis = { nowMillis },
+                nowEpochMillis = { clockMillis },
                 pendingSignupStore = pendingStore,
+                underageStopStore = underageStore,
             )
 
         fun enterDob(
@@ -673,7 +1296,7 @@ class OnboardingStateHolderTest {
         }
 
         /** Drives the pre-auth steps to the Account form. */
-        fun advanceToAccount(
+        suspend fun advanceToAccount(
             day: String = "01",
             month: String = "06",
             year: String = "2000",
@@ -690,6 +1313,17 @@ class OnboardingStateHolderTest {
             onboarding.updateEmail("new@pynapli.local")
             onboarding.updatePassword("LongEnoughPassword1!")
             onboarding.submitAccount()
+        }
+
+        /** Runs the whole stepper (blank name, no photo) to the grid with a live session. */
+        suspend fun completeSignupToGrid() {
+            startSignup()
+            onboarding.updateSignupCode("123456")
+            onboarding.verifySignupCode()
+            onboarding.continueFromLocation()
+            onboarding.finishProfile()
+            assertNotNull(auth.state.value.session)
+            assertFalse(onboarding.state.value.active)
         }
 
         /** Puts a live session into the auth state without going through signup. */
@@ -745,6 +1379,8 @@ private const val NOW_MILLIS = 1_781_000_000_000L
 private class FakeAuthApi(
     private val signupResult: () -> AppResult<EmailSignupStartedDto> = { AppResult.Success(EmailSignupStartedDto(signupToken = "signup-token")) },
     private val verifyResult: (EmailSignupVerifyRequestDto) -> AppResult<AuthSessionDto> = { AppResult.Success(testSessionDto()) },
+    // When set, emailSignup waits for it first: lets a test look at the state while the request is in flight.
+    private val signupGate: CompletableDeferred<Unit>? = null,
 ) : AuthApi {
     var lastSignupRequest: EmailSignupRequestDto? = null
         private set
@@ -753,6 +1389,7 @@ private class FakeAuthApi(
 
     override suspend fun emailSignup(request: EmailSignupRequestDto): AppResult<EmailSignupStartedDto> {
         lastSignupRequest = request
+        signupGate?.await()
         return signupResult()
     }
 
@@ -806,9 +1443,19 @@ private class InMemorySessionStore : SessionStore {
 private class InMemoryProgressStore(
     var progress: OnboardingProgress = OnboardingProgress(),
 ) : OnboardingProgressStore {
-    override suspend fun load(): OnboardingProgress = progress
+    /** When set, every save waits for it first: models a device store slower than a frame. */
+    var saveGate: CompletableDeferred<Unit>? = null
+
+    /** When true, every load throws: models an unreadable device store. */
+    var failLoads: Boolean = false
+
+    override suspend fun load(): OnboardingProgress {
+        check(!failLoads) { "progress store unreadable" }
+        return progress
+    }
 
     override suspend fun save(progress: OnboardingProgress) {
+        saveGate?.await()
         this.progress = progress
     }
 }
@@ -816,6 +1463,8 @@ private class InMemoryProgressStore(
 private class FakeOnboardingProfileRepository(
     private val updateDisplayNameResult: (String) -> AppResult<MeDto> = { AppResult.Success(meDto(it)) },
     private val getMeResult: () -> AppResult<MeDto> = { AppResult.Success(meDto(null)) },
+    // When set, getMe waits for it first: lets a test look at the state while /me is in flight.
+    private val getMeGate: CompletableDeferred<Unit>? = null,
 ) : OnboardingProfileRepository {
     var lastDisplayName: String? = null
         private set
@@ -825,5 +1474,8 @@ private class FakeOnboardingProfileRepository(
         return updateDisplayNameResult(displayName)
     }
 
-    override suspend fun getMe(): AppResult<MeDto> = getMeResult()
+    override suspend fun getMe(): AppResult<MeDto> {
+        getMeGate?.await()
+        return getMeResult()
+    }
 }

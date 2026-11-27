@@ -3,6 +3,7 @@ package com.pynapli.server.config
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ServerConfigValidationTest {
@@ -26,6 +27,7 @@ class ServerConfigValidationTest {
         assertTrue("FIREBASE_PROJECT_ID_REQUIRED" in issueCodes)
         assertTrue("ADMIN_API_TOKEN_REQUIRED" in issueCodes)
         assertTrue("RUNTIME_CURSOR_SECRETS_REQUIRED" in issueCodes)
+        assertTrue("MET_IN_PERSON_TOKEN_SECRET_REQUIRED" in issueCodes)
         assertTrue("CONTACT_BLOCK_KEYS_REQUIRED" in issueCodes)
     }
 
@@ -54,6 +56,36 @@ class ServerConfigValidationTest {
     }
 
     @Test
+    fun productionLikeEnvironmentsRefuseMissingOrSharedMetInPersonTokenSecret() {
+        val missing =
+            validStagingConfig()
+                .copy(metInPersonTokenSecret = "pynapli-local-dev-met-in-person-token-secret")
+                .startupValidationIssues()
+                .map { it.code }
+        val reusedCursorSecret =
+            validStagingConfig(environment = "production")
+                .copy(metInPersonTokenSecret = "swipedeckstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        // K3 must also stay distinct from both contact block keys, in either direction.
+        val reusedContactBlockEmailKey =
+            validStagingConfig()
+                .copy(metInPersonTokenSecret = "contactblockemailstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        val contactBlockTargetKeyReusesK3 =
+            validStagingConfig(environment = "production")
+                .copy(contactBlockTargetKey = "metinpersonstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+
+        assertEquals(listOf("MET_IN_PERSON_TOKEN_SECRET_REQUIRED"), missing)
+        assertEquals(listOf("MET_IN_PERSON_TOKEN_SECRET_REQUIRED"), reusedCursorSecret)
+        assertEquals(listOf("MET_IN_PERSON_TOKEN_SECRET_REQUIRED"), reusedContactBlockEmailKey)
+        assertEquals(listOf("MET_IN_PERSON_TOKEN_SECRET_REQUIRED"), contactBlockTargetKeyReusesK3)
+    }
+
+    @Test
     fun stagingEnvironmentAcceptsProductionSafeRuntimeConfig() {
         assertEquals(emptyList(), validStagingConfig().startupValidationIssues())
     }
@@ -77,6 +109,49 @@ class ServerConfigValidationTest {
         assertEquals(listOf("DEV_SIGNUP_SHORTCUTS_FORBIDDEN"), staging)
         assertEquals(listOf("DEV_SIGNUP_SHORTCUTS_FORBIDDEN"), production)
         assertEquals(emptyList(), localConfig().copy(devSignupShortcutsEnabled = true).startupValidationIssues())
+    }
+
+    @Test
+    fun socialSignInIsOffByDefaultAndEachProviderNeedsItsWholeConfig() {
+        assertFalse(localConfig().googleSignInConfigured())
+        assertFalse(localConfig().copy(googleClientIds = listOf("web")).googleSignInConfigured(), "the flag is off")
+        assertTrue(localConfig().copy(socialSignInEnabled = true, googleClientIds = listOf("web")).googleSignInConfigured())
+        val appleIdsOnly = localConfig().copy(socialSignInEnabled = true, appleClientIds = listOf("com.pynapli.app"))
+        assertFalse(appleIdsOnly.appleSignInConfigured(), "no revocation key, no Apple")
+        assertTrue(appleIdsOnly.copy(appleTeamId = "T", appleKeyId = "K", applePrivateKeyPem = "pem").appleSignInConfigured())
+    }
+
+    @Test
+    fun productionLikeEnvironmentsRefuseProviderOverridesPartialAppleAndAWeakSocialTokenKey() {
+        val overridden = validStagingConfig().copy(googleJwksUrl = "http://127.0.0.1/jwks").startupValidationIssues().map { it.code }
+        assertEquals(listOf("SOCIAL_PROVIDER_ENDPOINT_OVERRIDE_FORBIDDEN"), overridden)
+
+        val partialApple =
+            validStagingConfig()
+                .copy(socialSignInEnabled = true, appleClientIds = listOf("com.pynapli.app"), socialTokenKey = "socialtokenstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        assertEquals(listOf("APPLE_SIGN_IN_INCOMPLETE"), partialApple)
+
+        val defaultKey = validStagingConfig().copy(socialSignInEnabled = true, googleClientIds = listOf("web")).startupValidationIssues().map { it.code }
+        assertEquals(listOf("SOCIAL_TOKEN_KEY_REQUIRED"), defaultKey)
+
+        val sharedKey =
+            validStagingConfig()
+                .copy(socialSignInEnabled = true, googleClientIds = listOf("web"), socialTokenKey = "contactblockemailstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        assertEquals(listOf("SOCIAL_TOKEN_KEY_REQUIRED"), sharedKey)
+
+        assertEquals(emptyList(), localConfig().copy(socialSignInEnabled = true, googleJwksUrl = "http://127.0.0.1/jwks").startupValidationIssues())
+    }
+
+    @Test
+    fun appleRedirectUrisParseClientIdEqualsUri() {
+        assertEquals(
+            mapOf("com.pynapli.web" to "https://app.pynapli.com/auth/apple?x=1"),
+            appleRedirectUrisFrom(" com.pynapli.web=https://app.pynapli.com/auth/apple?x=1 , broken, =nope"),
+        )
     }
 
     @Test
@@ -184,6 +259,75 @@ class ServerConfigValidationTest {
     }
 
     @Test
+    fun productionRefusesManualModerationWithoutTheOverride() {
+        val manual = validStagingConfig(environment = "production").copy(mediaModerationProvider = "manual")
+        val prod = validStagingConfig(environment = "prod").copy(mediaModerationProvider = "MANUAL")
+
+        assertEquals(listOf("MEDIA_MODERATION_MANUAL_FORBIDDEN"), manual.startupValidationIssues().map { it.code })
+        assertEquals(listOf("MEDIA_MODERATION_MANUAL_FORBIDDEN"), prod.startupValidationIssues().map { it.code })
+        assertEquals(
+            emptyList(),
+            manual.copy(mediaModerationManualInProductionAllowed = true).startupValidationIssues(),
+        )
+    }
+
+    @Test
+    fun stagingAndLocalMayRunManualModeration() {
+        assertEquals(emptyList(), validStagingConfig().copy(mediaModerationProvider = "manual").startupValidationIssues())
+        assertEquals(emptyList(), localConfig().copy(mediaModerationProvider = "manual").startupValidationIssues())
+    }
+
+    @Test
+    fun cloudVisionWithoutCredentialsFailsStartupInProduction() {
+        val issues =
+            validStagingConfig(environment = "production")
+                .copy(mediaGcsSigningServiceAccountPath = null, mediaGcsSigningServiceAccountJson = null)
+                .startupValidationIssues()
+                .map { it.code }
+
+        assertTrue("MEDIA_SIGNING_CREDENTIALS_REQUIRED" in issues, "got $issues")
+    }
+
+    @Test
+    fun moderationThresholdsMustBeKnownCeilings() {
+        assertEquals(emptyList(), localConfig().copy(mediaModerationMaxAdult = "very_unlikely").startupValidationIssues())
+        val badConfigs =
+            listOf(
+                localConfig().copy(mediaModerationMaxAdult = "UNLIKLEY"),
+                localConfig().copy(mediaModerationMaxViolence = "VERY_LIKELY"),
+                localConfig().copy(mediaModerationMaxViolence = "LIKELY"),
+                localConfig().copy(mediaModerationMaxRacy = "UNKNOWN"),
+                validStagingConfig().copy(mediaModerationMaxRacy = ""),
+            )
+        for (bad in badConfigs) {
+            assertEquals(listOf("INVALID_MEDIA_MODERATION_THRESHOLD"), bad.startupValidationIssues().map { it.code })
+        }
+    }
+
+    @Test
+    fun anUnknownEnvironmentNameFailsStartup() {
+        // A typo'd production name must not silently skip the production-only guards.
+        assertEquals(
+            listOf("UNKNOWN_ENVIRONMENT"),
+            localConfig().copy(environment = "prodution").startupValidationIssues().map { it.code },
+        )
+        assertEquals(
+            listOf("UNKNOWN_ENVIRONMENT"),
+            localConfig().copy(environment = "").startupValidationIssues().map { it.code },
+        )
+        assertEquals(emptyList(), localConfig().copy(environment = " Local ").startupValidationIssues())
+    }
+
+    @Test
+    fun moderationDefaultsToCloudVisionOnlyInStagingAndProduction() {
+        assertEquals("cloud_vision", defaultMediaModerationProvider("staging"))
+        assertEquals("cloud_vision", defaultMediaModerationProvider("prod"))
+        assertEquals("cloud_vision", defaultMediaModerationProvider(" Production "))
+        assertEquals("manual", defaultMediaModerationProvider("local"))
+        assertEquals("manual", defaultMediaModerationProvider("test"))
+    }
+
+    @Test
     fun validateForStartupThrowsAllIssueCodes() {
         val error = assertFailsWith<ServerConfigException> { stagingWithLocalDefaults().validateForStartup() }
 
@@ -242,9 +386,11 @@ class ServerConfigValidationTest {
             discoveryCursorSecret = "discoverystagingruntimevalue123456789",
             activityCursorSecret = "activitystagingruntimevalue123456789",
             swipeDeckTokenSecret = "swipedeckstagingruntimevalue123456789",
+            metInPersonTokenSecret = "metinpersonstagingruntimevalue123456789",
             contactBlockEmailKey = "contactblockemailstagingruntimevalue123456789",
             contactBlockTargetKey = "contactblocktargetstagingruntimevalue123456789",
             playStoreSandboxEnabled = playStoreSandboxEnabled,
             corsAllowedOrigins = corsAllowedOrigins,
+            mediaModerationProvider = "cloud_vision",
         )
 }
