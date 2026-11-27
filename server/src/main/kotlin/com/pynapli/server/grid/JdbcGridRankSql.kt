@@ -82,7 +82,9 @@ internal fun Connection.queryGridRank(
         tier_photo_owners AS (
             ${GridActivitySql.approvedProfilePhotoOwners(candidates = "nearby_ids", tag = "tier_po")}
         ),
-        base_candidates AS (
+        -- MATERIALIZED: planned as its own unit, so Postgres does not search join orders across
+        -- every tier set and filter fragment on each call (planning 14 ms -> 4.5 ms; same results).
+        base_candidates AS MATERIALIZED (
             SELECT u.id AS user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
                    ds.show_distance,
