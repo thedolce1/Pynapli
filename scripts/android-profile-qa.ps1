@@ -178,7 +178,7 @@ function Invoke-DevSql {
     if ($null -eq $docker) {
         throw "Docker was not found; Android Profile QA needs direct dev database setup."
     }
-    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -v ON_ERROR_STOP=1 -c $Sql 2>&1
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } elseif ($env:PYNAPLI_DATABASE_URL -match '/([^/?]+)(\?|$)') { $Matches[1] } else { 'pynapli_dev' }) -t -A -v ON_ERROR_STOP=1 -c $Sql 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Dev SQL failed: $output"
     }

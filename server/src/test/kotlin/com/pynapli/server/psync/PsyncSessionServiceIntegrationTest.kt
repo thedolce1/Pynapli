@@ -1785,6 +1785,53 @@ class PsyncSessionServiceIntegrationTest :
             }
         }
 
+        "lifestyle Psync filters need both partners age verified, on create and on a suggestion" {
+            runBlocking {
+                val (initiator, partner) = seedLinkedPair()
+
+                fun serviceVerifying(vararg verified: UUID) =
+                    PsyncSessionService(
+                        repository = JdbcPsyncSessionRepository(dataSource),
+                        subscriptionService =
+                            com.pynapli.server.subscriptions.SubscriptionService(
+                                com.pynapli.server.subscriptions
+                                    .JdbcSubscriptionRepository(dataSource),
+                            ),
+                        viewerTrustRepository =
+                            object : com.pynapli.server.grid.GridViewerTrustRepository {
+                                override suspend fun isAgeVerified(userId: UUID): Boolean = userId in verified
+                            },
+                    )
+                val lifestyle = SwipeDeckRequestDto(lifestyleTags = listOf("soft_swap"))
+
+                // The initiator is verified, the partner is not: refused, naming the partner.
+                val onCreate =
+                    assertFailsWith<PsyncException> {
+                        serviceVerifying(initiator).create(initiator, CreatePsyncSessionRequestDto(deckSize = 5, filters = lifestyle))
+                    }
+                assertEquals("PSYNC_PARTNER_AGE_VERIFICATION_REQUIRED", onCreate.code)
+
+                // Without lifestyle tags the session starts; a later lifestyle suggestion is held to the same rule.
+                val created =
+                    serviceVerifying(initiator).create(initiator, CreatePsyncSessionRequestDto(deckSize = 5))
+                val onSuggest =
+                    assertFailsWith<PsyncException> {
+                        serviceVerifying(initiator).suggestFilters(
+                            UUID.fromString(created.id),
+                            initiator,
+                            SuggestPsyncFiltersRequestDto(filters = lifestyle),
+                        )
+                    }
+                assertEquals("PSYNC_PARTNER_AGE_VERIFICATION_REQUIRED", onSuggest.code)
+
+                // Both verified: allowed.
+                val both = serviceVerifying(initiator, partner)
+                val configuring =
+                    both.suggestFilters(UUID.fromString(created.id), initiator, SuggestPsyncFiltersRequestDto(filters = lifestyle))
+                assertEquals("configuring", configuring.status)
+            }
+        }
+
         "create refuses lifestyle Psync filters from a viewer who is not age verified" {
             runBlocking {
                 val (initiator, _) = seedLinkedPair()

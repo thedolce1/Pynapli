@@ -29,6 +29,16 @@ internal class PsyncLifecycleActions(
 ) {
     private suspend fun ageVerified(userId: UUID): Boolean = viewerTrustRepository?.isAgeVerified(userId) ?: true
 
+    /** Lifestyle filters shape what both partners see, so the other partner must be age-verified too. */
+    private suspend fun requirePartnerAgeVerifiedForLifestyle(
+        filters: com.pynapli.shared.network.dto.SwipeDeckRequestDto,
+        partnerUserId: UUID,
+    ) {
+        if (filters.lifestyleTags.any { it.isNotBlank() } && !ageVerified(partnerUserId)) {
+            throw PsyncException("PSYNC_PARTNER_AGE_VERIFICATION_REQUIRED")
+        }
+    }
+
     suspend fun create(
         userId: UUID,
         request: CreatePsyncSessionRequestDto,
@@ -67,6 +77,8 @@ internal class PsyncLifecycleActions(
         if (repository.hasNonTerminalSessionForLink(link.linkId)) {
             throw PsyncException("PSYNC_SESSION_ALREADY_ACTIVE")
         }
+        // Both partners swipe the deck, so lifestyle filters need both of them age-verified.
+        requirePartnerAgeVerifiedForLifestyle(request.filters, link.partnerUserId)
 
         val now = clock.instant()
         val sessionId = UUID.randomUUID()
@@ -151,6 +163,11 @@ internal class PsyncLifecycleActions(
     ): PsyncSessionDto {
         // The re-suggested filters are validated and age-gated for the suggester, like the first set.
         requirePsyncFiltersAllowed(request.filters) { ageVerified(userId) }
+        repository
+            .findById(sessionId)
+            ?.participants
+            ?.filter { it.userId != userId }
+            ?.forEach { other -> requirePartnerAgeVerifiedForLifestyle(request.filters, other.userId) }
         val filtersJson =
             json.encodeToString(
                 SwipeDeckRequestDto.serializer(),

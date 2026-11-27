@@ -612,7 +612,7 @@ Partner, Trust, Media, Presence, Intent, gender and orientation. Plans buy depth
 
 The one gate on a filter is safety, not payment: **Lifestyle tags need an age-verified viewer**
 (`AGE_VERIFICATION_REQUIRED`) on the Grid, the Grid count, Swipe, Psync (create and re-suggest) and
-the Tonight feed. Logistics, boundaries and every other filter are not age-gated. The client hides
+the Tonight feed; in Psync the other partner must be age verified too (`PSYNC_PARTNER_AGE_VERIFICATION_REQUIRED`), since both swipe the deck. Logistics, boundaries and every other filter are not age-gated. The client hides
 the Lifestyle tags from a viewer who is not age verified, and a refusal takes out only the lifestyle
 tags and asks again with the rest.
 
