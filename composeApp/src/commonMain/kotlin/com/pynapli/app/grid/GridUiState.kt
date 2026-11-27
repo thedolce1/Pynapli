@@ -94,7 +94,33 @@ data class GridFilters(
     // "Haven't chatted" (Presence, Grid only): hide people this viewer exchanged a message with in the
     // last 24 hours. The server decides who that is; nothing about the conversations is sent back.
     val haventChatted: Boolean = false,
+    // Lifestyle "All of" (plan G2-4, Grindr's tags): every chosen tag must match, at most
+    // [MAX_LIFESTYLE_ALL_OF] and one experience level. Off = any of within a group (the default).
+    val lifestyleMatchAll: Boolean = false,
 ) {
+    /**
+     * Taps a Lifestyle tag under the current mode. In "All of" a fourth tag is refused (the chip stays
+     * off) and a second experience level replaces the first, since a profile has one.
+     */
+    fun withLifestyleTagToggled(tag: LifestyleTag): GridFilters {
+        if (tag in lifestyleTags) return copy(lifestyleTags = lifestyleTags - tag)
+        if (!lifestyleMatchAll) return copy(lifestyleTags = lifestyleTags + tag)
+        val kept = if (tag.group == LifestyleGroup.Experience) lifestyleTags.filterNot { it.group == LifestyleGroup.Experience }.toSet() else lifestyleTags
+        if (kept.size >= MAX_LIFESTYLE_ALL_OF) return this
+        return copy(lifestyleTags = kept + tag)
+    }
+
+    /** Switches Any / All. Turning All on keeps the first chosen tags that fit (3, one experience level). */
+    fun withLifestyleMatchAll(on: Boolean): GridFilters {
+        if (!on) return copy(lifestyleMatchAll = false)
+        var kept = emptySet<LifestyleTag>()
+        LifestyleTag.entries.filter { it in lifestyleTags }.forEach { tag ->
+            val experienceTaken = tag.group == LifestyleGroup.Experience && kept.any { it.group == LifestyleGroup.Experience }
+            if (kept.size < MAX_LIFESTYLE_ALL_OF && !experienceTaken) kept = kept + tag
+        }
+        return copy(lifestyleMatchAll = true, lifestyleTags = kept)
+    }
+
     /** Any partner filter is chosen (whether or not the Who choice lets it apply). */
     val hasPartnerFilters: Boolean
         get() =
@@ -212,6 +238,8 @@ data class GridFilters(
             partnerVerifiedOnly = partner.partnerVerified,
             excludeSingleMen = noSingleMen,
             haventChattedOnly = haventChatted,
+            // Only with tags, as the server reads it.
+            lifestyleMatchAll = lifestyleMatchAll && lifestyleTags.isNotEmpty(),
         )
     }
 
@@ -224,6 +252,9 @@ data class GridFilters(
         const val MIN_FILTER_AGE: Int = 18
         const val MAX_FILTER_AGE: Int = 99
         const val PAGE_SIZE: Int = 60
+
+        /** Lifestyle "All of" takes at most this many tags (the server refuses more). */
+        const val MAX_LIFESTYLE_ALL_OF: Int = 3
 
         /** The live Grid asks for this many; the server answers with the plan's page size (G2-2). */
         const val MAX_FEED_PAGE_REQUEST: Int = 120
@@ -286,6 +317,7 @@ data class GridFilters(
                 partnerVerified = request.partnerVerifiedOnly,
                 noSingleMen = request.excludeSingleMen,
                 haventChatted = request.haventChattedOnly,
+                lifestyleMatchAll = request.lifestyleMatchAll,
             )
         }
     }

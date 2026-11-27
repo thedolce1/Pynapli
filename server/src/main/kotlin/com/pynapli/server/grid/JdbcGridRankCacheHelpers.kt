@@ -151,4 +151,6 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         append(partnerScopeKey)
         // Never cached either (per viewer); appended only when on.
         if (haventChattedOnly) append(";haventChatted")
+        // Any-of and all-of rank different sets: never one window. Appended only when on.
+        if (lifestyleMatchAll) append(";lifestyleAllOf")
     }

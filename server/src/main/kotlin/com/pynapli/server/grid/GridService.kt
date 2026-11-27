@@ -535,6 +535,7 @@ internal fun gridFiltersFrom(request: GridQueryRequestDto): DiscoveryFilters =
         partnerVerifiedOnly = request.partnerVerifiedOnly,
         excludeSingleMen = request.excludeSingleMen,
         haventChattedOnly = request.haventChattedOnly,
+        lifestyleMatchAll = request.lifestyleMatchAll,
     ) { _ -> GridException("INVALID_GRID_FILTER") }
 
 /**

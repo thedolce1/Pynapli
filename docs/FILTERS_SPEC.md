@@ -273,6 +273,15 @@ Filters:
 Rules:
 
 - Lifestyle filters match "any of" inside a group (Swap, Room, Experience, other terms) and "all of" across groups.
+- Grid "All of (up to 3)" (plan G2-4, Grindr's tags, `lifestyleMatchAll`): an Any / All toggle above the
+  Lifestyle tags. All means every chosen tag must be on the profile (`lifestyle_tags @> chosen`, one
+  predicate in `LifestyleFilterSql`, the group predicates then bind empty), and a chosen experience
+  level must equal the profile's. At most 3 tags and one experience level: the sheet refuses a fourth
+  tag and a second level replaces the first; the server refuses more with `INVALID_GRID_FILTER`
+  (`INVALID_SAVED_FILTER_PAYLOAD` for presets). Dropped when no tag is chosen, so older scopes keep
+  their hash; otherwise in the rank-cache key and the cursor scope (only when on) and saved presets.
+  Grid only (Swipe and Tonight keep any-of). Still age-gated like every lifestyle filter. Proof:
+  `LifestyleAllOfFilterIntegrationTest`, `GridFilterBarParityTest`.
 - Experience is one value per profile (`profiles.experience_level`), never two tags.
 - A boundaries filter hides only "not for me"; "ask first" and unset pass.
 - Lifestyle terms should be optional.

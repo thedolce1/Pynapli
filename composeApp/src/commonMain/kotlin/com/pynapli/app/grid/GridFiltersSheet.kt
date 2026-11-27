@@ -162,9 +162,17 @@ internal fun GridFiltersSheet(
 
             if (lifestyleFiltersAllowed) {
                 LifestyleSectionHeader(onOpenGlossary = { glossaryVisible = true })
+                LifestyleMatchModeRow(
+                    matchAll = draft.lifestyleMatchAll,
+                    onChange = { on -> draft = draft.withLifestyleMatchAll(on) },
+                )
                 LifestyleSection(
                     selected = draft.lifestyleTags,
-                    onChange = { draft = draft.copy(lifestyleTags = it) },
+                    onChange = { chosen ->
+                        // One chip per tap: route it through the mode's rules (All: up to 3).
+                        val tapped = (chosen - draft.lifestyleTags) + (draft.lifestyleTags - chosen)
+                        tapped.firstOrNull()?.let { tag -> draft = draft.withLifestyleTagToggled(tag) }
+                    },
                 )
             } else {
                 SectionTitle("Lifestyle")

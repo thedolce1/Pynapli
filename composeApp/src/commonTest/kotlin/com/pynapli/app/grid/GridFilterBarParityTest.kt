@@ -57,6 +57,35 @@ class GridFilterBarParityTest {
         }
 
     @Test
+    fun lifestyleAllOfTakesAtMostThreeTagsAndOneExperienceLevel() {
+        var filters = GridFilters().withLifestyleMatchAll(true)
+        listOf(LifestyleTag.SoftSwap, LifestyleTag.FullSwap, LifestyleTag.SameRoom, LifestyleTag.SeparateRoom).forEach {
+            filters = filters.withLifestyleTagToggled(it)
+        }
+        assertEquals(setOf(LifestyleTag.SoftSwap, LifestyleTag.FullSwap, LifestyleTag.SameRoom), filters.lifestyleTags, "a fourth tag is refused")
+
+        val request = filters.toGridQueryRequest(cursor = null)
+        assertTrue(request.lifestyleMatchAll)
+        assertEquals(filters, GridFilters.fromGridQueryRequest(request))
+
+        // Any-of has no such cap; switching to All keeps the first tags that fit.
+        var any = GridFilters()
+        LifestyleTag.entries.forEach { any = any.withLifestyleTagToggled(it) }
+        assertEquals(LifestyleTag.entries.toSet(), any.lifestyleTags)
+        val all = any.withLifestyleMatchAll(true)
+        assertEquals(GridFilters.MAX_LIFESTYLE_ALL_OF, all.lifestyleTags.size)
+        assertTrue(all.lifestyleTags.count { it.group == LifestyleGroup.Experience } <= 1)
+
+        // Two experience levels: the second replaces the first under All.
+        val experience = LifestyleTag.inGroup(LifestyleGroup.Experience)
+        val oneLevel = GridFilters().withLifestyleMatchAll(true).withLifestyleTagToggled(experience[0]).withLifestyleTagToggled(experience[1])
+        assertEquals(setOf(experience[1]), oneLevel.lifestyleTags)
+
+        // No tags: the mode is not sent (the server would drop it anyway).
+        assertFalse(GridFilters(lifestyleMatchAll = true).toGridQueryRequest(cursor = null).lifestyleMatchAll)
+    }
+
+    @Test
     fun theApplyButtonSaysHowManyPeopleShowAndNeverInventsANumber() {
         assertEquals("Apply", gridApplyLabel(null))
         assertEquals("Show 0 people", gridApplyLabel(GridCountResponseDto(count = 0)))

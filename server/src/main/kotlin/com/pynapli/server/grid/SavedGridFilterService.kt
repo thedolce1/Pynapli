@@ -104,4 +104,5 @@ private fun validatePayload(payload: GridQueryRequestDto): DiscoveryFilters =
         partnerVerifiedOnly = payload.partnerVerifiedOnly,
         excludeSingleMen = payload.excludeSingleMen,
         haventChattedOnly = payload.haventChattedOnly,
+        lifestyleMatchAll = payload.lifestyleMatchAll,
     ) { _ -> SavedFilterException("INVALID_SAVED_FILTER_PAYLOAD") }

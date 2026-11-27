@@ -54,6 +54,9 @@ data class GridQueryRequestDto(
     // message with in the last 24 hours (either direction; an inbound message counts only once it is
     // visible to the viewer). Grid only, per viewer, never from a shared cache. Old clients omit it.
     val haventChattedOnly: Boolean = false,
+    // Lifestyle "All of" (G2-4, Grid only): every one of [lifestyleTags] must match (at most 3, and one
+    // experience level), instead of any one per group. Old clients omit it.
+    val lifestyleMatchAll: Boolean = false,
     // Section 3 opt-in: this client renders locked cards (GridCardDto.locked) as paywall tiles, never
     // as profiles. Without it the server keeps the old behaviour: the grid stops at the tier depth with
     // resultLimitReached. With it the grid keeps paging past the depth with locked cards up to the next

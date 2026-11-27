@@ -250,6 +250,25 @@ internal fun LifestyleSection(
     }
 }
 
+/**
+ * Lifestyle match mode (plan G2-4, Grindr's tags): "Any" is the usual any-of within a group; "All of up
+ * to 3" means every chosen tag must be on the profile.
+ */
+@Composable
+internal fun LifestyleMatchModeRow(
+    matchAll: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SheetToggleChip(label = "Any", active = !matchAll, onClick = { onChange(false) })
+        SheetToggleChip(label = "All of (up to ${GridFilters.MAX_LIFESTYLE_ALL_OF})", active = matchAll, onClick = { onChange(true) })
+    }
+}
+
 /** Boundaries filter: hides people who marked a chosen item "not for me". */
 @Composable
 internal fun BoundariesFilterSection(

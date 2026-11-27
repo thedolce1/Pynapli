@@ -165,7 +165,7 @@ internal object GridFilterSql {
         index = PartnerFilterSql.bind(statement, connection, index, filters, viewerUserId, hiddenFromViewerIds)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
-        index = LifestyleFilterSql.bind(statement, connection, index, filters.lifestyleTags, filters.boundaryItems)
+        index = LifestyleFilterSql.bind(statement, connection, index, filters.lifestyleTags, filters.boundaryItems, filters.lifestyleMatchAll)
         statement.setArray(index++, logisticsTags)
         statement.setArray(index++, logisticsTags)
         statement.setBoolean(index++, filters.tonightAvailableOnly)
