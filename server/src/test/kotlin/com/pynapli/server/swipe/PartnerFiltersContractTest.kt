@@ -150,7 +150,7 @@ class PartnerFiltersContractTest {
 
     @Test
     fun savedFiltersRoundTripAndOldRowsLoad() =
-        runBlocking {
+        runBlocking<Unit> {
             val oldGrid = OneRowRepository("""{"radiusMeters":5000,"linkedOnly":true}""")
             val oldItem = SavedGridFilterService(oldGrid).list(viewer).items.single()
             assertTrue(oldItem.payload.partnerGenders.isEmpty())
