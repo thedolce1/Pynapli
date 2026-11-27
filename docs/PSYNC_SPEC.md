@@ -421,7 +421,7 @@ Social:
 Select:
 
 - Larger decks.
-- (Advanced Psync filters were a Select perk until founder decision 2, 2026-11-26: every Psync filter is now free; lifestyle tags need an age-verified suggester.)
+- (Advanced Psync filters were a Select perk until founder decision 2, 2026-11-26: every Psync filter is now free; lifestyle tags need both partners age-verified, on create and on every suggestion (`PSYNC_PARTNER_AGE_VERIFICATION_REQUIRED` when the other partner is not), because both partners swipe the deck.)
 - Travel-mode Psync.
 - More recap history.
 - Priority/Pineapple Like inventory usable in Psync.
