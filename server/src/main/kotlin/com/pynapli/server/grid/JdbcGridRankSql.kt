@@ -191,57 +191,85 @@ internal fun Connection.queryGridRank(
         LIMIT ?
         """.trimIndent()
 
-    return prepareStatement(sql).use { statement ->
-        // Bound in SQL order; the running index keeps added placeholders from shifting the rest.
-        var index = 1
-        statement.setObject(index++, viewerUserId)
-        // nearby_ids index pre-filter radius (home GPS + travel point), padded by the cell slack.
-        statement.setDouble(index++, paddedRadius)
-        statement.setDouble(index++, paddedRadius)
-        // self exclusion gate.
-        statement.setNullableUuid(index++, userSpecificViewerId)
-        statement.setNullableUuid(index++, userSpecificViewerId)
-        // Exact cell-to-cell radius membership.
-        statement.setDouble(index++, radiusMeters.toDouble())
-        index = GridFilterSql.bind(statement, this, index, filters, viewerUserId, hiddenFromViewerIds)
-        // per-viewer block exclusion (self path).
-        statement.setNullableUuid(index++, userSpecificViewerId)
-        statement.setNullableUuid(index++, userSpecificViewerId)
-        statement.setNullableUuid(index++, userSpecificViewerId)
-        // Order key: radius (hidden placement span), seed, seed.
-        statement.setInt(index++, radiusMeters)
-        statement.setString(index++, orderSeed)
-        statement.setString(index++, orderSeed)
-        // Keyset cursor predicate (no-op when cursor is null).
-        statement.setBoolean(index++, cursor != null)
-        statement.setObject(index++, cursor?.boostBucket)
-        statement.setObject(index++, cursor?.boostBucket)
-        statement.setObject(index++, cursor?.orderBucket)
-        statement.setObject(index++, cursor?.boostBucket)
-        statement.setObject(index++, cursor?.orderBucket)
-        statement.setObject(index++, cursor?.orderTiebreak)
-        statement.setObject(index++, cursor?.boostBucket)
-        statement.setObject(index++, cursor?.orderBucket)
-        statement.setObject(index++, cursor?.orderTiebreak)
-        statement.setObject(index++, cursor?.userId)
-        statement.setInt(index++, limit)
-        statement.executeQuery().use { rs ->
-            buildList {
-                while (rs.next()) {
-                    add(
-                        GridRankRow(
-                            userId = rs.getObject("user_id", UUID::class.java),
-                            displayName = rs.getString("display_name"),
-                            showDistance = rs.getBoolean("show_distance"),
-                            boostBucket = rs.getInt("boost_bucket"),
-                            orderBucket = rs.getInt("distance_bucket_meters"),
-                            distanceMeters = rs.getDouble("distance_meters"),
-                            orderTiebreak = rs.getLong("order_tiebreak"),
-                            visiting = rs.getBoolean("visiting"),
-                        ),
-                    )
+    return withPinnedJoinOrder {
+        prepareStatement(sql).use { statement ->
+            // Bound in SQL order; the running index keeps added placeholders from shifting the rest.
+            var index = 1
+            statement.setObject(index++, viewerUserId)
+            // nearby_ids index pre-filter radius (home GPS + travel point), padded by the cell slack.
+            statement.setDouble(index++, paddedRadius)
+            statement.setDouble(index++, paddedRadius)
+            // self exclusion gate.
+            statement.setNullableUuid(index++, userSpecificViewerId)
+            statement.setNullableUuid(index++, userSpecificViewerId)
+            // Exact cell-to-cell radius membership.
+            statement.setDouble(index++, radiusMeters.toDouble())
+            index = GridFilterSql.bind(statement, this, index, filters, viewerUserId, hiddenFromViewerIds)
+            // per-viewer block exclusion (self path).
+            statement.setNullableUuid(index++, userSpecificViewerId)
+            statement.setNullableUuid(index++, userSpecificViewerId)
+            statement.setNullableUuid(index++, userSpecificViewerId)
+            // Order key: radius (hidden placement span), seed, seed.
+            statement.setInt(index++, radiusMeters)
+            statement.setString(index++, orderSeed)
+            statement.setString(index++, orderSeed)
+            // Keyset cursor predicate (no-op when cursor is null).
+            statement.setBoolean(index++, cursor != null)
+            statement.setObject(index++, cursor?.boostBucket)
+            statement.setObject(index++, cursor?.boostBucket)
+            statement.setObject(index++, cursor?.orderBucket)
+            statement.setObject(index++, cursor?.boostBucket)
+            statement.setObject(index++, cursor?.orderBucket)
+            statement.setObject(index++, cursor?.orderTiebreak)
+            statement.setObject(index++, cursor?.boostBucket)
+            statement.setObject(index++, cursor?.orderBucket)
+            statement.setObject(index++, cursor?.orderTiebreak)
+            statement.setObject(index++, cursor?.userId)
+            statement.setInt(index++, limit)
+            statement.executeQuery().use { rs ->
+                buildList {
+                    while (rs.next()) {
+                        add(
+                            GridRankRow(
+                                userId = rs.getObject("user_id", UUID::class.java),
+                                displayName = rs.getString("display_name"),
+                                showDistance = rs.getBoolean("show_distance"),
+                                boostBucket = rs.getInt("boost_bucket"),
+                                orderBucket = rs.getInt("distance_bucket_meters"),
+                                distanceMeters = rs.getDouble("distance_meters"),
+                                orderTiebreak = rs.getLong("order_tiebreak"),
+                                visiting = rs.getBoolean("visiting"),
+                            ),
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * Runs [block] with the planner held to the join order the rank SQL is written in (nearby_ids drives),
+ * scoped to one short read transaction so nothing else on the pooled connection is affected. The
+ * planner otherwise spends as long searching join orders across the tier sets and filter fragments
+ * as the query takes to run (measured: 48 -> 38 ms per rank under 10 concurrent clients). A caller
+ * already inside a transaction keeps the planner's own choice, since SET LOCAL would outlive the rank.
+ */
+internal inline fun <T> Connection.withPinnedJoinOrder(block: () -> T): T {
+    if (!autoCommit) return block()
+    autoCommit = false
+    try {
+        createStatement().use { statement ->
+            statement.execute("SET LOCAL join_collapse_limit = 1")
+            statement.execute("SET LOCAL from_collapse_limit = 1")
+        }
+        val result = block()
+        commit()
+        return result
+    } catch (error: Throwable) {
+        runCatching { rollback() }
+        throw error
+    } finally {
+        autoCommit = true
     }
 }
