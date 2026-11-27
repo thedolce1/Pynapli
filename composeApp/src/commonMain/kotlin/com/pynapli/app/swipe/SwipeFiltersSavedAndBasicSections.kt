@@ -33,6 +33,63 @@ internal fun SwipeWhoAgeDistanceFilters(
     draft: SwipeFilters,
     onDraftChange: (SwipeFilters) -> Unit,
 ) {
+    // Age and Distance first, like the top of the Grid sheet: the filters people change most (plan G2-4).
+    SectionHeader(
+        title = "Age",
+        dealbreakerKey = SwipeDealbreakerKey.AGE,
+        eligible = draft.minimumAge != null || draft.maximumAge != null,
+        locked = SwipeDealbreakerKey.AGE in draft.dealbreakers,
+        onLockChange = { locked ->
+            onDraftChange(
+                draft.copy(
+                    dealbreakers =
+                        toggleDealbreaker(
+                            draft.dealbreakers,
+                            SwipeDealbreakerKey.AGE,
+                            locked,
+                        ),
+                ),
+            )
+        },
+    )
+    AgeSection(
+        minimumAge = draft.minimumAge,
+        maximumAge = draft.maximumAge,
+        onChange = { lo, hi ->
+            val unbounded = lo == null && hi == null
+            val dealbreakers =
+                if (unbounded) {
+                    draft.dealbreakers - SwipeDealbreakerKey.AGE
+                } else {
+                    draft.dealbreakers
+                }
+            onDraftChange(draft.copy(minimumAge = lo, maximumAge = hi, dealbreakers = dealbreakers))
+        },
+    )
+
+    SectionHeader(
+        title = "Distance",
+        dealbreakerKey = SwipeDealbreakerKey.DISTANCE,
+        eligible = true,
+        locked = SwipeDealbreakerKey.DISTANCE in draft.dealbreakers,
+        onLockChange = { locked ->
+            onDraftChange(
+                draft.copy(
+                    dealbreakers =
+                        toggleDealbreaker(
+                            draft.dealbreakers,
+                            SwipeDealbreakerKey.DISTANCE,
+                            locked,
+                        ),
+                ),
+            )
+        },
+    )
+    DistanceSection(
+        radiusMeters = draft.radiusMeters,
+        onChange = { meters -> onDraftChange(draft.copy(radiusMeters = meters)) },
+    )
+
     SectionHeader(
         title = "Who",
         dealbreakerKey = SwipeDealbreakerKey.LINKED_ONLY,
@@ -96,62 +153,6 @@ internal fun SwipeWhoAgeDistanceFilters(
     PartnerSection(
         filters = draft.asGridWhoAndPartner(),
         onChange = { onDraftChange(draft.withGridWhoAndPartner(it)) },
-    )
-
-    SectionHeader(
-        title = "Age",
-        dealbreakerKey = SwipeDealbreakerKey.AGE,
-        eligible = draft.minimumAge != null || draft.maximumAge != null,
-        locked = SwipeDealbreakerKey.AGE in draft.dealbreakers,
-        onLockChange = { locked ->
-            onDraftChange(
-                draft.copy(
-                    dealbreakers =
-                        toggleDealbreaker(
-                            draft.dealbreakers,
-                            SwipeDealbreakerKey.AGE,
-                            locked,
-                        ),
-                ),
-            )
-        },
-    )
-    AgeSection(
-        minimumAge = draft.minimumAge,
-        maximumAge = draft.maximumAge,
-        onChange = { lo, hi ->
-            val unbounded = lo == null && hi == null
-            val dealbreakers =
-                if (unbounded) {
-                    draft.dealbreakers - SwipeDealbreakerKey.AGE
-                } else {
-                    draft.dealbreakers
-                }
-            onDraftChange(draft.copy(minimumAge = lo, maximumAge = hi, dealbreakers = dealbreakers))
-        },
-    )
-
-    SectionHeader(
-        title = "Distance",
-        dealbreakerKey = SwipeDealbreakerKey.DISTANCE,
-        eligible = true,
-        locked = SwipeDealbreakerKey.DISTANCE in draft.dealbreakers,
-        onLockChange = { locked ->
-            onDraftChange(
-                draft.copy(
-                    dealbreakers =
-                        toggleDealbreaker(
-                            draft.dealbreakers,
-                            SwipeDealbreakerKey.DISTANCE,
-                            locked,
-                        ),
-                ),
-            )
-        },
-    )
-    DistanceSection(
-        radiusMeters = draft.radiusMeters,
-        onChange = { meters -> onDraftChange(draft.copy(radiusMeters = meters)) },
     )
 }
 
