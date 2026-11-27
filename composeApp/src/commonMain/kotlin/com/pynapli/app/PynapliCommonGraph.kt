@@ -34,6 +34,7 @@ import com.pynapli.app.onboarding.OnboardingStateHolder
 import com.pynapli.app.presence.PresenceHeartbeat
 import com.pynapli.app.profile.ApiPublicProfileRepository
 import com.pynapli.app.profile.ProfileDetailStateHolder
+import com.pynapli.app.profile.toProfileTagSet
 import com.pynapli.app.profilehub.ApiProfileHubRepository
 import com.pynapli.app.profilehub.ProfileHubStateHolder
 import com.pynapli.app.profilelink.ApiProfileLinksRepository
@@ -147,7 +148,18 @@ class PynapliCommonGraph(
     /** The per-viewer `PsyncStateHolder` is built in `PynapliApp` from this. */
     val psyncRepository = ApiPsyncRepository(apiClient)
 
-    val profileDetailStateHolder = ProfileDetailStateHolder(ApiPublicProfileRepository(apiClient))
+    val profileHubStateHolder = ProfileHubStateHolder(ApiProfileHubRepository(apiClient))
+
+    // The peek's "in common" tags read the viewer's own profile from the Hub's loaded state.
+    val profileDetailStateHolder =
+        ProfileDetailStateHolder(
+            repository = ApiPublicProfileRepository(apiClient),
+            viewerTags = {
+                profileHubStateHolder.state.value.me
+                    ?.profile
+                    ?.toProfileTagSet()
+            },
+        )
 
     val conversationStateHolder =
         ConversationStateHolder(ApiConversationRepository(apiClient, KtorMediaByteUploader()))
@@ -166,8 +178,6 @@ class PynapliCommonGraph(
                     mediaByteUploader = KtorMediaByteUploader(),
                 ),
         )
-
-    val profileHubStateHolder = ProfileHubStateHolder(ApiProfileHubRepository(apiClient))
 
     /** "Hide from people you know" (Profile > Privacy). */
     val contactBlocksStateHolder =

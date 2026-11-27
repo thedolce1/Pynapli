@@ -5,6 +5,7 @@ import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.app.media.MediaAlbumItemUi
 import com.pynapli.app.media.OwnPreviewPhoto
 import com.pynapli.shared.network.dto.PublicProfileDto
+import com.pynapli.shared.profile.ProfileTagSet
 
 @Immutable
 data class ProfileDetailUiState(
@@ -39,6 +40,9 @@ data class ProfileDetailUiState(
     // Opened from a like in Likes You: the Activity event the sheet's "Like back" answers.
     val likeBackEventId: String? = null,
     val isTogglingFavorite: Boolean = false,
+    // The viewer's own saved tags when this profile opened (G3-A "in common"); null for the own
+    // preview and until the viewer's profile has loaded, which then flags nothing.
+    val viewerTags: ProfileTagSet? = null,
 ) {
     val visible: Boolean
         get() = selectedCard != null

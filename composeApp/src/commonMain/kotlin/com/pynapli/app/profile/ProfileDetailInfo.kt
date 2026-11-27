@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +36,7 @@ import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowForward
+import com.pynapli.app.design.icons.filled.Check
 import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.app.grid.Boundary
 import com.pynapli.app.grid.BoundaryStance
@@ -45,7 +48,11 @@ import com.pynapli.app.grid.LogisticsTag
 import com.pynapli.app.grid.discoveryTagLabel
 import com.pynapli.app.media.rememberCachedImageModel
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
+import com.pynapli.shared.network.dto.ProfileDto
+import com.pynapli.shared.network.dto.PublicProfileDto
+import com.pynapli.shared.profile.ProfileTagSet
 import com.pynapli.shared.profile.ProfileTaxonomies
+import com.pynapli.shared.profile.inCommonTags
 
 @Composable
 internal fun ProfileFacts(profileState: ProfileDetailUiState) {
@@ -64,14 +71,20 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
                 // same label; show it once.
             }.distinct()
         }
+    val viewerTags = profileState.viewerTags
+    // G3-A: the tags the viewer shares come first and are marked "in common". Only what the server
+    // sent is reordered; nothing is added, so any lifestyle gating stays exactly as it was.
     val tagChips =
-        remember(profile) {
-            buildList {
-                profile.logisticsTags.forEach { value -> add(logisticsTagLabel(value)) }
-                profile.intents.forEach { value -> add(intentLabel(value)) }
-            }
+        remember(profile, viewerTags) {
+            val shared = inCommonTags(viewerTags, profile.toProfileTagSet())
+            val logistics = shared.logisticsTags.map { match -> ProfileTagChip(logisticsTagLabel(match.token), match.inCommon) }
+            val intents = shared.intents.map { match -> ProfileTagChip(intentLabel(match.token), match.inCommon) }
+            (logistics + intents).sortedBy { !it.inCommon }
         }
-    val lifestyleRows = remember(profile) { lifestyleRows(profile.experienceLevel, profile.lifestyleTags, profile.boundaries) }
+    val lifestyleRows =
+        remember(profile, viewerTags) {
+            lifestyleRows(profile.experienceLevel, profile.lifestyleTags, profile.boundaries, viewerTags)
+        }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -121,8 +134,8 @@ internal fun ProfileFacts(profileState: ProfileDetailUiState) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                tagChips.forEach { label ->
-                    PynapliPill(text = label, selected = false)
+                tagChips.forEach { chip ->
+                    ProfileTagPill(text = chip.label, inCommon = chip.inCommon)
                 }
             }
         }
@@ -143,7 +156,58 @@ private fun selfDescribableLabel(
 internal data class LifestyleFactRow(
     val label: String,
     val values: List<String>,
+    // The [values] the viewer's own profile shares (they are listed first).
+    val inCommon: Set<String> = emptySet(),
 )
+
+/** A logistics or intent chip on the profile, and whether the viewer shares it. */
+private data class ProfileTagChip(
+    val label: String,
+    val inCommon: Boolean,
+)
+
+/** The peek's tags as the shared in-common rule reads them. */
+internal fun PublicProfileDto.toProfileTagSet(): ProfileTagSet =
+    ProfileTagSet(lifestyleTags = lifestyleTags, experienceLevel = experienceLevel, logisticsTags = logisticsTags, intents = intents)
+
+/** The viewer's own saved tags (the Profile Hub's loaded profile). */
+internal fun ProfileDto.toProfileTagSet(): ProfileTagSet =
+    ProfileTagSet(lifestyleTags = lifestyleTags, experienceLevel = experienceLevel, logisticsTags = logisticsTags, intents = intents)
+
+/**
+ * A profile tag pill. One the viewer shares draws brighter (the neutral text colour, never the
+ * premium gold) with a small check, and screen readers hear "In common" after its label.
+ */
+@Composable
+private fun ProfileTagPill(
+    text: String,
+    inCommon: Boolean,
+) {
+    if (!inCommon) {
+        PynapliPill(text = text, selected = false)
+        return
+    }
+    val highlight = MaterialTheme.colorScheme.onSurface
+    PynapliPill(
+        text = text,
+        selected = true,
+        accent = highlight,
+        leading = {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = highlight,
+                modifier = Modifier.size(12.dp),
+            )
+        },
+        modifier =
+            Modifier
+                .semantics(mergeDescendants = true) { stateDescription = IN_COMMON_DESCRIPTION }
+                .testTag(ProfileDetailTags.IN_COMMON),
+    )
+}
+
+internal const val IN_COMMON_DESCRIPTION = "In common"
 
 /**
  * The person's own lifestyle answers, grouped swinger-first: experience, swap, room, other terms,
@@ -153,13 +217,22 @@ internal fun lifestyleRows(
     experienceLevel: String?,
     lifestyleTags: List<String>,
     boundaries: List<String>,
+    // The viewer's own tags: shared ones go first in each row and are flagged. Null flags nothing.
+    viewerTags: ProfileTagSet? = null,
 ): List<LifestyleFactRow> =
     buildList {
-        val tags = lifestyleTags.mapNotNull { LifestyleTag.fromServerValue(it) }
-        LifestyleTag.fromServerValue(experienceLevel)?.let { add(LifestyleFactRow(LifestyleGroup.Experience.label, listOf(it.label))) }
+        val shared = inCommonTags(viewerTags, ProfileTagSet(lifestyleTags = lifestyleTags, experienceLevel = experienceLevel))
+        val tags = shared.lifestyleTags.mapNotNull { match -> LifestyleTag.fromServerValue(match.token)?.let { tag -> tag to match.inCommon } }
+        LifestyleTag.fromServerValue(experienceLevel)?.let { tag ->
+            val sharedLabels = if (shared.experienceInCommon) setOf(tag.label) else emptySet()
+            add(LifestyleFactRow(LifestyleGroup.Experience.label, listOf(tag.label), inCommon = sharedLabels))
+        }
         listOf(LifestyleGroup.Swap, LifestyleGroup.Room, LifestyleGroup.Other).forEach { group ->
-            val labels = tags.filter { it.group == group }.map { it.label }
-            if (labels.isNotEmpty()) add(LifestyleFactRow(group.label, labels))
+            val inGroup = tags.filter { (tag, _) -> tag.group == group }
+            if (inGroup.isNotEmpty()) {
+                val sharedLabels = inGroup.filter { (_, inCommon) -> inCommon }.mapTo(LinkedHashSet()) { (tag, _) -> tag.label }
+                add(LifestyleFactRow(group.label, inGroup.map { (tag, _) -> tag.label }, inCommon = sharedLabels))
+            }
         }
         val stances = BoundaryStance.parse(boundaries)
         BoundaryStance.entries.forEach { stance ->
@@ -197,7 +270,7 @@ private fun LifestyleFacts(rows: List<LifestyleFactRow>) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    row.values.forEach { value -> PynapliPill(text = value, selected = false) }
+                    row.values.forEach { value -> ProfileTagPill(text = value, inCommon = value in row.inCommon) }
                 }
             }
         }
