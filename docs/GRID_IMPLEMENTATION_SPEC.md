@@ -724,9 +724,11 @@ Client behavior:
 - Subscribe to what the viewer is looking at (G3-A, 2026-11-27). The Nearby grid reports its visible
   item range (`GridScreen`, a `snapshotFlow` over `LazyGridState.layoutInfo`); the holder maps it to
   cards around the locked banner (`GridStateHolder.onGridItemsVisible`, `cardIndexForGridItem`) and
-  subscribes to the visible cards, then 30 below, then 30 above (`presenceWindowIds`,
-  `PRESENCE_WINDOW_MARGIN`), after Favorites and within the 200 cap (`presenceSubscription`). Before
-  the grid lays out it is the cards from the top. A new range is followed only once it held still for
+  subscribes to the 200 cards nearest the screen: the visible cards, then 30 below, then 30 above
+  (`PRESENCE_WINDOW_MARGIN`), then outward from both edges until the cap is spent
+  (`presenceWindowIds`); Favorites still go first and the total stays within 200
+  (`presenceSubscription`). A list within the cap is watched whole wherever the viewer is, as before;
+  only a longer one follows the viewer. Before the grid lays out it is the cards from the top. A new range is followed only once it held still for
   300 ms (`PRESENCE_WINDOW_SETTLE`), so a fling sends one subscription, not dozens; a card change (a
   page, a delta) applies at once. The range lives outside `GridUiState`: it never refetches, reorders
   or touches the scroll anchor (`GridPresenceWindowTest`, virtual clock). Known limit: the stream sends
@@ -1031,9 +1033,9 @@ updates when the app pauses, prefer event deltas over polling.
   presence, snapshot, New nearby and Favorites, reload on plan change (`GridLockedCardsTest`,
   `ProfilePagerControllerTest`, `StorePaywallFocusTest`).
 - [x] Section 3: server half of the contract, emulator + browser QA with a Free and a paid account;
-  merged and verified (PRs #237 to #241).
+  merged and verified (PR #234).
 - [x] Section 2: emulator + browser QA of the pill, chips, travel pill, locks and profile pager;
-  merged and verified (PRs #237 to #241).
+  merged and verified (PR #233).
 - [x] Swipe between profiles in grid order, full screen on phones, panel with Previous/Next and arrow keys
   on wider windows; fetch on settle only; next page at the end; block/hide moves on; tap-to-change photos;
   inline first-message composer and "Verify to message" (`ProfilePagerControllerTest`,
@@ -1051,8 +1053,8 @@ updates when the app pauses, prefer event deltas over polling.
   #241).
 - [x] G2-2 and G2-4: built, tested and merged (PRs #237 to #241); G2-2 measurements under
   "Server-made grid thumbnails" in this checklist.
-- [x] G3-A "feels live" (2026-11-27, written, not yet built or run): presence follows the cards on
-  screen (`GridPresenceWindowTest`), tiles animate on backfill and filter answers (`animateItem`, off
+- [x] G3-A "feels live" (2026-11-27, written, not yet built or run): presence follows the 200 cards
+  nearest the screen (`GridPresenceWindowTest`), tiles animate on backfill and filter answers (`animateItem`, off
   under reduced motion), and the profile peek lists tags the viewer shares first, marked "In common"
   (`InCommonTagsTest`, `ProfileInCommonTagsTest`; see "Profile open").
 - [ ] G3-A: build, full test run, emulator + browser look (scroll past card 200 and watch a dot
