@@ -130,6 +130,7 @@ internal fun userSafeMessage(code: String): String =
         "TONIGHT_NOT_PARTICIPANT" -> "You're not part of that Playing Tonight session."
         "TONIGHT_NOT_PENDING" -> "That session is no longer awaiting your response."
         "PSYNC_NO_LINKED_PARTNER" -> "You need an active linked partner to start Psync."
+        "PSYNC_PARTNER_AGE_VERIFICATION_REQUIRED" -> "Lifestyle filters need both partners to verify their age."
         "INVALID_PSYNC_DECK_SIZE" -> "Choose a Psync deck size between 1 and 50."
         "PSYNC_SESSION_ALREADY_ACTIVE" -> "You already have a Psync session in progress."
         "PSYNC_INVALID_STATE" -> "That action isn't available for this Psync session right now."
