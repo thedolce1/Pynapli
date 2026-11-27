@@ -65,8 +65,11 @@ class JdbcHiddenProfileRepository(
                     FROM user_hidden_profiles hp
                     LEFT JOIN profiles p ON p.user_id = hp.hidden_user_id
                     LEFT JOIN users hidden_user ON hidden_user.id = hp.hidden_user_id
+                    LEFT JOIN discovery_settings hidden_ds ON hidden_ds.user_id = hp.hidden_user_id
+                    LEFT JOIN account_risk_states hidden_ars ON hidden_ars.user_id = hp.hidden_user_id
                     -- The unhide list avatar (plan G2-4): the first approved profile photo, only while
-                    -- the account is active and visible and no block stands either way.
+                    -- the account is active, visible, not incognito, not quarantined or terminated, and
+                    -- no block stands either way (the same owner gates as Favorites).
                     LEFT JOIN LATERAL (
                         SELECT mai.media_asset_id
                         FROM media_albums ma
@@ -91,6 +94,8 @@ class JdbcHiddenProfileRepository(
                       ON hidden_user.status = 'active'
                      AND hidden_user.deleted_at IS NULL
                      AND p.visibility_status = 'visible'
+                     AND hidden_ds.incognito = false
+                     AND COALESCE(hidden_ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
                      AND NOT EXISTS (
                          SELECT 1
                          FROM user_blocks b

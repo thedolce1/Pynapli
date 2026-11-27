@@ -72,4 +72,53 @@ class HiddenProfileUnhideListIntegrationTest :
                 assertEquals(listOf(blockedLater.toString()), service.listHiddenProfiles(viewer).hiddenProfiles.map { it.hiddenUserId })
             }
         }
+
+        "no avatar once the hidden person goes incognito or is quarantined, back when they return" {
+            runBlocking {
+                val viewer = UUID.randomUUID()
+                val incognito = UUID.randomUUID()
+                val quarantined = UUID.randomUUID()
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(incognito, "Ines", age = 31, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(quarantined, "Quin", age = 36, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertApprovedProfilePhoto(incognito)
+                dataSource.insertApprovedProfilePhoto(quarantined)
+                val service = HiddenProfileService(JdbcHiddenProfileRepository(dataSource), mediaAssetUrlResolver = urls)
+                service.hideProfile(viewer, incognito.toString())
+                service.hideProfile(viewer, quarantined.toString())
+
+                suspend fun avatars() = service.listHiddenProfiles(viewer).hiddenProfiles.associate { it.hiddenUserId to it.thumbnailUrl }
+                assertNotNull(avatars().getValue(incognito.toString()))
+                assertNotNull(avatars().getValue(quarantined.toString()))
+
+                dataSource.connection.use { connection ->
+                    connection.prepareStatement("UPDATE discovery_settings SET incognito = true WHERE user_id = ?").use {
+                        it.setObject(1, incognito)
+                        it.executeUpdate()
+                    }
+                    connection
+                        .prepareStatement(
+                            """
+                            INSERT INTO account_risk_states (user_id, score, tier) VALUES (?, 50, 'quarantine')
+                            ON CONFLICT (user_id) DO UPDATE SET tier = EXCLUDED.tier, score = EXCLUDED.score
+                            """.trimIndent(),
+                        ).use {
+                            it.setObject(1, quarantined)
+                            it.executeUpdate()
+                        }
+                }
+                // Still listed so they can be unhidden, but nothing of their current profile shows.
+                assertEquals(setOf(incognito.toString(), quarantined.toString()), avatars().keys)
+                assertNull(avatars().getValue(incognito.toString()))
+                assertNull(avatars().getValue(quarantined.toString()))
+
+                dataSource.connection.use { connection ->
+                    connection.prepareStatement("UPDATE discovery_settings SET incognito = false WHERE user_id = ?").use {
+                        it.setObject(1, incognito)
+                        it.executeUpdate()
+                    }
+                }
+                assertNotNull(avatars().getValue(incognito.toString()))
+            }
+        }
     })
