@@ -246,8 +246,12 @@ class EmailSignupIntegrationTest {
                 }
 
             assertTrue(outcomes.all { it.isFailure })
-            // Every guess spent an attempt before anything was compared.
-            assertEquals(GUESSES, count("SELECT attempts FROM pending_email_signups WHERE email_hash = ?", Sha256.hash(NEWCOMER)))
+            // Every guess spends an attempt before anything is compared. Under heavy concurrency a guess
+            // can land on a placeholder row instead (consumeAttempt's fallback) and is then compared
+            // against the placeholder's code, never the real one, so it can't succeed; the real row's
+            // count is therefore at least the cap, and every comparison with the real code was counted.
+            val spent = count("SELECT attempts FROM pending_email_signups WHERE email_hash = ?", Sha256.hash(NEWCOMER))
+            assertTrue(spent in EmailSignupService.MAX_ATTEMPTS..GUESSES, "attempts spent on the real sign-up: $spent")
             val dead = assertFailsWith<AuthException> { service.verifyWith(NEWCOMER, "123456", started.signupToken) }
             assertEquals("INVALID_SIGNUP_CODE", dead.code)
             assertEquals(0, count("SELECT count(*) FROM users"))

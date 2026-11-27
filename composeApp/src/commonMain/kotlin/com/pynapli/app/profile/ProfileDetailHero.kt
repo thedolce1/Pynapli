@@ -390,6 +390,7 @@ internal object ProfileDetailTags {
     const val LAST_SEEN = "profile-detail-last-seen"
     const val LIKE_BACK = "profile-detail-like-back"
     const val LIFESTYLE = "profile-detail-lifestyle"
+    const val IN_COMMON = "profile-detail-in-common"
     const val PARTNER_SUMMARY = "profile-detail-partner-summary"
     const val BEING_REVIEWED_BADGE = "profile-detail-being-reviewed"
 }

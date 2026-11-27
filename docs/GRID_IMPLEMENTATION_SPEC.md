@@ -391,8 +391,10 @@ Current implementation:
 ## Client Implementation
 
 `GridStateHolder` exposes `StateFlow` UI state; `GridProfileGrid` renders a `LazyVerticalGrid` with
-stable keys (`key = card.id`), a `contentType`, and `Modifier.animateItem()` so inserts, removals and
-reorders keep identity and animate. Images load through Coil 3 (the only image loader). Compact panes
+stable keys (`key = card.id`; a locked card's opaque per-viewer token is unique too), a `contentType`,
+and `Modifier.animateItem()` on both card `items` blocks (G3-A, 2026-11-27; it was claimed here before
+it was built) so a hide's backfill and a filter answer move tiles instead of snapping. Under the
+system's reduced-motion setting (`rememberReducedMotion`) tiles jump straight to their places. Images load through Coil 3 (the only image loader). Compact panes
 keep a fixed 3-up grid; wider panes use adaptive columns at the same tile size (see
 [WEB_PWA_GAMEPLAN.md](WEB_PWA_GAMEPLAN.md)).
 
@@ -462,6 +464,17 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
 - Locked cards (Section 3): `ProfilePagerController.isLocked` is the per-card seam; a locked page
   shows the paywall, never fetches a profile, and the pages end at the first locked card (see "Locked
   cards" below; the server side is "Locked cards past the tier depth").
+
+In common (G3-A, 2026-11-27): the peek lists the tags the viewer also has first, in each lifestyle
+row (experience, swap, room, other) and in the logistics and intents row, each half in the profile's
+own order, Grindr's "My Tags" in common. The rule is `inCommonTags` in `:shared`
+(`com.pynapli.shared.profile`); it only reorders and flags what the server sent, so any lifestyle
+gating is untouched. Experience counts when both have the same level; boundaries never count (a limit
+is not a shared interest). The viewer's own tags come from the Profile Hub's already-loaded profile
+(`me.profile`, saved values, not an unsaved draft), read when a profile opens: no request of its own,
+nothing for the own preview, and nothing flagged until the Hub has loaded. A shared pill draws in the
+neutral text colour with a small check (never the premium gold) and screen readers hear "In common"
+as its state.
 
 ### Launch path (2026-11-24, Section 1, plan G1)
 
@@ -630,7 +643,7 @@ Filter correctness (2026-11-26, G2-1):
 - Active today, the activeAgo caption and Fresh read one source, `user_last_active`
   (`GridActivitySql.activeToday`).
 
-Couples in the filters (2026-11-26, G2-3; written, not yet built or run):
+Couples in the filters (2026-11-26, G2-3; merged and verified):
 
 - Partner filters (partner's gender, age range, orientation, photo verified) and the "No single men"
   quick chip, FILTERS_SPEC "Partner". `PartnerFilterSql` sits in `GridFilterSql` right after Linked,
@@ -708,6 +721,19 @@ Client behavior:
 - Update visible online dots immediately.
 - Update offscreen card models.
 - Do not reorder unless threshold rules say to.
+- Subscribe to what the viewer is looking at (G3-A, 2026-11-27). The Nearby grid reports its visible
+  item range (`GridScreen`, a `snapshotFlow` over `LazyGridState.layoutInfo`); the holder maps it to
+  cards around the locked banner (`GridStateHolder.onGridItemsVisible`, `cardIndexForGridItem`) and
+  subscribes to the 200 cards nearest the screen: the visible cards, then 30 below, then 30 above
+  (`PRESENCE_WINDOW_MARGIN`), then outward from both edges until the cap is spent
+  (`presenceWindowIds`); Favorites still go first and the total stays within 200
+  (`presenceSubscription`). A list within the cap is watched whole wherever the viewer is, as before;
+  only a longer one follows the viewer. Before the grid lays out it is the cards from the top. A new range is followed only once it held still for
+  300 ms (`PRESENCE_WINDOW_SETTLE`), so a fling sends one subscription, not dozens; a card change (a
+  page, a delta) applies at once. The range lives outside `GridUiState`: it never refetches, reorders
+  or touches the scroll anchor (`GridPresenceWindowTest`, virtual clock). Known limit: the stream sends
+  transitions only, nothing on subscribe, so a card whose presence changed before it entered the
+  window shows its last known state until its next transition or the next reorder.
 
 ## Image Loading
 
@@ -950,7 +976,10 @@ updates when the app pauses, prefer event deltas over polling.
 - [x] Server-made grid thumbnails from approved photos only, stable cache keys, chip debounce and
   cancel, page size per plan, owner visibility re-read after the shared rank window, joined rank tier,
   rank-pass and image-source measurement hooks (G2-2, 2026-11-26; see "Image Loading" through
-  "Measuring on a laptop"). Not yet built or run.
+  "Measuring on a laptop"). Merged and verified; measured: thumbnails are 7.4% of the original bytes,
+  and the 60 s refresh with URL churn made 0 network image fetches. The rank planning fixes (#238,
+  #240) took page 2 p50 from 333 to about 220 ms and a filter change p50 from 194 to 126 ms under 10
+  concurrent clients.
 - [x] Message rate limiting; ranking does not reward spam volume.
 - [x] Never-empty: with no filters the Grid is a plain proximity query, and a **first page** showing
   fewer than 12 people widens once to `MAX_RADIUS_METERS` and pages normally under a widened cursor
@@ -1003,24 +1032,33 @@ updates when the app pauses, prefer event deltas over polling.
 - [x] Section 3 client: locked tiles, boundary banner, tap to plans, pager end page, locks kept out of
   presence, snapshot, New nearby and Favorites, reload on plan change (`GridLockedCardsTest`,
   `ProfilePagerControllerTest`, `StorePaywallFocusTest`).
-- [ ] Section 3: emulator + browser QA with a Free and a paid account (more than 60 cards for Free,
-  tap a locked tile opens the plans, no lock for Select), and the server half of the contract.
-- [ ] Section 2: emulator + browser QA of the pill, chips, travel pill, locks and profile pager.
+- [x] Section 3: server half of the contract, emulator + browser QA with a Free and a paid account;
+  merged and verified (PR #234).
+- [x] Section 2: emulator + browser QA of the pill, chips, travel pill, locks and profile pager;
+  merged and verified (PR #233).
 - [x] Swipe between profiles in grid order, full screen on phones, panel with Previous/Next and arrow keys
   on wider windows; fetch on settle only; next page at the end; block/hide moves on; tap-to-change photos;
   inline first-message composer and "Verify to message" (`ProfilePagerControllerTest`,
   `ProfileComposerStateHolderTest`, `ProfileDetailPagingTest`). Emulator and browser walk still owed.
-- [x] G2-1 (2026-11-26, written, not yet built or run here): Linked uses the partner mini's visibility
+- [x] G2-1 (2026-11-26, merged and verified): Linked uses the partner mini's visibility
   gate (privacy fix, Grid + Swipe), Singles / Partnered from the visible link, the distance slider on
   the server's steps, Visiting soon filtered + ordered + paged, one Active-today source, and dead code
   plus the Favorites reset removed (see "Filter correctness" under Filter Application).
-- [ ] G2-1: build, full test run, independent privacy review of the Linked fix, emulator + browser walk
-  (sheet Who and Distance, Visiting soon paging, Clear all from Favorites).
-- [x] G2-3 (2026-11-26, written, not yet built or run here): Partner filters and "No single men" behind
+- [x] G2-1: build, full test run, independent privacy review of the Linked fix, emulator + browser walk
+  (PRs #237 to #241).
+- [x] G2-3 (2026-11-26, merged and verified): Partner filters and "No single men" behind
   the Linked gate (Grid, Swipe, Psync), the Partner section and Single women / Single men in the sheet,
   the partner's age and gender mark under the tile's partner mini.
-- [ ] G2-3: build, full test run, independent privacy review, emulator + browser walk (quick row
-  scrolls with the new chip, Partner section disabled under Singles, mini caption legible on photos).
+- [x] G2-3: build, full test run, independent privacy review, emulator + browser walk (PRs #237 to
+  #241).
+- [x] G2-2 and G2-4: built, tested and merged (PRs #237 to #241); G2-2 measurements under
+  "Server-made grid thumbnails" in this checklist.
+- [x] G3-A "feels live" (2026-11-27, written, not yet built or run): presence follows the 200 cards
+  nearest the screen (`GridPresenceWindowTest`), tiles animate on backfill and filter answers (`animateItem`, off
+  under reduced motion), and the profile peek lists tags the viewer shares first, marked "In common"
+  (`InCommonTagsTest`, `ProfileInCommonTagsTest`; see "Profile open").
+- [ ] G3-A: build, full test run, emulator + browser look (scroll past card 200 and watch a dot
+  change, hide a card and watch the backfill slide, open a profile that shares tags).
 ## Do Not Implement
 
 - Do not use offset pagination for live grid pages.

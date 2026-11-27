@@ -33,6 +33,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.pynapliEntrance
+import com.pynapli.app.design.rememberReducedMotion
 import com.pynapli.app.media.ImageLoadStats
 
 internal const val GRID_LOAD_MORE_RETRY_TAG = "grid-load-more-retry"
@@ -173,6 +174,10 @@ internal fun ProfileGrid(
     var revealed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { revealed = true }
 
+    // A hide's backfill and a filter answer move tiles to their new places (keys are user ids, locked
+    // cards an opaque per-viewer token, both unique) instead of snapping. Reduced motion: they jump.
+    val reducedMotion = rememberReducedMotion()
+
     // The grid answers its OWN pane width (not the window): beside a nav rail or a
     // side panel the pane is what determines honest density, and phone-width panes
     // keep the locked 3-up layout byte-for-byte.
@@ -203,7 +208,7 @@ internal fun ProfileGrid(
                     card = card,
                     distanceUnit = distanceUnit,
                     onClick = { onProfileSelected(card) },
-                    modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
+                    modifier = (if (reducedMotion) Modifier else Modifier.animateItem()).pynapliEntrance(visible = revealed, index = index),
                 )
             }
             if (bannerAt != null) {
@@ -225,7 +230,7 @@ internal fun ProfileGrid(
                         card = card,
                         distanceUnit = distanceUnit,
                         onClick = { onProfileSelected(card) },
-                        modifier = Modifier.pynapliEntrance(visible = revealed, index = index),
+                        modifier = (if (reducedMotion) Modifier else Modifier.animateItem()).pynapliEntrance(visible = revealed, index = index),
                     )
                 }
             }

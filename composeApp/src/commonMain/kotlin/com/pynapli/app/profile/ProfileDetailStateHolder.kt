@@ -6,6 +6,7 @@ import com.pynapli.app.grid.isLockedCard
 import com.pynapli.app.media.OwnPreviewPhoto
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ReportTargetType
+import com.pynapli.shared.profile.ProfileTagSet
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -22,6 +23,11 @@ data class FavoriteChange(
 
 class ProfileDetailStateHolder(
     private val repository: PublicProfileRepository,
+    /**
+     * The viewer's own saved tags (the Profile Hub's loaded profile, no request of its own), read
+     * when a profile opens so the peek can show the tags they share first. Null when not loaded.
+     */
+    private val viewerTags: () -> ProfileTagSet? = { null },
 ) {
     private val _state = MutableStateFlow(ProfileDetailUiState())
     val state: StateFlow<ProfileDetailUiState> = _state.asStateFlow()
@@ -49,6 +55,8 @@ class ProfileDetailStateHolder(
                 isOwnProfile = isOwnProfile,
                 likeBackEventId = likeBackEventId,
                 ownPreviewPhotos = if (isOwnProfile) ownPreviewPhotos else emptyList(),
+                // Previewing yourself, everything would be "in common".
+                viewerTags = if (isOwnProfile) null else viewerTags(),
             )
         }
         reportedBefore?.let { _removedProfiles.tryEmit(it) }

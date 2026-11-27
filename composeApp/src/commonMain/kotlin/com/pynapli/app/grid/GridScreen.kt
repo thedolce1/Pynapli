@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.location.LocationUiState
@@ -96,6 +97,15 @@ fun GridScreen(
                 GridEvent.ScrollToTop -> gridState.scrollToItem(0)
             }
         }
+    }
+
+    // G3-A: the presence subscription follows the cards on screen (the holder settles the range, so
+    // a fling never thrashes the socket). Read-only: it never refetches, reorders or scrolls.
+    LaunchedEffect(stateHolder, gridState) {
+        snapshotFlow {
+            val visible = gridState.layoutInfo.visibleItemsInfo
+            if (visible.isEmpty()) null else visible.minOf { it.index } to visible.maxOf { it.index }
+        }.collect { range -> if (range != null) stateHolder.onGridItemsVisible(range.first, range.second) }
     }
 
     // The Favorites view covers Nearby: pause Nearby's liveness refresh meanwhile.
