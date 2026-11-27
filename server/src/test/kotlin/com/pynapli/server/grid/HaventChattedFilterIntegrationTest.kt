@@ -62,7 +62,12 @@ class HaventChattedFilterIntegrationTest :
                         .toSet()
                 assertEquals(setOf(heldInbound, oldChat, deletedOnly, stranger), filtered)
 
-                val everyone = repository.queryNearby(viewer, 100_000, 20, DiscoveryFilters()).cards.map { it.userId }.toSet()
+                val everyone =
+                    repository
+                        .queryNearby(viewer, 100_000, 20, DiscoveryFilters())
+                        .cards
+                        .map { it.userId }
+                        .toSet()
                 assertEquals(setOf(sentTo, heardFrom, heldInbound, oldChat, deletedOnly, stranger), everyone)
             }
         }
@@ -103,8 +108,7 @@ class HaventChattedFilterIntegrationTest :
                 val off = service.queryGrid(viewer, GridQueryRequestDto(radiusMeters = 100_000))
                 assertEquals(listOf(chatted.toString()), off.items.map { it.userId })
 
-                fun scope(filters: DiscoveryFilters) =
-                    DiscoveryCursorCodec.gridScopeHash(viewer, 50_000, 60, filters, onlineOnly = false)
+                fun scope(filters: DiscoveryFilters) = DiscoveryCursorCodec.gridScopeHash(viewer, 50_000, 60, filters, onlineOnly = false)
                 assertNotEquals(scope(DiscoveryFilters()), scope(DiscoveryFilters(haventChattedOnly = true)))
                 assertNotEquals(
                     DiscoveryFilters().gridRankCacheKey(),

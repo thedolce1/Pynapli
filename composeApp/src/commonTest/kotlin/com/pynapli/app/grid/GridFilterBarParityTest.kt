@@ -25,7 +25,7 @@ class GridFilterBarParityTest {
     fun hidingACardDropsItAtOnceKeepsTheOrderAndBackfillsFromTheSameCursor() =
         runTest {
             val repository =
-                PagedGridFeedRepository(
+                ParityPagedGridFeedRepository(
                     mapOf(
                         null to GridFeedUi(cards = listOf(card("a"), card("b"), card("c")), nextCursor = "page-2"),
                         "page-2" to GridFeedUi(cards = listOf(card("d")), nextCursor = null),
@@ -37,7 +37,11 @@ class GridFilterBarParityTest {
             holder.removeCardById("b")
 
             // Everyone after the hidden card moved up one slot in place; the next page filled the tail.
-            assertEquals(listOf("a", "c", "d"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("a", "c", "d"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
             assertEquals(listOf<String?>(null, "page-2"), repository.cursors, "no refresh, the same cursor continued")
         }
 
@@ -45,14 +49,18 @@ class GridFilterBarParityTest {
     fun hidingWithNothingMoreToLoadNeverRefetches() =
         runTest {
             val repository =
-                PagedGridFeedRepository(mapOf(null to GridFeedUi(cards = listOf(card("a"), card("b")), nextCursor = null)))
+                ParityPagedGridFeedRepository(mapOf(null to GridFeedUi(cards = listOf(card("a"), card("b")), nextCursor = null)))
             val holder = GridStateHolder(repository)
             holder.load()
 
             holder.removeCardById("a")
             holder.removeCardById("not-on-screen")
 
-            assertEquals(listOf("b"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("b"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
             assertEquals(listOf<String?>(null), repository.cursors)
         }
 
@@ -113,7 +121,7 @@ class GridFilterBarParityTest {
     private fun card(id: String): GridProfileCardUi = GridProfileCardUi(id = id, displayName = id.uppercase(), online = false, distanceLabel = null)
 }
 
-private class PagedGridFeedRepository(
+private class ParityPagedGridFeedRepository(
     private val pages: Map<String?, GridFeedUi>,
 ) : GridFeedRepository {
     val cursors = mutableListOf<String?>()

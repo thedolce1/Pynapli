@@ -104,7 +104,6 @@ class PartnerFiltersContractTest {
     }
 
     @Test
-    @Test
     fun parsingValidatesLikeTheOwnersFilters() {
         fun parse(
             genders: List<String> = emptyList(),

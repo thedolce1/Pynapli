@@ -45,7 +45,11 @@ class LifestyleAllOfFilterIntegrationTest :
                 val repository = JdbcGridRepository(dataSource)
 
                 suspend fun ids(filters: DiscoveryFilters) =
-                    repository.queryNearby(viewer, 100_000, 20, filters).cards.map { it.userId }.toSet()
+                    repository
+                        .queryNearby(viewer, 100_000, 20, filters)
+                        .cards
+                        .map { it.userId }
+                        .toSet()
 
                 val tags = setOf("soft_swap", "full_swap")
                 assertEquals(setOf(both, softOnly, fullOnly, bothExperienced), ids(DiscoveryFilters(lifestyleTags = tags)))

@@ -91,8 +91,7 @@ internal fun Connection.viewerHasActiveTravelLocation(viewerUserId: UUID): Boole
  * they never share a window either (plan G2-3). "Haven't chatted" tests this viewer's own messages, so
  * it is per viewer too (plan G2-4).
  */
-internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean =
-    linkedOnly == null && !verifiedCouplesOnly && !hasPartnerFilters && !excludeSingleMen && !haventChattedOnly
+internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly && !hasPartnerFilters && !excludeSingleMen && !haventChattedOnly
 
 /**
  * Stable cache-class key for the FILTER properties that define the ranked

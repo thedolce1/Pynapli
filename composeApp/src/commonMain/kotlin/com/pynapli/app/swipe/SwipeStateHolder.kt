@@ -136,16 +136,6 @@ class SwipeStateHolder(
 
     suspend fun selectFilter(type: SwipeFilterType) {
         val selected = _state.value.filters.firstOrNull { it.type == type } ?: return
-        if (selected.locked) {
-            _state.update {
-                it.copy(
-                    paywallMessage = "${selected.label} is included with Social or Select.",
-                    errorCode = null,
-                    errorMessage = null,
-                )
-            }
-            return
-        }
         if (selected.active) {
             _state.update { it.copy(paywallMessage = null) }
             return

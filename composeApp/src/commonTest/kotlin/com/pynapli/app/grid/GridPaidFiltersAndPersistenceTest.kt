@@ -79,7 +79,10 @@ class GridPaidFiltersAndPersistenceTest {
 
             holder.primeFromCacheThenLoad()
 
-            assertTrue(holder.state.value.filters.lifestyleTags.isEmpty())
+            assertTrue(
+                holder.state.value.filters.lifestyleTags
+                    .isEmpty(),
+            )
             assertTrue(holder.state.value.filters.online)
             assertEquals(paidAndFree.logisticsTags, holder.state.value.filters.logisticsTags)
             assertEquals("Verify your age to use lifestyle filters.", holder.state.value.verificationMessage, "the row still says why")
@@ -245,7 +248,6 @@ class GridPaidFiltersAndPersistenceTest {
 
             assertEquals(GridFilters.defaults, holder.state.value.filters)
         }
-
 }
 
 /** Records the filters each first-page request asked with; optionally refuses lifestyle tags like the age gate. */
