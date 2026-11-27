@@ -79,6 +79,7 @@ internal fun buildSwipeDependencies(
             contactBlockVisibility = contactBlockVisibility,
             mediaImages = mediaImageResolver,
             viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
+            hiddenProfileRepository = hiddenProfileRepository,
         )
     val psyncSessionService =
         PsyncSessionService(

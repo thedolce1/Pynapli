@@ -346,6 +346,7 @@ class ServerDependencies(
                     profileViewRecordConcurrency = 4,
                     contactBlockVisibility = core.contactBlockVisibility,
                     mediaImages = media.mediaImageResolver,
+                    hiddenProfileRepository = core.hiddenProfileRepository,
                 )
             val profileLinkService =
                 ProfileLinkService(

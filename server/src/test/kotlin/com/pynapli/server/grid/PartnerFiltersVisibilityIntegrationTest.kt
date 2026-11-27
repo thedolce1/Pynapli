@@ -149,6 +149,13 @@ class PartnerFiltersVisibilityIntegrationTest {
             assertEquals(30, profileMini.age)
             assertEquals("woman", profileMini.gender)
             assertNull(graph.profiles.getPublicProfile(world.viewer, world.e1).linkedPartner)
+            // G2-4 partner strip parity: every partner the tile strips, the preview strips too, including
+            // the partner the viewer hid (G). Owners the viewer cannot open at all are skipped.
+            world.hiddenPartnerOwners.forEach { owner ->
+                runCatching { graph.profiles.getPublicProfile(world.viewer, owner) }
+                    .getOrNull()
+                    ?.let { profile -> assertNull(profile.linkedPartner, "$owner's partner is stripped from the preview") }
+            }
         }
 
     /** Psync: the strictest of both session partners' views (PartnerFilterSql.matchingCandidateIds). */

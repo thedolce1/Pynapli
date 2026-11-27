@@ -25,6 +25,8 @@ internal class SwipeRewindAction(
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val clock: Clock,
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // The viewer's own hides: the rewound card drops a partner the viewer hid, as Grid and Favorites do.
+    private val hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
 ) {
     suspend fun rewind(viewerUserId: UUID): SwipeRewindResponseDto {
         if (profile("swipe.rewind.risk") { riskPolicyService?.isSocialActionRestricted(viewerUserId) == true }) {
@@ -61,7 +63,14 @@ internal class SwipeRewindAction(
         // interaction, so a pass from before the block can be the latest one), nor their partner mini.
         val hiddenFromViewerIds = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
         if (candidate.targetUserId in hiddenFromViewerIds) return SwipeRewindResponseDto(rewound = false)
-        val card = candidate.card.withoutPartnerIn(hiddenFromViewerIds)
+        // The partner mini also drops a partner the viewer hid (G2-4 partner strip parity with the Grid).
+        val partnerHiddenIds =
+            if (candidate.card.linkedPartnerUserId == null) {
+                hiddenFromViewerIds
+            } else {
+                hiddenFromViewerIds + hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
+            }
+        val card = candidate.card.withoutPartnerIn(partnerHiddenIds)
 
         val now = clock.instant()
         val filters = DiscoveryFilters()
