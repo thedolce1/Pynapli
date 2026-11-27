@@ -64,7 +64,7 @@ class RequestProfiler(
     /** Counts one [name] event for this request (no-op when profiling is off). */
     fun count(name: String) {
         if (!enabled) return
-        counts.merge(name, 1, Int::plus)
+        counts.merge(name, 1) { a, b -> a + b }
     }
 
     suspend fun <T> measure(

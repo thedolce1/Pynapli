@@ -273,7 +273,7 @@ private fun buildThumbnails(
                 jobLock = com.pynapli.server.db.PostgresJobLock(dataSource),
             ),
     )
-})
+}
 
 private val LOCAL_MEDIA_ALLOWED_ENVIRONMENTS = setOf("local", "test")
 
