@@ -17,8 +17,8 @@ import java.util.TreeMap
  * extra SDK and no network call. The canonical-request / string-to-sign construction follows the
  * documented GCS V4 algorithm: https://cloud.google.com/storage/docs/access-control/signed-urls
  *
- * Signed headers are limited to `host` so a client only needs to hit the URL with the right method;
- * the payload is `UNSIGNED-PAYLOAD`. Live end-to-end validation against a real bucket requires a
+ * Signed headers are `host` plus any `extraSignedHeaders` (uploads sign the create-only
+ * precondition); the payload is `UNSIGNED-PAYLOAD`. Live end-to-end validation against a real bucket requires a
  * provisioned GCS bucket + service account (founder/ops step).
  */
 class GcsV4SignedUrlFactory(
@@ -32,11 +32,18 @@ class GcsV4SignedUrlFactory(
         val expiresAtEpochSeconds: Long,
     )
 
+    /**
+     * [extraSignedHeaders] are signed alongside `host` and the client must send them verbatim (GCS:
+     * "Headers prefixed with `x-goog-`" must be canonical headers when used). The upload signer uses
+     * this for `x-goog-if-generation-match: 0`, so the URL can only create the object, never overwrite
+     * it after it was screened.
+     */
     fun sign(
         method: String,
         bucket: String,
         objectKey: String,
         ttl: Duration,
+        extraSignedHeaders: Map<String, String> = emptyMap(),
     ): SignedUrl {
         require(bucket.isNotBlank()) { "bucket must not be blank" }
         require(objectKey.isNotBlank()) { "objectKey must not be blank" }
@@ -49,8 +56,14 @@ class GcsV4SignedUrlFactory(
         val credentialScope = "$datestamp/$region/storage/goog4_request"
         val canonicalUri = "/${encodePathSegment(bucket)}/${encodeObjectKey(objectKey)}"
 
-        val signedHeaders = "host"
-        val canonicalHeaders = "host:$host\n"
+        // Canonical headers: lowercase names, sorted by code point, trimmed values, "name:value\n".
+        val headers =
+            TreeMap<String, String>().apply {
+                put("host", host)
+                extraSignedHeaders.forEach { (name, value) -> put(name.trim().lowercase(Locale.US), value.trim()) }
+            }
+        val signedHeaders = headers.keys.joinToString(";")
+        val canonicalHeaders = headers.entries.joinToString("") { "${it.key}:${it.value}\n" }
 
         // Query params must be sorted by key and percent-encoded (RFC 3986) for the canonical query.
         val queryParams =

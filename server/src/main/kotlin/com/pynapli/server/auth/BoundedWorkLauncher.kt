@@ -20,6 +20,8 @@ class BoundedWorkLauncher(
     private val scope: CoroutineScope,
     maxConcurrent: Int = DEFAULT_MAX_CONCURRENT,
     private val maxPending: Int = DEFAULT_MAX_PENDING,
+    // Names the work in the saturation log line (no per-job detail is ever logged).
+    private val label: String = "sign-up",
 ) {
     private val permits = Semaphore(maxConcurrent)
     private val pending = AtomicInteger(0)
@@ -31,7 +33,7 @@ class BoundedWorkLauncher(
         if (pending.incrementAndGet() > maxPending) {
             pending.decrementAndGet()
             if (droppedJobs.incrementAndGet() % LOG_EVERY == 1L) {
-                logger.warn("Background sign-up work is saturated; dropped {} jobs so far", droppedJobs.get())
+                logger.warn("Background {} work is saturated; dropped {} jobs so far", label, droppedJobs.get())
             }
             return
         }

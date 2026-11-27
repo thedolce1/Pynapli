@@ -110,15 +110,16 @@ async function surfaces(viewport) {
 
     if (viewport === 'desktop') {
       const [width] = VIEWPORTS.desktop;
-      // Grid header actions are right-aligned: refresh, then the moon (Tonight), then filters.
-      const refresh = await browser.cursorAt(width - 160, 34);
+      // Grid header actions are right-aligned: refresh, then the moon (Tonight). Filters moved to the
+      // chip row below (2026-11-25), so both sit one button (60 px) further right than before.
+      const refresh = await browser.cursorAt(width - 100, 34);
       check('desktop: hand cursor over a header button', refresh === 'pointer', `cursor=${refresh}`);
       const label = await browser.cursorAt(Math.round(width / 2), 138);
       check('desktop: arrow over non-clickable text', label !== 'pointer', `cursor=${label}`);
 
       // Open Tonight the way a user does (this click doubles as giving the page keyboard focus).
-      await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: width - 100, y: 34, button: 'left', clickCount: 1 });
-      await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: width - 100, y: 34, button: 'left', clickCount: 1 });
+      await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: width - 40, y: 34, button: 'left', clickCount: 1 });
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: width - 40, y: 34, button: 'left', clickCount: 1 });
       const viaClick = await browser.waitForPath('/tonight');
       check('desktop: the moon button opens Tonight', viaClick === '/tonight', `pathname=${viaClick}`);
       await sleep(1500);
@@ -351,13 +352,10 @@ async function authWalk() {
     const atLogin = await browser.waitForPath('/login');
     check('auth walk: a fresh visitor lands on /login', atLogin === '/login', `pathname=${atLogin}`);
 
-    // Landing: Email, Password, then [Sign in] (wide) and the "Create account" link right after it.
-    let layout = await waitForLayout(browser, 'Landing', l => l.fields.length === 2 && l.wide.length >= 1);
-    const signInButton = layout.wide[0];
-    const createLink = layout.pointers.find(p => p.top > signInButton.bottom);
-    if (!createLink) throw new Error(`Landing: no "Create account" link under Sign in (${layout.summary})`);
+    // Welcome landing: no fields, [Create account] (wide) then [Sign in] (wide).
+    let layout = await waitForLayout(browser, 'Welcome landing', l => l.fields.length === 0 && l.wide.length >= 2);
     await authShot(browser, '00-landing');
-    await browser.click(layout.cx, createLink.y);
+    await browser.click(layout.cx, layout.wide[0].y);
     const atSignup = await browser.waitForPath('/signup');
     check('auth walk: Create account opens the sign-up stepper', atSignup === '/signup', `pathname=${atSignup}`);
 
@@ -394,13 +392,13 @@ async function authWalk() {
     try { sent = JSON.parse((signup && (await browser.requestBody(signup))) ?? '{}'); } catch {}
     check('auth walk: sign-up sent with the typed email and birthday', signup?.status === 202 && sent.email === email && sent.birthdate === '2000-06-01', `status=${signup?.status} birthdate=${sent.birthdate} emailMatches=${sent.email === email}`);
 
-    // Code: one field, Verify (wide).
+    // Code: one field, Verify (wide). The sixth digit submits on its own (Section 1), so no click:
+    // a click after it would land on the Location step's button.
     layout = await waitForLayout(browser, 'Code step', l => l.fields.length === 1 && l.wide.length >= 1);
     const code = await latestSignupCode(email);
+    since = browser.requests.length;
     await fillField(browser, layout, layout.fields[0], code);
     await authShot(browser, '04-code');
-    since = browser.requests.length;
-    await browser.click(layout.cx, layout.wide.find(w => w.top > layout.fields[0].bottom).y);
     const verify = await browser.waitForRequest('POST', '/v1/auth/email/signup/verify', { since });
     check('auth walk: the emailed code creates the account', verify?.status === 200, `status=${verify?.status}`);
     const stored = await browser.evaluate("!!localStorage.getItem('pynapli.auth.session.v1')");
@@ -416,7 +414,7 @@ async function authWalk() {
     const located = await browser.waitForRequest('POST', '/v1/location/current', { since });
     check('auth walk: the granted location reaches the server', located?.status === 200, `status=${located?.status}`);
 
-    // Profile: Add photo (wide), Display name, Next (wide, below the field). Skipped: blank name.
+    // Profile: Add photo (wide), Display name, Done (wide, below the field). Skipped: blank name.
     layout = await waitForLayout(browser, 'Profile step', l => l.fields.length === 1 && l.wide.some(w => w.top > l.fields[0].bottom));
     await authShot(browser, '06-profile');
     await browser.click(layout.cx, layout.wide.find(w => w.top > layout.fields[0].bottom).y);
@@ -471,16 +469,13 @@ async function authWalk() {
     const cleared = await browser.evaluate("localStorage.getItem('pynapli.auth.session.v1') === null");
     check('auth walk: the stored session is gone after Log out', cleared === true);
 
-    // Sign back in on the same page (same app process). Known bug B1: after a sign-up, Log out leaves
-    // the legacy create-account form (Email, Password, Birthdate) instead of sign-in. Record it, then
-    // use the form's own "Sign in" link (right under its primary button) so the rest still runs.
-    layout = await waitForLayout(browser, 'Login after Log out', l => l.fields.length >= 2 && l.wide.length >= 1);
-    knownBug('auth walk: after Log out the login screen is the sign-in form (B1)', layout.fields.length === 2, `fields=${layout.fields.length}`, 'Section 1');
-    if (layout.fields.length !== 2) {
-      const modeLink = layout.pointers.find(p => p.top > layout.wide[0].bottom);
-      if (modeLink) await browser.click(layout.cx, modeLink.y);
-      layout = await waitForLayout(browser, 'Sign-in form', l => l.fields.length === 2 && l.wide.length >= 1);
-    }
+    // Sign back in on the same page (same app process). B1 (fixed in Section 1): after a sign-up, Log
+    // out used to leave the legacy create-account form. Now it lands on the welcome landing, whose
+    // [Sign in] (second wide button) opens the two-field sign-in form.
+    layout = await waitForLayout(browser, 'Welcome after Log out', l => l.wide.length >= 1, 10000).catch(() => layoutOf(browser));
+    check('auth walk: after Log out the landing is the welcome screen (B1)', layout.fields.length === 0 && layout.wide.length >= 2, `fields=${layout.fields.length} wide=${layout.wide.length}`);
+    if (layout.fields.length === 0 && layout.wide.length >= 2) await browser.click(layout.cx, layout.wide[1].y);
+    layout = await waitForLayout(browser, 'Sign-in form', l => l.fields.length === 2 && l.wide.length >= 1);
     await fillField(browser, layout, layout.fields[0], email);
     await fillField(browser, layout, layout.fields[1], AUTH_WALK.password);
     await authShot(browser, '10-sign-in');

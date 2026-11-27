@@ -8,7 +8,6 @@ data class SwipeDeckUi(
     val deckSessionId: String? = null,
     val cards: List<SwipeCardDto>,
     val nextCursor: String? = null,
-    val advancedFiltersAllowed: Boolean = true,
     val advancedFiltersApplied: Boolean = false,
 )
 

@@ -10,13 +10,36 @@ interface GridRepository {
         limit: Int,
         filters: DiscoveryFilters = DiscoveryFilters(),
         cursor: GridCursorAnchor? = null,
+        // People hiding from the viewer ("Hide from people you know"). The partner rule (linkedOnly)
+        // never counts one of them as a partner shown to the viewer, as the card strips their mini.
+        hiddenFromViewerIds: Set<UUID> = emptySet(),
     ): GridQueryResult
 
-    /** People whose announced planned trip reaches the viewer's area within two weeks, soonest first. */
+    /**
+     * The result count's window (plan G2-4): exactly [queryNearby]'s first page of [limit] under the
+     * same filters, but ranked for this viewer and never read from or written to a shared rank cache.
+     * The default (test fakes) is the first page itself.
+     */
+    suspend fun queryNearbyForCount(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters = DiscoveryFilters(),
+        hiddenFromViewerIds: Set<UUID> = emptySet(),
+    ): GridQueryResult = queryNearby(viewerUserId, radiusMeters, limit, filters, null, hiddenFromViewerIds)
+
+    /**
+     * People whose announced planned trip reaches the viewer's area within two weeks and who pass every
+     * Grid filter: soonest arrival first, then distance bucket, then id, paged by [cursor]
+     * (JdbcGridVisitingSoonSql).
+     */
     suspend fun queryVisitingSoon(
         viewerUserId: UUID,
         radiusMeters: Int,
         limit: Int,
+        filters: DiscoveryFilters = DiscoveryFilters(),
+        cursor: GridCursorAnchor? = null,
+        hiddenFromViewerIds: Set<UUID> = emptySet(),
     ): GridQueryResult = GridQueryResult(viewerHadLocation = true, cards = emptyList())
 }
 
@@ -47,6 +70,9 @@ data class GridCardRecord(
     val linkedPartnerUserId: UUID? = null,
     val linkedPartnerDisplayName: String? = null,
     val linkedPartnerThumbnailMediaAssetId: UUID? = null,
+    // The partner's own declared age and gender key (plan G2-3); stripped with the rest of the mini.
+    val linkedPartnerAge: Int? = null,
+    val linkedPartnerGender: String? = null,
     /**
      * Target has an active travel_locations row. Surfaced as a "Visiting" pill
      * on the Grid card (SWIPE_IMPLEMENTATION_SPEC L348) so the viewer knows
@@ -64,6 +90,11 @@ data class GridCardRecord(
      * so it stays fresh as sessions start/expire.
      */
     val tonightActive: Boolean = false,
+    /** Plan G4 Fresh rule, hydrated per page like [tonightActive]. */
+    val fresh: Boolean = false,
+    /** Plan G11 inputs to the card's activeAgo key; the instant itself never leaves the server. */
+    val lastActiveAt: java.time.Instant? = null,
+    val activityHidden: Boolean = false,
 )
 
 /** Keyset position: (boostBucket, orderBucket, orderTiebreak, userId). Travels only inside a sealed cursor. */

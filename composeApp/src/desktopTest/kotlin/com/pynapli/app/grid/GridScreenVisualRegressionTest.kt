@@ -84,7 +84,6 @@ private fun visualRegressionCards(): List<GridProfileCardUi> =
                 },
             online = index % 2 == 0,
             distanceLabel = "${index + 1} km",
-            tone = GridCardTone.entries[index % GridCardTone.entries.size],
             linkedPartner =
                 if (index % 5 == 0) {
                     GridLinkedPartnerUi(
@@ -119,7 +118,11 @@ private fun ImageBitmap.assertGridVisualSignature(label: String) {
     // subdued; the sum shrank only because the band overlap shrank. 0.52 still asserts a
     // majority-dark premium surface.
     assertTrue(signature.darkRatio + signature.sheetSurfaceRatio > 0.52f, "$label should remain predominantly dark/subdued: $signature")
-    assertTrue(signature.midToneRatio > 0.25f, "$label should contain visible Grid card tone blocks: $signature")
+    // Recalibrated 2026-11-24 (plan G11): no-photo tiles are one neutral raised surface with a
+    // silhouette instead of a coloured gradient picked by list position, so the old mid-tone
+    // "tone block" check (> 0.25) no longer applies. The tiles now register in the subdued-surface
+    // band (#16161C); their top halves (above the bottom scrim) must still cover a visible share.
+    assertTrue(signature.sheetSurfaceRatio > 0.15f, "$label should contain visible neutral Grid tiles: $signature")
     assertTrue(signature.brightRatio > 0.006f, "$label should contain legible light text/icons: $signature")
     // Threshold lowered 8 -> 4 (Grid handoff refinement): the per-tile online dot shrank from 8dp
     // to a compact, photo-first 7dp, so fewer green pixels register at this sample step. Lowered
@@ -139,7 +142,12 @@ private fun ImageBitmap.assertFilterSheetVisualSignature() {
     val signature = visualSignature()
 
     assertTrue(signature.darkRatio > 0.50f, "filter sheet should preserve dark premium surface: $signature")
-    assertTrue(signature.sheetSurfaceRatio > 0.12f, "filter sheet should render a visible subdued surface: $signature")
+    // The desktop test window is wide, so Filters opens as a side panel that lies mostly outside this
+    // 390 dp capture; what the band sees is the scrim-dimmed Grid behind it. Since Section 2 (plan G11)
+    // no-photo tiles are a neutral silhouette instead of a bright gradient, and they dim to near-black,
+    // so the surface share fell (0.048 measured on Windows). The gold, bright and dark checks below
+    // still prove the sheet renders; this one guards against the overlay disappearing entirely.
+    assertTrue(signature.sheetSurfaceRatio > 0.02f, "filter sheet should render a visible subdued surface: $signature")
     assertTrue(signature.goldPixels > 50, "filter sheet should keep primary action/accent visible: $signature")
     assertTrue(signature.brightRatio > 0.012f, "filter sheet should contain readable controls: $signature")
 }

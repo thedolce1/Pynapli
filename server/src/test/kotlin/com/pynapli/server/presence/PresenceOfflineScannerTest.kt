@@ -36,6 +36,7 @@ class PresenceOfflineScannerTest {
                     repository = repository,
                     broadcaster = broadcaster,
                     clock = Clock.fixed(Instant.parse("2026-05-09T12:00:00Z"), ZoneOffset.UTC),
+                    offlineJitterMillis = { 0 },
                 )
 
             coroutineScope {
@@ -86,6 +87,7 @@ class PresenceOfflineScannerTest {
                     tracker = tracker,
                     repository = repository,
                     broadcaster = broadcaster,
+                    offlineJitterMillis = { 0 },
                 )
 
             coroutineScope {
@@ -108,6 +110,58 @@ class PresenceOfflineScannerTest {
 
             assertEquals(setOf(a, b), tracker.snapshot())
         }
+
+    // Privacy review F2: "went offline" is delayed by its own random jitter, and dropped if the person
+    // is back before it fires.
+    @Test
+    fun wentOfflineWaitsForItsJitterAndIsDroppedIfThePersonCameBack() =
+        runBlocking {
+            val stays = UUID.randomUUID()
+            val returns = UUID.randomUUID()
+            val tracker =
+                OnlinePresenceTracker().apply {
+                    markOnline(stays)
+                    markOnline(returns)
+                }
+            val repository = MutablePresenceRepository()
+            val broadcaster = PresenceBroadcaster()
+            val scanner =
+                PresenceOfflineScanner(
+                    tracker = tracker,
+                    repository = repository,
+                    broadcaster = broadcaster,
+                    offlineJitterMillis = { 400 },
+                )
+
+            coroutineScope {
+                val received = mutableListOf<PresenceDeltaDto>()
+                val job = broadcaster.deltas.onEach { received += it }.launchIn(this)
+                withTimeoutOrNull(2_000) { broadcaster.subscriptionCount.first { it > 0 } }
+
+                scanner.scanOnce()
+                delay(150)
+                assertTrue(received.isEmpty(), "nothing before the jitter elapses")
+                // One of them comes back inside the delay.
+                repository.online += returns
+                withTimeoutOrNull(3_000) { while (received.isEmpty()) delay(10) }
+                delay(600)
+                job.cancel()
+
+                assertEquals(listOf(stays.toString()), received.map { it.userId })
+                assertEquals(false, received.single().online)
+            }
+            scanner.close()
+        }
+}
+
+private class MutablePresenceRepository : PresenceRepository {
+    val online =
+        java.util.concurrent.ConcurrentHashMap
+            .newKeySet<UUID>()
+
+    override suspend fun heartbeat(userId: UUID): PresenceState = PresenceState(online = true, expiresInSeconds = 900)
+
+    override suspend fun onlineUserIds(userIds: Collection<UUID>): Set<UUID> = userIds.filterTo(mutableSetOf()) { it in online }
 }
 
 private class FakePresenceRepository(

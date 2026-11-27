@@ -35,6 +35,7 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.CheckCircle
 import com.pynapli.app.design.icons.filled.Person
+import com.pynapli.app.media.rememberCachedImageModel
 
 @Composable
 internal fun PhotoCarouselIndicators(
@@ -112,6 +113,7 @@ internal fun SwipeVisitingPill(modifier: Modifier = Modifier) {
 @Composable
 internal fun SwipeLinkedPartnerBadge(
     thumbnailUrl: String?,
+    thumbnailCacheKey: String? = null,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     coupleVerified: Boolean = false,
@@ -119,7 +121,7 @@ internal fun SwipeLinkedPartnerBadge(
 ) {
     // The couple badge rides on the partner mini, as on the Grid: both partners photo-verified.
     Box(modifier = modifier) {
-        SwipeLinkedPartnerCircle(thumbnailUrl = thumbnailUrl, enabled = enabled, onClick = onClick)
+        SwipeLinkedPartnerCircle(thumbnailUrl = thumbnailUrl, thumbnailCacheKey = thumbnailCacheKey, enabled = enabled, onClick = onClick)
         if (coupleVerified) {
             VerifiedBadge(
                 size = 14.dp,
@@ -139,6 +141,7 @@ internal fun SwipeLinkedPartnerBadge(
 @Composable
 private fun SwipeLinkedPartnerCircle(
     thumbnailUrl: String?,
+    thumbnailCacheKey: String?,
     enabled: Boolean,
     onClick: (() -> Unit)?,
 ) {
@@ -162,7 +165,7 @@ private fun SwipeLinkedPartnerCircle(
     ) {
         if (thumbnailUrl != null) {
             AsyncImage(
-                model = thumbnailUrl,
+                model = rememberCachedImageModel(thumbnailUrl, thumbnailCacheKey),
                 contentDescription = "Linked partner",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

@@ -2,7 +2,6 @@ package com.pynapli.app.grid
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,14 +21,20 @@ import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.SearchOff
+import com.pynapli.app.location.LOCATION_SKIP_COST_COPY
+import com.pynapli.app.location.LocationAccessHelp
 import com.pynapli.app.location.LocationUiState
 import com.pynapli.app.perf.PynapliPerfMarks
 
-private enum class GridPhase { CheckingCache, Loading, LocationRequired, Error, EmptyFiltered, Empty, Content }
+internal enum class GridPhase { Loading, LocationRequired, Error, EmptyFiltered, Empty, Content }
 
-private fun gridPhase(state: GridUiState): GridPhase =
+internal const val GRID_EMPTY_TITLE: String = "No one nearby yet"
+
+internal fun gridPhase(state: GridUiState): GridPhase =
     when {
-        !state.cacheChecked && state.cards.isEmpty() -> GridPhase.CheckingCache
+        // Still reading the cold-start cache: the same skeleton as a first network load, as one
+        // phase so the crossfade never runs skeleton-to-skeleton.
+        !state.cacheChecked && state.cards.isEmpty() -> GridPhase.Loading
         state.isRefreshing && state.cards.isEmpty() -> GridPhase.Loading
         state.errorCode == "LOCATION_REQUIRED" && state.cards.isEmpty() -> GridPhase.LocationRequired
         state.errorMessage != null && state.cards.isEmpty() -> GridPhase.Error
@@ -51,6 +56,8 @@ internal fun GridBody(
     onRetry: () -> Unit,
     onClearFilters: () -> Unit,
     modifier: Modifier = Modifier,
+    // The locked-card boundary banner's button: the plans sheet on the server's unlockTier.
+    onOpenUnlockStore: (unlockTier: String?) -> Unit = {},
 ) {
     // Loading dissolves into the arriving content rather than snapping; the skeleton fades out while
     // the grid fades + staggers in (see ProfileGrid). Phase is stable across profile open/close (cards
@@ -62,10 +69,9 @@ internal fun GridBody(
         modifier = modifier,
     ) { phase ->
         when (phase) {
-            // A frame or two while the cold-start cache is read: nothing, so cached cards (the
-            // usual case) appear without a skeleton flashing first.
-            GridPhase.CheckingCache -> Box(modifier = Modifier.fillMaxSize())
-
+            // Also covers the cold-start cache read: the shell is already up then (a returning
+            // member skips the /me wait), so a skeleton rather than a blank pane; cached cards
+            // crossfade in over it like the live feed does.
             GridPhase.Loading -> {
                 GridLoadingSkeleton(modifier = Modifier.fillMaxSize())
             }
@@ -101,6 +107,15 @@ internal fun GridBody(
                             modifier = Modifier.padding(top = 10.dp),
                         )
                     }
+                    // Blocked for good or services off: the way to Settings (or the browser's switch).
+                    LocationAccessHelp(locationState, modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        text = LOCATION_SKIP_COST_COPY,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
                 }
             }
 
@@ -125,10 +140,12 @@ internal fun GridBody(
             }
 
             GridPhase.Empty -> {
+                // A true empty Grid: no filters, no error, and the server already widened the search
+                // as far as it goes (plan G10). The client only says so, honestly.
                 PynapliEmptyState(
                     icon = Icons.Filled.SearchOff,
-                    title = "No one nearby right now.",
-                    subtitle = "New people join all the time. Pull down or tap Refresh to look again.",
+                    title = GRID_EMPTY_TITLE,
+                    subtitle = "New people join every day. Pull down or tap Refresh to look again.",
                     actionLabel = "Refresh",
                     onAction = onRetry,
                     modifier = Modifier.fillMaxSize(),
@@ -150,6 +167,9 @@ internal fun GridBody(
                     isLoadingMore = state.isLoadingMore,
                     loadMoreFailed = state.errorMessage != null,
                     modifier = Modifier,
+                    lockedBannerIndex = state.lockedBannerIndex,
+                    unlockTier = state.unlockTier,
+                    onOpenUnlockStore = onOpenUnlockStore,
                 )
             }
         }

@@ -11,6 +11,8 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class MediaServiceTest {
     @Test
@@ -139,19 +141,283 @@ class MediaServiceTest {
         }
 
     @Test
-    fun rejectingScannerRemovesProfileUpload() =
+    fun rejectingScannerHoldsProfileUploadForAPersonInsteadOfRemovingIt() =
         runBlocking {
+            // Never auto-reject a profile photo (TRUST_AND_SAFETY_SPEC "Photo pre-screening").
             val ownerId = UUID.randomUUID()
             val scanner =
                 object : MediaModerationScanner {
                     override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = MediaModerationDecision.Rejected("policy")
                 }
-            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = scanner)
+            val escalationPublisher = RecordingMediaModerationEscalationPublisher()
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = scanner,
+                    moderationEscalationPublisher = escalationPublisher,
+                )
 
             val item = service.uploadAndComplete(ownerId, albumKind = "profile")
 
+            assertEquals("uploaded", item.mediaAsset.processingStatus)
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+            assertEquals(null, escalationPublisher.mediaAssetId)
+        }
+
+    @Test
+    fun severeSignalOnAProfilePhotoOnlyHoldsIt() =
+        runBlocking {
+            val ownerId = UUID.randomUUID()
+            val escalationPublisher = RecordingMediaModerationEscalationPublisher()
+            val service =
+                MediaService(
+                    repository = InMemoryMediaRepository(),
+                    uploadSigner = FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(violence = "VERY_LIKELY") }),
+                    moderationEscalationPublisher = escalationPublisher,
+                )
+
+            val item = service.uploadAndComplete(ownerId, albumKind = "profile")
+
+            assertEquals("uploaded", item.mediaAsset.processingStatus)
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+            // Approve or queue only: no automatic report or risk points on a profile photo.
+            assertEquals(null, escalationPublisher.mediaAssetId)
+        }
+
+    @Test
+    fun cloudVisionCleanProfilePhotoIsApprovedOnUploadComplete() =
+        runBlocking {
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(racy = "LIKELY") }),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "profile")
+
+            assertEquals("ready", item.mediaAsset.processingStatus)
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun cloudVisionFlaggedProfilePhotoWaitsInTheQueue() =
+        runBlocking {
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(adult = "POSSIBLE") }),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "profile")
+
+            assertEquals("uploaded", item.mediaAsset.processingStatus)
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun cloudVisionErrorLeavesProfilePhotoInTheQueue() =
+        runBlocking {
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { throw java.io.IOException("vision down") }),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "profile")
+
+            assertEquals("pending", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun cloudVisionFlagDoesNotHoldConsentGatedPrivateMedia() =
+        runBlocking {
+            // Explicit content is allowed in a private album; only the severe signal removes it.
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = { safeSearch(adult = "VERY_LIKELY") }),
+                    scanScope = MediaScanScope(scanPrivateMedia = true),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "private")
+
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+        }
+
+    // ---- Which uploads reach Vision (founder decision: public profile photos only by default) ----
+
+    @Test
+    fun privateAlbumUploadMakesNoVisionCallByDefault() =
+        runBlocking {
+            val vision = CountingSafeSearchClient()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "private")
+
+            assertEquals(0, vision.calls)
+            // Unscanned private media is approved on upload, as the manual scanner always left it.
+            assertEquals("ready", item.mediaAsset.processingStatus)
+            assertEquals("approved", item.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun privateAlbumUploadIsScannedWhenPrivateScanningIsOn() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(violence = "VERY_LIKELY")
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = CloudVisionMediaModerationScanner(client = vision),
+                    scanScope = MediaScanScope(scanPrivateMedia = true),
+                )
+
+            val item = service.uploadAndComplete(UUID.randomUUID(), albumKind = "private")
+
+            assertEquals(1, vision.calls)
             assertEquals("removed", item.mediaAsset.moderationStatus)
         }
+
+    @Test
+    fun profilePhotoIsAlwaysScanned() =
+        runBlocking {
+            val vision = CountingSafeSearchClient()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+
+            service.uploadAndComplete(UUID.randomUUID(), albumKind = "profile")
+
+            assertEquals(1, vision.calls)
+        }
+
+    // ---- A retried complete never re-scans a decided photo ----
+
+    @Test
+    fun retriedCompleteOfAHeldPhotoReturnsItWithoutCallingVisionAgain() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(adult = "POSSIBLE")
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+            val (ownerId, slot) = service.profileSlot()
+            val request = CompleteMediaUploadRequestDto(albumId = slot.album.albumId)
+
+            service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+            val retried = service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+
+            assertEquals(1, vision.calls)
+            assertEquals("pending", retried.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun retriedCompleteOfAnApprovedPhotoReturnsItWithoutCallingVisionAgain() =
+        runBlocking {
+            val vision = CountingSafeSearchClient()
+            val service =
+                MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+            val (ownerId, slot) = service.profileSlot()
+            val request = CompleteMediaUploadRequestDto(albumId = slot.album.albumId)
+
+            service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+            val retried = service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+
+            assertEquals(1, vision.calls)
+            assertEquals("approved", retried.mediaAsset.moderationStatus)
+        }
+
+    @Test
+    fun retriedCompleteScansAnAssetThatWasNeverScanned() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(adult = "POSSIBLE")
+            val repository = InMemoryMediaRepository()
+            val service = MediaService(repository, FixedMediaUploadSigner(), moderationScanner = CloudVisionMediaModerationScanner(client = vision))
+            val (ownerId, slot) = service.profileSlot()
+            val request = CompleteMediaUploadRequestDto(albumId = slot.album.albumId)
+            service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+            // Crash between attach and moderation: no decision was recorded.
+            repository.forgetScan(UUID.fromString(slot.mediaAsset.mediaAssetId))
+
+            service.completeUpload(ownerId, slot.mediaAsset.mediaAssetId, request)
+
+            assertEquals(2, vision.calls)
+        }
+
+    private suspend fun MediaService.profileSlot(): Pair<UUID, com.pynapli.shared.network.dto.MediaUploadSlotDto> {
+        val ownerId = UUID.randomUUID()
+        return ownerId to
+            createUploadSlot(
+                ownerId,
+                CreateMediaUploadRequestDto(albumKind = "profile", mediaType = "image", contentType = "image/jpeg", byteSize = 1_024),
+            )
+    }
+
+    @Test
+    fun chatPhotoMakesNoVisionCallByDefaultAndStillSends() =
+        runBlocking<Unit> {
+            val vision = CountingSafeSearchClient(violence = "VERY_LIKELY")
+            val (gateway, ownerId, assetId) = chatGateway(vision, scanPrivateMedia = false)
+
+            val prepared = gateway.prepareOutboundMedia(ownerId, assetId)
+
+            assertEquals(0, vision.calls)
+            assertNotNull(prepared)
+        }
+
+    @Test
+    fun chatPhotoIsScannedWhenPrivateScanningIsOn() =
+        runBlocking {
+            val vision = CountingSafeSearchClient(violence = "VERY_LIKELY")
+            val (gateway, ownerId, assetId) = chatGateway(vision, scanPrivateMedia = true)
+
+            val prepared = gateway.prepareOutboundMedia(ownerId, assetId)
+
+            assertEquals(1, vision.calls)
+            assertNull(prepared, "a severe hit refuses the send")
+        }
+
+    private suspend fun chatGateway(
+        vision: SafeSearchClient,
+        scanPrivateMedia: Boolean,
+    ): Triple<MediaServiceMessageMediaGateway, UUID, UUID> {
+        val ownerId = UUID.randomUUID()
+        val repository = InMemoryMediaRepository()
+        val asset =
+            repository.createAsset(
+                ownerUserId = ownerId,
+                create =
+                    MediaAssetCreate(
+                        mediaType = "image",
+                        storageProvider = "gcs",
+                        storageBucket = "pynapli-test-media",
+                        storageObjectKey = "users/$ownerId/message/chat.jpg",
+                        contentType = "image/jpeg",
+                        byteSize = 1_024,
+                        intendedAlbumKind = "message",
+                    ),
+                assetIdFactory = { UUID.randomUUID() },
+            )
+        val gateway =
+            MediaServiceMessageMediaGateway(
+                repository = repository,
+                uploadSigner = FixedMediaUploadSigner(),
+                mediaAssetUrlResolver = null,
+                moderationScanner = CloudVisionMediaModerationScanner(client = vision),
+                scanScope = MediaScanScope(scanPrivateMedia = scanPrivateMedia),
+            )
+        return Triple(gateway, ownerId, asset.mediaAssetId)
+    }
+
+    private fun safeSearch(
+        adult: String = "VERY_UNLIKELY",
+        racy: String = "VERY_UNLIKELY",
+        violence: String = "VERY_UNLIKELY",
+    ) = SafeSearchAnnotation(adult = adult, racy = racy, violence = violence)
 
     @Test
     fun nonSeverePrivateRejectionDoesNotRemoveConsentGatedMedia() =
@@ -161,7 +427,13 @@ class MediaServiceTest {
                 object : MediaModerationScanner {
                     override suspend fun scan(asset: MediaAssetRecord): MediaModerationDecision = MediaModerationDecision.Rejected("policy")
                 }
-            val service = MediaService(InMemoryMediaRepository(), FixedMediaUploadSigner(), moderationScanner = scanner)
+            val service =
+                MediaService(
+                    InMemoryMediaRepository(),
+                    FixedMediaUploadSigner(),
+                    moderationScanner = scanner,
+                    scanScope = MediaScanScope(scanPrivateMedia = true),
+                )
 
             val item = service.uploadAndComplete(ownerId, albumKind = "private")
 
@@ -189,6 +461,7 @@ class MediaServiceTest {
                     uploadSigner = FixedMediaUploadSigner(),
                     moderationScanner = scanner,
                     moderationEscalationPublisher = escalationPublisher,
+                    scanScope = MediaScanScope(scanPrivateMedia = true),
                 )
 
             val item = service.uploadAndComplete(ownerId, albumKind = "private")
@@ -749,6 +1022,19 @@ private class FixedMediaUploadSigner : MediaUploadSigner {
     }
 }
 
+/** A fake Vision client that counts calls and answers one fixed annotation. */
+private class CountingSafeSearchClient(
+    private val violence: String = "VERY_UNLIKELY",
+    private val adult: String = "VERY_UNLIKELY",
+) : SafeSearchClient {
+    var calls = 0
+
+    override fun annotate(gcsUri: String): SafeSearchAnnotation {
+        calls += 1
+        return SafeSearchAnnotation(adult = adult, racy = "VERY_UNLIKELY", violence = violence)
+    }
+}
+
 private class RecordingMediaModerationEscalationPublisher : MediaModerationEscalationPublisher {
     var ownerUserId: UUID? = null
     var mediaAssetId: UUID? = null
@@ -950,6 +1236,39 @@ private class InMemoryMediaRepository : MediaRepository {
         ).also { item -> items[albumId to mediaAssetId] = item }
     }
 
+    // Mirrors completeMediaAlbumUpload's rules (the JDBC one is covered by the integration tests).
+    override suspend fun completeAlbumUpload(
+        ownerUserId: UUID,
+        albumId: UUID,
+        mediaAssetId: UUID,
+        sortOrder: Int,
+    ): AlbumUploadCompletion {
+        val asset =
+            assets[mediaAssetId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null }
+                ?: return AlbumUploadCompletion.Refused("MEDIA_ASSET_NOT_FOUND")
+        val album =
+            albums[albumId]?.takeIf { it.ownerUserId == ownerUserId && it.deletedAt == null }
+                ?: return AlbumUploadCompletion.Refused("MEDIA_ALBUM_NOT_FOUND")
+        val intended = intendedAlbumKinds[mediaAssetId]
+        if (intended == null || intended !in setOf("profile", "private")) return AlbumUploadCompletion.Refused("MEDIA_ALBUM_NOT_FOUND")
+        if (intended != album.kind) return AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALBUM_MISMATCH")
+        val existing = items.values.filter { it.mediaAsset.mediaAssetId == mediaAssetId }
+        if (existing.any { it.albumId != albumId }) return AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+        existing.firstOrNull()?.let { same ->
+            return if (same.removedAt == null) {
+                AlbumUploadCompletion.AlreadyCompleted(same, scanned = mediaAssetId in scannedAssets)
+            } else {
+                AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+            }
+        }
+        if (asset.processingStatus != "pending_upload") return AlbumUploadCompletion.Refused("MEDIA_UPLOAD_ALREADY_COMPLETED")
+        val uploaded = asset.copy(processingStatus = "uploaded")
+        assets[mediaAssetId] = uploaded
+        val item = MediaAlbumItemRecord(albumId = albumId, mediaAsset = uploaded, sortOrder = sortOrder, addedAt = now, removedAt = null)
+        items[albumId to mediaAssetId] = item
+        return AlbumUploadCompletion.Attached(item)
+    }
+
     override suspend fun listAlbumItemsForViewer(
         viewerUserId: UUID,
         albumId: UUID,
@@ -1098,6 +1417,19 @@ private class InMemoryMediaRepository : MediaRepository {
 
     private val displayNamesByUserId = mutableMapOf<UUID, String>()
     private val intendedAlbumKinds = mutableMapOf<UUID, String>()
+    private val scannedAssets = mutableSetOf<UUID>()
+
+    override suspend fun markModerationScanned(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+    ) {
+        scannedAssets += mediaAssetId
+    }
+
+    /** Simulates a crash between attach and moderation: the asset was never recorded as scanned. */
+    fun forgetScan(mediaAssetId: UUID) {
+        scannedAssets -= mediaAssetId
+    }
 
     private fun updateAlbumItems(asset: MediaAssetRecord) {
         items.keys

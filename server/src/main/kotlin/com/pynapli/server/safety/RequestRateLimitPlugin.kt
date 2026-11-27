@@ -264,6 +264,10 @@ internal val REQUEST_LIMIT_RULES =
         RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/email/signup/verify"), RateLimitedAction.AUTH_SIGNUP_VERIFY_IP, LimitKey.CLIENT_IP),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/password/reset-request"), RateLimitedAction.AUTH_PASSWORD_RESET_IP, LimitKey.CLIENT_IP),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/account-appeal"), RateLimitedAction.ACCOUNT_APPEAL_IP, LimitKey.CLIENT_IP),
+        RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/account-appeal/social/$ID"), RateLimitedAction.ACCOUNT_APPEAL_IP, LimitKey.CLIENT_IP),
+        // Continue with Google / Apple (the service adds a per-identity limit once a token verifies).
+        RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/social/nonce"), RateLimitedAction.AUTH_SOCIAL_NONCE_IP, LimitKey.CLIENT_IP),
+        RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/social/(?:google|apple)"), RateLimitedAction.AUTH_SOCIAL_IP, LimitKey.CLIENT_IP),
         // Signed in: per user.
         RequestLimitRule(HttpMethod.Post, Regex("/v1/messages/threads/$ID/messages"), RateLimitedAction.MESSAGE_SEND),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/messages/threads/$ID/media"), RateLimitedAction.MESSAGE_SEND),
@@ -285,9 +289,13 @@ internal val REQUEST_LIMIT_RULES =
         RequestLimitRule(HttpMethod.Post, Regex("/v1/me/contact-blocks/remove"), RateLimitedAction.BLOCK_OR_HIDE),
         RequestLimitRule(HttpMethod.Delete, Regex("/v1/me/contact-blocks"), RateLimitedAction.BLOCK_OR_HIDE),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/location/current"), RateLimitedAction.LOCATION_UPDATE),
+        // "Met in person": one budget for the menu fetch and confirm/take back (ids in the body only).
+        RequestLimitRule(HttpMethod.Post, Regex("/v1/met-in-person/(?:offers|confirmations)"), RateLimitedAction.MET_IN_PERSON),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/account/data-export"), RateLimitedAction.DATA_EXPORT),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/appeals"), RateLimitedAction.APPEAL),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/notifications/devices"), RateLimitedAction.PUSH_REGISTER),
+        RequestLimitRule(HttpMethod.Post, Regex("/v1/auth/identities/$ID"), RateLimitedAction.SOCIAL_IDENTITY_CHANGE),
+        RequestLimitRule(HttpMethod.Delete, Regex("/v1/auth/identities/$ID"), RateLimitedAction.SOCIAL_IDENTITY_CHANGE),
         // Reads where walking ids would enumerate other people's data.
         RequestLimitRule(HttpMethod.Get, Regex("/v1/profiles/$ID"), RateLimitedAction.PROFILE_FETCH),
         RequestLimitRule(HttpMethod.Get, Regex("/v1/media/users/$ID/albums/private"), RateLimitedAction.PRIVATE_ALBUM_FETCH),

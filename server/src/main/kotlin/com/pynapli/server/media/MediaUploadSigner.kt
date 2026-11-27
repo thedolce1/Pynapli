@@ -60,6 +60,9 @@ class StaticMediaUploadSigner(
  */
 internal fun mediaObjectKey(mediaAssetId: UUID): String = "media/$mediaAssetId"
 
+/** GCS create-only precondition: `0` means "only if no live object exists at this key". */
+const val GCS_IF_GENERATION_MATCH_HEADER = "x-goog-if-generation-match"
+
 /**
  * Production signer: issues GCS V4 signed `PUT` URLs via [GcsV4SignedUrlFactory] at [mediaObjectKey],
  * so the stored asset key and the signed URL agree. The client uploads with `PUT` + `Content-Type`.
@@ -76,12 +79,17 @@ class GcsV4MediaUploadSigner(
         contentType: String,
     ): MediaUploadDestination {
         val objectKey = mediaObjectKey(mediaAssetId)
+        // Create-only: the signed URL lives ~15 minutes, so without this precondition clean bytes
+        // could be approved on upload-complete and then overwritten at the same URL with other
+        // bytes. GCS answers 412 to a second PUT (TRUST_AND_SAFETY_SPEC "Photo pre-screening").
+        val precondition = mapOf(GCS_IF_GENERATION_MATCH_HEADER to "0")
         val signed =
             signedUrlFactory.sign(
                 method = "PUT",
                 bucket = storageBucket,
                 objectKey = objectKey,
                 ttl = ttl,
+                extraSignedHeaders = precondition,
             )
         return MediaUploadDestination(
             storageProvider = "gcs",
@@ -89,7 +97,8 @@ class GcsV4MediaUploadSigner(
             storageObjectKey = objectKey,
             uploadUrl = signed.url,
             uploadMethod = "PUT",
-            uploadHeaders = mapOf("Content-Type" to contentType),
+            // The client sends every header listed here verbatim (MediaByteUploader).
+            uploadHeaders = mapOf("Content-Type" to contentType) + precondition,
             expiresAt = Instant.ofEpochSecond(signed.expiresAtEpochSeconds),
         )
     }

@@ -140,6 +140,43 @@ internal fun DataSource.insertSession(
     }
 }
 
+/** Sets the durable last-active row (user_last_active) the Grid tier, Fresh and activeAgo read. */
+internal fun DataSource.setLastActive(
+    userId: UUID,
+    at: java.time.Instant,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                """
+                INSERT INTO user_last_active (user_id, last_active_at) VALUES (?, ?)
+                ON CONFLICT (user_id) DO UPDATE SET last_active_at = EXCLUDED.last_active_at
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.setTimestamp(2, java.sql.Timestamp.from(at))
+                statement.executeUpdate()
+            }
+    }
+}
+
+/** Backdates the newest profile-album item of [userId] by [hours] (for the Fresh photo rule). */
+internal fun DataSource.setProfilePhotosAddedHoursAgo(
+    userId: UUID,
+    hours: Int,
+) {
+    connection.use { connection ->
+        connection
+            .prepareStatement(
+                "UPDATE media_album_items SET added_at = now() - make_interval(hours => ?) WHERE owner_user_id = ?",
+            ).use { statement ->
+                statement.setInt(1, hours)
+                statement.setObject(2, userId)
+                statement.executeUpdate()
+            }
+    }
+}
+
 internal fun DataSource.setUserCreatedDaysAgo(
     userId: UUID,
     days: Int,
@@ -189,9 +226,9 @@ internal fun DataSource.insertApprovedProfilePhoto(userId: UUID) {
                 """
                 INSERT INTO media_assets (
                     id, owner_user_id, media_type, storage_provider, storage_bucket,
-                    storage_object_key, content_type, byte_size, processing_status, moderation_status
+                    storage_object_key, content_type, byte_size, processing_status, moderation_status, intended_album_kind
                 )
-                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved')
+                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved', 'profile')
                 """.trimIndent(),
             ).use { statement ->
                 statement.setObject(1, assetId)
@@ -229,9 +266,9 @@ internal fun DataSource.insertApprovedPrivateAlbumPhoto(userId: UUID) {
                 """
                 INSERT INTO media_assets (
                     id, owner_user_id, media_type, storage_provider, storage_bucket,
-                    storage_object_key, content_type, byte_size, processing_status, moderation_status
+                    storage_object_key, content_type, byte_size, processing_status, moderation_status, intended_album_kind
                 )
-                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved')
+                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved', 'private')
                 """.trimIndent(),
             ).use { statement ->
                 statement.setObject(1, assetId)

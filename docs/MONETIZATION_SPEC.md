@@ -127,7 +127,7 @@ Free limits:
 - Limited Activity reveal
 - No full Viewed You list
 - No full Likes You list
-- No advanced filters
+- Every filter (founder decision 2, 2026-11-26: no filter is paid); no saved filter presets
 - No incognito
 - No travel mode
 - No Pineapple Like notes except possibly promo inventory
@@ -195,7 +195,7 @@ Included:
 - See who viewed you
 - See who liked you
 - Repeat viewers
-- Advanced filters
+- Saved filter presets (every filter itself is free since founder decision 2)
 - Incognito
 - Travel mode
 - Priority Likes
@@ -471,7 +471,7 @@ Good paywall moments:
 - Tapping blurred Activity item
 - Trying to see full Viewed You list
 - Trying to see full Likes You list
-- Applying advanced filters
+- Saving a filter preset (applying a filter never opens the paywall since founder decision 2)
 - Running out of free likes
 - Using Rewind after limit
 - Trying Incognito
@@ -494,10 +494,11 @@ Bad paywall moments:
 |---|---:|---:|---:|
 | Basic profile | Yes | Yes | Yes |
 | Basic grid | Yes | Yes | Yes |
-| Expanded grid | 60-profile nearby depth | 600-profile nearby depth | Largest uncapped nearby depth |
+| Expanded grid | 60-profile nearby depth, then locked tiles to 600 | 600-profile nearby depth, then locked tiles to 1,200 | Largest uncapped nearby depth |
 | Grid messaging | Yes | Yes | Yes |
 | Basic filters | Yes | Yes | Yes |
-| Advanced filters | No | Some | Yes |
+| All filters (incl. lifestyle, logistics, partner) | Yes | Yes | Yes |
+| Saved filter presets | No | Yes | Yes |
 | Swipe likes | Limited | More/Unlimited | Unlimited |
 | Rewind | No | Yes | Yes |
 | Activity counts | Yes | Yes | Yes |
@@ -568,7 +569,7 @@ Track:
 - Pineapple Like usage
 - Pineapple Like note rate (share of Pineapple Likes sent with a note) and note-to-match rate
 - Activity paywall conversion
-- Advanced filter paywall conversion
+- Saved-preset paywall conversion
 - Ad revenue per free user
 - ARPU / ARPPU
 - Report/block rates by tier
@@ -610,7 +611,7 @@ Do not experiment with:
 - [x] Connected Android Store QA proves login -> Grid -> Profile -> Plans and store, structural Store screenshots, Restore, dev Boost purchase, balance refresh, and no app error text.
 - [x] Restore purchases exists.
 - [x] Activity gating is implemented.
-- [x] Advanced filters are gated.
+- [x] Every filter is free (founder decision 2, 2026-11-26, G2-4); saved filter presets are gated. Lifestyle filters need age verification (safety, not payment).
 - [x] Rewind is gated to Social/Select for latest eligible Like/Pass.
 - [x] Boost inventory exists.
 - [x] One active Boost per person, enforced by the database (V101) as well as the activation lock.

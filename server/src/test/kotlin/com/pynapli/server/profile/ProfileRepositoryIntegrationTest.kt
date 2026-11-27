@@ -479,6 +479,65 @@ class ProfileRepositoryIntegrationTest {
             assertEquals(partner, requireNotNull(repository.getPublicProfile(viewer, owner)).linkedPartnerUserId)
         }
 
+    // Plan G12: the profile says why Grid messaging is off only when the viewer can fix it.
+    @Test
+    fun publicProfileSaysVerifyToMessageOnlyForTheVerificationGate() =
+        runBlocking {
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000000761")
+            val owner = UUID.fromString("00000000-0000-0000-0000-000000000762")
+            dataSource.insertUserWithProfile(viewer, "Viewer")
+            dataSource.insertUserWithProfile(owner, "Owner")
+            val repository = JdbcProfileRepository(dataSource)
+
+            suspend fun seen() = requireNotNull(repository.getPublicProfile(viewer, owner)).toDto(null)
+
+            // Default 'everyone': allowed, no reason.
+            seen().let {
+                assertEquals(true, it.allowGridMessages)
+                assertNull(it.messagingUnavailableReason)
+            }
+
+            // 'verified_only' and an unverified viewer: off, and the viewer is told to verify.
+            dataSource.setGridPolicy(owner, allow = true, policy = "verified_only")
+            seen().let {
+                assertEquals(false, it.allowGridMessages)
+                assertEquals("VERIFY_TO_MESSAGE", it.messagingUnavailableReason)
+            }
+
+            // Every other "no" gives no reason: Grid messages off, matches only, no one.
+            dataSource.setGridPolicy(owner, allow = false, policy = "verified_only")
+            assertNull(seen().messagingUnavailableReason)
+            dataSource.setGridPolicy(owner, allow = true, policy = "matches_only")
+            assertNull(seen().messagingUnavailableReason)
+            dataSource.setGridPolicy(owner, allow = true, policy = "no_one")
+            assertNull(seen().messagingUnavailableReason)
+
+            // Once the viewer is verified, 'verified_only' lets them write and the reason goes.
+            dataSource.setGridPolicy(owner, allow = true, policy = "verified_only")
+            dataSource.setVerified(viewer)
+            seen().let {
+                assertEquals(true, it.allowGridMessages)
+                assertNull(it.messagingUnavailableReason)
+            }
+        }
+
+    private fun DataSource.setGridPolicy(
+        userId: UUID,
+        allow: Boolean,
+        policy: String,
+    ) {
+        connection.use { connection ->
+            connection
+                .prepareStatement("UPDATE discovery_settings SET allow_grid_messages = ?, grid_message_policy = ? WHERE user_id = ?")
+                .use { statement ->
+                    statement.setBoolean(1, allow)
+                    statement.setString(2, policy)
+                    statement.setObject(3, userId)
+                    statement.executeUpdate()
+                }
+        }
+    }
+
     @Test
     fun publicProfileDropsLinkedPartnerMiniAfterUnlink() =
         runBlocking {

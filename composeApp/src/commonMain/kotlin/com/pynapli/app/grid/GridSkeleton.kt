@@ -18,8 +18,8 @@ import kotlin.math.ceil
  * from. It previously hardcoded 3 columns and 5 rows, which was right while the grid was phone-only
  * and silently wrong from the moment W2 made the grid adaptive: on a wide pane that produced three
  * full-height bars (each tile a third of the pane wide and, being square, taller than the viewport)
- * instead of a preview of the grid. Web feels it worst — with `NoOpGridSnapshotStore` there is no
- * cached first paint, so this is what every desktop visitor sees before their first cards arrive.
+ * instead of a preview of the grid. Web feels it most — its cached first paint lives in
+ * `sessionStorage` only, so a new tab shows this before its first cards arrive.
  */
 @Composable
 internal fun GridLoadingSkeleton(modifier: Modifier = Modifier) {

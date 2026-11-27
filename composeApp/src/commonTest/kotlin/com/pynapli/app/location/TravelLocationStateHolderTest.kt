@@ -6,6 +6,9 @@ import com.pynapli.shared.network.dto.SetTravelLocationRequestDto
 import com.pynapli.shared.network.dto.TravelLocationDto
 import com.pynapli.shared.network.dto.TravelPlaceDto
 import com.pynapli.shared.network.dto.TravelPlaceSearchResponseDto
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,6 +26,40 @@ class TravelLocationStateHolderTest {
             latitude = 36.17497,
             longitude = -115.13722,
         )
+
+    private val activeInVegas =
+        TravelLocationDto(
+            city = "Las Vegas",
+            latitude = vegas.latitude,
+            longitude = vegas.longitude,
+            activeFrom = "2026-06-09T00:00:00Z",
+            status = "active",
+        )
+
+    @Test
+    fun signOutForgetsTheAccountsTravelStateEvenWithALoadInFlight() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val repository = FakeRepository(currentResult = AppResult.Success(activeInVegas))
+            val stateHolder = TravelLocationStateHolder(repository)
+            stateHolder.load()
+            assertEquals(
+                "Las Vegas",
+                stateHolder.state.value.current
+                    ?.city,
+            )
+
+            // Account A's refetch is on the wire when A signs out.
+            repository.currentGate = gate
+            val loading = async { stateHolder.load() }
+            runCurrent()
+            stateHolder.reset()
+            gate.complete(Unit)
+            loading.await()
+
+            assertNull(stateHolder.state.value.current, "A's travel city must not reach the next account")
+            assertFalse(stateHolder.state.value.isLoading)
+        }
 
     @Test
     fun aPickedPlaceCanBePlannedForDatesAndThenCancelled() =
@@ -222,7 +259,12 @@ private class FakeRepository(
     val searchQueries = mutableListOf<String>()
     val setRequests = mutableListOf<SetTravelLocationRequestDto>()
 
-    override suspend fun getCurrent(): AppResult<TravelLocationDto?> = currentResult
+    var currentGate: CompletableDeferred<Unit>? = null
+
+    override suspend fun getCurrent(): AppResult<TravelLocationDto?> {
+        currentGate?.await()
+        return currentResult
+    }
 
     override suspend fun setActive(request: SetTravelLocationRequestDto): AppResult<TravelLocationDto> {
         setRequests += request

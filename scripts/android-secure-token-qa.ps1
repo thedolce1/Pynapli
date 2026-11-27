@@ -22,27 +22,20 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaUi.psm1") -Force -DisableNameChecking
 Import-Module (Join-Path $PSScriptRoot "lib\PynapliQaDevice.psm1") -Force -DisableNameChecking
 
-function Dismiss-NotificationPromptIfPresent {
-    # The OS POST_NOTIFICATIONS prompt (Android 13+) appears only AFTER the session
-    # authenticates, which lags the login tap by a network round-trip. Poll for it (don't
-    # bail on the first miss) so we catch it whenever it appears; tap Allow and return, or
-    # give up after the window if it never shows. Exact match: the dialog title also has "Allow".
-    for ($attempt = 1; $attempt -le 10; $attempt++) {
-        Start-Sleep -Milliseconds 1500
-        $xml = Dump-Ui "notification_prompt_check"
-        $allowButton = Find-NodeByExactText $xml "Allow"
-        if ($null -eq $allowButton) {
-            continue
-        }
-        $bounds = $allowButton.GetAttribute("bounds")
-        if ($bounds -notmatch "\[(\d+),(\d+)\]\[(\d+),(\d+)\]") {
-            return
-        }
-        $centerX = [int](([int]$Matches[1] + [int]$Matches[3]) / 2)
-        $centerY = [int](([int]$Matches[2] + [int]$Matches[4]) / 2)
-        Invoke-Adb @("shell", "input", "tap", "$centerX", "$centerY") | Out-Null
-        Write-Host "[note] OS notification prompt allowed (tap at $centerX,$centerY)."
-        return
+# POST_NOTIFICATIONS is granted up front (Grant-QaNotificationPermission), so the old
+# "dismiss the OS prompt after login" poll could no longer fire and is gone.
+
+function Assert-StillSignedInAfterBackgroundCheck {
+    # A stored session now goes straight to the shell and GET /v1/me checks it in the background
+    # (ONBOARDING_AUTH_SPEC, Returning members), so the Grid showing proves nothing on its own: a
+    # terminal answer would bounce to sign-in a moment later. Let that check (and any refresh behind
+    # its 401) finish, then look again.
+    param([string]$Stage)
+
+    Start-Sleep -Seconds 8
+    $xml = Dump-Ui "${Stage}_after_background_check"
+    if ($null -ne (Find-NodeByText $xml "Dev login")) {
+        throw "${Stage}: the session was signed out once the background /me check finished."
     }
 }
 
@@ -125,6 +118,7 @@ if (-not $SkipInstall) {
 
 Write-Host "[step] Clearing app data for a fresh session"
 Invoke-Adb @("shell", "pm", "clear", $PackageName) | Out-Null
+Grant-QaNotificationPermission -PackageName $PackageName
 
 $component = "$PackageName/$LaunchActivity"
 Write-Host "[step] Launching $component"
@@ -133,7 +127,6 @@ Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
 # --- Sign in via dev login ---
 Wait-ForAnyText @("Dev login") | Out-Null
 Tap-Text "Dev login"
-Dismiss-NotificationPromptIfPresent
 Wait-ForAnyText @("Use current location", "Filters", "Grid") 45 | Out-Null
 Start-Sleep -Milliseconds 1500
 $signedInShot = Save-Screen "00_signed_in"
@@ -153,11 +146,11 @@ Write-Host "[step] Force-stop + relaunch to prove encrypted session restore"
 Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
 Start-Sleep -Milliseconds 1200
 Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
-Dismiss-NotificationPromptIfPresent
 $afterRestart = Wait-ForAnyText @("Use current location", "Filters", "Grid", "Dev login") 45
 if ($afterRestart.Text -eq "Dev login") {
     throw "Session did not survive restart: the auth screen is showing again."
 }
+Assert-StillSignedInAfterBackgroundCheck "01_restart"
 $restoredShot = Save-Screen "01_session_restored"
 
 # --- Expired-access-token proof: the app refreshes instead of signing the user out ---
@@ -173,7 +166,7 @@ $restoredShot = Save-Screen "01_session_restored"
 # returns 401. A correct client refreshes and carries on.
 Write-Host "[step] Expiring the access token server-side to prove the refresh path"
 $expireSql = "UPDATE user_sessions SET access_expires_at = now() - interval '1 minute' WHERE revoked_at IS NULL AND refresh_expires_at > now();"
-$expired = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c $expireSql
+$expired = docker exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -c $expireSql
 if ($LASTEXITCODE -ne 0) {
     throw "Could not expire user_sessions in Postgres. Is the pynapli-postgres container running?"
 }
@@ -185,16 +178,16 @@ Start-Sleep -Seconds 8
 Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
 Start-Sleep -Milliseconds 1200
 Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
-Dismiss-NotificationPromptIfPresent
 $afterExpiry = Wait-ForAnyText @("Use current location", "Filters", "Grid", "Dev login") 45
 if ($afterExpiry.Text -eq "Dev login") {
     throw "Expired access token signed the user out. The client is not refreshing (see StoredSessionRefresher / the refresh-on-401 interceptor)."
 }
+Assert-StillSignedInAfterBackgroundCheck "02_expired_token"
 $refreshedShot = Save-Screen "02_expired_token_refreshed"
 
 # Server-side confirmation: a refresh rotates the session, so the row must be live again. Without
 # this the UI check alone could pass on a cached screen.
-$liveSessions = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
+$liveSessions = docker exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
 if ([int]$liveSessions -lt 1) {
     throw "App stayed on screen but no session was rotated: expected a live access_expires_at row after refresh, found $liveSessions."
 }
@@ -212,7 +205,7 @@ Write-Host "[ok] Expired access token was refreshed, not treated as a sign-out (
 # inbox refresh trips the 401 -> terminal-refresh-rejection -> sign-out chain on its own.
 Write-Host "[step] Revoking the session server-side to prove mid-session sign-out (no relaunch)"
 $revokeSql = "UPDATE user_sessions SET revoked_at = now() WHERE revoked_at IS NULL;"
-$revoked = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c $revokeSql
+$revoked = docker exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -c $revokeSql
 if ($LASTEXITCODE -ne 0) {
     throw "Could not revoke user_sessions in Postgres. Is the pynapli-postgres container running?"
 }
@@ -229,7 +222,7 @@ if ($afterRevoke.Text -ne "Dev login") {
 $revokedShot = Save-Screen "03_revoked_signed_out"
 
 # Server-side confirmation: every session is revoked and the rejected refresh created no new one.
-$liveAfterRevoke = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
+$liveAfterRevoke = docker exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
 if ([int]$liveAfterRevoke -ne 0) {
     throw "Expected no live session rows after revoke, found $liveAfterRevoke (a failed refresh must not mint a new session)."
 }

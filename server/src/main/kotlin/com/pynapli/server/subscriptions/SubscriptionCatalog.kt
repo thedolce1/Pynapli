@@ -64,7 +64,6 @@ internal object SubscriptionCatalog {
                 features =
                     listOf(
                         "Full activity reveal",
-                        "Advanced filters",
                         "Incognito",
                         "Travel mode",
                         includedPineappleLikesLine(IncludedAllowancePlan.SELECT_WEEKLY_PINEAPPLE_LIKES),

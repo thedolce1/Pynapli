@@ -22,6 +22,7 @@ internal fun SectionTitle(text: String) {
     PynapliSectionTitle(text)
 }
 
+/** A sheet filter chip. Every filter is free (founder decision 2, 2026-11-26), so none carries a lock. */
 @Composable
 internal fun SheetToggleChip(
     label: String,

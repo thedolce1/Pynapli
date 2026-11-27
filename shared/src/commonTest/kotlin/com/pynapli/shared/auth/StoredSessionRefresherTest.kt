@@ -3,13 +3,19 @@ package com.pynapli.shared.auth
 import com.pynapli.shared.core.result.AppError
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.AuthApi
+import com.pynapli.shared.network.ProfileApi
 import com.pynapli.shared.network.dto.AuthSessionDto
 import com.pynapli.shared.network.dto.AuthUserDto
 import com.pynapli.shared.network.dto.EmailLoginRequestDto
 import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.EmailSignupStartedDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
+import com.pynapli.shared.network.dto.MeDto
+import com.pynapli.shared.network.dto.PublicProfileDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
+import com.pynapli.shared.network.dto.UpdateDiscoverySettingsRequestDto
+import com.pynapli.shared.network.dto.UpdateProfileRequestDto
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -17,6 +23,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -197,6 +204,60 @@ class StoredSessionRefresherTest {
             assertEquals(0, api.requests.size)
         }
 
+    @Test
+    fun aSignOutDuringARefreshIsNotUndoneByIt() =
+        runTest {
+            val store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
+            val gate = CompletableDeferred<Unit>()
+            val api = FakeRefreshApi(refreshResult = AppResult.Success(session("fresh", "refresh-2")), onRefresh = { gate.await() })
+            val lock = SessionMutationLock()
+            val refresher = StoredSessionRefresher(api, store, lock = lock)
+            val repository = AuthRepository(authApi = api, profileApi = UnusedProfileApi, sessionStore = store, sessionLock = lock)
+
+            // A request 401'd and its refresh is on the wire when the member taps Log out.
+            val refreshing = launch { refresher.refreshAccessToken("expired") }
+            runCurrent()
+            val loggingOut = launch { repository.logout() }
+            runCurrent()
+            gate.complete(Unit)
+            refreshing.join()
+            loggingOut.join()
+
+            assertNull(store.currentSession(), "the refresh's rotated session must not sign the member back in")
+        }
+
+    @Test
+    fun aRefreshAnswerIsDroppedWhenTheStoreWasEmptiedMeanwhile() =
+        runTest {
+            // Another tab signed out (shared localStorage; this process's lock cannot see it).
+            lateinit var store: SessionStore
+            val api = FakeRefreshApi(refreshResult = AppResult.Success(session("fresh", "refresh-2")), onRefresh = { store.clear() })
+            store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
+
+            val token = StoredSessionRefresher(api, store).refreshAccessToken("expired")
+
+            assertNull(token)
+            assertNull(store.currentSession())
+        }
+
+    @Test
+    fun aRefreshAnswerNeverOverwritesANewerSession() =
+        runTest {
+            // Someone else signed in (or another tab rotated it) while this refresh was on the wire.
+            lateinit var store: SessionStore
+            val api =
+                FakeRefreshApi(
+                    refreshResult = AppResult.Success(session("fresh", "refresh-2")),
+                    onRefresh = { store.save(session("newer", "refresh-newer")) },
+                )
+            store = seededStore(accessToken = "expired", refreshToken = "refresh-1")
+
+            val token = StoredSessionRefresher(api, store).refreshAccessToken("expired")
+
+            assertEquals("newer", token)
+            assertEquals("refresh-newer", store.currentSession()?.refreshToken)
+        }
+
     private suspend fun seededStore(
         accessToken: String,
         refreshToken: String,
@@ -231,6 +292,19 @@ private class InMemoryRefreshSessionStore : SessionStore {
     override suspend fun clear() {
         session = null
     }
+}
+
+/** AuthRepository needs one; the sign-out race never reaches it. */
+private object UnusedProfileApi : ProfileApi {
+    override suspend fun getMe(): AppResult<MeDto> = unused()
+
+    override suspend fun updateProfile(request: UpdateProfileRequestDto): AppResult<MeDto> = unused()
+
+    override suspend fun updateDiscoverySettings(request: UpdateDiscoverySettingsRequestDto): AppResult<MeDto> = unused()
+
+    override suspend fun getPublicProfile(userId: String): AppResult<PublicProfileDto> = unused()
+
+    private fun <T> unused(): AppResult<T> = AppResult.Failure(AppError("UNIMPLEMENTED", "Not implemented."))
 }
 
 private class FakeRefreshApi(

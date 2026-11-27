@@ -5,6 +5,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +16,8 @@ import com.pynapli.app.design.PynapliBottomSheet
 import com.pynapli.app.design.PynapliSheetActionRow
 import com.pynapli.app.design.PynapliSheetColumn
 import com.pynapli.app.design.handCursor
+import com.pynapli.shared.network.dto.GridCountResponseDto
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun GridFiltersSheet(
@@ -22,6 +25,8 @@ internal fun GridFiltersSheet(
     savedState: SavedGridFiltersUiState = SavedGridFiltersUiState(),
     tonightSessionActive: Boolean = false,
     lifestyleFiltersAllowed: Boolean = true,
+    // Plan G2-4: "Show N people" for the draft, from the server (debounced here while editing).
+    countFor: suspend (GridFilters) -> GridCountResponseDto? = { null },
     onDismiss: () -> Unit,
     onApply: (GridFilters) -> Unit,
     onClearAll: () -> Unit,
@@ -37,6 +42,14 @@ internal fun GridFiltersSheet(
     var draft by remember(initialDraft) { mutableStateOf(initialDraft) }
     var saveName by remember { mutableStateOf("") }
     var glossaryVisible by remember { mutableStateOf(false) }
+    var count by remember { mutableStateOf<GridCountResponseDto?>(null) }
+    LaunchedEffect(draft) {
+        // Debounced: a run of taps asks once, and a newer draft cancels the older wait or request.
+        // The old number never stands for a changed draft: the button says "Apply" until the new one.
+        count = null
+        delay(COUNT_DEBOUNCE_MILLIS)
+        count = countFor(draft.withLifestyleAccess(lifestyleFiltersAllowed).withPartnerFiltersReconciled())
+    }
 
     PynapliBottomSheet(
         onDismiss = onDismiss,
@@ -76,15 +89,17 @@ internal fun GridFiltersSheet(
                 online = draft.online,
                 tonightAvailable = draft.tonightAvailable,
                 activeToday = draft.activeToday,
-                recentlyJoined = draft.recentlyJoined,
+                fresh = draft.fresh,
                 travelingHere = draft.travelingHere,
                 visitingSoon = draft.visitingSoon,
                 onVisitingSoonToggle = { draft = draft.copy(visitingSoon = !draft.visitingSoon) },
                 onOnlineToggle = { draft = draft.copy(online = !draft.online) },
                 onTonightToggle = { draft = draft.copy(tonightAvailable = !draft.tonightAvailable) },
                 onActiveTodayToggle = { draft = draft.copy(activeToday = !draft.activeToday) },
-                onRecentlyJoinedToggle = { draft = draft.copy(recentlyJoined = !draft.recentlyJoined) },
+                onFreshToggle = { draft = draft.copy(fresh = !draft.fresh) },
                 onTravelingHereToggle = { draft = draft.copy(travelingHere = !draft.travelingHere) },
+                haventChatted = draft.haventChatted,
+                onHaventChattedToggle = { draft = draft.copy(haventChatted = !draft.haventChatted) },
             )
             TonightSessionEntryRow(
                 sessionActive = tonightSessionActive,
@@ -95,11 +110,11 @@ internal fun GridFiltersSheet(
             WhoSection(
                 singles = draft.singles,
                 linked = draft.linked,
-                partnered = draft.partnered,
-                onTogglesChanged = { singles, linked, partnered ->
-                    draft = draft.copy(singles = singles, linked = linked, partnered = partnered)
+                onTogglesChanged = { singles, linked ->
+                    draft = draft.copy(singles = singles, linked = linked)
                 },
             )
+            SinglesShortcutRow(filters = draft, onChange = { draft = it })
 
             SectionTitle("Gender")
             GenderSection(
@@ -112,6 +127,11 @@ internal fun GridFiltersSheet(
                 selected = draft.orientations,
                 onChange = { draft = draft.copy(orientations = it) },
             )
+
+            // Plan G2-4: Who, then the viewer's own Gender and Orientation, then Partner (which narrows
+            // "Linked" by the partner's own profile). Swipe's sheet has the same order.
+            SectionTitle("Partner")
+            PartnerSection(filters = draft, onChange = { draft = it })
 
             SectionTitle("Trust")
             TrustSection(
@@ -145,9 +165,17 @@ internal fun GridFiltersSheet(
 
             if (lifestyleFiltersAllowed) {
                 LifestyleSectionHeader(onOpenGlossary = { glossaryVisible = true })
+                LifestyleMatchModeRow(
+                    matchAll = draft.lifestyleMatchAll,
+                    onChange = { on -> draft = draft.withLifestyleMatchAll(on) },
+                )
                 LifestyleSection(
                     selected = draft.lifestyleTags,
-                    onChange = { draft = draft.copy(lifestyleTags = it) },
+                    onChange = { chosen ->
+                        // One chip per tap: route it through the mode's rules (All: up to 3).
+                        val tapped = (chosen - draft.lifestyleTags) + (draft.lifestyleTags - chosen)
+                        tapped.firstOrNull()?.let { tag -> draft = draft.withLifestyleTagToggled(tag) }
+                    },
                 )
             } else {
                 SectionTitle("Lifestyle")
@@ -176,7 +204,7 @@ internal fun GridFiltersSheet(
                     isSaving = savedState.isSaving,
                     onSave = {
                         if (saveName.isNotBlank()) {
-                            onSavePreset(saveName, draft.withLifestyleAccess(lifestyleFiltersAllowed))
+                            onSavePreset(saveName, draft.withLifestyleAccess(lifestyleFiltersAllowed).withPartnerFiltersReconciled())
                             saveName = ""
                         }
                     },
@@ -193,9 +221,9 @@ internal fun GridFiltersSheet(
             ) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.handCursor()) { Text(text = "Cancel") }
                 Button(
-                    onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed)) },
+                    onClick = { onApply(draft.withLifestyleAccess(lifestyleFiltersAllowed).withPartnerFiltersReconciled()) },
                     modifier = Modifier.testTag(GridFilterTags.APPLY).handCursor(),
-                ) { Text(text = "Apply") }
+                ) { Text(text = gridApplyLabel(count)) }
             }
         }
     }
@@ -206,3 +234,12 @@ internal fun GridFiltersSheet(
 }
 
 private fun GridFilters.withLifestyleAccess(allowed: Boolean): GridFilters = if (allowed) this else copy(lifestyleTags = emptySet())
+
+private const val COUNT_DEBOUNCE_MILLIS = 400L
+
+/** The apply button: "Show 12 people", "Show 500+ people", "Show 1 person", or "Apply" before the count lands. */
+internal fun gridApplyLabel(count: GridCountResponseDto?): String {
+    if (count == null) return "Apply"
+    val number = if (count.atLeast) "${count.count}+" else count.count.toString()
+    return if (count.count == 1 && !count.atLeast) "Show 1 person" else "Show $number people"
+}

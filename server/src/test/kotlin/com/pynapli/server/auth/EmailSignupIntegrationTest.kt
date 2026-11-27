@@ -898,6 +898,13 @@ private class CountingSignupRepository(
         return inner.findEmailIdentity(emailHash)
     }
 
+    // Recorded under the same name as the lookup it replaced in the sign-up work, so the call lists the
+    // existing tests compare are unchanged; the answer is the real one (social-only accounts included).
+    override suspend fun addressHasAccount(emailHash: String): Boolean {
+        calls += "findEmailIdentity"
+        return inner.addressHasAccount(emailHash)
+    }
+
     override suspend fun insertPendingSignup(
         pending: NewPendingSignup,
         now: Instant,

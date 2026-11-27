@@ -94,7 +94,7 @@ function Invoke-DevSql {
         throw "Docker was not found; Android Messages QA needs direct dev database seeding."
     }
 
-    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -v ON_ERROR_STOP=1 -c $Sql 2>&1
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -v ON_ERROR_STOP=1 -c $Sql 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Dev SQL failed: $output"
     }
@@ -237,6 +237,7 @@ function Find-DebugApk {
 
 function Start-App {
     $component = "$PackageName/$LaunchActivity"
+    Grant-QaNotificationPermission -PackageName $PackageName
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         Invoke-Adb @("shell", "am", "force-stop", $PackageName) | Out-Null
         Start-Sleep -Milliseconds 800

@@ -79,6 +79,74 @@ fun ProfileDetailSheet(
     onLikeBack: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    if (state.selectedCard == null) return
+    PynapliBottomSheet(
+        onDismiss = onDismiss,
+        modifier = modifier,
+        // Wide windows show the peek as a right-anchored inspector so the grid or
+        // conversation behind stays visible (WEB_PWA_GAMEPLAN.md W2.2).
+        widePresentation = PynapliWideSheetPresentation.SidePanel,
+    ) {
+        ProfileDetailContent(
+            state = state,
+            onDismiss = onDismiss,
+            onMessage = onMessage,
+            onSpark = onSpark,
+            onRequestAlbum = onRequestAlbum,
+            onViewPrivateAlbum = onViewPrivateAlbum,
+            onHide = onHide,
+            onBlock = onBlock,
+            onReport = onReport,
+            actionMode = actionMode,
+            isSwipeSubmitting = isSwipeSubmitting,
+            onSwipePass = onSwipePass,
+            onSwipeLike = onSwipeLike,
+            profileLinkAction = profileLinkAction,
+            onInviteProfileLink = onInviteProfileLink,
+            onOpenLinkedPartner = onOpenLinkedPartner,
+            distanceUnit = distanceUnit,
+            onReportAlbum = onReportAlbum,
+            onToggleFavorite = onToggleFavorite,
+            likeBack = likeBack,
+            onLikeBack = onLikeBack,
+        )
+    }
+}
+
+/**
+ * One profile's hero, facts and pinned actions, plus its confirm dialogs: the body of
+ * [ProfileDetailSheet] and of each page of the Grid's profile pager ([GridProfileBrowser]).
+ * [composer] replaces the Message button with an inline "Say something…" field when grid messaging
+ * is allowed; [onVerifyToMessage] offers photo verification when the server says that is what
+ * stands in the way. [photosByTap] frees the horizontal swipe for the pager.
+ */
+@Composable
+internal fun ProfileDetailContent(
+    state: ProfileDetailUiState,
+    onDismiss: () -> Unit,
+    onMessage: () -> Unit,
+    onSpark: () -> Unit,
+    onRequestAlbum: () -> Unit,
+    onViewPrivateAlbum: () -> Unit,
+    onHide: () -> Unit,
+    onBlock: (reason: String?) -> Unit,
+    onReport: (category: String, note: String?) -> Unit,
+    actionMode: ProfileDetailActionMode = ProfileDetailActionMode.Grid,
+    isSwipeSubmitting: Boolean = false,
+    onSwipePass: () -> Unit = {},
+    onSwipeLike: () -> Unit = {},
+    profileLinkAction: ProfileLinkActionState? = null,
+    onInviteProfileLink: () -> Unit = {},
+    onOpenLinkedPartner: (GridLinkedPartnerUi) -> Unit = {},
+    distanceUnit: String = AppSettings.UNIT_METRIC,
+    onReportAlbum: ((albumId: String, category: String) -> Unit)? = null,
+    onToggleFavorite: (() -> Unit)? = null,
+    likeBack: LikeBackUi? = null,
+    onLikeBack: () -> Unit = {},
+    composer: ProfileComposerUi? = null,
+    onVerifyToMessage: (() -> Unit)? = null,
+    photosByTap: Boolean = false,
+) {
     val card = state.selectedCard ?: return
     val profile = state.profile
     val displayName = profile?.displayName ?: card.displayName
@@ -94,148 +162,158 @@ fun ProfileDetailSheet(
     var showReportDialog by remember { mutableStateOf(false) }
     var reportAlbumId by remember { mutableStateOf<String?>(null) }
 
-    PynapliBottomSheet(
-        onDismiss = onDismiss,
-        modifier = modifier,
-        // Wide windows show the peek as a right-anchored inspector so the grid or
-        // conversation behind stays visible (WEB_PWA_GAMEPLAN.md W2.2).
-        widePresentation = PynapliWideSheetPresentation.SidePanel,
-    ) {
-        // Present every profile peek (Grid, Swipe, Activity, Messages, hub preview) at one
-        // consistent near-full height with primary actions pinned to the bottom edge, so short
-        // profiles (or a sheet that opened mid-load) feel the same as rich ones and the buttons
-        // never float mid-sheet (the #126 gap). One scaffold = one profile experience everywhere.
-        PynapliSheetScaffold(
-            footer =
-                if (profile != null && !state.isOwnProfile) {
-                    {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            when (actionMode) {
-                                ProfileDetailActionMode.Grid -> {
-                                    likeBack?.let { offer -> LikeBackAction(done = offer.done, onLikeBack = onLikeBack) }
-                                    ProfileActions(
-                                        allowGridMessages = profile.allowGridMessages,
-                                        allowFlirts = profile.allowFlirts,
-                                        allowAlbumRequests = profile.allowAlbumRequests,
-                                        privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
-                                        isSendingFlirt = state.isSendingFlirt,
-                                        isRequestingAlbum = state.isRequestingAlbum,
-                                        isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
-                                        flirtFeedback = state.flirtFeedback,
-                                        albumFeedback = state.albumFeedback,
-                                        profileLinkAction = profileLinkAction,
-                                        onMessage = onMessage,
-                                        onSpark = onSpark,
-                                        onRequestAlbum = onRequestAlbum,
-                                        onViewPrivateAlbum = onViewPrivateAlbum,
-                                        onInviteProfileLink = onInviteProfileLink,
-                                    )
-                                }
+    // Present every profile peek (Grid, Swipe, Activity, Messages, hub preview) at one
+    // consistent near-full height with primary actions pinned to the bottom edge, so short
+    // profiles (or a sheet that opened mid-load) feel the same as rich ones and the buttons
+    // never float mid-sheet (the #126 gap). One scaffold = one profile experience everywhere.
+    PynapliSheetScaffold(
+        footer =
+            if (profile != null && !state.isOwnProfile) {
+                {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        when (actionMode) {
+                            ProfileDetailActionMode.Grid -> {
+                                likeBack?.let { offer -> LikeBackAction(done = offer.done, onLikeBack = onLikeBack) }
+                                ProfileActions(
+                                    allowGridMessages = profile.allowGridMessages,
+                                    allowFlirts = profile.allowFlirts,
+                                    allowAlbumRequests = profile.allowAlbumRequests,
+                                    privateAlbumAccessStatus = profile.privateAlbumAccessStatus,
+                                    isSendingFlirt = state.isSendingFlirt,
+                                    isRequestingAlbum = state.isRequestingAlbum,
+                                    isLoadingPrivateAlbum = state.isLoadingPrivateAlbum,
+                                    flirtFeedback = state.flirtFeedback,
+                                    albumFeedback = state.albumFeedback,
+                                    profileLinkAction = profileLinkAction,
+                                    onMessage = onMessage,
+                                    onSpark = onSpark,
+                                    onRequestAlbum = onRequestAlbum,
+                                    onViewPrivateAlbum = onViewPrivateAlbum,
+                                    onInviteProfileLink = onInviteProfileLink,
+                                    composer = composer,
+                                    messagingUnavailableReason = profile.messagingUnavailableReason,
+                                    onVerifyToMessage = onVerifyToMessage,
+                                )
+                            }
 
-                                ProfileDetailActionMode.SwipeUnmatched -> {
-                                    SwipeProfileActions(
-                                        isSubmitting = isSwipeSubmitting,
-                                        onPass = onSwipePass,
-                                        onLike = onSwipeLike,
-                                    )
-                                }
+                            ProfileDetailActionMode.SwipeUnmatched -> {
+                                SwipeProfileActions(
+                                    isSubmitting = isSwipeSubmitting,
+                                    onPass = onSwipePass,
+                                    onLike = onSwipeLike,
+                                )
+                            }
 
-                                ProfileDetailActionMode.SwipeMatched -> {
-                                    MatchedSwipeProfileActions(onMessage = onMessage)
-                                }
+                            ProfileDetailActionMode.SwipeMatched -> {
+                                MatchedSwipeProfileActions(onMessage = onMessage)
                             }
                         }
                     }
-                } else {
-                    null
-                },
-        ) {
-            ProfileHero(
-                displayName = displayName,
-                age = profile?.displayAge,
-                verified = profile?.verified == true,
-                // Server-computed, and only meaningful while the partner mini is visible.
-                coupleVerified = profile?.coupleVerified == true && profile.linkedPartner != null,
-                // Prefer the server-hydrated presence on the fetched profile (accurate from any
-                // entry point, including Activity/Hub where the synthesized card has online=false);
-                // fall back to the card's flag while the profile is still loading.
-                online = profile?.online ?: card.online,
-                distanceLabel = distanceLabel,
-                neighborhood = profile?.neighborhood,
-                photoUrls = profile?.photoUrls.orEmpty(),
-                profilePhotoUrl = profilePhotoUrl,
-                onDismiss = onDismiss,
-                onHideClick = { showHideConfirm = true },
-                onBlockClick = { showBlockConfirm = true },
-                onReportClick = { showReportDialog = true },
-                isOwnProfile = state.isOwnProfile,
-                onInviteProfileLink =
-                    profileLinkAction
-                        ?.takeIf { it.offeredInMenu && it.enabled && !it.isSubmitting }
-                        ?.let { onInviteProfileLink },
-                lastActiveLabel = LastActiveBucket.labelFor(profile?.lastActive),
-                favorite = profile?.favorite == true,
-                onToggleFavorite = onToggleFavorite?.takeIf { profile != null },
-            )
+                }
+            } else {
+                null
+            },
+    ) {
+        ProfileHero(
+            displayName = displayName,
+            age = profile?.displayAge,
+            verified = profile?.verified == true,
+            // Server-computed, and only meaningful while the partner mini is visible.
+            coupleVerified = profile?.coupleVerified == true && profile.linkedPartner != null,
+            // Prefer the server-hydrated presence on the fetched profile (accurate from any
+            // entry point, including Activity/Hub where the synthesized card has online=false);
+            // fall back to the card's flag while the profile is still loading.
+            online = profile?.online ?: card.online,
+            distanceLabel = distanceLabel,
+            neighborhood = profile?.neighborhood,
+            // Own preview shows the owner's own photos, including ones still being reviewed (labelled),
+            // which the public profile leaves out until they are approved.
+            photoUrls = state.ownPreviewPhotos.map { it.url }.ifEmpty { profile?.photoUrls.orEmpty() },
+            beingReviewedPhotoUrls =
+                state.ownPreviewPhotos
+                    .filter { it.beingReviewed }
+                    .map { it.url }
+                    .toSet(),
+            profilePhotoUrl = profilePhotoUrl,
+            // G2-2: the server's stable keys (never the owner's own preview, which has none), and the
+            // Grid tile's key so the first page paints the cached small photo while the original loads.
+            photoCacheKeys = if (state.ownPreviewPhotos.isEmpty()) profile?.photoCacheKeys.orEmpty() else emptyList(),
+            profilePhotoCacheKey = if (profile?.profilePhotoUrl != null) profile.profilePhotoCacheKey else card.thumbnailCacheKey,
+            firstPhotoPlaceholderCacheKey =
+                if (state.ownPreviewPhotos.isEmpty()) profile?.profilePhotoThumbnailCacheKey ?: card.thumbnailCacheKey else null,
+            onDismiss = onDismiss,
+            onHideClick = { showHideConfirm = true },
+            onBlockClick = { showBlockConfirm = true },
+            onReportClick = { showReportDialog = true },
+            isOwnProfile = state.isOwnProfile,
+            onInviteProfileLink =
+                profileLinkAction
+                    ?.takeIf { it.offeredInMenu && it.enabled && !it.isSubmitting }
+                    ?.let { onInviteProfileLink },
+            lastActiveLabel = LastActiveBucket.labelFor(profile?.lastActive),
+            favorite = profile?.favorite == true,
+            onToggleFavorite = onToggleFavorite?.takeIf { profile != null },
+            photosByTap = photosByTap,
+        )
 
-            when {
-                state.isLoading -> {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 20.dp),
-                        contentAlignment = Alignment.Center,
+        when {
+            state.isLoading -> {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 20.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            state.errorMessage != null -> {
+                Text(
+                    text = state.errorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            profile != null -> {
+                profile.metInPersonBadgeUi()?.let { badge -> MetInPersonBadgeRow(badge) }
+                ProfileFacts(profileState = state)
+                LinkedPartnerSection(
+                    linkedPartner = profile.linkedPartner,
+                    cardLinkedPartner = card.linkedPartner,
+                    onOpenLinkedPartner = onOpenLinkedPartner,
+                )
+                if (state.isOwnProfile) {
+                    OwnProfilePreviewNote()
+                }
+                state.reportFeedback?.let { feedback ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = feedback,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
-
-                state.errorMessage != null -> {
-                    Text(
-                        text = state.errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                profile != null -> {
-                    ProfileFacts(profileState = state)
-                    LinkedPartnerSection(
-                        linkedPartner = profile.linkedPartner,
-                        cardLinkedPartner = card.linkedPartner,
-                        onOpenLinkedPartner = onOpenLinkedPartner,
-                    )
-                    if (state.isOwnProfile) {
-                        OwnProfilePreviewNote()
-                    }
-                    state.reportFeedback?.let { feedback ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(
-                                text = feedback,
-                                color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                    PrivateAlbumPreview(
-                        items = state.privateAlbumItems,
-                        isLoading = state.isLoadingPrivateAlbum,
-                        onReportAlbum = onReportAlbum?.let { { albumId -> reportAlbumId = albumId } },
-                    )
-                }
+                PrivateAlbumPreview(
+                    items = state.privateAlbumItems,
+                    isLoading = state.isLoadingPrivateAlbum,
+                    onReportAlbum = onReportAlbum?.let { { albumId -> reportAlbumId = albumId } },
+                )
             }
         }
     }

@@ -7,6 +7,7 @@ import com.pynapli.server.account.JdbcAccountDataExportArchiver
 import com.pynapli.server.account.JdbcAccountLifecycleRepository
 import com.pynapli.server.activity.ActivityBroadcaster
 import com.pynapli.server.auth.AuthService
+import com.pynapli.server.auth.BoundedWorkLauncher
 import com.pynapli.server.auth.JdbcAuthRepository
 import com.pynapli.server.auth.JdbcDeviceFarmRepository
 import com.pynapli.server.auth.JdbcPasswordRecoveryRepository
@@ -15,6 +16,9 @@ import com.pynapli.server.auth.LocalFilePasswordResetMailer
 import com.pynapli.server.auth.PasswordRecoveryService
 import com.pynapli.server.auth.SignedInDevicesService
 import com.pynapli.server.auth.UnconfiguredPasswordResetMailer
+import com.pynapli.server.auth.social.AppleGrantRevoker
+import com.pynapli.server.auth.social.AppleTokenClient
+import com.pynapli.server.auth.social.SocialTokenSeal
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.contactblocks.ContactBlockResolver
 import com.pynapli.server.contactblocks.ContactBlockResolverWorker
@@ -101,6 +105,9 @@ internal class CoreDependencies(
     val contactBlockResolverWorker: ContactBlockResolverWorker,
     val contactBlockService: ContactBlockService,
     val contactBlockSettling: com.pynapli.server.contactblocks.ContactBlockSettling,
+    val socialTokenSeal: SocialTokenSeal,
+    val appleTokenClient: AppleTokenClient?,
+    val appleGrantRevoker: AppleGrantRevoker?,
 )
 
 internal fun buildCoreDependencies(
@@ -124,12 +131,26 @@ internal fun buildCoreDependencies(
     val contactBlockSettling =
         com.pynapli.server.contactblocks
             .ContactBlockSettling(contactBlockResolver, contactBlockResolverWorker)
-    val accountLifecycleRepository = JdbcAccountLifecycleRepository(database.dataSource, contactBlockTokens)
+    val accountLifecycleRepository =
+        JdbcAccountLifecycleRepository(
+            database.dataSource,
+            contactBlockTokens,
+            metInPersonAccountData = metInPersonAccountData(config),
+        )
     val accountExportStorage = buildAccountExportStorage(config)
+    // Sign in with Apple: revocation on deletion works whenever the Apple key is configured, even if
+    // the sign-in flag was switched off later (stored grants must still be revoked).
+    val socialTokenSeal = SocialTokenSeal(config.socialTokenKey)
+    val appleTokenClient = buildAppleTokenClient(config)
+    val appleGrantRevoker =
+        appleTokenClient?.let { client ->
+            AppleGrantRevoker(client, socialTokenSeal, BoundedWorkLauncher(backgroundScope, label = "apple-revocation")::launch)
+        }
     val accountLifecycleService =
         AccountLifecycleService(
             repository = accountLifecycleRepository,
             exportStorage = accountExportStorage,
+            revokeAppleGrants = appleGrantRevoker?.let { revoker -> revoker::revokeLater },
         )
     val accountDataExportWorker =
         if (config.accountDataExportEnabled) {
@@ -137,7 +158,12 @@ internal fun buildCoreDependencies(
                 processor =
                     AccountDataExportProcessor(
                         repository = accountLifecycleRepository,
-                        archiver = JdbcAccountDataExportArchiver(database.dataSource, contactBlockTokens = contactBlockTokens),
+                        archiver =
+                            JdbcAccountDataExportArchiver(
+                                database.dataSource,
+                                contactBlockTokens = contactBlockTokens,
+                                metInPersonAccountData = metInPersonAccountData(config),
+                            ),
                         storage = accountExportStorage,
                     ),
                 intervalMillis = config.accountDataExportIntervalMillis,
@@ -149,21 +175,48 @@ internal fun buildCoreDependencies(
     val presenceRepository = RedisPresenceRepository(redisCache)
     val presenceBroadcaster = PresenceBroadcaster(relay = redisCache.realtimeRelay)
     val onlinePresenceTracker = OnlinePresenceTracker()
+    val lastActiveRepository =
+        com.pynapli.server.presence
+            .JdbcLastActiveRepository(database.dataSource)
+    // Online/offline transitions go out on the presence stream only for people the Grid could show
+    // (active, visible, Grid-visible, not incognito, not hidden while travelling, not quarantined).
+    val presenceVisibility =
+        com.pynapli.server.presence
+            .JdbcPresenceVisibility(database.dataSource)
+    val presenceBroadcastAllowed: suspend (java.util.UUID) -> Boolean = presenceVisibility::broadcastable
     val presenceService =
         PresenceService(
             repository = presenceRepository,
             onlineTracker = onlinePresenceTracker,
             lastActiveRecorder =
-                com.pynapli.server.presence.LastActiveRecorder(
-                    com.pynapli.server.presence
-                        .JdbcLastActiveRepository(database.dataSource),
-                ),
+                com.pynapli.server.presence
+                    .LastActiveRecorder(lastActiveRepository),
+            broadcaster = presenceBroadcaster,
+            broadcastAllowed = presenceBroadcastAllowed,
         )
+    // Plan G2: every authenticated request (and a socket opening) marks the caller online. The
+    // in-memory claim keeps it to one Redis + one DB write per user a minute, and the write runs off
+    // the request so a slow Redis never delays an unrelated call.
+    val presenceRefreshLauncher =
+        com.pynapli.server.auth.BoundedWorkLauncher(
+            scope = backgroundScope,
+            maxConcurrent = PRESENCE_REFRESH_MAX_CONCURRENT,
+            maxPending = PRESENCE_REFRESH_MAX_PENDING,
+            label = "presence",
+        )
+    val markOnlineOnAuthenticated: (java.util.UUID) -> Unit = { userId ->
+        // The activity time is taken now, on the request, so a refresh still queued when the member
+        // logs out is recognised as older than the logout and writes nothing (privacy review F3).
+        presenceService.claimRefreshAt(userId)?.let { activityAt ->
+            presenceRefreshLauncher.launch { runCatching { presenceService.refreshOnline(userId, activityAt) } }
+        }
+    }
     val presenceOfflineScanner =
         PresenceOfflineScanner(
             tracker = onlinePresenceTracker,
             repository = presenceRepository,
             broadcaster = presenceBroadcaster,
+            broadcastAllowed = presenceBroadcastAllowed,
         )
     val blockRepository = JdbcBlockRepository(database.dataSource)
     val blockService = BlockService(blockRepository)
@@ -198,6 +251,8 @@ internal fun buildCoreDependencies(
             productMetrics = productMetrics,
             revocationRelay = redisCache.realtimeRelay,
             onEmailSignIn = contactBlockSettling::atSignIn,
+            onAuthenticated = markOnlineOnAuthenticated,
+            onPresenceEnded = presenceService::endPresence,
         )
     val contactBlockService =
         ContactBlockService(
@@ -300,6 +355,9 @@ internal fun buildCoreDependencies(
         contactBlockResolverWorker = contactBlockResolverWorker,
         contactBlockService = contactBlockService,
         contactBlockSettling = contactBlockSettling,
+        socialTokenSeal = socialTokenSeal,
+        appleTokenClient = appleTokenClient,
+        appleGrantRevoker = appleGrantRevoker,
     )
 }
 
@@ -311,3 +369,8 @@ private fun createPushNotificationSender(config: ServerConfig): PushNotification
             "Unsupported notification push provider: ${config.notificationPushProvider}",
         )
     }
+
+// Presence refresh off the request path: a few concurrent Redis/DB writes, a bounded queue; past it a
+// refresh is dropped and the next request a minute later tries again.
+private const val PRESENCE_REFRESH_MAX_CONCURRENT = 8
+private const val PRESENCE_REFRESH_MAX_PENDING = 2_000

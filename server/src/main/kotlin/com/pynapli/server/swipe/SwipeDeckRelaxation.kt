@@ -62,7 +62,10 @@ internal object SwipeDeckRelaxation {
     /**
      * The one relaxed retry (SwipeDeckQueryAction; Psync decks go through it too). Founder rule
      * (2026-11-18): "Verified couples only" is a trust filter and never relaxes, locked or not, so
-     * it is deliberately not listed here and `copy` carries it into the retry unchanged.
+     * it is deliberately not listed here and `copy` carries it into the retry unchanged. The partner
+     * filters and "No single men" (plan G2-3) follow the same rule: they describe who the viewer wants
+     * to meet as a couple, so a thin deck never relaxes them (they keep implying Linked even when a
+     * non-dealbreaker linkedOnly relaxes away).
      */
     fun relaxFilters(
         filters: DiscoveryFilters,

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -34,38 +35,58 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.pynapli.app.auth.autofillContentType
+import com.pynapli.app.auth.backspaceMovesTo
+import com.pynapli.app.auth.rememberAutoFocusRequester
 import com.pynapli.app.design.PynapliContentWidth
 import com.pynapli.app.design.PynapliMaxWidthColumn
 import com.pynapli.app.design.PynapliMotion
 import com.pynapli.app.design.PynapliPasswordVisibilityToggle
 import com.pynapli.app.design.PynapliShape
+import com.pynapli.app.design.PynapliWindowSizeClass
+import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Person
+import com.pynapli.app.location.LOCATION_SKIP_COST_COPY
+import com.pynapli.app.location.LocationAccessHelp
 import com.pynapli.app.location.LocationUiState
+import com.pynapli.app.media.BEING_REVIEWED_LABEL
 import com.pynapli.app.media.MediaAlbumsUiState
+import com.pynapli.app.media.ownPreviewPhotos
+import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.shared.core.config.LegalLinks
+import kotlinx.coroutines.delay
 
 /**
  * The DOB-first signup stepper (ONBOARDING_AUTH_SPEC), aligned to the founder's
- * Grindr reference capture (2026-06-10): typed DD/MM/YYYY birthday fields, a
+ * Grindr reference capture (2026-06-10): a day/month/year scroll wheel on phones
+ * (typed DD/MM/YYYY fields on wider windows, and on request), a
  * dedicated policies step with read links and one Accept, then email+password, the
  * emailed 6-digit code ("Check your email"; the account only exists once it checks out),
  * location, and a single consolidated "Your profile" step (photo + display name).
  * Driven entirely by [OnboardingStateHolder] state; platform work (OS location
  * prompt, photo picker) arrives via callbacks.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun OnboardingFlowScreen(
     state: OnboardingUiState,
@@ -92,9 +113,22 @@ fun OnboardingFlowScreen(
     onDisplayNameChanged: (String) -> Unit,
     onPickPhoto: () -> Unit,
     onFinishProfile: () -> Unit,
+    // System back: one step back (OnboardingStateHolder.stepBack), never out of the app mid-sign-up.
+    onStepBack: () -> Unit = {},
+    // The phone birthday wheel (OnboardingStateHolder.showBirthdayWheel / selectWheelDate / useTypedBirthday).
+    onShowBirthdayWheel: () -> Unit = {},
+    onWheelDateChange: (day: Int, month: Int, year: Int) -> Unit = { _, _, _ -> },
+    onUseTypedBirthday: () -> Unit = {},
+    // Seconds until "Send a new code" is offered again (OnboardingStateHolder.resendCooldownSecondsLeft).
+    resendCooldownSecondsLeft: () -> Int = { 0 },
     testerDiagnosticLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
+    // B6. Always enabled while the stepper is up: a disabled handler would let back close the app.
+    // The holder ignores it while a request is in flight and on the post-code steps. Deprecated in
+    // CMP 1.11 but deliberately retained; see the note in AppOverlays.kt. The crop overlay composes
+    // after this screen, so its own handler wins while it is open.
+    BackHandler(onBack = onStepBack)
     PynapliMaxWidthColumn(
         maxWidth = PynapliContentWidth.Form,
         modifier = modifier,
@@ -126,7 +160,7 @@ fun OnboardingFlowScreen(
         }
         Spacer(modifier = Modifier.height(12.dp))
         if (state.step != OnboardingStep.UnderageStop) {
-            StepProgressDots(step = state.step)
+            StepProgressDots(step = state.step, social = state.socialProvider != null)
         }
         Spacer(modifier = Modifier.height(28.dp))
 
@@ -137,18 +171,23 @@ fun OnboardingFlowScreen(
                     onDobDayChanged = onDobDayChanged,
                     onDobMonthChanged = onDobMonthChanged,
                     onDobYearChanged = onDobYearChanged,
+                    onShowBirthdayWheel = onShowBirthdayWheel,
+                    onWheelDateChange = onWheelDateChange,
+                    onUseTypedBirthday = onUseTypedBirthday,
                     onConfirmDob = onConfirmDob,
                     onCancelToSignIn = onCancelToSignIn,
                 )
 
             OnboardingStep.UnderageStop ->
                 UnderageStopStep(
-                    onBackToDob = onBackToDob,
+                    // The stop is sticky (OnboardingStateHolder.confirmDob): "Go back" leaves the stepper.
+                    onGoBack = onStepBack,
                     onCancelToSignIn = onCancelToSignIn,
                 )
 
             OnboardingStep.Policies ->
                 PoliciesStep(
+                    state = state,
                     onAcceptPolicies = onAcceptPolicies,
                     onBackToDob = onBackToDob,
                 )
@@ -170,6 +209,8 @@ fun OnboardingFlowScreen(
                     onResendSignupCode = onResendSignupCode,
                     onUseDifferentEmail = onUseDifferentEmail,
                     onStartSignupAgain = onStartSignupAgain,
+                    onSignIn = onCancelToSignIn,
+                    resendCooldownSecondsLeft = resendCooldownSecondsLeft,
                 )
 
             OnboardingStep.Location ->
@@ -197,6 +238,9 @@ private fun DobStep(
     onDobDayChanged: (String) -> Unit,
     onDobMonthChanged: (String) -> Unit,
     onDobYearChanged: (String) -> Unit,
+    onShowBirthdayWheel: () -> Unit,
+    onWheelDateChange: (day: Int, month: Int, year: Int) -> Unit,
+    onUseTypedBirthday: () -> Unit,
     onConfirmDob: () -> Unit,
     onCancelToSignIn: () -> Unit,
 ) {
@@ -205,41 +249,55 @@ private fun DobStep(
         subtitle = "You must be at least 18 years old to use Pynapli. Only your age shows on your profile.",
     )
     Spacer(modifier = Modifier.height(24.dp))
-    val monthFocus = remember { FocusRequester() }
-    val yearFocus = remember { FocusRequester() }
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        DobField(
-            value = state.dobDay,
-            label = "DD",
-            onValueChange = { value ->
-                onDobDayChanged(value)
-                if (value.count { it.isDigit() } >= 2) monthFocus.requestFocus()
+    // Phones get the scroll wheels (the pattern the big apps use); wider windows (web, desktop,
+    // tablet) keep the typed DD/MM/YYYY fields, which are also the screen-reader-friendly way in.
+    val compact = currentPynapliWindowSizeClass() == PynapliWindowSizeClass.Compact
+    var typed by rememberSaveable { mutableStateOf(false) }
+    if (compact && !typed) {
+        LaunchedEffect(Unit) { onShowBirthdayWheel() }
+        val day = state.dobDay.toIntOrNull()
+        val month = state.dobMonth.toIntOrNull()
+        val year = state.dobYear.toIntOrNull()
+        if (day != null && month != null && year != null && state.wheelFirstYear > 0) {
+            BirthdayWheelPicker(
+                day = day,
+                month = month,
+                year = year,
+                years = state.wheelFirstYear..state.wheelLastYear,
+                onDateChange = onWheelDateChange,
+            )
+        }
+        // The hint keeps its space once a wheel moves (only the text goes), so nothing below it jumps.
+        if (state.wheelFirstYear > 0) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Scroll to your birthday.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .alpha(if (state.dobWheelUntouched) 1f else 0f)
+                        .then(if (state.dobWheelUntouched) Modifier else Modifier.clearAndSetSemantics {}),
+            )
+        }
+        TextButton(
+            onClick = {
+                typed = true
+                onUseTypedBirthday()
             },
-            modifier = Modifier.weight(1f),
-        )
-        DobField(
-            value = state.dobMonth,
-            label = "MM",
-            onValueChange = { value ->
-                onDobMonthChanged(value)
-                if (value.count { it.isDigit() } >= 2) yearFocus.requestFocus()
-            },
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .focusRequester(monthFocus),
-        )
-        DobField(
-            value = state.dobYear,
-            label = "YYYY",
-            onValueChange = onDobYearChanged,
-            modifier =
-                Modifier
-                    .weight(1.4f)
-                    .focusRequester(yearFocus),
+            modifier = Modifier.handCursor(),
+        ) {
+            Text(TYPE_BIRTHDAY_INSTEAD)
+        }
+    } else {
+        TypedDobFields(
+            state = state,
+            onDobDayChanged = onDobDayChanged,
+            onDobMonthChanged = onDobMonthChanged,
+            onDobYearChanged = onDobYearChanged,
+            onConfirmDob = onConfirmDob,
         )
     }
     StepError(state.errorMessage)
@@ -257,11 +315,79 @@ private fun DobStep(
     }
 }
 
+/** The label of the wheel's way out to the typed fields (QA scripts tap it by this text). */
+internal const val TYPE_BIRTHDAY_INSTEAD = "Type your birthday instead"
+
+@Composable
+private fun TypedDobFields(
+    state: OnboardingUiState,
+    onDobDayChanged: (String) -> Unit,
+    onDobMonthChanged: (String) -> Unit,
+    onDobYearChanged: (String) -> Unit,
+    onConfirmDob: () -> Unit,
+) {
+    val dayFocus = rememberAutoFocusRequester()
+    val monthFocus = remember { FocusRequester() }
+    val yearFocus = remember { FocusRequester() }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        DobField(
+            value = state.dobDay,
+            label = "DD",
+            onValueChange = { value ->
+                onDobDayChanged(value)
+                if (value.count { it.isDigit() } >= 2) monthFocus.requestFocus()
+            },
+            imeAction = ImeAction.Next,
+            onImeAction = { monthFocus.requestFocus() },
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .focusRequester(dayFocus)
+                    .autofillContentType(ContentType.BirthDateDay),
+        )
+        DobField(
+            value = state.dobMonth,
+            label = "MM",
+            onValueChange = { value ->
+                onDobMonthChanged(value)
+                if (value.count { it.isDigit() } >= 2) yearFocus.requestFocus()
+            },
+            imeAction = ImeAction.Next,
+            onImeAction = { yearFocus.requestFocus() },
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .focusRequester(monthFocus)
+                    .backspaceMovesTo(dayFocus) { state.dobMonth.isEmpty() }
+                    .autofillContentType(ContentType.BirthDateMonth),
+        )
+        DobField(
+            value = state.dobYear,
+            label = "YYYY",
+            onValueChange = onDobYearChanged,
+            imeAction = ImeAction.Done,
+            // Enter / Done on the last field is Next, once the date is complete.
+            onImeAction = { if (state.dobComplete) onConfirmDob() },
+            modifier =
+                Modifier
+                    .weight(1.4f)
+                    .focusRequester(yearFocus)
+                    .backspaceMovesTo(monthFocus) { state.dobYear.isEmpty() }
+                    .autofillContentType(ContentType.BirthDateYear),
+        )
+    }
+}
+
 @Composable
 private fun DobField(
     value: String,
     label: String,
     onValueChange: (String) -> Unit,
+    imeAction: ImeAction,
+    onImeAction: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
@@ -269,7 +395,8 @@ private fun DobField(
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = imeAction),
+        keyboardActions = KeyboardActions(onNext = { onImeAction() }, onDone = { onImeAction() }),
         colors = onboardingTextFieldColors(),
         modifier = modifier,
     )
@@ -277,7 +404,7 @@ private fun DobField(
 
 @Composable
 private fun UnderageStopStep(
-    onBackToDob: () -> Unit,
+    onGoBack: () -> Unit,
     onCancelToSignIn: () -> Unit,
 ) {
     StepTitle(
@@ -288,7 +415,7 @@ private fun UnderageStopStep(
     )
     Spacer(modifier = Modifier.height(28.dp))
     Button(
-        onClick = onBackToDob,
+        onClick = onGoBack,
         modifier = Modifier.fillMaxWidth().handCursor(),
     ) {
         Text("Go back")
@@ -301,10 +428,13 @@ private fun UnderageStopStep(
 
 @Composable
 private fun PoliciesStep(
+    state: OnboardingUiState,
     onAcceptPolicies: () -> Unit,
     onBackToDob: () -> Unit,
 ) {
-    val uriHandler = LocalUriHandler.current
+    // A tab over the app where the platform has one (Android Custom Tab, a new browser tab on the
+    // web), so reading a policy never drops the sign-up.
+    val openPolicy = rememberPolicyLinkOpener()
     StepTitle(
         title = "Review our policies",
         subtitle = "To continue, you'll need to accept our Terms of Service and Privacy Policy.",
@@ -312,12 +442,12 @@ private fun PoliciesStep(
     Spacer(modifier = Modifier.height(28.dp))
     PolicyReadRow(
         label = "Terms of Service",
-        onRead = { uriHandler.openUri(LegalLinks.TERMS_OF_SERVICE) },
+        onRead = { openPolicy(LegalLinks.TERMS_OF_SERVICE) },
     )
     Spacer(modifier = Modifier.height(12.dp))
     PolicyReadRow(
         label = "Privacy Policy",
-        onRead = { uriHandler.openUri(LegalLinks.PRIVACY_POLICY) },
+        onRead = { openPolicy(LegalLinks.PRIVACY_POLICY) },
     )
     Spacer(modifier = Modifier.height(28.dp))
     Text(
@@ -327,15 +457,17 @@ private fun PoliciesStep(
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
+    // A Google / Apple sign-up finishes on this Accept (the provider asks once more), so it can be
+    // in flight and can fail here; an email sign-up just moves on.
+    StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(12.dp))
-    Button(
+    SubmittingButton(
+        text = "Accept",
+        isSubmitting = state.isSubmitting,
         onClick = onAcceptPolicies,
-        modifier = Modifier.fillMaxWidth().handCursor(),
-    ) {
-        Text("Accept")
-    }
+    )
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onBackToDob, modifier = Modifier.handCursor()) {
+    TextButton(onClick = onBackToDob, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
         Text("Back")
     }
 }
@@ -375,15 +507,23 @@ private fun AccountStep(
         subtitle = "Just an email and a strong password — everything else can wait.",
     )
     Spacer(modifier = Modifier.height(20.dp))
+    val emailFocus = rememberAutoFocusRequester()
+    val passwordFocus = remember { FocusRequester() }
     OutlinedTextField(
         value = state.email,
         onValueChange = onEmailChanged,
         label = { Text("Email") },
         singleLine = true,
         enabled = !state.isSubmitting,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+        keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
         colors = onboardingTextFieldColors(),
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .focusRequester(emailFocus)
+                // A new account: password managers offer to save the address and generate a password.
+                .autofillContentType(ContentType.NewUsername + ContentType.EmailAddress),
     )
     Spacer(modifier = Modifier.height(12.dp))
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
@@ -398,9 +538,14 @@ private fun AccountStep(
         trailingIcon = {
             PynapliPasswordVisibilityToggle(visible = passwordVisible) { passwordVisible = !passwordVisible }
         },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { if (!state.isSubmitting) onSubmitAccount() }),
         colors = onboardingTextFieldColors(),
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .focusRequester(passwordFocus)
+                .autofillContentType(ContentType.NewPassword),
     )
     state.accountNotice?.let { notice ->
         Spacer(modifier = Modifier.height(12.dp))
@@ -439,6 +584,8 @@ private fun VerifyEmailStep(
     onResendSignupCode: () -> Unit,
     onUseDifferentEmail: () -> Unit,
     onStartSignupAgain: () -> Unit,
+    onSignIn: () -> Unit,
+    resendCooldownSecondsLeft: () -> Int,
 ) {
     StepTitle(
         title = "Check your email",
@@ -447,15 +594,23 @@ private fun VerifyEmailStep(
                 "It works for 30 minutes. If that address already has an account, the email says how to sign in instead.",
     )
     Spacer(modifier = Modifier.height(20.dp))
+    val codeFocus = rememberAutoFocusRequester()
+    // The holder submits the code on its own at six digits (OnboardingStateHolder.updateSignupCode);
+    // Done / Enter submits a shorter one so its "6-digit code" error shows.
     OutlinedTextField(
         value = state.signupCode,
         onValueChange = onSignupCodeChanged,
         label = { Text("6-digit code") },
         singleLine = true,
         enabled = !state.isSubmitting && !state.signupAttemptsSpent,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { if (!state.isSubmitting) onVerifySignupCode() }),
         colors = onboardingTextFieldColors(),
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .focusRequester(codeFocus)
+                .autofillContentType(ContentType.SmsOtpCode),
     )
     state.signupNotice?.let { notice ->
         Spacer(modifier = Modifier.height(12.dp))
@@ -484,8 +639,18 @@ private fun VerifyEmailStep(
             onClick = onVerifySignupCode,
         )
         Spacer(modifier = Modifier.height(10.dp))
-        TextButton(onClick = onResendSignupCode, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
-            Text("Send a new code")
+        // Ticks once a second while the wait lasts; the same wait for every address.
+        var secondsLeft by remember { mutableStateOf(resendCooldownSecondsLeft()) }
+        LaunchedEffect(state.resendAvailableAtEpochMs) {
+            secondsLeft = resendCooldownSecondsLeft()
+            while (secondsLeft > 0) {
+                delay(1_000)
+                secondsLeft = resendCooldownSecondsLeft()
+            }
+        }
+        val canResend = !state.isSubmitting && secondsLeft == 0
+        TextButton(onClick = onResendSignupCode, enabled = canResend, modifier = Modifier.handCursor(enabled = canResend)) {
+            Text(if (secondsLeft > 0) "Send a new code in ${formatCountdown(secondsLeft)}" else "Send a new code")
         }
         // Always there: if no email ever arrives, a new code can't help either; a new sign-up can.
         TextButton(onClick = onStartSignupAgain, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
@@ -495,7 +660,14 @@ private fun VerifyEmailStep(
     TextButton(onClick = onUseDifferentEmail, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
         Text("Use a different email")
     }
+    // Shown to everyone, whatever the address: the email itself tells an existing member to sign in.
+    TextButton(onClick = onSignIn, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
+        Text("Already have an account? Sign in")
+    }
 }
+
+/** 0:27 style. */
+private fun formatCountdown(seconds: Int): String = "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 
 @Composable
 private fun LocationStep(
@@ -518,6 +690,8 @@ private fun LocationStep(
                 "while you use the app. Your exact position is never shown to others.",
     )
     StepError(locationState.errorMessage)
+    // Blocked for good or services off: the way to Settings (or where the browser keeps it).
+    LocationAccessHelp(locationState)
     Spacer(modifier = Modifier.height(28.dp))
     SubmittingButton(
         text = "Share my location",
@@ -528,6 +702,14 @@ private fun LocationStep(
     TextButton(onClick = onContinue, enabled = !locationState.isUpdating, modifier = Modifier.handCursor(enabled = !locationState.isUpdating)) {
         Text("Skip for now")
     }
+    // What skipping costs, said plainly next to the choice (Section 1, Permissions).
+    Text(
+        text = LOCATION_SKIP_COST_COPY,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -538,7 +720,11 @@ private fun ProfileStep(
     onPickPhoto: () -> Unit,
     onFinishProfile: () -> Unit,
 ) {
+    // Everything here is optional (Grindr parity): a blank name and no photo still finish, and the
+    // grid shows either way (OnboardingStateHolder.finishProfile).
     val hasPhoto = mediaState.profileItems.isNotEmpty()
+    // The owner's own copy of the chosen photo (visible to them while it is in review).
+    val photoUrl = mediaState.primaryOwnerProfilePhotoUrl()
     StepTitle(
         title = "Your profile",
         subtitle = "Add a photo and a display name — or skip and do it later.",
@@ -558,11 +744,26 @@ private fun ProfileStep(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(64.dp),
         )
+        if (photoUrl != null) {
+            // Drawn over the placeholder, which stays visible while the image loads.
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = "Your profile photo",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
     }
     Spacer(modifier = Modifier.height(12.dp))
     if (hasPhoto) {
         Text(
-            text = "Photo added! It will appear once it's approved.",
+            // Pre-screening approves most photos within seconds; a held one waits for a person.
+            text =
+                if (mediaState.ownPreviewPhotos().firstOrNull()?.beingReviewed == true) {
+                    "Photo added. $BEING_REVIEWED_LABEL until it's approved."
+                } else {
+                    "Photo added."
+                },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
@@ -599,23 +800,32 @@ private fun ProfileStep(
         },
         singleLine = true,
         enabled = !state.isSubmitting,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions =
+            KeyboardActions(onDone = { if (!state.isSubmitting && !mediaState.isUploadingProfile) onFinishProfile() }),
         colors = onboardingTextFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
     StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(20.dp))
+    // The stepper's last button: it finishes, so it says so.
     SubmittingButton(
-        text = "Next",
+        text = "Done",
         isSubmitting = state.isSubmitting || mediaState.isUploadingProfile,
         onClick = onFinishProfile,
     )
 }
 
 @Composable
-private fun StepProgressDots(step: OnboardingStep) {
-    val currentIndex = progressSteps.indexOf(step).coerceAtLeast(0)
+private fun StepProgressDots(
+    step: OnboardingStep,
+    social: Boolean,
+) {
+    // A Google / Apple sign-up has no email, password or code steps, so fewer dots.
+    val steps = if (social) socialProgressSteps else progressSteps
+    val currentIndex = steps.indexOf(step).coerceAtLeast(0)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        progressSteps.forEachIndexed { index, _ ->
+        steps.forEachIndexed { index, _ ->
             // Reached steps fill with the accent; the current step stretches into a short
             // pill so "you are here" reads at a glance. Both animate through the shared
             // motion tokens, giving the stepper the same restrained life as the core loop.
@@ -724,6 +934,14 @@ private val progressSteps =
         OnboardingStep.Policies,
         OnboardingStep.Account,
         OnboardingStep.VerifyEmail,
+        OnboardingStep.Location,
+        OnboardingStep.Profile,
+    )
+
+private val socialProgressSteps =
+    listOf(
+        OnboardingStep.Dob,
+        OnboardingStep.Policies,
         OnboardingStep.Location,
         OnboardingStep.Profile,
     )

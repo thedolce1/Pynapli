@@ -1,5 +1,7 @@
 package com.pynapli.app
 
+import com.pynapli.app.onboarding.OnboardingStep
+
 /**
  * Canonical browser paths for the app's navigation states (WEB_PWA_GAMEPLAN.md W1.2).
  * The web shell keeps the address bar in sync via `PynapliApp`'s
@@ -25,6 +27,28 @@ object PynapliRoutes {
     const val STORE = "/store"
 
     fun messagesThread(conversationId: String): String = "$MESSAGES/$conversationId"
+
+    /**
+     * One path per sign-up step, so the web shell can push a history entry for each and browser back
+     * steps back through the stepper (B6). The first step keeps the bare [SIGNUP]. These are outbound
+     * only: an inbound `/signup/...` never jumps into the middle of the stepper (it starts at the
+     * birthday, see the web shell), and browser back only ever asks the stepper to step back.
+     */
+    fun signupPath(step: OnboardingStep): String =
+        when (step) {
+            OnboardingStep.Dob -> SIGNUP
+            OnboardingStep.UnderageStop -> "$SIGNUP/age"
+            OnboardingStep.Policies -> "$SIGNUP/policies"
+            OnboardingStep.Account -> "$SIGNUP/account"
+            OnboardingStep.VerifyEmail -> "$SIGNUP/code"
+            OnboardingStep.Location -> "$SIGNUP/location"
+            OnboardingStep.Profile -> "$SIGNUP/profile"
+        }
+
+    fun isSignupPath(path: String): Boolean {
+        val normalized = path.trim().removeSuffix("/")
+        return normalized == SIGNUP || normalized.startsWith("$SIGNUP/")
+    }
 
     /**
      * Issues the deep-link command for [path]. Returns false when the path is not
@@ -103,9 +127,10 @@ internal fun pynapliRouteFor(
     tonightOpen: Boolean = false,
     psyncOpen: Boolean = false,
     storeOpen: Boolean = false,
+    onboardingStep: OnboardingStep = OnboardingStep.Dob,
 ): String =
     when {
-        onboardingActive -> PynapliRoutes.SIGNUP
+        onboardingActive -> PynapliRoutes.signupPath(onboardingStep)
         !authenticated -> PynapliRoutes.LOGIN
         // The overlays draw above every tab and the profile surface, so they win; the store sheet
         // draws above the other overlays.

@@ -53,6 +53,35 @@ class SwipeRewindPartnerVisibilityIntegrationTest {
             assertEquals(partner, rewoundCard(viewer).linkedPartnerUserId)
         }
 
+    @Test
+    fun aRewoundCardDropsAPartnerTheViewerHidAsTheGridDoes() =
+        runBlocking<Unit> {
+            // G2-4 partner strip parity: Grid and Favorites strip a partner the viewer hid; so does rewind.
+            val viewer = UUID.randomUUID()
+            val owner = UUID.randomUUID()
+            val partner = UUID.randomUUID()
+            dataSource.insertDiscoverableUser(viewer, "Viewer", 35, -79.38, 43.65)
+            dataSource.insertDiscoverableUser(owner, "Owner", 34, -79.381, 43.651)
+            dataSource.insertDiscoverableUser(partner, "Partner", 33, -79.382, 43.652)
+            dataSource.sql("INSERT INTO user_profile_links (id, user_id, linked_user_id, status, accepted_at) VALUES (?, ?, ?, 'active', now())", UUID.randomUUID(), owner, partner)
+            val service =
+                SwipeService(
+                    repository = JdbcSwipeRepository(dataSource),
+                    hiddenProfileRepository =
+                        com.pynapli.server.safety
+                            .JdbcHiddenProfileRepository(dataSource),
+                )
+
+            JdbcSwipeRepository(dataSource).recordSwipeAction(UUID.randomUUID(), viewer, owner, SwipeAction.LIKE)
+            // The SQL still deals the partner (the owner shows them publicly); only the viewer's hide drops it.
+            assertEquals(partner, rewoundCard(viewer).linkedPartnerUserId)
+            dataSource.sql("INSERT INTO user_hidden_profiles (id, hider_user_id, hidden_user_id) VALUES (?, ?, ?)", UUID.randomUUID(), viewer, partner)
+
+            val rewound = service.rewind(viewer)
+            assertEquals(owner.toString(), rewound.card?.userId)
+            assertNull(rewound.card?.linkedPartner)
+        }
+
     private fun rewoundCard(viewer: UUID): SwipeCardRecord = assertNotNull(dataSource.connection.use { it.findLatestRewindableAction(viewer, radiusMeters = 50_000) }).card
 }
 

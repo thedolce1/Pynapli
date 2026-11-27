@@ -28,7 +28,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }
@@ -72,7 +71,7 @@ class GridScreenScrollPreservationTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun headerFilterButtonOpensFiltersSheet() =
+    fun filtersChipOpensFiltersSheet() =
         runComposeUiTest {
             val cards =
                 (0 until 12).map { index ->
@@ -81,7 +80,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }
@@ -101,7 +99,7 @@ class GridScreenScrollPreservationTest {
             }
             waitForIdle()
 
-            onNodeWithTag(GridFilterTags.HEADER_OPEN_SHEET).performClick()
+            onNodeWithTag(GridFilterTags.OPEN_SHEET).performClick()
             waitForIdle()
 
             onNodeWithTag(GridFilterTags.SHEET).assertExists()
@@ -124,7 +122,7 @@ class GridScreenScrollPreservationTest {
             }
             waitForIdle()
 
-            onNodeWithTag(GridFilterTags.HEADER_OPEN_SHEET).performClick()
+            onNodeWithTag(GridFilterTags.OPEN_SHEET).performClick()
             waitForIdle()
             onNodeWithTag(GridFilterTags.OPEN_TONIGHT).performScrollTo().performClick()
             waitForIdle()
@@ -144,7 +142,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }
@@ -195,7 +192,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }
@@ -249,7 +245,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }

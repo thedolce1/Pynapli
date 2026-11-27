@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -136,6 +137,7 @@ internal fun PrivacyDiscoveryContent(
     onVisibleWhileTravelingChanged: (Boolean) -> Unit,
     onSharePsyncSoloMatchesChanged: (Boolean) -> Unit,
     onSave: () -> Unit,
+    onShowMetInPersonBadgeChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
     // "Hide from people you know"; null hides the entry (shells that don't wire it).
     onOpenHideFromPeopleYouKnow: (() -> Unit)? = null,
@@ -205,6 +207,23 @@ internal fun PrivacyDiscoveryContent(
             }
 
             item {
+                ProfileHubSection("Met in person") {
+                    PrivacyToggleRow(
+                        label = "Show my Met in person badge",
+                        value = if (state.privacyDraft.showMetInPersonBadge) "On" else "Off",
+                        checked = state.privacyDraft.showMetInPersonBadge,
+                        onCheckedChange = onShowMetInPersonBadgeChanged,
+                    )
+                    Text(
+                        text = MET_IN_PERSON_SETTING_HELPER,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
+            }
+
+            item {
                 ProfileHubSection("Location") {
                     PrivacyToggleRow(
                         label = "Distance display",
@@ -236,3 +255,7 @@ internal fun PrivacyDiscoveryContent(
         )
     }
 }
+
+/** One line under "Show my Met in person badge" (TRUST_AND_SAFETY_SPEC "Met in person"). */
+internal const val MET_IN_PERSON_SETTING_HELPER =
+    "When several members who've met you confirm it, a badge can show on your profile. Off until you turn it on."

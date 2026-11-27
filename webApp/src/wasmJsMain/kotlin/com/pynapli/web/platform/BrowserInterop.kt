@@ -35,6 +35,8 @@ internal fun historyPushState(path: String): Unit = js("window.history.pushState
 
 internal fun historyReplaceState(path: String): Unit = js("window.history.replaceState(null, '', path)")
 
+internal fun historyGo(delta: Int): Unit = js("window.history.go(delta)")
+
 internal fun onWindowPopState(handler: () -> Unit): Unit = js("window.addEventListener('popstate', handler)")
 
 internal fun onWindowEvent(
@@ -54,6 +56,18 @@ internal fun onDocumentVisible(handler: () -> Unit): Unit =
         });
     }""",
     )
+
+/** Calls [handler] with true when the tab becomes visible and false when it is hidden. */
+internal fun onDocumentVisibilityChange(handler: (Boolean) -> Unit): Unit =
+    js(
+        """{
+        document.addEventListener('visibilitychange', function () {
+            handler(document.visibilityState === 'visible');
+        });
+    }""",
+    )
+
+internal fun documentVisible(): Boolean = js("document.visibilityState === 'visible'")
 
 /**
  * Opens the browser image picker and reads the chosen file. Bytes cross the JS
@@ -101,6 +115,37 @@ internal fun requestBrowserGeolocation(
             },
             { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
         );
+    }""",
+    )
+
+/**
+ * Calls [handler] when ANOTHER tab of this origin changes localStorage [key] (the `storage` event
+ * never fires in the tab that wrote). A null event key means that tab cleared all of storage.
+ */
+internal fun onOtherTabStorageChange(
+    key: String,
+    handler: () -> Unit,
+): Unit =
+    js(
+        """{
+        window.addEventListener('storage', function (event) {
+            if (event.key === key || event.key === null) { handler(); }
+        });
+    }""",
+    )
+
+/**
+ * Calls [onGranted] only when the site already holds the geolocation permission, so a caller can
+ * refresh a fix without ever showing the browser's prompt (the resume path). Browsers without the
+ * Permissions API, or that reject the query, simply never call back.
+ */
+internal fun whenGeolocationAlreadyGranted(onGranted: () -> Unit): Unit =
+    js(
+        """{
+        if (!navigator.permissions || !navigator.permissions.query) { return; }
+        navigator.permissions.query({ name: 'geolocation' }).then(function (status) {
+            if (status.state === 'granted') { onGranted(); }
+        }).catch(function () {});
     }""",
     )
 

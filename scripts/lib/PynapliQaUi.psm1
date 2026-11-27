@@ -253,7 +253,17 @@ function Get-GridCardSnapshot {
         "Activity",
         "Messages",
         "Store",
-        "NEARBY"
+        "NEARBY",
+        # Grid chrome and tile marks added since Section 2 (chips, context strip, tile badges).
+        "Fresh",
+        "Tonight",
+        "No single men",
+        "Profile",
+        "Showing people farther away",
+        "New",
+        "Playing tonight",
+        "Playing Tonight",
+        "Linked partner"
     )
 
     $candidates = @(
@@ -265,6 +275,8 @@ function Get-GridCardSnapshot {
             if ($text -like "Filters *") { continue }
             if ($text -match "^\s*(<=|≤)?\s*\d+(\.\d+)?\s*(m|km)\s*$") { continue }
             if ($text -match "^\s*\d+\s*$") { continue }
+            # Tile captions such as "Active 15m ago" / "Active today" are not a card's name.
+            if ($text -like "Active *") { continue }
 
             $bounds = Get-Bounds $node
             if ($bounds.Top -lt 420 -or $bounds.Top -gt 2100) { continue }

@@ -77,6 +77,7 @@ internal class ContactBlockTestGraph(
             cursorCodec = DiscoveryCursorCodec("contact-block-test-cursor-secret"),
             blockRepository = blocks,
             contactBlockVisibility = visibility,
+            hiddenProfileRepository = JdbcHiddenProfileRepository(dataSource),
         )
     val profiles =
         ProfileService(
@@ -85,6 +86,7 @@ internal class ContactBlockTestGraph(
             blockRepository = blocks,
             favoriteService = favorites,
             contactBlockVisibility = visibility,
+            hiddenProfileRepository = JdbcHiddenProfileRepository(dataSource),
         )
     val grid =
         GridService(

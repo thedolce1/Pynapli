@@ -9,6 +9,11 @@ class AccountLifecycleService(
     private val repository: AccountLifecycleRepository,
     private val exportStorage: AccountExportStorage? = null,
     private val clock: Clock = Clock.systemUTC(),
+    /**
+     * Revokes the deleted account's Apple grants after the deletion committed (Apple requires it);
+     * off the request path and best-effort ([com.pynapli.server.auth.social.AppleGrantRevoker]).
+     */
+    private val revokeAppleGrants: ((List<com.pynapli.server.auth.social.SealedAppleToken>) -> Unit)? = null,
 ) {
     suspend fun latestDataExportRequest(userId: UUID): AccountDataExportDto? = repository.latestDataExportRequest(userId)?.toDto()
 
@@ -41,6 +46,7 @@ class AccountLifecycleService(
         val result =
             repository.deleteAccount(userId)
                 ?: throw AccountLifecycleException("ACCOUNT_ALREADY_DELETED")
+        if (result.appleTokens.isNotEmpty()) runCatching { revokeAppleGrants?.invoke(result.appleTokens) }
 
         return DeleteAccountResponseDto(
             deleted = true,

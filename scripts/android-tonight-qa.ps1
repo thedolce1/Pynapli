@@ -152,6 +152,8 @@ if (-not $KeepAppData) {
     Invoke-Adb @("shell", "pm", "clear", $PackageName) | Out-Null
 }
 
+Grant-QaNotificationPermission -PackageName $PackageName
+
 $component = "$PackageName/$LaunchActivity"
 Write-Host "[step] Launching $component"
 Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null

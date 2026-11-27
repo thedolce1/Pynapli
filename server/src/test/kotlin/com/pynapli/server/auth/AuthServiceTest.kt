@@ -121,6 +121,50 @@ class AuthServiceTest {
             assertEquals("UNAUTHENTICATED", error.code)
         }
 
+    // Privacy review F3: only real use counts as activity, and logout ends presence.
+    @Test
+    fun authenticateWithoutActivityNeverRunsThePresenceHook() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val active = mutableListOf<UUID>()
+            val service = AuthService(repository, onAuthenticated = { active += it })
+            val session = signup(service, repository)
+            val userId = UUID.fromString(session.user.userId)
+
+            service.authenticateWithoutActivity(session.accessToken)
+            assertEquals(emptyList(), active)
+            service.authenticate(session.accessToken)
+            assertEquals(listOf(userId), active)
+        }
+
+    @Test
+    fun logoutEndsPresenceForTheSignedOutUserAndCountsAsNoActivity() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val active = mutableListOf<UUID>()
+            val ended = mutableListOf<UUID>()
+            val service = AuthService(repository, onAuthenticated = { active += it }, onPresenceEnded = { ended += it })
+            val session = signup(service, repository)
+
+            assertEquals(true, service.logout(session.accessToken))
+            assertEquals(listOf(UUID.fromString(session.user.userId)), ended)
+            assertEquals(emptyList(), active)
+
+            // An unknown token revokes nothing and ends nothing.
+            assertEquals(false, service.logout("not-a-token"))
+            assertEquals(1, ended.size)
+        }
+
+    @Test
+    fun aFailingPresenceEndNeverFailsLogout() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository, onPresenceEnded = { error("redis down") })
+            val session = signup(service, repository)
+
+            assertEquals(true, service.logout(session.accessToken))
+        }
+
     @Test
     fun userCacheInvalidationForcesFreshAccountStatusCheck() =
         runBlocking {
@@ -168,6 +212,34 @@ class AuthServiceTest {
                 }
 
             assertEquals("PASSWORD_TOO_SHORT", error.code)
+        }
+
+    @Test
+    fun tenCharactersIsEnoughAndNineIsNot() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+
+            val nine = assertFailsWith<AuthException> { signup(service, repository, email = "nine@example.com", password = "nine-char") }
+            assertEquals("PASSWORD_TOO_SHORT", nine.code)
+
+            val session = signup(service, repository, email = "ten@example.com", password = "ten-chars!")
+            assertTrue(session.accessToken.isNotBlank())
+        }
+
+    @Test
+    fun aCommonPasswordIsRefusedTheSameForAMemberAndAStranger() =
+        runBlocking {
+            val repository = InMemoryAuthRepository()
+            val service = AuthService(repository)
+            signup(service, repository, email = "member@example.com")
+
+            // Checked before any address lookup, case-insensitively: identical for both addresses.
+            val member = assertFailsWith<AuthException> { signup(service, repository, email = "member@example.com", password = "Password123") }
+            val stranger = assertFailsWith<AuthException> { signup(service, repository, email = "stranger@example.com", password = "PASSWORD123") }
+
+            assertEquals("PASSWORD_TOO_COMMON", member.code)
+            assertEquals(member.code, stranger.code)
         }
 
     @Test

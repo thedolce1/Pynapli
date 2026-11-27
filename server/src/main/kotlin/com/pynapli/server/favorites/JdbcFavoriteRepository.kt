@@ -140,7 +140,7 @@ private val LIST_VISIBLE_FAVORITES =
     ),
     visible AS (
         SELECT u.id AS user_id,
-               COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+               COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
                ds.show_distance,
                target_travel.id IS NOT NULL AS visiting,
                CASE

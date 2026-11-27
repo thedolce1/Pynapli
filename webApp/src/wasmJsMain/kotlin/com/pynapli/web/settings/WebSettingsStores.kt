@@ -7,6 +7,7 @@ import com.pynapli.shared.settings.OnboardingProgress
 import com.pynapli.shared.settings.OnboardingProgressStore
 import com.pynapli.shared.settings.PendingSignup
 import com.pynapli.shared.settings.PendingSignupStore
+import com.pynapli.shared.settings.UnderageStopStore
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.platform.BrowserSessionStorage
 import kotlinx.serialization.json.Json
@@ -71,5 +72,25 @@ class SessionStoragePendingSignupStore(
 
     private companion object {
         private const val PENDING_SIGNUP_KEY = "pynapli.onboarding.pending-signup.v1"
+    }
+}
+
+/**
+ * The 18+ stop's time, kept for this tab's session only (`sessionStorage`), like the pending sign-up:
+ * a refresh can't retype the birthday older, and the next visitor on a shared computer starts clean.
+ */
+class SessionStorageUnderageStopStore : UnderageStopStore {
+    override suspend fun load(): Long? = BrowserSessionStorage.get(UNDERAGE_STOP_KEY)?.toLongOrNull()
+
+    override suspend fun save(stoppedAtEpochMs: Long) {
+        BrowserSessionStorage.set(UNDERAGE_STOP_KEY, stoppedAtEpochMs.toString())
+    }
+
+    override suspend fun clear() {
+        BrowserSessionStorage.remove(UNDERAGE_STOP_KEY)
+    }
+
+    private companion object {
+        private const val UNDERAGE_STOP_KEY = "pynapli.onboarding.underage-stop.v1"
     }
 }

@@ -201,6 +201,25 @@ Rules:
 - Each partner's individual privacy and location settings still apply.
 - Dealbreakers must be respected.
 - Psync should not show profiles that are incompatible with either partner's hard safety/privacy settings.
+- **A candidate's linked partner follows the strictest of the two views** (founder decision,
+  2026-11-26, G2-1 residuals). The deck is one deck shown to both partners, so a candidate's partner
+  mini (and the couple-verified badge, which needs it) shows only when that partner may be shown
+  to BOTH session partners. The same holds for whether the candidate counts for `Linked` (and for
+  `Singles`, the complement) and for `Verified couples only`. The check is
+  `CoupleVerifiedFilterSql.partnerShownToViewer` for each partner: no block either way, not hidden
+  by that partner, and the owner's `partner_visibility`. Verified only means both partners are
+  verified; matches only means the owner matched both. The candidate's partner must also not hide
+  from either partner ("Hide from people you know"): the contact-block set is the union of both
+  partners' sets. Otherwise partner B could learn from a mini-less Linked card, or from a mini
+  granted only to A, about a partner the profile hides from them.
+  - Code: `SwipeService.queryDeckForPsync(initiator, partner, …)` passes the partner as a co-viewer
+    to the Swipe rank, the linked-only candidate lookup and the deck hydration
+    (`LinkedPartnerFilterSql` / `CoupleVerifiedFilterSql` with two viewers).
+  - Proof: `PsyncPartnerVisibilityIntegrationTest`, which covers a partner contact-blocking either
+    partner, matches only in each direction and both, and verified only in each direction and both.
+  - Candidates themselves are unchanged. People blocked or hidden by either partner are left out,
+    and people hiding from one partner are still dealt, then left out of that partner's view when
+    shown.
 
 ## Target Consent
 
@@ -402,7 +421,7 @@ Social:
 Select:
 
 - Larger decks.
-- Advanced Psync filters.
+- (Advanced Psync filters were a Select perk until founder decision 2, 2026-11-26: every Psync filter is now free; lifestyle tags need an age-verified suggester.)
 - Travel-mode Psync.
 - More recap history.
 - Priority/Pineapple Like inventory usable in Psync.

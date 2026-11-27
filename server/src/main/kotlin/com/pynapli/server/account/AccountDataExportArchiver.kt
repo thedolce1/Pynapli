@@ -2,6 +2,7 @@ package com.pynapli.server.account
 
 import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.metinperson.MetInPersonAccountData
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -35,6 +36,8 @@ class JdbcAccountDataExportArchiver(
     private val clock: Clock = Clock.systemUTC(),
     // The server's contact block keys (ServerDependencies passes the configured ones).
     private val contactBlockTokens: ContactBlockTokens,
+    // K3-dependent: required, so a dropped wiring fails the build instead of exporting nothing.
+    private val metInPersonAccountData: MetInPersonAccountData,
 ) : AccountDataExportArchiver {
     override suspend fun buildArchive(userId: UUID): ExportArchive =
         dataSource.withConnection { connection ->
@@ -54,6 +57,8 @@ class JdbcAccountDataExportArchiver(
                     // know") stay out, exactly as they stay out of every other read of theirs.
                     val hiddenToken = contactBlockTokens.targetToken(userId)
                     VIEWER_FILTERED_SECTIONS.forEach { (name, sql) -> put(name, connection.queryRowsForViewer(sql, userId, hiddenToken)) }
+                    // Confirmations the person gave (by token); as a subject, only their badge state.
+                    put("metInPerson", metInPersonAccountData.exportSection(connection, userId, hiddenToken))
                 }
             ExportArchive(
                 filename = "pynapli-data-export-$userId.json",
@@ -152,6 +157,10 @@ class JdbcAccountDataExportArchiver(
                     "SELECT s.id, s.status, s.deck_size, s.location_label, s.created_at, s.started_at, s.ended_at FROM psync_sessions s JOIN psync_session_participants p ON p.session_id = s.id WHERE p.user_id = ? ORDER BY s.created_at",
                 "psyncChoices" to
                     "SELECT session_id, target_user_id, action, created_at FROM psync_session_actions WHERE actor_user_id = ? ORDER BY created_at",
+                // How the person signs in (email/password, Google, Apple): never the subject, password
+                // hash or any provider token.
+                "signInMethods" to
+                    "SELECT provider, linked_at, provider_email_hint, email_verified, last_used_at FROM auth_identities WHERE user_id = ? AND provider_subject NOT LIKE 'deleted:%' ORDER BY linked_at",
                 "signIns" to
                     "SELECT platform, app_version, created_at, last_seen_at, revoked_at FROM user_sessions WHERE user_id = ? ORDER BY created_at",
                 "pushDevices" to
@@ -231,6 +240,27 @@ class JdbcAccountDataExportArchiver(
                             AND (cb.released_at IS NULL OR l.created_at < cb.released_at)
                       )
                     ORDER BY l.created_at
+                    """.trimIndent(),
+                // The durable link record (V124): the first invite and first acceptance per direction, by the
+                // same hide rule as partnerLinks (the act's date is the first one on record).
+                "partnerLinkHistory" to
+                    """
+                    WITH me AS (SELECT ?::uuid AS id, ?::text AS hidden_token)
+                    SELECT CASE WHEN h.user_id = me.id THEN 'sent' ELSE 'received' END AS direction,
+                           CASE WHEN h.user_id = me.id THEN h.linked_user_id ELSE h.user_id END AS partner_user_id,
+                           h.first_invited_at, h.first_accepted_at
+                    FROM profile_link_history h, me
+                    WHERE (h.user_id = me.id OR h.linked_user_id = me.id)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM contact_blocks cb
+                          WHERE cb.target_token = me.hidden_token
+                            AND cb.blocker_user_id = CASE WHEN h.user_id = me.id THEN h.linked_user_id ELSE h.user_id END
+                            AND (
+                                cb.released_at IS NULL
+                                OR COALESCE(h.first_invited_at, h.first_accepted_at) < cb.released_at
+                            )
+                      )
+                    ORDER BY COALESCE(h.first_invited_at, h.first_accepted_at)
                     """.trimIndent(),
                 // A Psync together match can pair this person with someone hiding from them.
                 "matches" to

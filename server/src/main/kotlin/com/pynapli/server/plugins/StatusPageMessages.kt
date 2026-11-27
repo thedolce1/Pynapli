@@ -1,5 +1,7 @@
 package com.pynapli.server.plugins
 
+import com.pynapli.shared.auth.PasswordRules
+
 internal fun userSafeMessage(code: String): String =
     when (code) {
         "EMAIL_ALREADY_EXISTS" -> "An account already exists for this email."
@@ -27,6 +29,17 @@ internal fun userSafeMessage(code: String): String =
         "INVALID_SIGNUP_CODE" -> "That code isn't right or has expired. Check the newest email, or send a new code."
         "SIGNUP_UNAVAILABLE" -> "Creating an account by email isn't available right now. Contact support@pynapli.com."
         "WRONG_CURRENT_PASSWORD" -> "Your current password isn't right."
+        "INVALID_SOCIAL_TOKEN" -> "That sign-in didn't go through. Try again."
+        "SOCIAL_SIGN_IN_UNAVAILABLE" -> "That sign-in option isn't available right now. Use email instead."
+        "SOCIAL_SIGN_IN_TEMPORARILY_UNAVAILABLE" -> "Sign-in is having trouble right now. Try again in a moment."
+        "SOCIAL_SIGNUP_NEEDS_AGE_GATE" -> "Tell us your birthday and accept our policies to create your account."
+        "SOCIAL_EMAIL_HAS_ACCOUNT" ->
+            "You already have a Pynapli account with this email. Sign in the way you usually do, then add this sign-in option in Settings."
+        "SOCIAL_IDENTITY_IN_USE" -> "That account is already used to sign in to a different Pynapli account."
+        "SOCIAL_PROVIDER_ALREADY_LINKED" -> "A different account of this kind is already linked. Remove it first."
+        "SOCIAL_IDENTITY_NOT_LINKED" -> "That sign-in option isn't linked to your account."
+        "LAST_SIGN_IN_METHOD" -> "This is your only way to sign in, so it can't be removed."
+        "SOCIAL_ACCOUNT_NOT_FOUND" -> "There's no Pynapli account for that sign-in."
         "SESSION_NOT_FOUND" -> "That device is already signed out."
         "CANNOT_SIGN_OUT_CURRENT_SESSION" -> "Use Log out to sign out of this device."
         "PASSWORD_CHANGE_NOT_AVAILABLE" -> "This account doesn't sign in with a password."
@@ -34,9 +47,11 @@ internal fun userSafeMessage(code: String): String =
         "ACCOUNT_NOT_ACTIVE" -> "This account is suspended. If you think that's a mistake, you can appeal."
         "ACCOUNT_NOT_RESTRICTED" -> "This account isn't suspended. Try signing in."
         "INVALID_EMAIL" -> "Enter a valid email address."
-        "PASSWORD_TOO_SHORT" -> "Password must be at least 12 characters."
+        "PASSWORD_TOO_SHORT" -> PasswordRules.TOO_SHORT_MESSAGE
+        "PASSWORD_TOO_COMMON" -> PasswordRules.TOO_COMMON_MESSAGE
         "PROFILE_NOT_FOUND" -> "Profile was not found."
         "INVALID_DISPLAY_NAME" -> "Display name must be 2 to 32 characters."
+        "DISPLAY_NAME_RESERVED" -> "That name is reserved. Choose another display name."
         "INVALID_BIRTHDATE" -> "Enter a valid birthdate."
         "AGE_RESTRICTED" -> "You must be 18 or older to use Pynapli."
         "BIRTHDATE_REQUIRED" -> "Add your birthdate before starting age verification."
@@ -125,7 +140,6 @@ internal fun userSafeMessage(code: String): String =
         "PSYNC_INVALID_ACTION" -> "That Psync swipe action isn't allowed."
         "PSYNC_NUDGE_COOLDOWN" -> "Give your partner a moment — you can nudge again shortly."
         "PSYNC_DECK_SIZE_NOT_ALLOWED" -> "Upgrade to review a larger Psync deck together."
-        "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED" -> "Upgrade to use advanced filters in Psync."
         "PSYNC_LOCATION_CHANGED" -> "Where you're swiping changed since you both agreed. Take another look and agree again."
         "TRAVEL_REGION_UNAVAILABLE" -> "Travel mode isn't available for that destination."
         "TRAVEL_SWITCH_LIMITED" -> "You've changed your Travel mode destination a lot today. Try again tomorrow."
@@ -145,6 +159,10 @@ internal fun userSafeMessage(code: String): String =
         "ACTIVITY_EVENT_NOT_FOUND" -> "Activity item was not found."
         "INVALID_ID", "INVALID_CONVERSATION_TARGET", "INVALID_CONVERSATION_ORIGIN" -> "Request could not be completed."
         "MESSAGING_NOT_ALLOWED" -> "This profile is not accepting grid messages."
+        "MET_IN_PERSON_NOT_AVAILABLE" -> "This isn't available in this chat right now."
+        "MET_IN_PERSON_CONFIRMATION_NOT_FOUND" -> "That confirmation was not found."
+        "MET_IN_PERSON_VOIDED_WITH_VOUCHER" -> "That confirmation was voided with everything its voucher gave. Undo that void instead."
+        "MET_IN_PERSON_KEY_MISMATCH" -> "Met in person is paused: the configured key does not match the stored one."
         "CONVERSATION_NOT_FOUND" -> "Conversation was not found."
         "LINKED_PARTNER_NOT_FOUND" -> "No linked partner is available."
         "PARTNER_INVITE_NOT_FOUND" -> "Chat invite was not found."
@@ -167,6 +185,8 @@ internal fun userSafeMessage(code: String): String =
         "MEDIA_ALBUM_ORDER_MISMATCH" -> "Photo order is out of date. Refresh and try again."
         "MEDIA_ASSET_NOT_FOUND" -> "Media item was not found."
         "MEDIA_ALBUM_NOT_FOUND" -> "Album was not found."
+        "MEDIA_UPLOAD_ALBUM_MISMATCH" -> "This photo was uploaded for a different album. Upload it again there."
+        "MEDIA_UPLOAD_ALREADY_COMPLETED" -> "This photo has already been added."
         "MEDIA_GRANT_NOT_FOUND" -> "Album access was not found."
         "INVALID_SWIPE_TARGET" -> "That profile could not be swiped."
         "LIKE_BACK_NOT_AVAILABLE" -> "That like is no longer active, so there's nothing to like back."

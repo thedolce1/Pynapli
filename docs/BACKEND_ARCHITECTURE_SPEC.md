@@ -16,7 +16,8 @@ album grants and revocations; subscription entitlement and the linked-partner be
 premium inventory; rate limiting and quarantine; admin APIs; WebSocket events.
 
 **Firebase supports:** FCM delivery, Crashlytics, Analytics, Remote Config, App Check, Hosting for the
-website, and optionally Firebase Auth as an identity provider.
+website. Firebase Auth is not used: Google and Apple sign-in are verified by Ktor directly (see
+"Firebase usage rules").
 
 **Firebase is never the source of truth for:** discovery ranking, location eligibility, subscription
 entitlements, partner link state, private album permissions, chat membership, moderation decisions or
@@ -102,13 +103,21 @@ server-side, one beneficiary at a time, with cooldowns against link abuse.
 ## Firebase usage rules
 
 - **Analytics:** coarse, privacy-safe event names only. Never send lifestyle preferences, sensitive
-  tags, private album actions with sensitive labels, exact location, or message contents.
+  tags, private album actions with sensitive labels, exact location, or message contents. Also never
+  send sexual orientation, gender, relationship or partner details, couple-link state, or Playing
+  Tonight status, as event parameters or user properties: for this audience they can be
+  special-category data (GDPR art. 9). Advertising-ID collection stays off. (Founder decision,
+  2026-11-26; the legal review of analytics consent is still the founder's.)
 - **Crashlytics:** never log message contents, private album URLs, exact location, full profile data,
   or sensitive tags.
 - **Remote Config:** feature flags, rollout percentages, copy variants, defaults. It never bypasses
   server authority; the server validates every limit it might influence.
-- **Firebase Auth (optional):** Ktor verifies the ID token, maps it to an internal user id, and issues
-  its own opaque session. Firebase UID is never the domain boundary.
+- **Firebase Auth: not used (founder decision, 2026-11-26).** "Continue with Google / Apple" is
+  verified directly by Ktor against Google's and Apple's own keys, which then issues its own opaque
+  session, the same as email sign-in (ONBOARDING_AUTH_SPEC "Social Sign-in"). This keeps one identity
+  system, server-owned, and no account data passing through Firebase. If that ever changes, the swap is
+  contained: Ktor would verify a Firebase ID token instead and map it to the internal user id; the
+  Firebase UID is never the domain boundary.
 - **App Check:** `AppCheckPlugin` requires `X-Firebase-AppCheck` on state-changing requests when
   `PYNAPLI_APP_CHECK_ENFORCED=true`, verified against the App Check JWKS for
   `PYNAPLI_APP_CHECK_PROJECT_NUMBER`. It is not complete bot protection. Rollout steps:

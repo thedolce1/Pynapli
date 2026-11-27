@@ -77,6 +77,51 @@ class ThumbnailPrefetchPlannerTest {
         assertTrue(planThumbnailPrefetch(cards, lastVisibleIndex = 0, windowSize = -3).isEmpty())
     }
 
+    @Test
+    fun lockedCardsAreNeverPrefetched() {
+        val cards =
+            listOf(
+                card("id-0", thumbnail = "https://cdn/0.jpg"),
+                card("id-1", thumbnail = "https://cdn/1.jpg"),
+                card("locked_a", thumbnail = "https://cdn/locked-a.jpg"),
+                card("locked_b", thumbnail = "https://cdn/locked-b.jpg"),
+            )
+        assertEquals(listOf("https://cdn/1.jpg"), planThumbnailPrefetch(cards, lastVisibleIndex = 0))
+    }
+
+    @Test
+    fun prefetchCarriesTheTilesStableKeySoTheTileReadsTheSameEntry() {
+        val cards =
+            listOf(
+                card("a", thumbnail = "https://cdn/a.jpg?sig=1").copy(thumbnailCacheKey = "asset-a:v1-thumb-480"),
+                card("b", thumbnail = "https://cdn/b.jpg?sig=1"),
+            )
+
+        val images = planThumbnailPrefetchImages(cards, lastVisibleIndex = -1, windowSize = 10)
+
+        assertEquals(
+            listOf(
+                PrefetchImage("https://cdn/a.jpg?sig=1", "asset-a:v1-thumb-480"),
+                PrefetchImage("https://cdn/b.jpg?sig=1", null),
+            ),
+            images,
+        )
+    }
+
+    @Test
+    fun twoSignaturesOfTheSamePhotoArePrefetchedOnce() {
+        // Production URLs change their signature on every response; the key names the bytes.
+        val cards =
+            listOf(
+                card("a", thumbnail = "https://cdn/a.jpg?sig=1").copy(thumbnailCacheKey = "asset-a:orig"),
+                card("a2", thumbnail = "https://cdn/a.jpg?sig=2").copy(thumbnailCacheKey = "asset-a:orig"),
+            )
+
+        val images = planThumbnailPrefetchImages(cards, lastVisibleIndex = -1, windowSize = 10)
+
+        assertEquals(listOf(PrefetchImage("https://cdn/a.jpg?sig=1", "asset-a:orig")), images)
+    }
+
     private fun card(
         id: String,
         thumbnail: String?,
@@ -87,6 +132,5 @@ class ThumbnailPrefetchPlannerTest {
             thumbnailUrl = thumbnail,
             online = false,
             distanceLabel = null,
-            tone = GridCardTone.Warm,
         )
 }

@@ -112,6 +112,7 @@ class JdbcTonightFeedRepository(
               AND m.media_type = 'image'
               AND m.processing_status = 'ready'
               AND m.moderation_status = 'approved'
+              AND m.intended_album_kind = 'profile'
             ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
             LIMIT 1
             """.trimIndent()
@@ -145,9 +146,12 @@ class JdbcTonightFeedRepository(
                          AND m.deleted_at IS NULL
                          AND m.processing_status = 'ready'
                          AND m.moderation_status = 'approved'
+                         -- Public surface: only a profile photo (pre-screened), never a private-album,
+                         -- chat or verification asset the owner happens to own.
+                         AND m.intended_album_kind = 'profile'
                    ) AS photo_media_asset_id,
                    owner_user.id AS owner_user_id,
-                   COALESCE(NULLIF(owner_profile.display_name, ''), 'Pynapli User') AS owner_display_name,
+                   COALESCE(NULLIF(owner_profile.display_name, ''), 'New member') AS owner_display_name,
                    owner_ds.show_distance AS owner_show_distance,
                    pynapli_coarse_distance_m(v.geom, COALESCE(owner_travel.geom, owner_ul.geom)) AS owner_distance_meters,
                    -- Zones come from the owner's CELL in integer arithmetic (V116), never the raw point.
@@ -188,7 +192,7 @@ class JdbcTonightFeedRepository(
                 -- partner may be blocked/hidden by the viewer — that is nulled out in
                 -- the service, not filtered here (the session row still shows).
                 SELECT partner_user.id AS partner_user_id,
-                       COALESCE(NULLIF(partner_profile.display_name, ''), 'Pynapli User') AS partner_display_name,
+                       COALESCE(NULLIF(partner_profile.display_name, ''), 'New member') AS partner_display_name,
                        partner_photo.media_asset_id AS partner_thumbnail_media_asset_id
                 FROM tonight_session_participants partner_tsp
                 JOIN users partner_user ON partner_user.id = partner_tsp.user_id

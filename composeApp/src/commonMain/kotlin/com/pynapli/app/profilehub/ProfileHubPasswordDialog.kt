@@ -22,8 +22,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.PynapliPasswordVisibilityToggle
 import com.pynapli.app.design.handCursor
-
-private const val MIN_PASSWORD_LENGTH = 12
+import com.pynapli.shared.auth.PasswordRules
 
 /** Current password + new password (twice). Server errors (wrong current password) show inline. */
 @Composable
@@ -41,12 +40,13 @@ internal fun ChangePasswordDialog(
 
     val hint =
         when {
-            new.isNotEmpty() && new.length < MIN_PASSWORD_LENGTH -> "Use at least $MIN_PASSWORD_LENGTH characters."
+            new.isNotEmpty() && new.length < PasswordRules.MIN_LENGTH -> "Use at least ${PasswordRules.MIN_LENGTH} characters."
+            new.isNotEmpty() && PasswordRules.isCommon(new) -> PasswordRules.TOO_COMMON_MESSAGE
             repeat.isNotEmpty() && repeat != new -> "The new passwords don't match."
             new.isNotEmpty() && new == current -> "Choose a password you aren't using now."
             else -> null
         }
-    val canSave = !isSaving && current.isNotEmpty() && new.length >= MIN_PASSWORD_LENGTH && repeat == new && new != current
+    val canSave = !isSaving && current.isNotEmpty() && PasswordRules.problemWith(new) == null && repeat == new && new != current
 
     AlertDialog(
         onDismissRequest = onDismiss,

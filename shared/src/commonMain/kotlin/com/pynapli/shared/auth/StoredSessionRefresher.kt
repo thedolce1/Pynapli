@@ -5,15 +5,13 @@ import com.pynapli.shared.network.AuthApi
 import com.pynapli.shared.network.SessionRefresher
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * [SessionRefresher] backed by the stored session: swaps the persisted refresh token for a new
  * session and saves it, so the [SessionStore] (which is also the app's `AccessTokenProvider`)
  * immediately hands the new access token to every subsequent request.
  *
- * Single-flight via [mutex], and deliberately more than just a lock. The server *rotates* the
+ * Single-flight via [lock], and deliberately more than just a lock. The server *rotates* the
  * refresh token on each call, so when several requests 401 at once only the first may actually
  * refresh; the rest would otherwise present a token the server just invalidated and get signed out.
  * Waiters therefore re-read the store after acquiring the lock and, if the access token has already
@@ -34,11 +32,12 @@ class StoredSessionRefresher(
     // keeps single-process stores signing out immediately.
     private val settleAttempts: Int = 0,
     private val settleDelayMillis: Long = 0,
+    // Shared with this store's AuthRepository, so sign-out's clear waits for a refresh in flight
+    // instead of being overwritten by it. A private one by default (tests, single-holder callers).
+    private val lock: SessionMutationLock = SessionMutationLock(),
 ) : SessionRefresher {
-    private val mutex = Mutex()
-
     override suspend fun refreshAccessToken(expiredAccessToken: String?): String? =
-        mutex.withLock {
+        lock.withLock {
             val current = sessionStore.currentSession() ?: return@withLock null
             if (expiredAccessToken != null && current.accessToken != expiredAccessToken) {
                 // Someone already rotated the session out from under this caller. Hand back the
@@ -48,6 +47,12 @@ class StoredSessionRefresher(
             }
             when (val result = authApi.refreshSession(RefreshSessionRequestDto(refreshToken = current.refreshToken))) {
                 is AppResult.Success -> {
+                    // Save only over the session this refresh started from. Emptied meanwhile (signed
+                    // out in another tab, which this process's lock cannot see) or replaced (another
+                    // tab rotated it, or someone else signed in): the answer is stale, so keeping it
+                    // would undo that sign-out or overwrite the newer session.
+                    val latest = sessionStore.currentSession()
+                    if (latest == null || latest.refreshToken != current.refreshToken) return@withLock latest?.accessToken
                     sessionStore.save(result.value)
                     sessionStore.currentSession()?.accessToken
                 }

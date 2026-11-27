@@ -176,7 +176,7 @@ BEGIN
 END $$;
 '@.Replace("__EMAIL_HASH__", $emailHash)
 
-    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $sql 2>&1
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -v ON_ERROR_STOP=1 -c $sql 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Dev Swipe state reset failed: $output"
     }
@@ -185,6 +185,7 @@ END $$;
 
 function Start-App {
     $component = "$PackageName/$LaunchActivity"
+    Grant-QaNotificationPermission -PackageName $PackageName
     Invoke-Adb @("shell", "am", "start", "-n", $component) | Out-Null
     Write-Host "[step] Launched $component"
 }
