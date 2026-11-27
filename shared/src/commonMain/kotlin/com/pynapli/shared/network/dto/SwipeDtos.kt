@@ -73,6 +73,14 @@ data class SwipeDeckRequestDto(
     // linked partners selfie-verified, partner visible). Independent of linkedOnly. Always hard: a thin
     // deck never relaxes it, with or without the "verified" dealbreaker. Old clients omit it.
     val verifiedCouplesOnly: Boolean = false,
+    // Partner filters (same meaning as GridQueryRequestDto's). Always hard: a thin deck never relaxes
+    // them, like verifiedCouplesOnly. Psync applies them from both session partners' views.
+    val partnerGenders: List<String> = emptyList(),
+    val partnerMinimumAge: Int? = null,
+    val partnerMaximumAge: Int? = null,
+    val partnerOrientations: List<String> = emptyList(),
+    val partnerVerifiedOnly: Boolean = false,
+    val excludeSingleMen: Boolean = false,
 )
 
 @Serializable
@@ -84,6 +92,12 @@ data class SwipeCardDto(
     val distanceMeters: Int? = null,
     val photoUrl: String? = null,
     val photoUrls: List<String> = emptyList(),
+    // G2-2: stable cache keys for [photoUrls], index for index ("<assetId>:orig"): a client caches by
+    // these, so a re-signed URL for the same bytes is a cache hit. The URL still guards access.
+    val photoCacheKeys: List<String> = emptyList(),
+    // The key the first photo's small Grid thumbnail is cached under, to paint while the original
+    // loads. Null when no thumbnail exists.
+    val photoThumbnailCacheKey: String? = null,
     val linkedPartner: LinkedPartnerMiniDto? = null,
     val rankToken: String,
     val online: Boolean = false,

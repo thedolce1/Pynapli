@@ -1,17 +1,18 @@
 package com.pynapli.server.media
 
 import kotlinx.coroutines.runBlocking
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Covers the pure decision logic of the Cloud Vision scanner: the SafeSearch likelihood -> decision
- * mapping ([SafeSearchPolicy]) and the scanner's fail-safe guards that never hit the network (non-image
- * content type, missing storage coordinates). The live HTTP path needs a real Vision endpoint and is
- * exercised by ops during media go-live, not in unit tests.
+ * Photo pre-screening (TRUST_AND_SAFETY_SPEC "Photo pre-screening") with the Vision client faked:
+ * the SafeSearch policy's ceilings on both sides of each boundary, fail-closed handling of unknown
+ * likelihoods, errors and timeouts, and the response parser. No network.
  */
 class CloudVisionMediaModerationScannerTest {
     private fun annotation(
@@ -20,56 +21,68 @@ class CloudVisionMediaModerationScannerTest {
         violence: String? = "VERY_UNLIKELY",
     ) = SafeSearchAnnotation(adult = adult, racy = racy, violence = violence)
 
+    private val policy = SafeSearchPolicy()
+
+    // ---- Policy boundaries ----
+
     @Test
-    fun approvesWhenAllCategoriesBelowReviewFloor() {
-        val decision = SafeSearchPolicy().decide(annotation(adult = "UNLIKELY", racy = "VERY_UNLIKELY"))
-        assertEquals(MediaModerationDecision.Approved, decision)
+    fun cleanPhotoIsApproved() {
+        assertEquals(MediaModerationDecision.Approved, policy.decide(annotation()))
     }
 
     @Test
-    fun holdsForReviewAtPossible() {
-        val decision = SafeSearchPolicy().decide(annotation(racy = "POSSIBLE"))
-        assertEquals(MediaModerationDecision.PendingReview, decision)
+    fun adultCeilingIsUnlikely() {
+        assertEquals(MediaModerationDecision.Approved, policy.decide(annotation(adult = "UNLIKELY")))
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(adult = "POSSIBLE")))
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(adult = "LIKELY")))
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(adult = "VERY_LIKELY")))
     }
 
     @Test
-    fun rejectsAtLikely() {
-        val decision = SafeSearchPolicy().decide(annotation(adult = "LIKELY"))
-        assertTrue(decision is MediaModerationDecision.Rejected, "expected Rejected, got $decision")
-        assertEquals("safe_search_adult_likely", decision.reason)
+    fun violenceCeilingIsPossible() {
+        assertEquals(MediaModerationDecision.Approved, policy.decide(annotation(violence = "UNLIKELY")))
+        assertEquals(MediaModerationDecision.Approved, policy.decide(annotation(violence = "POSSIBLE")))
+        // LIKELY is above the ceiling and is also the severe signal (see below): never Approved.
+        assertTrue(policy.decide(annotation(violence = "LIKELY")) != MediaModerationDecision.Approved)
     }
 
     @Test
-    fun rejectsAtVeryLikely() {
-        val decision = SafeSearchPolicy().decide(annotation(violence = "VERY_LIKELY"))
-        assertTrue(decision is MediaModerationDecision.Rejected, "expected Rejected, got $decision")
-        assertEquals(MediaModerationSeverity.SEVERE, decision.severity)
-        assertEquals("harassment_or_threats", decision.reportCategory)
+    fun racyCeilingIsLikelyBecauseSuggestiveIsFineOnPublicPhotos() {
+        assertEquals(MediaModerationDecision.Approved, policy.decide(annotation(racy = "POSSIBLE")))
+        assertEquals(MediaModerationDecision.Approved, policy.decide(annotation(racy = "LIKELY")))
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(racy = "VERY_LIKELY")))
     }
 
     @Test
-    fun worstCategoryWins() {
-        // racy POSSIBLE (review) but adult VERY_LIKELY (reject) -> reject dominates.
-        val decision = SafeSearchPolicy().decide(annotation(adult = "VERY_LIKELY", racy = "POSSIBLE"))
-        assertTrue(decision is MediaModerationDecision.Rejected, "expected Rejected, got $decision")
-        assertEquals("safe_search_adult_very_likely", decision.reason)
+    fun explicitAdultContentIsQueuedNotRejected() {
+        // Never auto-reject on adult/racy: a person decides.
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(adult = "VERY_LIKELY", racy = "VERY_LIKELY")))
     }
 
     @Test
-    fun presentButUnknownLikelihoodsAreTreatedAsBenign() {
-        // Contract: a present annotation whose categories are all UNKNOWN (ordinal 0, below the
-        // POSSIBLE review floor) is treated as benign -> Approved. The *absence* of a SafeSearch
-        // annotation entirely is the fail-safe case, and scan() maps that (and every error) to
-        // PendingReview before this policy is consulted.
-        val decision = SafeSearchPolicy().decide(annotation(adult = null, racy = null, violence = null))
-        assertEquals(MediaModerationDecision.Approved, decision)
+    fun strongViolenceIsTheOnlySevereSignal() {
+        for (level in listOf("LIKELY", "VERY_LIKELY")) {
+            val decision = policy.decide(annotation(violence = level))
+            assertTrue(decision is MediaModerationDecision.Rejected, "expected the severe signal at $level, got $decision")
+            assertEquals(MediaModerationSeverity.SEVERE, decision.severity)
+            assertEquals("harassment_or_threats", decision.reportCategory)
+            assertEquals("safe_search_violence_${level.lowercase()}", decision.reason)
+        }
     }
 
     @Test
-    fun ignoredCategoriesDoNotTriggerByDefault() {
-        // medical/spoof are not in the default evaluated set, so a high medical likelihood is ignored.
+    fun unknownOrMissingLikelihoodIsQueued() {
+        // Fail closed: a category Vision could not rate is not evidence the photo is clean.
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(adult = null)))
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(racy = "UNKNOWN")))
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(violence = "SOMETHING_NEW")))
+        assertEquals(MediaModerationDecision.PendingReview, policy.decide(annotation(adult = null, racy = null, violence = null)))
+    }
+
+    @Test
+    fun medicalAndSpoofAreIgnored() {
         val decision =
-            SafeSearchPolicy().decide(
+            policy.decide(
                 SafeSearchAnnotation(
                     adult = "VERY_UNLIKELY",
                     racy = "VERY_UNLIKELY",
@@ -82,25 +95,85 @@ class CloudVisionMediaModerationScannerTest {
     }
 
     @Test
-    fun nonImageAssetHeldForReviewWithoutNetwork() =
+    fun configuredCeilingsAreHonoured() {
+        val strict = SafeSearchPolicy(maxAdult = SafeSearchLikelihood.VERY_UNLIKELY, maxRacy = SafeSearchLikelihood.POSSIBLE)
+        assertEquals(MediaModerationDecision.PendingReview, strict.decide(annotation(adult = "UNLIKELY")))
+        assertEquals(MediaModerationDecision.PendingReview, strict.decide(annotation(racy = "LIKELY")))
+        assertEquals(MediaModerationDecision.Approved, strict.decide(annotation(racy = "POSSIBLE")))
+    }
+
+    // ---- Scanner with a faked Vision client ----
+
+    @Test
+    fun cleanAnswerFromVisionApproves() =
         runBlocking {
-            // No credentials/http wired; a non-image asset must short-circuit to PendingReview before
-            // any network use. This would throw/NPE if it tried to call out.
+            var askedFor: String? = null
             val scanner =
                 CloudVisionMediaModerationScanner(
-                    credentials =
-                        com.google.auth.oauth2.GoogleCredentials
-                            .create(
-                                com.google.auth.oauth2
-                                    .AccessToken("test", null),
-                            ),
+                    client = { uri ->
+                        askedFor = uri
+                        annotation(racy = "LIKELY")
+                    },
                 )
-            val decision = scanner.scan(asset(contentType = "video/mp4"))
-            assertEquals(MediaModerationDecision.PendingReview, decision)
+            assertEquals(MediaModerationDecision.Approved, scanner.scan(asset()))
+            assertEquals("gs://pynapli-media/media/abc", askedFor)
         }
 
     @Test
-    fun blankStorageCoordinatesHeldForReviewWithoutNetwork() =
+    fun flaggedAnswerFromVisionQueues() =
+        runBlocking {
+            val scanner = CloudVisionMediaModerationScanner(client = { annotation(adult = "POSSIBLE") })
+            assertEquals(MediaModerationDecision.PendingReview, scanner.scan(asset()))
+        }
+
+    @Test
+    fun clientErrorQueues() =
+        runBlocking {
+            val scanner = CloudVisionMediaModerationScanner(client = { throw java.io.IOException("quota") })
+            assertEquals(MediaModerationDecision.PendingReview, scanner.scan(asset()))
+        }
+
+    @Test
+    fun noUsableAnswerQueues() =
+        runBlocking {
+            val scanner = CloudVisionMediaModerationScanner(client = { null })
+            assertEquals(MediaModerationDecision.PendingReview, scanner.scan(asset()))
+        }
+
+    @Test
+    fun slowVisionTimesOutToTheQueue() =
+        runBlocking {
+            val scanner =
+                CloudVisionMediaModerationScanner(
+                    client = {
+                        Thread.sleep(10_000)
+                        annotation()
+                    },
+                    scanTimeout = Duration.ofMillis(200),
+                )
+            val started = System.nanoTime()
+            val decision = scanner.scan(asset())
+            val elapsedMillis = (System.nanoTime() - started) / 1_000_000
+            assertEquals(MediaModerationDecision.PendingReview, decision)
+            assertTrue(elapsedMillis < 5_000, "the timeout must interrupt the blocked call, took ${elapsedMillis}ms")
+        }
+
+    @Test
+    fun nonImageAssetQueuedWithoutCallingVision() =
+        runBlocking {
+            val scanner = CloudVisionMediaModerationScanner(client = { error("must not be called") })
+            assertEquals(MediaModerationDecision.PendingReview, scanner.scan(asset(contentType = "video/mp4")))
+        }
+
+    @Test
+    fun blankStorageCoordinatesQueuedWithoutCallingVision() =
+        runBlocking {
+            val scanner = CloudVisionMediaModerationScanner(client = { error("must not be called") })
+            assertEquals(MediaModerationDecision.PendingReview, scanner.scan(asset(storageObjectKey = "")))
+        }
+
+    @Test
+    fun credentialsConstructorStillShortCircuitsNonImages() =
         runBlocking {
             val scanner =
                 CloudVisionMediaModerationScanner(
@@ -111,9 +184,27 @@ class CloudVisionMediaModerationScannerTest {
                                     .AccessToken("test", null),
                             ),
                 )
-            val decision = scanner.scan(asset(storageObjectKey = ""))
-            assertEquals(MediaModerationDecision.PendingReview, decision)
+            assertEquals(MediaModerationDecision.PendingReview, scanner.scan(asset(contentType = "video/mp4")))
         }
+
+    // ---- Response parsing ----
+
+    @Test
+    fun parserReadsTheAnnotation() {
+        val parsed =
+            parseSafeSearchResponse(
+                """{"responses":[{"safeSearchAnnotation":{"adult":"UNLIKELY","racy":"LIKELY","violence":"VERY_UNLIKELY","spoof":"UNLIKELY","medical":"UNLIKELY"}}]}""",
+            )
+        assertEquals("LIKELY", parsed?.racy)
+    }
+
+    @Test
+    fun parserTreatsAPerImageErrorAsNoAnswer() {
+        // Vision reports an unreadable object as `error` on an HTTP 200.
+        assertNull(parseSafeSearchResponse("""{"responses":[{"error":{"code":7,"message":"denied"}}]}"""))
+        assertNull(parseSafeSearchResponse("""{"responses":[{}]}"""))
+        assertNull(parseSafeSearchResponse("""{"responses":[]}"""))
+    }
 
     private fun asset(
         contentType: String = "image/jpeg",

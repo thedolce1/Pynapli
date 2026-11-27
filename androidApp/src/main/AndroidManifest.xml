@@ -1,4 +1,11 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!--
+        googleid (Sign in with Google) declares minSdk 24; the app stays at minSdk 23 (Firebase floor).
+        AndroidGoogleSignInProvider reports Google as unsupported below API 24, so no googleid code
+        runs there and the "Continue with Google" button is simply not shown on Android 6.0.
+    -->
+    <uses-sdk tools:overrideLibrary="com.google.android.libraries.identity.googleid" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

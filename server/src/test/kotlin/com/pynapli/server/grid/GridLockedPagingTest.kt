@@ -306,6 +306,7 @@ private class SequentialGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         receivedLimits += limit
         receivedRadii += radiusMeters

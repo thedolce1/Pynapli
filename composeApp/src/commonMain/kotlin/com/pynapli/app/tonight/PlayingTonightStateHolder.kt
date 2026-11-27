@@ -86,8 +86,8 @@ class PlayingTonightStateHolder(
             is AppResult.Success ->
                 _state.update { it.copy(isLoading = false, feedItems = result.value) }
             is AppResult.Failure -> {
-                // Lifestyle filters are gated like the Grid's (age verification, then the advanced-
-                // filter plan). Keep the rest of the filters but drop the gated part, so later
+                // Lifestyle filters are age-gated like the Grid's (every filter is free since founder
+                // decision 2, so there is no plan gate). Keep the rest of the filters but drop the gated part, so later
                 // refreshes don't keep failing, and say why.
                 val gated = result.error.code in TONIGHT_GATED_FILTER_CODES
                 _state.update {
@@ -97,7 +97,6 @@ class PlayingTonightStateHolder(
                         errorMessage =
                             when (result.error.code) {
                                 "AGE_VERIFICATION_REQUIRED" -> "Verify your age to use lifestyle filters."
-                                "ENTITLEMENT_REQUIRED" -> "Lifestyle filters are part of a paid plan."
                                 else -> result.error.message
                             },
                     )
@@ -271,7 +270,7 @@ interface TonightRepository {
     suspend fun endSession(sessionId: String): AppResult<TonightSessionUi>
 }
 
-private val TONIGHT_GATED_FILTER_CODES = setOf("AGE_VERIFICATION_REQUIRED", "ENTITLEMENT_REQUIRED")
+private val TONIGHT_GATED_FILTER_CODES = setOf("AGE_VERIFICATION_REQUIRED")
 
 class ApiTonightRepository(
     private val apiClient: PynapliApiClient,

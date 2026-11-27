@@ -73,6 +73,8 @@ class PynapliAppGraph(
     val matchCelebrationStateHolder: MatchCelebrationStateHolder? = null,
     /** "Hide from people you know" (Profile > Privacy); absent, the entry is hidden. */
     val contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
+    /** Settings > Sign-in methods (Google / Apple linking); absent, the row is hidden. */
+    val signInMethodsStateHolder: com.pynapli.app.profilehub.SignInMethodsStateHolder? = null,
 )
 
 /**

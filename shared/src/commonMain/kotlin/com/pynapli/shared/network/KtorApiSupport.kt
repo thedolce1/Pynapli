@@ -7,6 +7,7 @@ import com.pynapli.shared.core.result.runCatchingCancellable
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
@@ -39,6 +40,14 @@ internal class KtorApiSupport(
                     contentType(ContentType.Application.Json)
                     setBody(request)
                 }.toAppResult<Response>(json)
+        }.getOrElse { error ->
+            error.toNetworkFailure()
+        }
+
+    /** Unauthenticated GET (public config such as `/v1/auth/social/config`). */
+    suspend inline fun <reified Response : Any> getJson(path: String): AppResult<Response> =
+        runCatchingCancellable {
+            httpClient.get(endpoint(path)).toAppResult<Response>(json)
         }.getOrElse { error ->
             error.toNetworkFailure()
         }

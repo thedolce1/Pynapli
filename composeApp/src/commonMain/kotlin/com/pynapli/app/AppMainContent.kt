@@ -31,7 +31,6 @@ import com.pynapli.app.design.PynapliTabIcons
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.design.currentPynapliWindowSizeClass
-import com.pynapli.app.grid.GridFilters
 import com.pynapli.app.grid.GridScreen
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
@@ -40,6 +39,7 @@ import com.pynapli.app.location.TravelLocationStateHolder
 import com.pynapli.app.media.MediaAlbumKindUi
 import com.pynapli.app.media.MediaAlbumsScreen
 import com.pynapli.app.media.MediaAlbumsStateHolder
+import com.pynapli.app.media.ownPreviewPhotos
 import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.app.messages.MessagesScreen
 import com.pynapli.app.messages.MessagesStateHolder
@@ -94,6 +94,7 @@ internal fun ColumnScope.PynapliMainContent(
     onboardingStateHolder: OnboardingStateHolder?,
     photoVerificationStateHolder: PhotoVerificationStateHolder?,
     contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
+    signInMethodsStateHolder: com.pynapli.app.profilehub.SignInMethodsStateHolder? = null,
     conversationActions: ConversationActions,
     scope: CoroutineScope,
     onProfileSurface: (ProfileSurface) -> Unit,
@@ -133,6 +134,7 @@ internal fun ColumnScope.PynapliMainContent(
                 onOpenPsync = onOpenPsync,
                 photoVerificationStateHolder = photoVerificationStateHolder,
                 contactBlocksStateHolder = contactBlocksStateHolder,
+                signInMethodsStateHolder = signInMethodsStateHolder,
                 onPickVerificationSelfie = onPickVerificationSelfie,
             )
         profileSurface == ProfileSurface.MediaAlbums -> {
@@ -219,6 +221,7 @@ internal fun ColumnScope.PynapliMainContent(
                 PynapliTab.Swipe ->
                     SwipeTabContent(
                         profileDetailStateHolder = profileDetailStateHolder,
+                        profileHubStateHolder = profileHubStateHolder,
                         conversationStateHolder = conversationStateHolder,
                         swipeStateHolder = swipeStateHolder,
                         appSettingsStateHolder = appSettingsStateHolder,
@@ -253,6 +256,7 @@ private fun ColumnScope.ProfileHubSurface(
     onOpenPsync: (() -> Unit)? = null,
     photoVerificationStateHolder: PhotoVerificationStateHolder? = null,
     contactBlocksStateHolder: com.pynapli.app.contactblocks.ContactBlocksStateHolder? = null,
+    signInMethodsStateHolder: com.pynapli.app.profilehub.SignInMethodsStateHolder? = null,
     onPickVerificationSelfie: (() -> Unit)? = null,
 ) {
     val authState by authStateHolder.state.collectAsState()
@@ -317,6 +321,7 @@ private fun ColumnScope.ProfileHubSurface(
                         userId = userId,
                         displayName = profileHubState.me?.profile?.displayName,
                         profilePhotoUrl = profileImageUrl,
+                        ownPhotos = mediaAlbumsState.ownPreviewPhotos(),
                     )
                 }
             }
@@ -332,6 +337,7 @@ private fun ColumnScope.ProfileHubSurface(
             },
         photoVerificationStateHolder = photoVerificationStateHolder,
         contactBlocksStateHolder = contactBlocksStateHolder,
+        signInMethodsStateHolder = signInMethodsStateHolder,
         onPickVerificationSelfie = onPickVerificationSelfie,
         // Cap + center the settings column on wide windows so it reads as an
         // intentional column instead of stretching edge-to-edge (WEB_PWA_GAMEPLAN).
@@ -446,8 +452,6 @@ private fun ColumnScope.GridTabContent(
         onOpenPhotoVerification = onOpenPhotoVerification,
         onOpenTravelStore = onOpenTravelStore,
         onOpenUnlockStore = onOpenUnlockStore,
-        // Paid Grid filters come with Social or Select; null until the plan has loaded.
-        advancedFiltersAllowed = GridFilters.advancedFiltersAllowedFor(profileHubState.entitlement?.tier),
     )
 }
 
@@ -517,6 +521,7 @@ private fun ColumnScope.MessagesTabContent(
             onSetExpiry = conversationActions.onSetExpiry,
             onRevealMedia = conversationActions.onRevealMedia,
             onPickPhoto = onPickConversationPhoto,
+            metInPersonCallbacks = conversationActions.metInPerson,
         )
     }
 
@@ -633,6 +638,7 @@ private fun ColumnScope.ActivityTabContent(
 @Composable
 private fun ColumnScope.SwipeTabContent(
     profileDetailStateHolder: ProfileDetailStateHolder,
+    profileHubStateHolder: ProfileHubStateHolder,
     conversationStateHolder: ConversationStateHolder,
     swipeStateHolder: SwipeStateHolder,
     appSettingsStateHolder: AppSettingsStateHolder,
@@ -647,6 +653,7 @@ private fun ColumnScope.SwipeTabContent(
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
+    val profileHubState by profileHubStateHolder.state.collectAsState()
     val distanceUnit = appSettingsState.settings.distanceUnit
 
     SwipeScreen(
@@ -662,6 +669,8 @@ private fun ColumnScope.SwipeTabContent(
         onOpenAgeVerification = onOpenAgeVerification,
         onOpenPsync = onOpenPsync,
         savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
+        // Lifestyle tags need age verification, as on the Grid (the server refuses them either way).
+        lifestyleFiltersAllowed = profileHubState.me?.profile?.ageVerified == true,
         travelLocationStateHolder = travelLocationStateHolder,
         profileLinksStateHolder = profileLinksStateHolder,
         deckCovered = deckCovered,

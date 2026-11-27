@@ -84,7 +84,6 @@ private fun visualRegressionCards(): List<GridProfileCardUi> =
                 },
             online = index % 2 == 0,
             distanceLabel = "${index + 1} km",
-            tone = GridCardTone.entries[index % GridCardTone.entries.size],
             linkedPartner =
                 if (index % 5 == 0) {
                     GridLinkedPartnerUi(

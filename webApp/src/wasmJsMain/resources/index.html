@@ -97,6 +97,17 @@
         //   window.__PYNAPLI_API_BASE__ = 'https://api.pynapli.com';
         window.__PYNAPLI_API_BASE__ = null;
 
+        // "Continue with Google / Apple" (ONBOARDING_AUTH_SPEC). Public client identifiers, set at
+        // deploy time; null hides that button. Nothing third-party loads unless the server's
+        // /v1/auth/social/config also switches the provider on. See docs/PATH_TO_TESTERS.md (A10).
+        //   __PYNAPLI_GOOGLE_CLIENT_ID__  : the Google Cloud *web* OAuth client id
+        //   __PYNAPLI_APPLE_SERVICES_ID__ : the Apple Services ID (e.g. com.pynapli.web)
+        //   __PYNAPLI_APPLE_REDIRECT_URI__: a return URL registered on that Services ID
+        //                                   (null = this page's origin + "/")
+        window.__PYNAPLI_GOOGLE_CLIENT_ID__ = null;
+        window.__PYNAPLI_APPLE_SERVICES_ID__ = null;
+        window.__PYNAPLI_APPLE_REDIRECT_URI__ = null;
+
         // Captured pre-wasm so the app can offer its own restrained install
         // affordance later (WEB_PWA_GAMEPLAN.md W1.4).
         window.__pynapliInstallPrompt = null;

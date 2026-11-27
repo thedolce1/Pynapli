@@ -53,7 +53,9 @@ object SignupEmailWording {
         Someone just tried to create a new account with this email address.
 
         You already have an account with this address, so nothing was created and nothing was changed.
-        To get in, sign in with your password, or choose "Forgot password?" on the sign-in screen to set a new one.
+        To get in, sign in the way you usually do: with your password, or with Continue with Google or
+        Continue with Apple. If you use a password and don't remember it, choose "Forgot password?" on the
+        sign-in screen to set a new one.
 
         If this wasn't you, you can ignore this email. Your account and password are unchanged.
         """.trimIndent()

@@ -28,7 +28,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }
@@ -81,7 +80,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }
@@ -144,7 +142,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }
@@ -195,7 +192,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }
@@ -249,7 +245,6 @@ class GridScreenScrollPreservationTest {
                         displayName = "User $index",
                         online = index % 2 == 0,
                         distanceLabel = "${index + 1} km",
-                        tone = GridCardTone.entries[index % GridCardTone.entries.size],
                         distanceMeters = (index + 1) * 100,
                     )
                 }

@@ -21,7 +21,7 @@ import com.pynapli.app.design.icons.filled.StarBorder
 
 /**
  * The Grid's header chip row (plan G8): Filters (with its active count), then Online · Favorites ·
- * Fresh · Tonight · Verified. It scrolls sideways, and an active chip carries a check as well as the
+ * Fresh · Tonight · Verified · No single men. It scrolls sideways, and an active chip carries a check as well as the
  * accent outline, so "on" reads at a glance rather than by a faint tint.
  *
  * Singles and Linked moved out of the row into the filter sheet's Who section (where they already
@@ -84,6 +84,17 @@ internal fun QuickFilterRow(
         item(key = QuickFilterId.Verified.name, contentType = "grid-filter-chip") {
             QuickChip(label = "Verified", active = filters.verified, onClick = { onToggled(QuickFilterId.Verified) })
         }
+        // Plan G2-3: the swinger ask. Hides men with no partner shown to this viewer; men visibly
+        // linked to a partner still show (FILTERS_SPEC "No single men"). Last, so the row still opens
+        // with "who is around now" and this reads as the couples' shortcut at the end.
+        item(key = QuickFilterId.NoSingleMen.name, contentType = "grid-filter-chip") {
+            QuickChip(
+                label = NO_SINGLE_MEN_LABEL,
+                active = filters.noSingleMen,
+                onClick = { onToggled(QuickFilterId.NoSingleMen) },
+                modifier = Modifier.testTag(GridFilterTags.NO_SINGLE_MEN_CHIP),
+            )
+        }
     }
 }
 
@@ -127,4 +138,9 @@ internal object GridFilterTags {
     const val CLEAR_ALL: String = "grid-filters-clear-all"
     const val OPEN_TONIGHT: String = "grid-filters-open-tonight"
     const val FRESH_CHIP: String = "grid-quick-fresh"
+    const val NO_SINGLE_MEN_CHIP: String = "grid-quick-no-single-men"
+    const val PARTNER_SECTION: String = "grid-filters-partner"
 }
+
+/** The quick chip and its sheet twin share one name. */
+internal const val NO_SINGLE_MEN_LABEL = "No single men"

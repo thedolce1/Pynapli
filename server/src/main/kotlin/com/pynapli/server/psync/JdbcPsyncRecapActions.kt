@@ -57,7 +57,7 @@ internal suspend fun DataSource.listPsyncSessionMatches(sessionId: UUID): List<P
                 .prepareStatement(
                     """
                     SELECT m.target_user_id, m.kind, m.owner_user_id,
-                           COALESCE(NULLIF(TRIM(pr.display_name), ''), 'Pynapli User') AS display_name
+                           COALESCE(NULLIF(TRIM(pr.display_name), ''), 'New member') AS display_name
                     FROM psync_session_matches m
                     LEFT JOIN profiles pr ON pr.user_id = m.target_user_id
                     WHERE m.session_id = ?

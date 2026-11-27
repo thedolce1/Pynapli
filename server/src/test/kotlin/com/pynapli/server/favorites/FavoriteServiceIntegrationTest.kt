@@ -2,6 +2,7 @@ package com.pynapli.server.favorites
 
 import com.pynapli.server.discovery.DiscoveryCursorCodec
 import com.pynapli.server.grid.GridException
+import com.pynapli.server.grid.insertActiveProfileLink
 import com.pynapli.server.grid.insertBlock
 import com.pynapli.server.grid.insertDiscoverableUser
 import com.pynapli.server.grid.insertHiddenProfile
@@ -11,6 +12,7 @@ import com.pynapli.server.presence.PresenceRepository
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.presence.PresenceState
 import com.pynapli.server.safety.JdbcBlockRepository
+import com.pynapli.server.safety.JdbcHiddenProfileRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
@@ -88,6 +90,9 @@ class FavoriteServiceIntegrationTest {
                     dataSource,
                     com.pynapli.server.contactblocks.ContactBlockTokens
                         .localDevelopment(),
+                    metInPersonAccountData =
+                        com.pynapli.server.metinperson.MetInPersonAccountData
+                            .localDevelopment(),
                 ).deleteAccount(target)
 
             assertEquals(0, dataSource.count("SELECT count(*) FROM favorite_profiles"))
@@ -166,6 +171,34 @@ class FavoriteServiceIntegrationTest {
             dataSource.exec("UPDATE discovery_settings SET grid_visible = false WHERE user_id = ?", gridHidden)
 
             assertEquals(listOf(visible.toString()), service.list(viewer, null, null).items.map { it.userId })
+        }
+
+    // Before: only contact blocks stripped a partner mini here, so a partner the viewer hid still showed.
+    @Test
+    fun aPartnerTheViewerHidNeverShowsAsAMiniOnAFavorite() =
+        runBlocking {
+            val viewer = user("Viewer")
+            val starred = user("Starred")
+            val partner = user("Partner")
+            val otherStarred = user("OtherStarred")
+            val otherPartner = user("OtherPartner")
+            dataSource.insertActiveProfileLink(starred, partner)
+            dataSource.insertActiveProfileLink(otherStarred, otherPartner)
+            dataSource.insertHiddenProfile(viewer, partner)
+            val service =
+                FavoriteService(
+                    repository = JdbcFavoriteRepository(dataSource),
+                    cursorCodec = codec,
+                    presenceService = PresenceService(presence),
+                    blockRepository = JdbcBlockRepository(dataSource),
+                    hiddenProfileRepository = JdbcHiddenProfileRepository(dataSource),
+                )
+            service.add(viewer, starred.toString())
+            service.add(viewer, otherStarred.toString())
+
+            val cards = service.list(viewer, null, null).items.associateBy { it.userId }
+            assertNull(cards.getValue(starred.toString()).linkedPartner, "the viewer hid this partner")
+            assertEquals(otherPartner.toString(), cards.getValue(otherStarred.toString()).linkedPartner?.userId)
         }
 
     @Test

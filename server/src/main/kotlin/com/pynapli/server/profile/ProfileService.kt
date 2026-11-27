@@ -3,6 +3,7 @@ package com.pynapli.server.profile
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.favorites.FavoriteService
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.forAssetsOrOriginals
 import com.pynapli.server.presence.LastActiveRepository
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
@@ -37,6 +38,12 @@ class ProfileService(
     // "Hide from people you know": someone hiding from the viewer is PROFILE_NOT_FOUND (as a deleted
     // or hidden profile is), and never shows as the partner on someone else's profile.
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // G2-2: stable cache keys on every photo, the partner mini as a thumbnail, and the first
+    // photo's thumbnail key so the pager paints the cached Grid tile first.
+    private val mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
+    // The viewer's own hides: a partner the viewer hid is stripped from the profile's partner preview,
+    // exactly as the Grid and Favorites strip it from the tile (G2-4 partner strip parity).
+    private val hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
 ) {
     private val profileViewRecorder =
         ProfileViewActivityRecorder(
@@ -61,12 +68,31 @@ class ProfileService(
         if (targetUserId in hiddenFromViewer) throw ProfileException("PROFILE_NOT_FOUND")
         val fetched =
             profile("profile.repository") {
-                repository.getPublicProfile(viewerUserId, targetUserId)?.toDto(mediaAssetUrlResolver)
+                repository.getPublicProfile(viewerUserId, targetUserId)?.let { record ->
+                    val images =
+                        mediaImages.forAssetsOrOriginals(
+                            mediaAssetUrlResolver,
+                            listOf(record.profilePhotoMediaAssetId, record.linkedPartnerThumbnailMediaAssetId),
+                        )
+                    record.toDto(mediaAssetUrlResolver, images)
+                }
             }
                 ?: throw ProfileException("PROFILE_NOT_FOUND")
+        val partnerId = fetched.linkedPartner?.userId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        // Strip the partner hiding from the viewer, and the partner the viewer hid (Grid and Favorites
+        // parity). The hide list is only read when there is a partner to test.
+        val partnerStripped =
+            partnerId != null &&
+                (
+                    partnerId in hiddenFromViewer ||
+                        profile("profile.viewerHides") {
+                            hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
+                        }.contains(partnerId)
+                )
         val profile =
-            if (fetched.linkedPartner?.userId?.let { runCatching { UUID.fromString(it) }.getOrNull() } in hiddenFromViewer) {
-                fetched.copy(linkedPartner = null, coupleVerified = false)
+            if (partnerStripped) {
+                // Every couple signal goes with the partner: the couple badges would name the hidden link.
+                fetched.copy(linkedPartner = null, coupleVerified = false, metInPersonAsCouple = false)
             } else {
                 fetched
             }

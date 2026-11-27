@@ -280,6 +280,9 @@ class SwipeDeckTokenCodec(
                     append("|verifiedPreferred=").append(filters.verifiedPreferred)
                     // Appended only when set, so decks dealt without it keep their hash.
                     if (filters.verifiedCouplesOnly) append("|verifiedCouplesOnly=true")
+                    // Partner filters + "No single men" (plan G2-3): empty when unset, so older decks keep
+                    // their hash.
+                    append(filters.partnerScopeKey)
                     // Locks decide which filters a thin deck may relax, so they shape later pages
                     // too. Appended only when set, so decks dealt without locks keep their hash.
                     if (dealbreakers.isNotEmpty()) {

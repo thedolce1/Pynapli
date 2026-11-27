@@ -64,6 +64,9 @@ internal object JdbcActivitySummarySql {
                       AND actor_settings.show_in_viewed_lists = true
                   )
               )
+              -- Viewed Me shows the last 7 days only (plan G2-4, as Grindr): an older view row stays
+              -- stored until the retention worker removes it at 30 days, but is never listed or counted.
+              AND (ae.event_type <> 'profile_view' OR ae.occurred_at >= now() - interval '7 days')
         )
         SELECT COUNT(*) FILTER (WHERE event_type = 'profile_view')::integer AS profile_view_count,
                COUNT(*) FILTER (WHERE event_type = 'flirt' AND seen_at IS NULL)::integer AS flirt_count,

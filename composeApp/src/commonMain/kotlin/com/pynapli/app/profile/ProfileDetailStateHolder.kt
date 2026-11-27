@@ -1,9 +1,9 @@
 package com.pynapli.app.profile
 
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.app.grid.isLockedCard
+import com.pynapli.app.media.OwnPreviewPhoto
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.ReportTargetType
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,6 +31,8 @@ class ProfileDetailStateHolder(
         flirtSource: String? = null,
         isOwnProfile: Boolean = false,
         likeBackEventId: String? = null,
+        // Own preview only (openOwnPreview): the owner's photos incl. ones being reviewed.
+        ownPreviewPhotos: List<OwnPreviewPhoto> = emptyList(),
     ) {
         // A locked Grid card (Section 3) has no profile for this viewer: its token is not a user id,
         // and the server refuses it anyway. Never fetch, never select it, so block, hide, favourite
@@ -46,6 +48,7 @@ class ProfileDetailStateHolder(
                 flirtSource = flirtSource,
                 isOwnProfile = isOwnProfile,
                 likeBackEventId = likeBackEventId,
+                ownPreviewPhotos = if (isOwnProfile) ownPreviewPhotos else emptyList(),
             )
         }
         reportedBefore?.let { _removedProfiles.tryEmit(it) }
@@ -87,7 +90,6 @@ class ProfileDetailStateHolder(
                 thumbnailUrl = partner.thumbnailUrl,
                 online = false,
                 distanceLabel = null,
-                tone = GridCardTone.entries[partner.userId.stableIndex(GridCardTone.entries.size)],
             ),
             flirtSource = flirtSource,
         )
@@ -114,6 +116,7 @@ class ProfileDetailStateHolder(
         userId: String,
         displayName: String?,
         profilePhotoUrl: String?,
+        ownPhotos: List<OwnPreviewPhoto> = emptyList(),
     ) {
         open(
             GridProfileCardUi(
@@ -122,9 +125,9 @@ class ProfileDetailStateHolder(
                 thumbnailUrl = profilePhotoUrl,
                 online = false,
                 distanceLabel = null,
-                tone = GridCardTone.entries[userId.stableIndex(GridCardTone.entries.size)],
             ),
             isOwnProfile = true,
+            ownPreviewPhotos = ownPhotos,
         )
     }
 

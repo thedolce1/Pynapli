@@ -15,6 +15,8 @@ data class ServerStartupSummary(
     val environment: String,
     val port: Int,
     val mediaStorageProvider: String,
+    // "dev_auto_approve", "manual" or "cloud_vision": which upload-complete scanner is wired.
+    val mediaModeration: String,
     val notificationPushProvider: String,
     val appCheckEnforced: Boolean,
     val cloudSqlConfigured: Boolean,
@@ -33,6 +35,7 @@ fun ServerConfig.startupSummary(): ServerStartupSummary =
         environment = environment,
         port = port,
         mediaStorageProvider = mediaStorageProvider,
+        mediaModeration = if (mediaDevAutoApproveUploads) "dev_auto_approve" else mediaModerationProvider.lowercase(),
         notificationPushProvider = notificationPushProvider,
         appCheckEnforced = appCheckEnforced,
         cloudSqlConfigured = !databaseCloudSqlInstance.isNullOrBlank(),
@@ -48,6 +51,13 @@ internal fun ServerConfig.startupValidationIssues(): List<ServerConfigIssue> =
     }
 
 private fun MutableList<ServerConfigIssue>.validateCommonSettings(config: ServerConfig) {
+    // A typo ("prodution") would otherwise run as a non-production environment and skip every
+    // production-only guard.
+    require(
+        condition = config.environment.trim().lowercase() in KNOWN_ENVIRONMENTS,
+        code = "UNKNOWN_ENVIRONMENT",
+        message = "PYNAPLI_ENV must be one of local, test, staging, prod or production.",
+    )
     require(
         condition = config.port in 1..65_535,
         code = "INVALID_PORT",
@@ -62,6 +72,19 @@ private fun MutableList<ServerConfigIssue>.validateCommonSettings(config: Server
         condition = config.mediaModerationProvider.lowercase() in MEDIA_MODERATION_PROVIDERS,
         code = "INVALID_MEDIA_MODERATION_PROVIDER",
         message = "PYNAPLI_MEDIA_MODERATION_PROVIDER must be manual or cloud_vision.",
+    )
+    // A typo in a ceiling must fail startup, never fall back to a looser or stricter default.
+    // VERY_LIKELY is refused: it would switch screening off for that category.
+    // Violence stops at POSSIBLE: LIKELY is always the severe signal, so a LIKELY ceiling would be inert.
+    require(
+        condition =
+            listOf(config.mediaModerationMaxAdult, config.mediaModerationMaxRacy)
+                .all { it.trim().uppercase() in MEDIA_MODERATION_CEILINGS } &&
+                config.mediaModerationMaxViolence.trim().uppercase() in MEDIA_MODERATION_CEILINGS - "LIKELY",
+        code = "INVALID_MEDIA_MODERATION_THRESHOLD",
+        message =
+            "PYNAPLI_MEDIA_MODERATION_MAX_ADULT/_MAX_RACY must each be VERY_UNLIKELY, UNLIKELY, POSSIBLE or LIKELY; " +
+                "PYNAPLI_MEDIA_MODERATION_MAX_VIOLENCE must be VERY_UNLIKELY, UNLIKELY or POSSIBLE.",
     )
     require(
         condition = config.mediaDeliveryProvider.lowercase() in MEDIA_DELIVERY_PROVIDERS,
@@ -157,6 +180,7 @@ private fun MutableList<ServerConfigIssue>.validateCorsOrigins(config: ServerCon
 private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config: ServerConfig) {
     if (!config.isProductionLikeEnvironment()) return
 
+    validateSocialSignIn(config)
     require(
         condition = !config.databaseUrl.isLocalPostgresUrl(),
         code = "DATABASE_URL_NOT_PRODUCTION_SAFE",
@@ -281,6 +305,23 @@ private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config
         code = "CONTACT_BLOCK_KEYS_MUST_DIFFER",
         message = "The two contact block keys must differ from each other and from every cursor/deck secret.",
     )
+    // K3 must differ from every other secret, including both contact block keys (which keeps those keys
+    // distinct from K3 too: distinctness is symmetric, so one check covers both directions).
+    require(
+        condition =
+            config.metInPersonTokenSecret.isStrongRuntimeSecret() &&
+                config.metInPersonTokenSecret !in
+                setOf(
+                    config.discoveryCursorSecret,
+                    config.activityCursorSecret,
+                    config.swipeDeckTokenSecret,
+                    config.contactBlockEmailKey,
+                    config.contactBlockTargetKey,
+                    config.adminApiToken,
+                ),
+        code = "MET_IN_PERSON_TOKEN_SECRET_REQUIRED",
+        message = "Production-like environments need a strong, distinct PYNAPLI_MET_IN_PERSON_TOKEN_SECRET.",
+    )
     require(
         condition = !config.apiProfilingEnabled || config.apiProfilingHeaderRequired,
         code = "API_PROFILING_HEADER_REQUIRED",
@@ -295,6 +336,52 @@ private fun MutableList<ServerConfigIssue>.validateProductionOnlySettings(config
         condition = !config.playStoreSandboxEnabled,
         code = "PLAY_STORE_SANDBOX_FORBIDDEN",
         message = "Production must not enable sandbox Play Billing verification.",
+    )
+    // Manual moderation in production means every new member's photo waits for a person, so the
+    // grid fills with photo-less tiles. It is allowed only with the explicit override.
+    require(
+        condition =
+            !config.mediaModerationProvider.equals("manual", ignoreCase = true) ||
+                config.mediaModerationManualInProductionAllowed,
+        code = "MEDIA_MODERATION_MANUAL_FORBIDDEN",
+        message =
+            "Production must pre-screen photos: set PYNAPLI_MEDIA_MODERATION_PROVIDER=cloud_vision, or set " +
+                "PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true to run manual review on purpose.",
+    )
+}
+
+/**
+ * Continue with Google / Apple in staging/production: the provider endpoints are never overridden
+ * (those overrides exist for tests and local fakes only), Apple is either fully configured or not at
+ * all, and the key sealing Apple refresh tokens is explicit, strong and used for nothing else.
+ */
+private fun MutableList<ServerConfigIssue>.validateSocialSignIn(config: ServerConfig) {
+    require(
+        condition =
+            listOf(config.googleJwksUrl, config.appleJwksUrl, config.appleTokenUrl, config.appleRevokeUrl).all { it.isNullOrBlank() },
+        code = "SOCIAL_PROVIDER_ENDPOINT_OVERRIDE_FORBIDDEN",
+        message = "PYNAPLI_GOOGLE_JWKS_URL / PYNAPLI_APPLE_JWKS_URL / PYNAPLI_APPLE_TOKEN_URL / PYNAPLI_APPLE_REVOKE_URL are for tests only.",
+    )
+    if (!config.socialSignInEnabled) return
+    val appleParts = listOf(config.appleTeamId, config.appleKeyId, config.applePrivateKeyPem)
+    require(
+        condition = config.appleClientIds.isEmpty() || appleParts.none { it.isNullOrBlank() },
+        code = "APPLE_SIGN_IN_INCOMPLETE",
+        message = "Sign in with Apple needs PYNAPLI_APPLE_TEAM_ID, PYNAPLI_APPLE_KEY_ID and PYNAPLI_APPLE_PRIVATE_KEY (deletion must revoke Apple tokens).",
+    )
+    require(
+        condition =
+            config.socialTokenKey.isStrongRuntimeSecret() &&
+                config.socialTokenKey !in
+                setOf(
+                    config.contactBlockEmailKey,
+                    config.contactBlockTargetKey,
+                    config.discoveryCursorSecret,
+                    config.activityCursorSecret,
+                    config.swipeDeckTokenSecret,
+                ),
+        code = "SOCIAL_TOKEN_KEY_REQUIRED",
+        message = "Social sign-in in production-like environments needs an explicit, strong PYNAPLI_SOCIAL_TOKEN_KEY that differs from every other secret.",
     )
 }
 
@@ -314,7 +401,7 @@ private fun MutableList<ServerConfigIssue>.requireNonBlank(
     require(!value.isNullOrBlank(), code, message)
 }
 
-private fun ServerConfig.isProductionLikeEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_LIKE_ENVIRONMENTS
+internal fun ServerConfig.isProductionLikeEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_LIKE_ENVIRONMENTS
 
 private fun ServerConfig.isProductionEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_ENVIRONMENTS
 
@@ -385,7 +472,11 @@ private const val MINIMUM_RUNTIME_SECRET_LENGTH = 32
 
 private val PRODUCTION_LIKE_ENVIRONMENTS = setOf("staging", "prod", "production")
 private val PRODUCTION_ENVIRONMENTS = setOf("prod", "production")
+private val KNOWN_ENVIRONMENTS = setOf("local", "test") + PRODUCTION_LIKE_ENVIRONMENTS
 private val MEDIA_STORAGE_PROVIDERS = setOf("local", "gcs")
 private val MEDIA_MODERATION_PROVIDERS = setOf("manual", "cloud_vision")
+
+// Mirrors SafeSearchPolicy.CONFIGURABLE_CEILINGS (config must not depend on the media package).
+private val MEDIA_MODERATION_CEILINGS = setOf("VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY")
 private val MEDIA_DELIVERY_PROVIDERS = setOf("signed_gcs", "cdn")
 private val NOTIFICATION_PUSH_PROVIDERS = setOf("local", "firebase", "fcm")

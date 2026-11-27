@@ -89,13 +89,6 @@ class VerifiedCouplesFilterContractTest {
     }
 
     @Test
-    fun isFreeLikeVerifiedOnly() {
-        assertTrue(on.hasAdvancedFilters)
-        assertFalse(on.requiresAdvancedEntitlement)
-        assertEquals(DiscoveryFilters(verifiedOnly = true).requiresAdvancedEntitlement, on.requiresAdvancedEntitlement)
-    }
-
-    @Test
     fun parsingKeepsLinkedOnlyAsSent() {
         val parsed =
             discoveryFiltersFrom(

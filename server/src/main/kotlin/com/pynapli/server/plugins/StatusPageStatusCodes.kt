@@ -16,6 +16,7 @@ internal fun profileStatusFor(code: String): HttpStatusCode =
         "AGE_VERIFICATION_REQUIRED" -> HttpStatusCode.Forbidden
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "INVALID_DISPLAY_NAME",
+        "DISPLAY_NAME_RESERVED",
         "INVALID_BIRTHDATE",
         "AGE_RESTRICTED",
         "INVALID_DISCOVERY_STYLE",
@@ -144,7 +145,7 @@ internal fun psyncStatusFor(code: String): HttpStatusCode =
         "PSYNC_NUDGE_COOLDOWN" -> HttpStatusCode.TooManyRequests
         "PSYNC_NOT_PARTICIPANT",
         "PSYNC_DECK_SIZE_NOT_ALLOWED",
-        "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED",
+        "AGE_VERIFICATION_REQUIRED",
         "PSYNC_SESSION_LIMIT_REACHED",
         "PSYNC_TRAVEL_NOT_ALLOWED",
         -> HttpStatusCode.Forbidden
@@ -184,6 +185,7 @@ internal fun messagingStatusFor(code: String): HttpStatusCode =
         "PARTNER_INVITE_NOT_FOUND",
         -> HttpStatusCode.NotFound
         "MESSAGING_NOT_ALLOWED" -> HttpStatusCode.Forbidden
+        "MET_IN_PERSON_NOT_AVAILABLE" -> HttpStatusCode.Forbidden
         "MEDIA_NOT_AVAILABLE" -> HttpStatusCode.ServiceUnavailable
         "PARTNER_INVITE_ALREADY_SENT",
         "PARTNER_ALREADY_IN_CONVERSATION",
@@ -235,6 +237,7 @@ internal fun swipeStatusFor(code: String): HttpStatusCode =
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "RISK_RESTRICTED",
         "ENTITLEMENT_REQUIRED",
+        "AGE_VERIFICATION_REQUIRED",
         "INTRO_NOTE_INVENTORY_REQUIRED",
         "PINEAPPLE_LIKE_INVENTORY_REQUIRED",
         -> HttpStatusCode.Forbidden
@@ -307,6 +310,9 @@ internal fun moderationStatusFor(code: String): HttpStatusCode =
         "USER_NOT_FOUND",
         -> HttpStatusCode.NotFound
         "MEDIA_REVIEW_NOT_FOUND" -> HttpStatusCode.NotFound
+        "MET_IN_PERSON_CONFIRMATION_NOT_FOUND" -> HttpStatusCode.NotFound
+        "MET_IN_PERSON_VOIDED_WITH_VOUCHER" -> HttpStatusCode.Conflict
+        "MET_IN_PERSON_KEY_MISMATCH" -> HttpStatusCode.ServiceUnavailable
         "MEDIA_REVIEW_NOT_PENDING" -> HttpStatusCode.Conflict
         "INVALID_REVIEW_CURSOR" -> HttpStatusCode.BadRequest
         "INVALID_ID",
@@ -359,6 +365,7 @@ internal fun verificationStatusFor(code: String): HttpStatusCode =
 internal fun mediaStatusFor(code: String): HttpStatusCode =
     when (code) {
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
+        "MEDIA_UPLOAD_ALREADY_COMPLETED" -> HttpStatusCode.Conflict
         "MEDIA_ASSET_NOT_FOUND",
         "MEDIA_ALBUM_NOT_FOUND",
         "MEDIA_GRANT_NOT_FOUND",

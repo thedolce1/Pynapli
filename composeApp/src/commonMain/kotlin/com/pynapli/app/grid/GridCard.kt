@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -53,6 +54,8 @@ import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.DarkMode
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.Person
+import com.pynapli.app.media.ImageLoadStats
+import com.pynapli.app.media.rememberCachedImageModel
 import com.pynapli.shared.distance.formatDistanceForUnit
 
 // Pure black on purpose: a shadow is an occlusion effect, not a palette value, so it does not
@@ -111,7 +114,8 @@ internal fun GridProfileTile(
         val thumbnailUrl = card.thumbnailUrl
         if (thumbnailUrl != null) {
             AsyncImage(
-                model = thumbnailUrl,
+                // G2-2: cached by the server's stable key, so a re-signed URL is a cache hit.
+                model = rememberCachedImageModel(thumbnailUrl, card.thumbnailCacheKey, stats = ImageLoadStats.grid),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -153,8 +157,13 @@ internal fun GridProfileTile(
         } else if (card.linkedPartner != null) {
             LinkedPartnerBadge(
                 thumbnailUrl = card.linkedPartner.thumbnailUrl,
+                thumbnailCacheKey = card.linkedPartner.thumbnailCacheKey,
                 coupleVerified = card.coupleVerified,
                 color = card.linkedPartnerTone.badgeColor(),
+                // Plan G2-3: the partner's own age and gender mark, only on a mini the server shows.
+                caption = partnerMiniCaption(card.linkedPartner),
+                description = partnerMiniDescription(card.linkedPartner),
+                captionTag = GridCardTags.partnerCaptionTag(card.id),
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
@@ -288,6 +297,8 @@ internal object GridCardTags {
     fun silhouetteTag(cardId: String): String = "grid-card-silhouette-$cardId"
 
     fun verifiedTag(cardId: String): String = "grid-card-verified-$cardId"
+
+    fun partnerCaptionTag(cardId: String): String = "grid-card-partner-caption-$cardId"
 }
 
 /** No approved photo: a quiet person outline on the neutral tile, the same for everyone. */
@@ -366,23 +377,52 @@ private fun TonightIndicator(modifier: Modifier = Modifier) {
 @Composable
 private fun LinkedPartnerBadge(
     thumbnailUrl: String?,
+    thumbnailCacheKey: String?,
     coupleVerified: Boolean,
     color: Color,
+    caption: String?,
+    description: String,
+    captionTag: String,
     modifier: Modifier = Modifier,
 ) {
-    // The couple badge rides on the partner mini: both partners verified (TRUST_AND_SAFETY_SPEC).
-    Box(modifier = modifier) {
-        PartnerMiniCircle(thumbnailUrl = thumbnailUrl, color = color)
-        if (coupleVerified) {
-            VerifiedBadge(
-                size = 12.dp,
-                contentDescription = "Verified couple",
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        // The couple badge rides on the partner mini: both partners verified (TRUST_AND_SAFETY_SPEC).
+        Box {
+            PartnerMiniCircle(thumbnailUrl = thumbnailUrl, thumbnailCacheKey = thumbnailCacheKey, color = color, description = description)
+            if (coupleVerified) {
+                VerifiedBadge(
+                    size = 12.dp,
+                    contentDescription = "Verified couple",
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 3.dp, y = 3.dp)
+                            .clip(CircleShape)
+                            .background(PynapliColors.OnPhotoBadgeFill),
+                )
+            }
+        }
+        if (caption != null) {
+            // Plan G2-3: "34 · W", the partner's own declared age and gender, on the same dark
+            // on-photo fill as the mini's badges. Read by the mini's description, so hidden from
+            // screen readers here.
+            Text(
+                text = caption,
+                color = PynapliColors.OnPhotoPrimary,
+                fontSize = GridTileTokens.MetaTextSize,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
                 modifier =
                     Modifier
-                        .align(Alignment.BottomEnd)
-                        .offset(x = 3.dp, y = 3.dp)
-                        .clip(CircleShape)
-                        .background(PynapliColors.OnPhotoBadgeFill),
+                        .testTag(captionTag)
+                        .clearAndSetSemantics {}
+                        .clip(PynapliShape.PillShape)
+                        .background(PynapliColors.OnPhotoBadgeFill)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
             )
         }
     }
@@ -391,7 +431,9 @@ private fun LinkedPartnerBadge(
 @Composable
 private fun PartnerMiniCircle(
     thumbnailUrl: String?,
+    thumbnailCacheKey: String?,
     color: Color,
+    description: String,
 ) {
     Box(
         modifier =
@@ -404,15 +446,15 @@ private fun PartnerMiniCircle(
     ) {
         if (thumbnailUrl != null) {
             AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = "Linked partner",
+                model = rememberCachedImageModel(thumbnailUrl, thumbnailCacheKey, stats = ImageLoadStats.grid),
+                contentDescription = description,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
             Icon(
                 imageVector = Icons.Filled.Person,
-                contentDescription = "Linked partner",
+                contentDescription = description,
                 tint = PynapliColors.OnPhotoPrimary,
                 modifier = Modifier.size(15.dp),
             )

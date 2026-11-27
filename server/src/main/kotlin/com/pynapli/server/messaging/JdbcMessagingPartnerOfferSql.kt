@@ -123,7 +123,7 @@ private val PARTNER_OFFER_QUERY =
     candidates AS (
         SELECT owner_cp.user_id AS owner_user_id,
                upl.linked_user_id AS partner_user_id,
-               COALESCE(NULLIF(partner_profile.display_name, ''), 'Pynapli User') AS partner_name
+               COALESCE(NULLIF(partner_profile.display_name, ''), 'New member') AS partner_name
         FROM present owner_cp
         JOIN pair ON true
         JOIN user_profile_links upl

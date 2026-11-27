@@ -2,6 +2,7 @@ package com.pynapli.server.admin
 
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.media.MediaRepository
+import com.pynapli.server.media.ProfilePhotoApprovedListener
 import com.pynapli.server.moderation.ModerationException
 import com.pynapli.server.notifications.NotificationEventDraft
 import com.pynapli.server.notifications.NotificationKind
@@ -25,6 +26,8 @@ class AdminMediaReviewService(
     private val mediaRepository: MediaRepository,
     private val mediaAssetUrlResolver: MediaAssetUrlResolver?,
     private val notificationPublisher: NotificationPublisher? = null,
+    // Grid thumbnails (G2-2): an approved profile photo gets its thumbnail made. Best effort.
+    private val profilePhotoApproved: ProfilePhotoApprovedListener? = null,
 ) {
     suspend fun listPending(
         limitText: String?,
@@ -60,6 +63,8 @@ class AdminMediaReviewService(
             mediaRepository.markAssetReadyApproved(asset.ownerUserId, asset.mediaAssetId)
                 ?: throw ModerationException("MEDIA_REVIEW_NOT_PENDING")
         repository.recordDecisionAudit(actorId, "media_review.approve", asset.mediaAssetId, asset.ownerUserId, reason.cleanReason())
+        runCatching { profilePhotoApproved?.profilePhotoApproved(asset.mediaAssetId) }
+            .onFailure { logger.warn("Thumbnail scheduling failed ({})", it.javaClass.simpleName) }
         return AdminMediaReviewDecisionDto(asset.mediaAssetId.toString(), asset.ownerUserId.toString(), approved.moderationStatus)
     }
 

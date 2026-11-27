@@ -110,9 +110,16 @@ data class MediaAlbumItemUi(
             when {
                 isUploadFailed -> "Upload failed"
                 moderationStatus == "removed" -> "Not approved"
-                moderationStatus == "pending" || moderationStatus == "held" -> "In review — only you can see this"
+                isBeingReviewed -> BEING_REVIEWED_LABEL
                 else -> null
             }
+
+    /**
+     * Pre-screening held this photo for a person (or the scan is still running). The server shows it
+     * to its owner only; everyone else sees it once it is approved.
+     */
+    val isBeingReviewed: Boolean
+        get() = !isUploadFailed && (moderationStatus == "pending" || moderationStatus == "held")
 
     val isOwnerVisibleImage: Boolean
         get() =
@@ -145,7 +152,32 @@ class PickedMediaForUpload(
     val bytes: ByteArray,
 )
 
+/** Owner-only badge for a photo waiting for moderation (TRUST_AND_SAFETY_SPEC "Photo pre-screening"). */
+const val BEING_REVIEWED_LABEL = "Being reviewed · only you can see it"
+
+/** The short form for tight spots (small thumbnails, the profile preview hero). */
+const val BEING_REVIEWED_SHORT_LABEL = "Being reviewed"
+
 fun MediaAlbumsUiState.primaryOwnerProfilePhotoUrl(): String? = profileItems.primaryOwnerVisibleImageUrl()
+
+/** One photo of the owner's own profile preview: what they see, and whether others can see it yet. */
+data class OwnPreviewPhoto(
+    val url: String,
+    val beingReviewed: Boolean,
+)
+
+/**
+ * The owner's profile photos for their own preview, in profile order: approved ones plus the ones
+ * still being reviewed (labelled), so a new member sees their photo at once and knows why others
+ * don't yet. Server-owned visibility is unchanged; this is the owner's own album listing.
+ */
+fun MediaAlbumsUiState.ownPreviewPhotos(): List<OwnPreviewPhoto> =
+    profileItems
+        .asSequence()
+        .filter { item -> item.albumKind == MediaAlbumKindUi.Profile && item.isOwnerVisibleImage }
+        .sortedWith(compareBy<MediaAlbumItemUi> { it.sortOrder }.thenByDescending { it.createdAt })
+        .mapNotNull { item -> item.mediaUrl?.let { OwnPreviewPhoto(url = it, beingReviewed = item.isBeingReviewed) } }
+        .toList()
 
 private fun List<MediaAlbumItemUi>.primaryOwnerVisibleImageUrl(): String? =
     asSequence()

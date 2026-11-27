@@ -35,7 +35,6 @@ import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.automirrored.filled.ArrowBack
 import com.pynapli.app.design.icons.filled.Close
-import com.pynapli.app.design.icons.filled.MoreVert
 import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.shared.network.dto.ConversationDto
 import com.pynapli.shared.network.dto.ConversationParticipantDto
@@ -45,6 +44,8 @@ internal fun FullScreenConversationHeader(
     state: ConversationUiState,
     onBack: () -> Unit,
     onOpenParticipantProfile: (ConversationParticipantDto) -> Unit,
+    onMetInPerson: (String) -> Unit = {},
+    onMetInPersonMenuOpened: () -> Unit = {},
 ) {
     val participant = state.detail?.conversation?.primaryOtherParticipant(state.viewerUserId)
     val title = state.conversationTitle()
@@ -120,14 +121,7 @@ internal fun FullScreenConversationHeader(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = {}, modifier = Modifier.handCursor()) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "Conversation options",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+            ConversationOverflowButton(menu = state.metInPersonMenuUi(), onMenuOpened = onMetInPersonMenuOpened, onMetInPerson = onMetInPerson)
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
     }
@@ -231,6 +225,11 @@ internal fun ConversationHeader(
     // report, hide live there). Null for groups and while loading.
     participant: ConversationParticipantDto? = null,
     onOpenParticipantProfile: (ConversationParticipantDto) -> Unit = {},
+    // Server-offered "We've met in person" items; the overflow button shows only when there are any.
+    // The conversation's overflow menu ("We've met in person"), fetched when opened; null hides it.
+    metInPersonMenu: MetInPersonMenuUi? = null,
+    onMetInPersonMenuOpened: () -> Unit = {},
+    onMetInPerson: (String) -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -264,6 +263,9 @@ internal fun ConversationHeader(
                     modifier = Modifier.size(20.dp),
                 )
             }
+        }
+        metInPersonMenu?.let { menu ->
+            ConversationOverflowButton(menu = menu, onMenuOpened = onMetInPersonMenuOpened, onMetInPerson = onMetInPerson)
         }
         IconButton(onClick = onDismiss, modifier = Modifier.handCursor()) {
             Icon(

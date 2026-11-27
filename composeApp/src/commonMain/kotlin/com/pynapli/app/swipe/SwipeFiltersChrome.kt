@@ -1,22 +1,17 @@
 package com.pynapli.app.swipe
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,7 +20,6 @@ import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliSectionIntro
 import com.pynapli.app.design.PynapliSectionTitle
-import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
 import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.Lock
@@ -160,58 +154,6 @@ internal fun ComingSoonSection(message: String) {
     )
 }
 
-/**
- * Pre-emptive paywall hint surfaced in-sheet when the draft selects any gated
- * advanced filter (FILTERS_SPEC L373-391, mirrors `requiresAdvancedEntitlement`).
- * Tapping Subscribe closes the sheet and hands off to the host's onOpenStore.
- * Server remains the entitlement authority — this banner just shortens the path
- * to the store for the user.
- */
-@Composable
-internal fun AdvancedPaywallBanner(onSubscribe: () -> Unit) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(PynapliShape.CardShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .testTag(SwipeFilterTags.ADVANCED_PAYWALL),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Lock,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Advanced filters require Pynapli+.",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            // The partner benefit, as one quiet line under the primary message.
-            Text(
-                text = "One plan covers your linked partner too.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        TextButton(
-            onClick = onSubscribe,
-            modifier = Modifier.testTag(SwipeFilterTags.ADVANCED_PAYWALL_SUBSCRIBE).handCursor(),
-        ) {
-            Text(text = "Subscribe", maxLines = 1)
-        }
-    }
-}
-
 @Composable
 internal fun SwipeSheetChip(
     label: String,
@@ -230,8 +172,7 @@ internal object SwipeFilterTags {
     const val APPLY = "swipe-filters-sheet-apply"
     const val CLEAR_ALL = "swipe-filters-sheet-clear-all"
     const val OPEN_SHEET = "swipe-filters-open-sheet"
-    const val ADVANCED_PAYWALL = "swipe-filters-advanced-paywall"
-    const val ADVANCED_PAYWALL_SUBSCRIBE = "swipe-filters-advanced-paywall-subscribe"
+    const val LIFESTYLE_AGE_GATE = "swipe-filters-lifestyle-age-gate"
     const val SAVED_PRESETS = "swipe-filters-saved-presets"
     const val SAVED_VERIFICATION = "swipe-filters-saved-verification"
     const val SAVED_VERIFICATION_VERIFY = "swipe-filters-saved-verification-verify"

@@ -2,6 +2,7 @@ package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
 import com.pynapli.server.profiling.profileBlocking
+import com.pynapli.server.profiling.profileCount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
@@ -30,6 +31,27 @@ internal class JdbcGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
+    ): GridQueryResult = nearby(viewerUserId, radiusMeters, limit, filters, cursor, hiddenFromViewerIds, bypassSharedCache = false)
+
+    // The result count (plan G2-4): the same rank, filters and hydration as the first Grid page, ranked
+    // for this viewer directly. A count window is larger than a page, so it never fills the shared cache.
+    override suspend fun queryNearbyForCount(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        hiddenFromViewerIds: Set<UUID>,
+    ): GridQueryResult = nearby(viewerUserId, radiusMeters, limit, filters, null, hiddenFromViewerIds, bypassSharedCache = true)
+
+    private suspend fun nearby(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters,
+        cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
+        bypassSharedCache: Boolean,
     ): GridQueryResult =
         withContext(Dispatchers.IO) {
             profileBlocking("grid.db.connectionWait") { dataSource.connection }.use { connection ->
@@ -54,12 +76,32 @@ internal class JdbcGridRepository(
                             limit = limit,
                             filters = filters,
                             cursor = cursor,
+                            hiddenFromViewerIds = hiddenFromViewerIds,
+                            bypassSharedCache = bypassSharedCache,
                         )
                     }
 
-                val pageRows = rankedRows.cards
+                // G2-2 ticket 5: a page served from the shared window re-reads owner visibility now
+                // (incognito, grid_visible, status, profile visibility, travel visibility, risk tier), so
+                // nothing the window baked in outlives a change by up to its TTL. The next cursor still
+                // anchors on the last RANKED row, so a dropped row never skips the rows after it.
+                val pageRows =
+                    if (rankedRows.fromSharedWindow && rankedRows.cards.isNotEmpty()) {
+                        val visible =
+                            profileBlocking("grid.db.ownerRecheck") {
+                                connection.stillDiscoverableOnGrid(rankedRows.cards.map { it.userId })
+                            }
+                        rankedRows.cards.filter { it.userId in visible }
+                    } else {
+                        rankedRows.cards
+                    }
+                val rankedAnchor =
+                    rankedRows.cards
+                        .lastOrNull()
+                        ?.takeIf { rankedRows.hasMore }
+                        ?.toCursorAnchor()
                 if (pageRows.isEmpty()) {
-                    return@withContext GridQueryResult(viewerHadLocation = true, cards = emptyList())
+                    return@withContext GridQueryResult(viewerHadLocation = true, cards = emptyList(), nextCursorAnchor = rankedAnchor)
                 }
 
                 val hydration =
@@ -85,6 +127,8 @@ internal class JdbcGridRepository(
                             linkedPartnerUserId = h?.linkedPartnerUserId,
                             linkedPartnerDisplayName = h?.linkedPartnerDisplayName,
                             linkedPartnerThumbnailMediaAssetId = h?.linkedPartnerThumbnailMediaAssetId,
+                            linkedPartnerAge = h?.linkedPartnerAge,
+                            linkedPartnerGender = h?.linkedPartnerGender,
                             visiting = row.visiting,
                             tonightActive = h?.tonightActive ?: false,
                             verified = h?.verified ?: false,
@@ -98,7 +142,7 @@ internal class JdbcGridRepository(
                 GridQueryResult(
                     viewerHadLocation = true,
                     cards = cards,
-                    nextCursorAnchor = if (rankedRows.hasMore && cards.isNotEmpty()) cards.last().toCursorAnchor() else null,
+                    nextCursorAnchor = rankedAnchor,
                 )
             }
         }
@@ -107,57 +151,62 @@ internal class JdbcGridRepository(
         viewerUserId: UUID,
         radiusMeters: Int,
         limit: Int,
+        filters: DiscoveryFilters,
+        cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
-                val rows =
-                    connection.prepareStatement(VISITING_SOON_QUERY).use { statement ->
-                        statement.setObject(1, viewerUserId)
-                        // Snapped radius step (GridService), tested cell-to-cell.
-                        statement.setInt(2, radiusMeters)
-                        statement.setObject(3, viewerUserId)
-                        statement.setInt(4, limit)
-                        statement.executeQuery().use { rs ->
-                            buildList {
-                                while (rs.next()) {
-                                    add(
-                                        Triple(
-                                            rs.getObject("user_id", UUID::class.java) to rs.getString("display_name"),
-                                            rs.getDate("starts_on").toLocalDate(),
-                                            rs.getDate("ends_on").toLocalDate(),
-                                        ),
-                                    )
-                                }
-                            }
-                        }
+                val viewerLocationKey =
+                    connection.findGridViewerLocationCacheKey(viewerUserId)
+                        ?: return@withContext GridQueryResult(viewerHadLocation = false, cards = emptyList())
+                // One extra row says whether a next page exists. Per viewer, never cached.
+                val ranked =
+                    connection.queryVisitingSoonRank(
+                        viewerUserId = viewerUserId,
+                        radiusMeters = radiusMeters,
+                        limit = limit + 1,
+                        filters = filters,
+                        orderSeed = viewerLocationKey.orderSeed,
+                        hiddenFromViewerIds = hiddenFromViewerIds,
+                        cursor = cursor,
+                    )
+                val rows = ranked.take(limit)
+                if (rows.isEmpty()) return@withContext GridQueryResult(viewerHadLocation = true, cards = emptyList())
+                val hydration = connection.hydrateGridCards(viewerUserId = viewerUserId, userIds = rows.map { it.userId })
+                val cards =
+                    rows.map { row ->
+                        val h = hydration[row.userId]
+                        GridCardRecord(
+                            userId = row.userId,
+                            displayName = row.displayName,
+                            thumbnailMediaAssetId = h?.thumbnailMediaAssetId,
+                            // They aren't here yet: no distance to show.
+                            showDistance = false,
+                            distanceMeters = 0.0,
+                            // Keyset position (arrival day, order bucket, id): see queryVisitingSoonRank.
+                            boostBucket = row.arrivalDay,
+                            orderBucket = row.orderBucket,
+                            orderTiebreak = 0,
+                            linkedPartnerUserId = h?.linkedPartnerUserId,
+                            linkedPartnerDisplayName = h?.linkedPartnerDisplayName,
+                            linkedPartnerThumbnailMediaAssetId = h?.linkedPartnerThumbnailMediaAssetId,
+                            linkedPartnerAge = h?.linkedPartnerAge,
+                            linkedPartnerGender = h?.linkedPartnerGender,
+                            visitingFrom = row.startsOn,
+                            visitingUntil = row.endsOn,
+                            tonightActive = h?.tonightActive ?: false,
+                            verified = h?.verified ?: false,
+                            coupleVerified = h?.coupleVerified ?: false,
+                            fresh = h?.fresh ?: false,
+                            lastActiveAt = h?.lastActiveAt,
+                            activityHidden = h?.activityHidden ?: true,
+                        )
                     }
-                val located = connection.findGridViewerLocationCacheKey(viewerUserId) != null
-                if (rows.isEmpty()) return@withContext GridQueryResult(viewerHadLocation = located, cards = emptyList())
-                val hydration = connection.hydrateGridCards(viewerUserId = viewerUserId, userIds = rows.map { it.first.first })
                 GridQueryResult(
                     viewerHadLocation = true,
-                    cards =
-                        rows.map { (who, from, until) ->
-                            val h = hydration[who.first]
-                            GridCardRecord(
-                                userId = who.first,
-                                displayName = who.second,
-                                thumbnailMediaAssetId = h?.thumbnailMediaAssetId,
-                                // They aren't here yet: no distance to show.
-                                showDistance = false,
-                                distanceMeters = 0.0,
-                                linkedPartnerUserId = h?.linkedPartnerUserId,
-                                linkedPartnerDisplayName = h?.linkedPartnerDisplayName,
-                                linkedPartnerThumbnailMediaAssetId = h?.linkedPartnerThumbnailMediaAssetId,
-                                visitingFrom = from,
-                                visitingUntil = until,
-                                verified = h?.verified ?: false,
-                                coupleVerified = h?.coupleVerified ?: false,
-                                fresh = h?.fresh ?: false,
-                                lastActiveAt = h?.lastActiveAt,
-                                activityHidden = h?.activityHidden ?: true,
-                            )
-                        },
+                    cards = cards,
+                    nextCursorAnchor = if (ranked.size > limit) cards.last().toCursorAnchor() else null,
                 )
             }
         }
@@ -178,15 +227,19 @@ internal class JdbcGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
+        bypassSharedCache: Boolean = false,
     ): GridRankPage {
         val viewerTravelActive = viewerHasActiveTravelLocation(viewerUserId)
 
         if (
+            bypassSharedCache ||
             !filters.isGridRankCacheEligible() ||
             !candidateRankCache.isEnabled() ||
             viewerTravelActive
         ) {
-            return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
+            profileCount("grid.rank.uncached")
+            return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor, hiddenFromViewerIds)
         }
 
         val cacheWindow = rankCacheWindow.coerceAtLeast(limit)
@@ -197,8 +250,11 @@ internal class JdbcGridRepository(
                 filterKey = filters.gridRankCacheKey(),
                 window = cacheWindow,
             )
+        // G2-2 ticket 7: hit vs miss, read off the profiled request (X-Pynapli-Profile-Counts).
+        var rankedNow = false
         val cachedRows =
             candidateRankCache.load(cacheKey) {
+                rankedNow = true
                 queryGridRank(
                     viewerUserId = viewerUserId,
                     radiusMeters = radiusMeters,
@@ -209,6 +265,7 @@ internal class JdbcGridRepository(
                     orderSeed = viewerLocationKey.orderSeed,
                 )
             }
+        profileCount(if (rankedNow) "grid.rank.cacheMiss" else "grid.rank.cacheHit")
 
         // Cursor slice + self-exclusion in Kotlin over the shared window. Block +
         // hidden are applied post-repository in GridService; self is excluded here
@@ -226,10 +283,12 @@ internal class JdbcGridRepository(
         // whether more rows lie beyond it, so rank this page for the viewer
         // directly. Mirrors Swipe's `windowRows < cacheWindow` guard.
         if (sliced.size > limit || cachedRows.size < cacheWindow) {
-            return GridRankPage(cards = sliced.take(limit), hasMore = sliced.size > limit)
+            return GridRankPage(cards = sliced.take(limit), hasMore = sliced.size > limit, fromSharedWindow = true)
         }
 
-        return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor)
+        // The window could not settle this page: a second rank pass, ranked for this viewer.
+        profileCount("grid.rank.windowFallback")
+        return queryGridRankUncached(viewerUserId, viewerLocationKey, radiusMeters, limit, filters, cursor, hiddenFromViewerIds)
     }
 
     /**
@@ -246,6 +305,7 @@ internal class JdbcGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridRankPage {
         // The keyset cursor predicate is pushed into the SQL here (matching the
         // original single query), so a `limit + 1` fetch is sufficient: the extra
@@ -260,6 +320,7 @@ internal class JdbcGridRepository(
                 userSpecificViewerId = viewerUserId,
                 orderSeed = viewerLocationKey.orderSeed,
                 cursor = cursor,
+                hiddenFromViewerIds = hiddenFromViewerIds,
             )
         val page = ranked.take(limit)
         val hasMore = ranked.size > limit
@@ -270,7 +331,17 @@ internal class JdbcGridRepository(
 private data class GridRankPage(
     val cards: List<GridRankRow>,
     val hasMore: Boolean,
+    // Served from the shared, cross-viewer window (owner visibility as of the window's ranking).
+    val fromSharedWindow: Boolean = false,
 )
+
+private fun GridRankRow.toCursorAnchor(): GridCursorAnchor =
+    GridCursorAnchor(
+        boostBucket = boostBucket,
+        orderBucket = orderBucket,
+        userId = userId,
+        orderTiebreak = orderTiebreak,
+    )
 
 /** Keyset comparison matching the SQL ORDER BY (boost_bucket, order bucket, order_tiebreak, user_id ASC). */
 private fun GridRankRow.afterCursor(cursor: GridCursorAnchor): Boolean =
@@ -290,43 +361,3 @@ private fun UUID.compareUnsigned(other: UUID): Int {
     if (hi != 0) return hi
     return java.lang.Long.compareUnsigned(leastSignificantBits, other.leastSignificantBits)
 }
-
-/**
- * Announced planned trips (opt-in per trip) whose destination is within the radius of where the
- * viewer is browsing and which start in the next 14 days. Same visibility rules as the Grid: a live,
- * visible, non-incognito, Grid-visible account that isn't quarantined. Blocks and hides are removed
- * afterwards by GridService, exactly as for nearby results.
- */
-private val VISITING_SOON_QUERY =
-    """
-    WITH viewer_location AS (
-        -- The viewer's cell centre, as on the Grid (L-09/L-10): membership is cell-to-cell.
-        SELECT pynapli_location_cell(COALESCE(tl.geom, ul.geom)) AS geom
-        FROM user_locations ul
-        LEFT JOIN travel_locations tl
-          ON tl.user_id = ul.user_id
-         AND tl.status = 'active'
-         AND tl.active_until IS NULL
-        WHERE ul.user_id = ?
-    )
-    SELECT DISTINCT ON (u.id)
-           u.id AS user_id,
-           COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
-           t.starts_on,
-           t.ends_on
-    FROM viewer_location v
-    JOIN travel_trips t
-      ON t.status = 'planned'
-     AND t.announce_to_locals = true
-     AND t.ends_on >= current_date
-     AND t.starts_on <= current_date + 14
-     AND pynapli_coarse_distance_m(v.geom, ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography) <= ?
-    JOIN users u ON u.id = t.user_id AND u.status = 'active' AND u.deleted_at IS NULL
-    JOIN profiles p ON p.user_id = u.id AND p.visibility_status = 'visible'
-    JOIN discovery_settings ds ON ds.user_id = u.id AND ds.grid_visible = true AND ds.incognito = false
-    LEFT JOIN account_risk_states ars ON ars.user_id = u.id
-    WHERE u.id <> ?
-      AND COALESCE(ars.tier, 'clean') NOT IN ('quarantine', 'terminate')
-    ORDER BY u.id, t.starts_on
-    LIMIT ?
-    """.trimIndent()

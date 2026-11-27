@@ -10,6 +10,7 @@ import com.pynapli.app.appsettings.ApiNotificationPreferencesGateway
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.appsettings.LocalAppSettingsRepository
 import com.pynapli.app.appsettings.ServerBackedAppSettingsRepository
+import com.pynapli.app.auth.AndroidGoogleSignInProvider
 import com.pynapli.app.auth.AuthStateHolder
 import com.pynapli.app.auth.DevLoginCredentials
 import com.pynapli.app.billing.AndroidPlayBillingPurchaseGateway
@@ -105,6 +106,14 @@ class AndroidAppGraph(
             playBillingPurchaseGateway
         }
 
+    init {
+        // G2-2 ticket 7: debug builds log one line per settled Grid refresh with how its tile images
+        // were served (memory / disk / network counts only; no URL, id or key). Release builds never set it.
+        if (DebugQaFlags.isDebuggable(appContext)) {
+            com.pynapli.app.media.ImageLoadStats.grid.sink = { line -> android.util.Log.d("PynapliGridImages", line) }
+        }
+    }
+
     val deepLinkStateHolder = AppDeepLinkStateHolder()
 
     val pushRegistrationCoordinator =
@@ -123,6 +132,14 @@ class AndroidAppGraph(
             },
         )
 
+    // "Continue with Google": one instance for sign-in and Settings > Sign-in methods. Hidden unless
+    // the build carries a server client id and the server's social config says Google is on.
+    private val socialSignInProvider =
+        AndroidGoogleSignInProvider(
+            context = appContext,
+            serverClientId = BuildConfig.PYNAPLI_GOOGLE_SERVER_CLIENT_ID,
+        )
+
     val authStateHolder =
         AuthStateHolder(
             authRepository = authRepository,
@@ -131,6 +148,7 @@ class AndroidAppGraph(
             deviceId = stableInstallId(appContext),
             beforeLogout = { pushRegistrationCoordinator.unregisterCurrentDevice() },
             sessionInvalidations = sessionInvalidationBus.events,
+            socialSignInProvider = socialSignInProvider,
         )
 
     val appSettingsStateHolder =
@@ -199,6 +217,7 @@ class AndroidAppGraph(
                 realtimeStreams.activity,
             messageStreamClient =
                 realtimeStreams.message,
+            socialSignInProvider = socialSignInProvider,
         )
 
     /** Routes a picked photo to its album, the open conversation, or a verification selfie. */
@@ -252,6 +271,15 @@ class AndroidAppGraph(
 
     fun attachBillingActivity(activity: Activity) {
         playBillingPurchaseGateway.attachActivity(activity)
+    }
+
+    /** Credential Manager shows its account picker over the foreground Activity. */
+    fun attachSignInActivity(activity: Activity) {
+        socialSignInProvider.attachActivity(activity)
+    }
+
+    fun detachSignInActivity(activity: Activity) {
+        socialSignInProvider.detachActivity(activity)
     }
 
     /** Confirms purchases finished while the app was away; see StorePurchaseGateway.syncUnfinishedPurchases. */

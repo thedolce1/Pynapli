@@ -11,6 +11,8 @@ import com.pynapli.shared.network.dto.EmailSignupRequestDto
 import com.pynapli.shared.network.dto.EmailSignupResendRequestDto
 import com.pynapli.shared.network.dto.EmailSignupStartedDto
 import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
+import com.pynapli.shared.network.dto.LinkSocialIdentityRequestDto
+import com.pynapli.shared.network.dto.LinkedIdentitiesDto
 import com.pynapli.shared.network.dto.LogoutResponseDto
 import com.pynapli.shared.network.dto.PasswordChangeDto
 import com.pynapli.shared.network.dto.PasswordChangedDto
@@ -20,6 +22,11 @@ import com.pynapli.shared.network.dto.PasswordResetRequestedDto
 import com.pynapli.shared.network.dto.RefreshSessionRequestDto
 import com.pynapli.shared.network.dto.SignedInDevicesDto
 import com.pynapli.shared.network.dto.SignedOutDevicesDto
+import com.pynapli.shared.network.dto.SocialAccountAppealRequestDto
+import com.pynapli.shared.network.dto.SocialNonceDto
+import com.pynapli.shared.network.dto.SocialSignInConfigDto
+import com.pynapli.shared.network.dto.SocialSignInRequestDto
+import com.pynapli.shared.network.dto.UnlinkedIdentityDto
 
 /**
  * Authentication slice of the API surface, split out of the monolithic [PynapliApiClient]
@@ -57,6 +64,38 @@ interface AuthApi {
 
     /** Appeal from a suspended or banned account, which can't sign in. */
     suspend fun submitAccountAppeal(request: AccountAppealRequestDto): AppResult<AppealDto> = notSupported()
+
+    // Continue with Google / Apple (ONBOARDING_AUTH_SPEC). Defaults keep test doubles compiling, and
+    // a "not supported" config simply hides the buttons.
+
+    /** Which providers the server has switched on. Unauthenticated. */
+    suspend fun socialSignInConfig(): AppResult<SocialSignInConfigDto> = notSupported()
+
+    /** A fresh single-use nonce for one provider attempt. Unauthenticated; the body is ignored. */
+    suspend fun socialNonce(deviceId: String? = null): AppResult<SocialNonceDto> = notSupported()
+
+    /** Signs in (or, with the age-gate fields, signs up) with a provider ID token. Same session as email login. */
+    suspend fun socialSignIn(
+        providerWireName: String,
+        request: SocialSignInRequestDto,
+    ): AppResult<AuthSessionDto> = notSupported()
+
+    /** Appeal from a suspended account that signs in with a provider: a fresh provider sign-in, no session. */
+    suspend fun submitSocialAccountAppeal(
+        providerWireName: String,
+        request: SocialAccountAppealRequestDto,
+    ): AppResult<AppealDto> = notSupported()
+
+    /** Signed in: the account's sign-in methods (`email`, `google`, `apple`) and its password flag. */
+    suspend fun listSignInMethods(): AppResult<LinkedIdentitiesDto> = notSupported()
+
+    /** Answers the account's updated methods. An invalid provider token is 400 here, never 401. */
+    suspend fun linkSocialIdentity(
+        providerWireName: String,
+        request: LinkSocialIdentityRequestDto,
+    ): AppResult<LinkedIdentitiesDto> = notSupported()
+
+    suspend fun unlinkSocialIdentity(providerWireName: String): AppResult<UnlinkedIdentityDto> = notSupported()
 }
 
 private fun notSupported(): AppResult.Failure = AppResult.Failure(AppError(code = "NOT_SUPPORTED", message = "Not available."))

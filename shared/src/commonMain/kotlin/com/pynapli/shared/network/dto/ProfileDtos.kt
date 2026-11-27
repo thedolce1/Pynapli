@@ -65,10 +65,23 @@ data class PublicProfileDto(
     val distanceMeters: Int? = null,
     val profilePhotoUrl: String? = null,
     val photoUrls: List<String> = emptyList(),
+    // G2-2: stable cache keys ("<assetId>:orig") for [profilePhotoUrl] and, index for index, [photoUrls].
+    // They name the bytes only; the signed URL still guards access.
+    val profilePhotoCacheKey: String? = null,
+    val photoCacheKeys: List<String> = emptyList(),
+    // The key the first photo's Grid thumbnail is cached under: the pager paints it while the
+    // original loads. Null when no thumbnail exists.
+    val profilePhotoThumbnailCacheKey: String? = null,
     val verified: Boolean = false,
     // This person and the linked partner in [linkedPartner] are both photo-verified (server-computed;
     // false whenever the partner mini is hidden from this viewer).
     val coupleVerified: Boolean = false,
+    // "Met in person" (TRUST_AND_SAFETY_SPEC): several members who met this person confirmed it, counted
+    // in a weekly batch. Shown only when the person turned it on. Never a count; not checked by Pynapli.
+    val metInPerson: Boolean = false,
+    // The same, as a couple with the partner in [linkedPartner] (both turned it on; false whenever the
+    // partner mini is hidden from this viewer).
+    val metInPersonAsCouple: Boolean = false,
     // Live presence at fetch time, hydrated server-side from PresenceService so the peek
     // shows an accurate online dot from any entry point (Grid/Swipe/Activity/Hub) rather
     // than depending on a card the caller may not have. Convenience snapshot — WebSocket
@@ -120,6 +133,8 @@ data class DiscoverySettingsDto(
     // PROFILE_SETTINGS_SPEC partner visibility: public | matches_only | verified_only | hidden.
     // Controls who can see this profile's linked-partner mini. Defaults public.
     val partnerVisibility: String = "public",
+    // "Show my Met in person badge". Off by default; the badge is never shown without it.
+    val showMetInPersonBadge: Boolean = false,
 )
 
 @Serializable
@@ -160,4 +175,5 @@ data class UpdateDiscoverySettingsRequestDto(
     val visibleWhileTraveling: Boolean? = null,
     val sharePsyncSoloMatches: Boolean? = null,
     val partnerVisibility: String? = null,
+    val showMetInPersonBadge: Boolean? = null,
 )

@@ -319,11 +319,11 @@ private val CONVERSATION_QUERY =
            cp.invitation_status,
            cp.invited_by_user_id,
            cp.message_expiry_seconds,
-           -- A thread outlives an account: say so instead of showing a blank "Pynapli User".
+           -- A thread outlives an account: say so instead of showing the "New member" placeholder.
            CASE
                WHEN u.status = 'deleted' OR u.deleted_at IS NOT NULL THEN 'Deleted member'
                WHEN u.status <> 'active' THEN 'Unavailable member'
-               ELSE COALESCE(NULLIF(p.display_name, ''), 'Pynapli User')
+               ELSE COALESCE(NULLIF(p.display_name, ''), 'New member')
            END AS display_name,
            profile_photo.media_asset_id AS profile_photo_media_asset_id
     FROM conversations c
@@ -358,6 +358,7 @@ private val CONVERSATION_QUERY =
           AND m.media_type = 'image'
           AND m.processing_status = 'ready'
           AND m.moderation_status = 'approved'
+          AND m.intended_album_kind = 'profile'
         ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
         LIMIT 1
     ) profile_photo ON true
