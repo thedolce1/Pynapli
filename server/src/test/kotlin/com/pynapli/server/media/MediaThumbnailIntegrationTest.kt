@@ -167,6 +167,29 @@ class MediaThumbnailIntegrationTest {
         }
 
     @Test
+    fun aHiddenProfileAlbumRetiresItsThumbnailsAndGetsNoNewOnes() =
+        runBlocking {
+            val owner = dataSource.insertVerificationUser("Owner")
+            val media = mediaService(flagged = false)
+            val shown = media.upload(owner, "profile")
+            thumbnails.reconcile(backfillLimit = 50, sweepLimit = 50, sweepAfter = null)
+            assertTrue(shown in store.objects)
+            // Approved but not made yet when the album is hidden.
+            val later = media.upload(owner, "profile")
+
+            // The owner hides the whole profile album: no photo of it shows, so no thumbnail stands.
+            execute("UPDATE media_albums SET visibility_status = 'hidden' WHERE owner_user_id = ? AND kind = 'profile'", owner)
+            assertTrue(repository.readyAmong(listOf(shown), MediaThumbnails.VARIANT).isEmpty(), "never served once hidden")
+            thumbnails.reconcile(backfillLimit = 50, sweepLimit = 50, sweepAfter = null)
+
+            assertFalse(shown in store.objects)
+            assertNull(variantOf(shown))
+            // And a photo of the hidden album that had none yet gets none (the backfill above skipped it too).
+            assertEquals(ThumbnailOutcome.SKIPPED, thumbnails.generate(later))
+            assertTrue(store.objects.isEmpty())
+        }
+
+    @Test
     fun aRemovalThatLandsWhileTheThumbnailIsBeingWrittenNeverLeavesOneStanding() =
         runBlocking {
             val owner = dataSource.insertVerificationUser("Owner")

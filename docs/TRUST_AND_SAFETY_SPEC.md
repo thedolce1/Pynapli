@@ -158,7 +158,8 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
     points against its owner; a moderator approves or rejects it.
 - **Grid thumbnails only from approved photos (G2-2, 2026-11-26):** the server makes a 480 px
   thumbnail (GRID_IMPLEMENTATION_SPEC "Server-made thumbnails") only from the stored, screened
-  original of an approved, live public profile photo. Held, pending, rejected, removed, deleted or
+  original of an approved, live public profile photo in a visible profile album. Held, pending,
+  rejected, removed, deleted, hidden-album or
   out-of-album photos, private-album, chat and verification media never get one: eligibility is
   re-checked when the job claims the photo and again, in the same statement, when it marks the
   thumbnail ready; if the photo stopped being eligible meanwhile the written object is deleted. A

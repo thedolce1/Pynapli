@@ -289,7 +289,7 @@ class JdbcMediaThumbnailRepository(
 
     companion object {
         /**
-         * An approved, ready, live public profile image in a live profile album: the photos the Grid,
+         * An approved, ready, live public profile image in a live, visible profile album: the photos the Grid,
          * Swipe and public profile may show (same definition as their photo projections). Alias `m`.
          */
         internal val ELIGIBLE =
@@ -309,6 +309,9 @@ class JdbcMediaThumbnailRepository(
                             AND thumb_mai.owner_user_id = m.owner_user_id
                             AND thumb_mai.removed_at IS NULL
                             AND thumb_ma.kind = 'profile'
+                            -- Parity with the photo projections: a hidden or archived album shows
+                            -- no photo, so its thumbnails are retired too.
+                            AND thumb_ma.visibility_status = 'visible'
                             AND thumb_ma.deleted_at IS NULL
                       )
             """.trimIndent()
