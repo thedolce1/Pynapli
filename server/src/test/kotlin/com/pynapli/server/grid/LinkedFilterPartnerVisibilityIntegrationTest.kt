@@ -132,20 +132,49 @@ class LinkedFilterPartnerVisibilityIntegrationTest {
             insertContactBlock(blocker = q2, viewer = viewer)
 
             // Services: the filter equals the badge.
-            val gridBadged = graph.grid.queryGrid(viewer, gridRequest(linkedOnly = null)).items.filter { it.coupleVerified }.map { UUID.fromString(it.userId) }.toSet()
-            val gridCouples = graph.grid.queryGrid(viewer, gridRequest(linkedOnly = null).copy(verifiedCouplesOnly = true)).items.map { UUID.fromString(it.userId) }.toSet()
+            val gridBadged =
+                graph.grid
+                    .queryGrid(viewer, gridRequest(linkedOnly = null))
+                    .items
+                    .filter { it.coupleVerified }
+                    .map { UUID.fromString(it.userId) }
+                    .toSet()
+            val gridCouples =
+                graph.grid
+                    .queryGrid(viewer, gridRequest(linkedOnly = null).copy(verifiedCouplesOnly = true))
+                    .items
+                    .map { UUID.fromString(it.userId) }
+                    .toSet()
             assertEquals(setOf(r1, r2), gridCouples)
             assertEquals(gridBadged, gridCouples)
-            val swipeBadged = graph.swipe.queryDeck(viewer, swipeRequest(linkedOnly = null)).items.filter { it.coupleVerified }.map { UUID.fromString(it.userId) }.toSet()
-            val swipeCouples = graph.swipe.queryDeck(viewer, swipeRequest(linkedOnly = null).copy(verifiedCouplesOnly = true)).items.map { UUID.fromString(it.userId) }.toSet()
+            val swipeBadged =
+                graph.swipe
+                    .queryDeck(viewer, swipeRequest(linkedOnly = null))
+                    .items
+                    .filter { it.coupleVerified }
+                    .map { UUID.fromString(it.userId) }
+                    .toSet()
+            val swipeCouples =
+                graph.swipe
+                    .queryDeck(viewer, swipeRequest(linkedOnly = null).copy(verifiedCouplesOnly = true))
+                    .items
+                    .map { UUID.fromString(it.userId) }
+                    .toSet()
             assertEquals(setOf(r1, r2), swipeCouples)
             assertEquals(swipeBadged, swipeCouples)
             // Swipe's linked-only forced path too.
-            val swipeLinkedCouples = graph.swipe.queryDeck(viewer, swipeRequest(linkedOnly = true).copy(verifiedCouplesOnly = true)).items.map { UUID.fromString(it.userId) }.toSet()
+            val swipeLinkedCouples =
+                graph.swipe
+                    .queryDeck(viewer, swipeRequest(linkedOnly = true).copy(verifiedCouplesOnly = true))
+                    .items
+                    .map { UUID.fromString(it.userId) }
+                    .toSet()
             assertEquals(setOf(r1, r2), swipeLinkedCouples)
 
             // Repositories (no service backstop): the SQL leaves Q1 out given the contact-block set.
-            val filters = com.pynapli.server.discovery.DiscoveryFilters(verifiedCouplesOnly = true)
+            val filters =
+                com.pynapli.server.discovery
+                    .DiscoveryFilters(verifiedCouplesOnly = true)
             val gridRows =
                 JdbcGridRepository(dataSource)
                     .queryNearby(viewer, 100_000, 60, filters, hiddenFromViewerIds = setOf(q2))
