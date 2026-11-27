@@ -137,19 +137,16 @@ class GridStateHolder(
     }
 
     suspend fun load(quiet: Boolean = false) {
-        load(quiet = quiet, keepGatePrompt = false, openPaywallOnRefusal = false)
+        load(quiet = quiet, keepGatePrompt = false)
     }
 
     /**
-     * [keepGatePrompt]: this load re-asks with the paid (or age-gated) filters taken out, so the
-     * paywall or verification prompt that caused it stays up when the answer lands.
-     * [openPaywallOnRefusal]: the viewer just chose these filters, so an entitlement refusal opens
-     * the plans. A cold-start restore or a quiet location refresh never pops the paywall unasked.
+     * [keepGatePrompt]: this load re-asks with the age-gated lifestyle tags taken out, so the
+     * verification prompt that caused it stays up when the answer lands.
      */
     private suspend fun load(
         quiet: Boolean,
         keepGatePrompt: Boolean,
-        openPaywallOnRefusal: Boolean,
     ) {
         // The account this load serves; a sign-out meanwhile makes its filter write a no-op.
         val epoch = accountEpoch
@@ -177,7 +174,7 @@ class GridStateHolder(
         try {
             // Inside the try, so a cancellation here still releases the in-flight marker.
             persistFilters(filters, epoch)
-            reaskWithout = fetchFirstPage(filters, generation, keepCardsVisible, keepGatePrompt, openPaywallOnRefusal)
+            reaskWithout = fetchFirstPage(filters, generation, keepCardsVisible, keepGatePrompt)
             answered = true
         } finally {
             // Always released, cancellation included, so a joiner never waits on a dead request.
@@ -189,7 +186,7 @@ class GridStateHolder(
         // A gate refused a filter: the rest of the viewer's choices still deserve a Grid. Bounded:
         // the re-ask carries no gated filter, so it cannot be refused for one again.
         if (reaskWithout != null && generation == feedGeneration) {
-            load(quiet = quiet, keepGatePrompt = true, openPaywallOnRefusal = false)
+            load(quiet = quiet, keepGatePrompt = true)
         }
     }
 
@@ -202,7 +199,6 @@ class GridStateHolder(
         generation: Int,
         keepCardsVisible: Boolean,
         keepGatePrompt: Boolean,
-        openPaywallOnRefusal: Boolean,
     ): GridFilters? {
         var reaskWithout: GridFilters? = null
         runCatchingCancellable { repository.loadGrid(filters) }
@@ -239,41 +235,22 @@ class GridStateHolder(
                     _serverHasLocation.value = false
                 }
                 val code = (error as? GridFeedException)?.code
-                val entitlementRequired = code == "ENTITLEMENT_REQUIRED"
-                val verificationRequired = code == "AGE_VERIFICATION_REQUIRED"
-                // Each gate takes out only what it refused (plan G9): the paid filters, or the
-                // age-gated lifestyle tags. Everything else the viewer chose stays.
-                val allowed =
-                    when {
-                        entitlementRequired -> filters.withoutPaidFilters()
-                        verificationRequired -> filters.copy(lifestyleTags = emptySet())
-                        else -> filters
-                    }
-                if (entitlementRequired && openPaywallOnRefusal) _events.tryEmit(GridEvent.OpenPaywall)
+                // Every filter is free (founder decision 2, 2026-11-26): the one filter gate left is
+                // age verification, which takes out only the lifestyle tags it refused (plan G9).
+                // Everything else the viewer chose stays.
+                val gated = code == "AGE_VERIFICATION_REQUIRED"
+                val allowed = if (gated) filters.copy(lifestyleTags = emptySet()) else filters
                 if (allowed != filters) reaskWithout = allowed
                 _state.update { current ->
-                    // Both gates surface a prompt instead of a raw error, keeping visible cards.
-                    val gated = entitlementRequired || verificationRequired
+                    // The gate surfaces a prompt instead of a raw error, keeping visible cards.
                     if (keepCardsVisible && !gated) {
                         current.copy(isRefreshing = false)
                     } else {
                         current.copy(
                             isRefreshing = false,
                             filters = if (gated) allowed else current.filters,
-                            paywallMessage =
-                                if (entitlementRequired) {
-                                    PAID_FILTER_PAYWALL_MESSAGE
-                                } else {
-                                    current.paywallMessage
-                                },
-                            paywallUpgradeTier =
-                                if (entitlementRequired) {
-                                    SubscriptionTier.SOCIAL
-                                } else {
-                                    current.paywallUpgradeTier
-                                },
                             verificationMessage =
-                                if (verificationRequired) {
+                                if (gated) {
                                     "Verify your age to use lifestyle filters."
                                 } else {
                                     current.verificationMessage
@@ -499,10 +476,9 @@ class GridStateHolder(
                 errorMessage = null,
             )
         }
-        // Always asked, never pre-stripped from the client's view of the plan (which can lag a
-        // purchase): the server decides, and a refusal takes out only the paid filters, keeps the
-        // rest and, because the viewer just chose them, opens the plans (plan G9).
-        filterRequests.run(debounced = false) { load(quiet = false, keepGatePrompt = false, openPaywallOnRefusal = true) }
+        // Always asked: the server decides, and an age-verification refusal takes out only the
+        // lifestyle tags and keeps the rest (plan G9).
+        filterRequests.run(debounced = false) { load(quiet = false, keepGatePrompt = false) }
     }
 
     /** The newest chip tap or filter apply; an older one still waiting or on the wire is cancelled. */
@@ -510,7 +486,7 @@ class GridStateHolder(
 
     private val _events = MutableSharedFlow<GridEvent>(extraBufferCapacity = 1)
 
-    /** One-off events for the screen: open the paywall after a paid filter was taken out, scroll to top. */
+    /** One-off events for the screen: scroll to top after a plan change reloaded the order. */
     val events: SharedFlow<GridEvent> = _events.asSharedFlow()
 
     private var filtersRestored = false
@@ -796,14 +772,9 @@ class GridStateHolder(
 
 /** One-off Grid events for the screen (StateFlow for state, SharedFlow for these). */
 sealed interface GridEvent {
-    /** A paid filter was taken out (the client knew, or the server refused): show the plans. */
-    data object OpenPaywall : GridEvent
-
     /** The order was replaced from page one (a plan change reloaded it): show it from the top. */
     data object ScrollToTop : GridEvent
 }
-
-internal const val PAID_FILTER_PAYWALL_MESSAGE: String = "Social or Select unlocks Lifestyle and Logistics filters. Your other filters still apply."
 
 /** A saved [androidx.compose.foundation.lazy.grid.LazyGridState] position. */
 data class GridScrollAnchor(

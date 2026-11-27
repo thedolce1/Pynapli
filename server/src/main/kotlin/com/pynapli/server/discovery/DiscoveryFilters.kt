@@ -101,38 +101,6 @@ data class DiscoveryFilters(
                 }
                 if (excludeSingleMen) append("|excludeSingleMen=true")
             }
-
-    // Broad non-default filter signal used by Swipe's stricter paid gate.
-    val hasAdvancedFilters: Boolean
-        get() =
-            minimumAge != null ||
-                maximumAge != null ||
-                relationshipContexts.isNotEmpty() ||
-                linkedOnly != null ||
-                verifiedOnly ||
-                verifiedCouplesOnly ||
-                facePhotoVerifiedOnly ||
-                ageVerifiedOnly ||
-                discoveryStyles.isNotEmpty() ||
-                lifestyleTags.isNotEmpty() ||
-                boundaryItems.isNotEmpty() ||
-                logisticsTags.isNotEmpty() ||
-                tonightAvailableOnly ||
-                activeTodayOnly ||
-                freshOnly ||
-                travelingHereOnly ||
-                withPhotosOnly ||
-                hasPrivateAlbumOnly ||
-                intents.isNotEmpty() ||
-                genders.isNotEmpty() ||
-                orientations.isNotEmpty()
-
-    // Basic intent, trust, who, distance, age, online, and tonight filters stay free.
-    // Paid "advanced" status is reserved for high-specificity lifestyle/logistics controls.
-    val requiresAdvancedEntitlement: Boolean
-        get() =
-            lifestyleTags.isNotEmpty() ||
-                logisticsTags.any { it in ADVANCED_LOGISTICS_TAGS }
 }
 
 fun discoveryFiltersFrom(
@@ -351,8 +319,6 @@ private val ALLOWED_BOUNDARY_ITEMS = DiscoveryTagTaxonomies.boundaryItems.toSet(
 private const val MAX_LOGISTICS_TAG_FILTERS = 8
 
 private val ALLOWED_LOGISTICS_TAGS = DiscoveryTagTaxonomies.logisticsTags
-
-private val ADVANCED_LOGISTICS_TAGS = ALLOWED_LOGISTICS_TAGS - "public_meet_first"
 
 private const val MAX_INTENT_FILTERS = 8
 

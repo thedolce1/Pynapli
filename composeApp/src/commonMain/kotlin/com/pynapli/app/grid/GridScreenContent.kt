@@ -56,8 +56,6 @@ internal fun GridScreenContent(
     onShowNewNearby: () -> Unit = {},
     // The location pill opens Travel mode; null leaves it a plain label.
     onOpenTravel: (() -> Unit)? = null,
-    // The viewer's plan allows paid filters: true/false, or null while unknown (no locks shown).
-    advancedFiltersAllowed: Boolean? = null,
     // Section 3: the boundary banner opens the plans sheet on the server's unlockTier.
     onOpenUnlockStore: (unlockTier: String?) -> Unit = { onOpenStore() },
 ) {
@@ -135,7 +133,6 @@ internal fun GridScreenContent(
             savedState = savedFiltersState,
             tonightSessionActive = tonightSessionActive,
             lifestyleFiltersAllowed = lifestyleFiltersAllowed,
-            advancedFiltersAllowed = advancedFiltersAllowed != false,
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false

@@ -245,8 +245,8 @@ class GridServiceTest {
         }
 
     @Test
-    fun queryGridRejectsAdvancedFiltersForFreeUsers() =
-        runBlocking {
+    fun queryGridAcceptsLifestyleAndLogisticsFiltersForFreeUsers() =
+        runBlocking<Unit> {
             val viewerId = UUID.randomUUID()
             val service =
                 GridService(
@@ -255,12 +255,15 @@ class GridServiceTest {
                     subscriptionService = freeSubscriptionService(),
                 )
 
-            val error =
-                assertFailsWith<GridException> {
-                    service.queryGrid(viewerId, GridQueryRequestDto(lifestyleTags = listOf("soft_swap")))
-                }
+            // Founder decision 2 (2026-11-26): every Grid filter is free; an age-verified Free viewer
+            // gets an answer, and the response never reports a paid filter.
+            val response =
+                service.queryGrid(
+                    viewerId,
+                    GridQueryRequestDto(lifestyleTags = listOf("soft_swap"), logisticsTags = listOf("hosts", "travels")),
+                )
 
-            assertEquals("ENTITLEMENT_REQUIRED", error.code)
+            assertEquals(false, response.advancedFiltersApplied)
         }
 
     @Test

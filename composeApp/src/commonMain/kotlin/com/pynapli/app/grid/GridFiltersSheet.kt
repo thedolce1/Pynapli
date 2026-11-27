@@ -22,9 +22,6 @@ internal fun GridFiltersSheet(
     savedState: SavedGridFiltersUiState = SavedGridFiltersUiState(),
     tonightSessionActive: Boolean = false,
     lifestyleFiltersAllowed: Boolean = true,
-    // Social or Select (from the client's plan state; null/unknown counts as allowed and the server
-    // decides). False marks the paid options with a lock before they are tapped.
-    advancedFiltersAllowed: Boolean = true,
     onDismiss: () -> Unit,
     onApply: (GridFilters) -> Unit,
     onClearAll: () -> Unit,
@@ -152,13 +149,9 @@ internal fun GridFiltersSheet(
 
             if (lifestyleFiltersAllowed) {
                 LifestyleSectionHeader(onOpenGlossary = { glossaryVisible = true })
-                if (!advancedFiltersAllowed) ComingSoonSection(message = PAID_FILTERS_HINT)
                 LifestyleSection(
                     selected = draft.lifestyleTags,
                     onChange = { draft = draft.copy(lifestyleTags = it) },
-                    chip = { label, active, onClick ->
-                        SheetToggleChip(label = label, active = active, locked = !advancedFiltersAllowed, onClick = onClick)
-                    },
                 )
             } else {
                 SectionTitle("Lifestyle")
@@ -174,11 +167,9 @@ internal fun GridFiltersSheet(
             )
 
             SectionTitle("Logistics")
-            if (!advancedFiltersAllowed) ComingSoonSection(message = PAID_FILTERS_HINT)
             LogisticsSection(
                 selected = draft.logisticsTags,
                 onChange = { draft = draft.copy(logisticsTags = it) },
-                lockPaid = !advancedFiltersAllowed,
             )
 
             if (!savedState.entitlementRequired) {

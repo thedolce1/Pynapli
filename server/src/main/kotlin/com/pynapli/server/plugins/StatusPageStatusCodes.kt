@@ -145,7 +145,7 @@ internal fun psyncStatusFor(code: String): HttpStatusCode =
         "PSYNC_NUDGE_COOLDOWN" -> HttpStatusCode.TooManyRequests
         "PSYNC_NOT_PARTICIPANT",
         "PSYNC_DECK_SIZE_NOT_ALLOWED",
-        "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED",
+        "AGE_VERIFICATION_REQUIRED",
         "PSYNC_SESSION_LIMIT_REACHED",
         "PSYNC_TRAVEL_NOT_ALLOWED",
         -> HttpStatusCode.Forbidden
@@ -237,6 +237,7 @@ internal fun swipeStatusFor(code: String): HttpStatusCode =
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
         "RISK_RESTRICTED",
         "ENTITLEMENT_REQUIRED",
+        "AGE_VERIFICATION_REQUIRED",
         "INTRO_NOTE_INVENTORY_REQUIRED",
         "PINEAPPLE_LIKE_INVENTORY_REQUIRED",
         -> HttpStatusCode.Forbidden

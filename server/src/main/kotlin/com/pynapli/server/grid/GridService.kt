@@ -95,14 +95,14 @@ class GridService(
                 ) { _ -> GridException("INVALID_GRID_FILTER") }
             }
         profile("grid.lifestyleGate") { requireLifestyleFilterAccess(viewerUserId, filters) }
-        val advancedFiltersApplied = filters.requiresAdvancedEntitlement
+        // Founder decision 2 (2026-11-26, Grindr model): every Grid filter is free on every plan. The
+        // only filter gate is age verification for lifestyle tags (safety, above). Plans buy depth
+        // (locked cards), saved presets and Boost. advancedFiltersApplied stays on the wire, always false.
+        val advancedFiltersApplied = false
         val policy =
             profile("grid.entitlement") {
                 subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
             }
-        if (advancedFiltersApplied && !policy.advancedFiltersAllowed) {
-            throw GridException("ENTITLEMENT_REQUIRED")
-        }
         // L-07: never fewer than MIN_PAGE_SIZE cards per request (a one-card page lets a client probe
         // the ranking card by card). Only the tier depth cap below can make a final page shorter.
         val pageLimit = request.limit.coerceIn(MIN_PAGE_SIZE, maxOf(MIN_PAGE_SIZE, minOf(MAX_LIMIT, policy.gridPageLimit)))

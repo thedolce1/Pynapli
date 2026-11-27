@@ -31,7 +31,6 @@ import com.pynapli.app.design.PynapliTabIcons
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.closeOnEscape
 import com.pynapli.app.design.currentPynapliWindowSizeClass
-import com.pynapli.app.grid.GridFilters
 import com.pynapli.app.grid.GridScreen
 import com.pynapli.app.grid.GridStateHolder
 import com.pynapli.app.grid.SavedGridFilterStateHolder
@@ -222,6 +221,7 @@ internal fun ColumnScope.PynapliMainContent(
                 PynapliTab.Swipe ->
                     SwipeTabContent(
                         profileDetailStateHolder = profileDetailStateHolder,
+                        profileHubStateHolder = profileHubStateHolder,
                         conversationStateHolder = conversationStateHolder,
                         swipeStateHolder = swipeStateHolder,
                         appSettingsStateHolder = appSettingsStateHolder,
@@ -452,8 +452,6 @@ private fun ColumnScope.GridTabContent(
         onOpenPhotoVerification = onOpenPhotoVerification,
         onOpenTravelStore = onOpenTravelStore,
         onOpenUnlockStore = onOpenUnlockStore,
-        // Paid Grid filters come with Social or Select; null until the plan has loaded.
-        advancedFiltersAllowed = GridFilters.advancedFiltersAllowedFor(profileHubState.entitlement?.tier),
     )
 }
 
@@ -640,6 +638,7 @@ private fun ColumnScope.ActivityTabContent(
 @Composable
 private fun ColumnScope.SwipeTabContent(
     profileDetailStateHolder: ProfileDetailStateHolder,
+    profileHubStateHolder: ProfileHubStateHolder,
     conversationStateHolder: ConversationStateHolder,
     swipeStateHolder: SwipeStateHolder,
     appSettingsStateHolder: AppSettingsStateHolder,
@@ -654,6 +653,7 @@ private fun ColumnScope.SwipeTabContent(
 ) {
     val authState by authStateHolder.state.collectAsState()
     val appSettingsState by appSettingsStateHolder.state.collectAsState()
+    val profileHubState by profileHubStateHolder.state.collectAsState()
     val distanceUnit = appSettingsState.settings.distanceUnit
 
     SwipeScreen(
@@ -669,6 +669,8 @@ private fun ColumnScope.SwipeTabContent(
         onOpenAgeVerification = onOpenAgeVerification,
         onOpenPsync = onOpenPsync,
         savedSwipeFilterStateHolder = savedSwipeFilterStateHolder,
+        // Lifestyle tags need age verification, as on the Grid (the server refuses them either way).
+        lifestyleFiltersAllowed = profileHubState.me?.profile?.ageVerified == true,
         travelLocationStateHolder = travelLocationStateHolder,
         profileLinksStateHolder = profileLinksStateHolder,
         deckCovered = deckCovered,

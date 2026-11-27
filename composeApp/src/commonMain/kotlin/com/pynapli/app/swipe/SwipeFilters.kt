@@ -80,16 +80,6 @@ data class SwipeFilters(
 
     val isAnyActive: Boolean get() = activeCount > 0
 
-    /**
-     * Mirrors `DiscoveryFilters.requiresAdvancedEntitlement` server-side. Used by the
-     * client to surface a paywall hint before issuing a request that the server would
-     * reject with `ENTITLEMENT_REQUIRED`.
-     */
-    val requiresAdvancedEntitlement: Boolean
-        get() =
-            lifestyleTags.isNotEmpty() ||
-                logisticsTags.any { it != LogisticsTag.PublicMeetFirst }
-
     fun toSwipeDeckRequest(cursor: String? = null): SwipeDeckRequestDto {
         val contexts =
             buildList {
