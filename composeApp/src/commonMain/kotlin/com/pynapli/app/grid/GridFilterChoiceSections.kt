@@ -103,6 +103,8 @@ internal fun PresenceSection(
     onTravelingHereToggle: () -> Unit,
     visitingSoon: Boolean = false,
     onVisitingSoonToggle: () -> Unit = {},
+    haventChatted: Boolean = false,
+    onHaventChattedToggle: () -> Unit = {},
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -115,6 +117,7 @@ internal fun PresenceSection(
         SheetToggleChip(label = "Traveling here", active = travelingHere, onClick = onTravelingHereToggle)
         SheetToggleChip(label = "Visiting soon", active = visitingSoon, onClick = onVisitingSoonToggle)
         SheetToggleChip(label = "Playing tonight", active = tonightAvailable, onClick = onTonightToggle)
+        SheetToggleChip(label = "Haven't chatted (24 h)", active = haventChatted, onClick = onHaventChattedToggle)
     }
 }
 
@@ -166,8 +169,6 @@ internal fun TonightSessionEntryRow(
 internal fun LogisticsSection(
     selected: Set<LogisticsTag>,
     onChange: (Set<LogisticsTag>) -> Unit,
-    // Free viewer: every paid tag (all but "Public meet first") shows a lock.
-    lockPaid: Boolean = false,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -176,7 +177,7 @@ internal fun LogisticsSection(
     ) {
         LogisticsTag.entries.forEach { tag ->
             val active = tag in selected
-            SheetToggleChip(label = tag.label, active = active, locked = lockPaid && tag.paid) {
+            SheetToggleChip(label = tag.label, active = active) {
                 onChange(if (active) selected - tag else selected + tag)
             }
         }
@@ -246,6 +247,25 @@ internal fun LifestyleSection(
                 }
             }
         }
+    }
+}
+
+/**
+ * Lifestyle match mode (plan G2-4, Grindr's tags): "Any" is the usual any-of within a group; "All of up
+ * to 3" means every chosen tag must be on the profile.
+ */
+@Composable
+internal fun LifestyleMatchModeRow(
+    matchAll: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SheetToggleChip(label = "Any", active = !matchAll, onClick = { onChange(false) })
+        SheetToggleChip(label = "All of (up to ${GridFilters.MAX_LIFESTYLE_ALL_OF})", active = matchAll, onClick = { onChange(true) })
     }
 }
 
@@ -387,19 +407,23 @@ internal fun SinglesShortcutRow(
     }
 }
 
-/** The Who shortcuts: Singles plus one declared gender key. */
+/**
+ * The Who shortcuts: Singles plus the declared gender keys of one gender identity (founder decision
+ * 2026-11-27): Single women = woman and trans woman, Single men = man and trans man. Non-binary and
+ * other identities are reachable through the Gender section, never through a shortcut.
+ */
 internal enum class SinglesShortcut(
     val label: String,
-    val genderKey: String,
+    val genderKeys: Set<String>,
 ) {
-    SingleWomen("Single women", "woman"),
-    SingleMen("Single men", "man"),
+    SingleWomen("Single women", setOf("woman", "trans_woman")),
+    SingleMen("Single men", setOf("man", "trans_man")),
     ;
 
-    fun isActive(filters: GridFilters): Boolean = filters.singles && !filters.linked && filters.genders == setOf(genderKey)
+    fun isActive(filters: GridFilters): Boolean = filters.singles && !filters.linked && filters.genders == genderKeys
 
     // Singles rules the partner filters out, so the applied state drops them (they could never match).
-    fun applied(filters: GridFilters): GridFilters = filters.copy(singles = true, linked = false, genders = setOf(genderKey)).withPartnerFiltersReconciled()
+    fun applied(filters: GridFilters): GridFilters = filters.copy(singles = true, linked = false, genders = genderKeys).withPartnerFiltersReconciled()
 
     fun cleared(filters: GridFilters): GridFilters = filters.copy(singles = false, genders = emptySet())
 }

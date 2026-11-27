@@ -35,11 +35,11 @@ internal fun WhoSection(
         SwipeSheetChip(label = "Singles", active = singles) {
             onTogglesChanged(!singles, linked, partnered)
         }
-        SwipeSheetChip(label = "Linked", active = linked) {
-            onTogglesChanged(singles, !linked, partnered)
-        }
-        SwipeSheetChip(label = "Partnered", active = partnered) {
-            onTogglesChanged(singles, linked, !partnered)
+        // One "Linked" chip, as on the Grid: the server already folds Partnered into Linked (plan G2-1),
+        // so an older saved Partnered choice shows here as Linked and clears with it.
+        val linkedActive = linked || partnered
+        SwipeSheetChip(label = "Linked", active = linkedActive) {
+            onTogglesChanged(singles, !linkedActive, false)
         }
     }
 }

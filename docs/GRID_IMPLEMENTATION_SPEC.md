@@ -437,6 +437,18 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   swipe belongs to the pager.
 - Block or hide removes the card from the Grid, Favorites and the cold-start cache and the pager
   moves on to the next person (the previous one at the end; it closes when nobody is left).
+  Hide with backfill (plan G2-4, Grindr's hide): the cards after the hidden one move up one slot in
+  place (no reorder, no refresh, the `LazyGridState` position stays), so the slot fills with the
+  next person at once; when that leaves fewer than 24 cards loaded (about two phone screens) and the
+  server has more, the next page is asked for at once on the same cursor (a hide on a full first page
+  never fetches ahead, so a Free viewer never spends a locked page on it)
+  (`GridStateHolder.removeCardById`, `GridFilterBarParityTest`). Hide is silent (the hidden person is
+  never told) and one-way (the hidden person still sees the hider; mutual hide is a founder call).
+  The unhide list is the Safety Center's "Hidden profiles": newest first, up to 500, each with a
+  name, a small avatar (the grid thumbnail of the first approved profile photo with its stable cache
+  key; none across a block either way, from someone hiding from the viewer, or for an account that
+  is gone) and Unhide (`GET` / `DELETE /v1/hidden-profiles/{userId}`;
+  `HiddenProfileUnhideListIntegrationTest`).
   Reporting then swiping on drops the reported person the same way closing does. A card leaving the
   list for any other reason (un-starred in Favorites, a quiet refresh) stays on screen until the
   viewer moves on.
@@ -784,11 +796,11 @@ The shared rank window (`JdbcGridRepository.queryGridRankCached`, `candidateRank
 | Rule | Where | After the cache? |
 | --- | --- | --- |
 | Self | `JdbcGridRepository.kt` ~246 (`filterNot { it.userId == viewerUserId }`) | Yes |
-| Blocks (both ways) | `GridService.kt` ~232 `grid.blockFilter` | Yes |
-| Hides and contact blocks | `GridService.kt` ~206 (list), ~240 `grid.hiddenFilter` | Yes |
+| Blocks (both ways) | `visibleToViewer` in `GridService.kt` (profile key `grid.visibility`), shared with the G2-4 count | Yes |
+| Hides and contact blocks | `GridService.kt` (lists), `visibleToViewer` (`grid.visibility`) | Yes |
 | Account status, profile visibility, `grid_visible`, incognito, visible-while-travelling, risk tier | Rank SQL `JdbcGridRankSql.kt` ~119-126, re-read for a window page by `GridOwnerRecheckSql.stillDiscoverableOnGrid` (`JdbcGridRepository.kt` ~71) | Yes, since G2-2 |
 | Photo moderation (thumbnail, partner mini) | Page hydration (`JdbcGridHydrationSql`), never cached | Yes |
-| linkedOnly, verified couples, travelling viewer | Never use the window (`isGridRankCacheEligible`, `JdbcGridRepository.kt` ~206) | n/a |
+| linkedOnly, verified couples, partner filters, No single men, Haven't chatted (G2-4), travelling viewer, the G2-4 count | Never use the window (`isGridRankCacheEligible`, `JdbcGridRepository.kt` ~206) | n/a |
 | Visiting soon | Its own per-viewer query with every owner rule live (`queryVisitingSoonRank`), never cached, so no re-read is needed | n/a |
 
 Before G2-2 the owner row of the table was applied only inside the window, so someone who went

@@ -48,8 +48,16 @@ data class GridQueryRequestDto(
     val partnerMaximumAge: Int? = null,
     val partnerOrientations: List<String> = emptyList(),
     val partnerVerifiedOnly: Boolean = false,
-    // "No single men": drop people whose own gender is "man" with no linked partner shown to this viewer.
+    // "No single men": drop people whose own gender is "man" or "trans_man" with no linked partner shown
+    // to this viewer (gender identity, founder decision 2026-11-27).
     val excludeSingleMen: Boolean = false,
+    // "Haven't chatted" (Grindr's "Haven't chatted today"): drop people the viewer exchanged a direct
+    // message with in the last 24 hours (either direction; an inbound message counts only once it is
+    // visible to the viewer). Grid only, per viewer, never from a shared cache. Old clients omit it.
+    val haventChattedOnly: Boolean = false,
+    // Lifestyle "All of" (G2-4, Grid only): every one of [lifestyleTags] must match (at most 3, and one
+    // experience level), instead of any one per group. Old clients omit it.
+    val lifestyleMatchAll: Boolean = false,
     // Section 3 opt-in: this client renders locked cards (GridCardDto.locked) as paywall tiles, never
     // as profiles. Without it the server keeps the old behaviour: the grid stops at the tier depth with
     // resultLimitReached. With it the grid keeps paging past the depth with locked cards up to the next
@@ -170,4 +178,16 @@ data class SavedGridFiltersListDto(
 data class CreateSavedGridFilterRequestDto(
     val name: String,
     val payload: GridQueryRequestDto,
+)
+
+/**
+ * `POST /v1/grid/count` (plan G2-4): how many people the Grid would show for these filters, for the
+ * filter sheet's "Show N people" button. The request is the Grid request itself. [count] never exceeds
+ * what the Grid would return under the same filters and visibility rules; [atLeast] means more match
+ * than were counted (show "N+"). Capped at 500 and at the plan's Grid depth.
+ */
+@Serializable
+data class GridCountResponseDto(
+    val count: Int,
+    val atLeast: Boolean = false,
 )

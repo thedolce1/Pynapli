@@ -86,6 +86,7 @@ internal class ContactBlockTestGraph(
             blockRepository = blocks,
             favoriteService = favorites,
             contactBlockVisibility = visibility,
+            hiddenProfileRepository = JdbcHiddenProfileRepository(dataSource),
         )
     val grid =
         GridService(

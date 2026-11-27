@@ -62,11 +62,13 @@ object PartnerFilterSql {
                 ?::boolean = false
                 OR $partnerMatches
             )
-            -- "No single men": not (declared man AND no partner shown to the viewer(s)). IS DISTINCT
-            -- FROM keeps people with no declared gender.
+            -- "No single men": not (declared man or trans man AND no partner shown to the viewer(s)).
+            -- Founder decision 2026-11-27: the shortcut follows gender identity, so trans_man counts as
+            -- a man. Non-binary and every other key, and no declared gender, are kept.
             AND (
                 ?::boolean = false
-                OR $profile.gender IS DISTINCT FROM 'man'
+                OR $profile.gender IS NULL
+                OR $profile.gender NOT IN ('man', 'trans_man')
                 OR $anyVisiblePartner
             )
             """.trimIndent()

@@ -16,20 +16,47 @@ import kotlin.test.assertTrue
 
 class SwipeStateHolderTest {
     @Test
-    fun loadLocksPaidFiltersWhenAdvancedFiltersAreNotAllowed() =
+    fun lifestyleAndLogisticsFiltersAreAskedAsChosenWithNoPaywall() =
         runTest {
-            val repository =
-                FakeSwipeRepository(
-                    deck = SwipeDeckUi(cards = emptyList(), advancedFiltersAllowed = false),
+            // Founder decision 2 (2026-11-26): every Swipe filter is free.
+            val repository = FakeSwipeRepository(deck = SwipeDeckUi(cards = emptyList()))
+            val stateHolder = SwipeStateHolder(repository)
+            val chosen =
+                SwipeFilters(
+                    lifestyleTags = setOf(com.pynapli.app.grid.LifestyleTag.SoftSwap),
+                    logisticsTags = setOf(com.pynapli.app.grid.LogisticsTag.Hosts),
                 )
+
+            stateHolder.applyFilters(chosen)
+
+            assertEquals(listOf("soft_swap"), repository.deckRequests.last().lifestyleTags)
+            assertEquals(listOf("hosts"), repository.deckRequests.last().logisticsTags)
+            assertEquals(chosen, stateHolder.state.value.swipeFilters)
+            assertNull(stateHolder.state.value.paywallMessage)
+        }
+
+    @Test
+    fun anAgeRefusedLifestyleFilterIsTakenOutAndTheRestIsAskedAgain() =
+        runTest {
+            val repository = FakeSwipeRepository(deck = SwipeDeckUi(cards = listOf(swipeCard(userId = "t-1"))), refuseLifestyle = true)
             val stateHolder = SwipeStateHolder(repository)
 
-            stateHolder.load()
+            stateHolder.applyFilters(
+                SwipeFilters(
+                    lifestyleTags = setOf(com.pynapli.app.grid.LifestyleTag.SoftSwap),
+                    logisticsTags = setOf(com.pynapli.app.grid.LogisticsTag.Hosts),
+                ),
+            )
 
-            val filters = stateHolder.state.value.filters
-            assertFalse(filters.first { it.type == SwipeFilterType.ForYou }.locked)
-            assertTrue(filters.first { it.type == SwipeFilterType.Linked }.locked)
-            assertTrue(filters.first { it.type == SwipeFilterType.Age }.locked)
+            assertEquals(2, repository.deckLoadCount, "the refused ask, then the re-ask")
+            val reasked = repository.deckRequests.last()
+            assertTrue(reasked.lifestyleTags.isEmpty())
+            assertEquals(listOf("hosts"), reasked.logisticsTags, "logistics is never age-gated")
+            val state = stateHolder.state.value
+            assertTrue(state.swipeFilters.lifestyleTags.isEmpty())
+            assertEquals("AGE_VERIFICATION_REQUIRED", state.errorCode)
+            assertEquals(LIFESTYLE_AGE_GATE_MESSAGE, state.errorMessage)
+            assertNull(state.paywallMessage)
         }
 
     @Test
@@ -609,6 +636,8 @@ private class FakeSwipeRepository(
     var actionResult: AppResult<MatchDto?> = AppResult.Success(null),
     var rewindResult: AppResult<SwipeRewindUi?> = AppResult.Success(null),
     private val pagesByCursor: Map<String, SwipeDeckUi> = emptyMap(),
+    // Refuses lifestyle tags the way the server's age gate does for an unverified viewer.
+    private val refuseLifestyle: Boolean = false,
 ) : SwipeRepository {
     var submitCount = 0
         private set
@@ -624,6 +653,9 @@ private class FakeSwipeRepository(
         deckLoadCount += 1
         deckCursors += request.cursor
         deckRequests += request
+        if (refuseLifestyle && request.lifestyleTags.isNotEmpty()) {
+            return AppResult.Failure(AppError("AGE_VERIFICATION_REQUIRED", "Age verification is required for this feature."))
+        }
         val payload =
             if (request.cursor == null) {
                 deck

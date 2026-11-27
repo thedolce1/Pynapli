@@ -1,7 +1,6 @@
 package com.pynapli.server.psync
 
 import com.pynapli.server.discovery.discoveryFiltersFrom
-import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import java.time.Duration
 
@@ -56,10 +55,13 @@ internal fun requirePsyncDeckSize(deckSize: Int) {
     }
 }
 
-/** PSYNC_SPEC Monetization: advanced (lifestyle/logistics) filters need Social/Select. */
-internal fun requirePsyncFiltersAllowed(
+/**
+ * Founder decision 2 (2026-11-26): every Psync filter is free, like the Grid and Swipe. The filters are
+ * validated here, and lifestyle tags still need the age-verified suggester (safety, not payment).
+ */
+internal suspend fun requirePsyncFiltersAllowed(
     filters: SwipeDeckRequestDto,
-    policy: EntitlementPolicy,
+    isAgeVerified: suspend () -> Boolean,
 ) {
     val discovery =
         discoveryFiltersFrom(
@@ -84,7 +86,7 @@ internal fun requirePsyncFiltersAllowed(
             partnerVerifiedOnly = filters.partnerVerifiedOnly,
             excludeSingleMen = filters.excludeSingleMen,
         ) { PsyncException("INVALID_PSYNC_FILTER") }
-    if (discovery.requiresAdvancedEntitlement && !policy.advancedFiltersAllowed) {
-        throw PsyncException("PSYNC_ADVANCED_FILTERS_NOT_ALLOWED")
+    if (discovery.lifestyleTags.isNotEmpty() && !isAgeVerified()) {
+        throw PsyncException("AGE_VERIFICATION_REQUIRED")
     }
 }

@@ -1,6 +1,6 @@
 # Pynapli Filters Spec
 
-Last updated: 2026-05-09
+Last updated: 2026-11-27
 
 ## Purpose
 
@@ -22,7 +22,7 @@ Core rule:
 6. A user can be single and still prefer couples or groups.
 7. The app must support singles, partnered people, linked partners, couples, and social-only users without forcing everyone into couple logic.
 8. Filters should reduce ambiguity, not create a questionnaire dump.
-9. Basic intent filters must not be fully paywalled.
+9. No filter is paywalled (founder decision 2, 2026-11-26): plans buy depth, presets and Boost.
 10. Safety filters should not be paywalled.
 
 ## Core Definitions
@@ -84,6 +84,7 @@ Filters:
 - Nearby now
 - Traveling here
 - Attending event
+- Haven't chatted (24 h) (Grid, plan G2-4)
 
 Rules:
 
@@ -98,6 +99,20 @@ Rules:
   contact blocks. One row per member (their soonest qualifying trip). Ordered by arrival day, then
   the destination's L-08 order bucket, then id. Paged by keyset, and `visitingSoonOnly` is in the
   Grid cursor scope, so its cursors never continue Nearby. It never widens.
+- `Haven't chatted (24 h)` (Grid only, `haventChattedOnly`, plan G2-4; Grindr's "Haven't chatted
+  today"): hides people the viewer exchanged a **direct** message with in the last rolling 24 hours,
+  in either direction. Every message the viewer sent counts, whatever its moderation state; a message
+  the viewer received counts only once it is `visible` to them, so a held inbound message never makes
+  a card vanish (that would reveal it). Deleted messages never count. Group chats (partner chat
+  invites) do not count: the pair always has a direct conversation too when they talk one to one.
+  SQL: one `NOT EXISTS` in `GridFilterSql` over `idx_direct_conversations_pair` (LEAST/GREATEST)
+  then `idx_messages_conversation_created`, so no new index (no migration). Per viewer, so it keeps
+  the request off the shared rank cache (`isGridRankCacheEligible`), and it is in the rank-cache key
+  and the cursor scope (appended only when on, so older cursors keep their hash). Saved presets keep
+  it (the payload is the request). Visiting soon applies it too. Free. Nothing about the
+  conversations is sent to the client. Proof: `HaventChattedFilterIntegrationTest` (sent, received,
+  held inbound, older than 24 h, deleted, another viewer's chats, cursor scope, cache key),
+  `GridFilterBarParityTest`.
 - `Available tonight` requires explicit user state, not merely online status.
 - `Fresh` (was `Recently joined`) should not override safety/trust rules.
 - `Traveling here` should be based on declared travel/passport state.
@@ -155,8 +170,12 @@ Rules:
 ### Partner
 
 Purpose: let couples and singles say who they want the *other half* to be, without combined couple
-cards and without the app guessing couple composition. Shipped 2026-11-26 (plan G2-3), Grid sheet
-section under Who; on the wire for Grid, Swipe and Psync.
+cards and without the app guessing couple composition. Shipped 2026-11-26 (plan G2-3) on the Grid
+and on the wire for Grid, Swipe and Psync. Since 2026-11-27 (plan G2-4) the Swipe and Psync filter
+sheets have the same section and the same Who shortcuts (Single women, Single men, No single men),
+reusing the Grid's composables (`SwipeFilters.asGridWhoAndPartner`; Swipe's Linked or Partnered read
+as Linked), and saved swipe presets keep them. In both sheets the order is Who (with its shortcuts),
+Gender, Orientation, then Partner (`SwipePartnerFiltersTest`).
 
 Filters:
 
@@ -190,11 +209,16 @@ Rules:
   server does not reject Singles plus a partner filter; that just matches nobody.
 - "Partner photo verified" needs only the partner verified. "Verified couples only" (Trust) needs
   both partners verified; the sheet says so under the chip.
-- "No single men" drops people whose **own** declared gender is `man` and who have no linked partner
-  shown to this viewer (same gate). Men visibly linked to a partner still show; people with no
-  declared gender, and every other gender key, are kept. A man whose partner is hidden from the
-  viewer reads as single on his tile, and is treated as single. Only the `man` key counts: `trans_man`
-  is not included (founder may revisit; the app only uses what members declare). Quick row placement:
+- "No single men" drops people whose **own** declared gender is `man` or `trans_man` and who have no
+  linked partner shown to this viewer (same gate). The shortcuts follow gender identity (founder
+  decision 2026-11-27): "Single men" selects `man` + `trans_man`, "Single women" selects `woman` +
+  `trans_woman`, on Grid, Swipe and Psync. Non-binary and every other gender key, and no declared
+  gender, are untouched by the shortcuts (reachable through the Gender section). Men visibly linked
+  to a partner still show. A man whose partner is hidden from the viewer reads as single on his tile,
+  and is treated as single. The partner mini's letter marks are unchanged. SQL: `gender IS NULL OR
+  gender NOT IN ('man', 'trans_man') OR` a visible partner (`PartnerFilterSql`); proof:
+  `PartnerFiltersVisibilityIntegrationTest` (single trans man out, single trans woman and
+  non-binary in), `PartnerFiltersClientTest`. Quick row placement:
   last, after Verified (Filters · Online · Favorites · Fresh · Tonight · Verified · No single men),
   scrolling sideways.
 - Per viewer: never served from the shared rank cache (like Linked); in both rank-cache keys, the
@@ -202,7 +226,7 @@ Rules:
   set, so older scopes keep their hash), both saved-filter services and the device filter store.
 - Swipe: never relaxed, locked or not, like "Verified couples only". There is no dealbreaker key for
   them because they are always hard.
-- Free (founder decision 2, 2026-11-26): not in `requiresAdvancedEntitlement`.
+- Free (founder decision 2, 2026-11-26), like every filter.
 - Cost: off, each predicate short-circuits on its leading boolean. On, one EXISTS per surviving
   candidate: a probe of `idx_user_profile_links_active_user` (at most one active link) and primary-key
   lookups on the partner's users / profiles / discovery_settings / account_risk_states, plus the gate's
@@ -258,6 +282,15 @@ Filters:
 Rules:
 
 - Lifestyle filters match "any of" inside a group (Swap, Room, Experience, other terms) and "all of" across groups.
+- Grid "All of (up to 3)" (plan G2-4, Grindr's tags, `lifestyleMatchAll`): an Any / All toggle above the
+  Lifestyle tags. All means every chosen tag must be on the profile (`lifestyle_tags @> chosen`, one
+  predicate in `LifestyleFilterSql`, the group predicates then bind empty), and a chosen experience
+  level must equal the profile's. At most 3 tags and one experience level: the sheet refuses a fourth
+  tag and a second level replaces the first; the server refuses more with `INVALID_GRID_FILTER`
+  (`INVALID_SAVED_FILTER_PAYLOAD` for presets). Dropped when no tag is chosen, so older scopes keep
+  their hash; otherwise in the rank-cache key and the cursor scope (only when on) and saved presets.
+  Grid only (Swipe and Tonight keep any-of). Still age-gated like every lifestyle filter. Proof:
+  `LifestyleAllOfFilterIntegrationTest`, `GridFilterBarParityTest`.
 - Experience is one value per profile (`profiles.experience_level`), never two tags.
 - A boundaries filter hides only "not for me"; "ask first" and unset pass.
 - Lifestyle terms should be optional.
@@ -360,6 +393,12 @@ On Grid:
 - Do not reset scroll unless location/context changed significantly.
 - Active filter buttons should be visually obvious.
 - Filter count should be visible.
+- The sheet's apply button says how many people the Grid would show for the draft ("Show 12 people",
+  "Show 500+ people", plan G2-4): `POST /v1/grid/count`, asked 400 ms after the last change, from the
+  same filters and visibility as the Grid (API_CONTRACT_SPEC). Before an answer, or if it fails, it
+  just says "Apply". Proof: `GridCountIntegrationTest` (count equals the Grid's cards under blocks
+  both ways, hides, lifestyle, age and Linked; a hide is reflected at once; the age gate),
+  `GridServiceTest` (plan depth cap, `atLeast`, rate limit), `GridFilterBarParityTest`.
 
 Example:
 
@@ -563,29 +602,34 @@ Do not:
 
 ## Filter Paywall Rules
 
-Free users should get enough filters for the app to function respectfully.
+Founder decision 2 (2026-11-26, the Grindr model): **every Grid, Swipe, Psync and Playing Tonight
+filter is free on every plan**, including Lifestyle (play type, room, experience), Logistics, Boundaries,
+Partner, Trust, Media, Presence, Intent, gender and orientation. Plans buy depth, not filters:
 
-Free:
+- Locked cards past the plan's Grid depth (Section 3)
+- Saved filter presets (`/v1/me/grid-filters`, `/v1/me/swipe-filters`; `EntitlementPolicy.advancedFiltersAllowed` now gates presets only)
+- Boost, Travel mode, rewind, reveal depth in Activity and the other plan perks in MONETIZATION_SPEC
 
-- Distance
-- Age
-- Singles/linked/everyone
-- Solo/together/social basics
-- Verified basics
-- Block/report/privacy controls
+The one gate on a filter is safety, not payment: **Lifestyle tags need an age-verified viewer**
+(`AGE_VERIFICATION_REQUIRED`) on the Grid, the Grid count, Swipe, Psync (create and re-suggest) and
+the Tonight feed. Logistics, boundaries and every other filter are not age-gated. The client hides
+the Lifestyle tags from a viewer who is not age verified, and a refusal takes out only the lifestyle
+tags and asks again with the rest.
 
-Social/Select:
-
-- More filter combinations
-- Advanced lifestyle filters
-- Saved filters
-- Travel filters
-- Activity-based filters
-- Popular/engagement filters
-- Full expanded grid volume
+Implementation (2026-11-27, G2-4 ticket 1): `DiscoveryFilters.requiresAdvancedEntitlement` and
+`hasAdvancedFilters` are gone, with the Grid, Swipe, Psync (`PSYNC_ADVANCED_FILTERS_NOT_ALLOWED`) and
+Tonight refusals. The wire fields stay for shipped clients: `advancedFiltersApplied` is always false,
+and Swipe's `advancedFiltersAllowed` is always true (older clients locked chips on false). The client
+lock icons, the Grid "paid filter taken out" paywall path, the Swipe advanced-filter banner and the
+Swipe preset-chip locks are removed. Tests: `GridServiceTest.queryGridAcceptsLifestyleAndLogisticsFiltersForFreeUsers`,
+`SwipeServiceTest.deckQueryAcceptsLifestyleAndLogisticsFiltersForFreeAgeVerifiedUsers` /
+`deckQueryKeepsTheAgeVerificationGateOnLifestyleFilters`, `PsyncSessionServiceIntegrationTest`
+(Free accepted, unverified refused), `GridPaidFiltersAndPersistenceTest`, `SwipeStateHolderTest`,
+`PlayingTonightStateHolderTest`, `SwipeFiltersSheetInteractionTest`.
 
 Never paywall:
 
+- Any filter (above)
 - Block/report
 - Hide distance
 - Basic safety filters
@@ -667,15 +711,15 @@ Do not rely on bios for filtering.
 - [x] Empty states are neutral and useful: when filters are active and the feed is empty, the grid shows "No one matches these filters right now. Try widening distance or clearing one filter." per L481.
 - [x] Filter changes on Grid animate diffs, not full refresh: `GridStateHolder` swaps cards atomically; stable `LazyVerticalGrid` keys + `Modifier.animateItem()` animate the diff. `GridStateHolderTest.filterChangeKeepsCardsVisibleUntilNewFeedLands` and `GridScreenScrollPreservationTest.filterChangeWithSameFeedKeepsScrollPosition` enforce non-clearing and scroll preservation. The filter sheet body is scrollable so lower filter groups and Clear/Cancel/Apply remain reachable on Android; `GridScreenScrollPreservationTest.filtersSheetScrollsToActionButtons` protects that path.
 - [x] Swipe filter changes request a new deck on a server-issued deck session. Deck sessions are signed (`SwipeDeckTokenCodec`), persisted (`swipe_deck_sessions` + `swipe_deck_cards`, V44/V45/V46 migrations), and support cursor pagination without duplicate cards. The Compose `SwipeStateHolder` auto-loads the next page when the visible stack drops below threshold and dedupes against visible/pending cards (`SwipeStateHolderTest`).
-- [x] "Has photos" (L377) is implemented as an opt-in, free `withPhotosOnly` filter on Grid + Swipe: a hard `EXISTS` gate to at least one approved (image/ready/approved), visible profile-album photo. Threaded through `DiscoveryFilters` (in `hasAdvancedFilters`, not entitlement-gated — it is a basic quality/safety control, never paywalled), the grid rank SQL + all four swipe deck SQL functions, both rank-cache class keys, and client Grid/Swipe filter sheets ("Has photos" chip). Covered by `GridAndSwipeRepositoryIntegrationTest`, `GridRankCacheKeyTest`/`SwipeRankCacheKeyTest`, and client round-trip tests.
-- [x] "Has private album" (Media, L195-201) is an opt-in, free `hasPrivateAlbumOnly` filter on Grid + Swipe: a hard `EXISTS` gate to owning at least one visible private album (`kind = 'private'`) with an approved (image/ready/approved) photo. Discovery signal only — it does NOT grant album access (albums are still request/granted, L199-201). Threaded through `DiscoveryFilters` (in `hasAdvancedFilters`, free), the grid rank SQL + all three swipe deck SQL files (incl. both forced-target functions), both rank-cache keys, both cursor/token scopes, both request DTOs + parsers + saved-filter services, and client Grid/Swipe filter sheets ("Has private album" chip). Covered by `GridAndSwipeRepositoryIntegrationTest` "grid and swipe query with hasPrivateAlbumOnly excludes profiles without a private album" + client `GridStateHolderTest.hasPrivateAlbumFilterSerializesAndRoundTrips` + `SwipeFiltersTest.hasPrivateAlbumSerializesAndRoundTrips`.
+- [x] "Has photos" (L377) is implemented as an opt-in, free `withPhotosOnly` filter on Grid + Swipe: a hard `EXISTS` gate to at least one approved (image/ready/approved), visible profile-album photo. Threaded through `DiscoveryFilters` (free, like every filter), the grid rank SQL + all four swipe deck SQL functions, both rank-cache class keys, and client Grid/Swipe filter sheets ("Has photos" chip). Covered by `GridAndSwipeRepositoryIntegrationTest`, `GridRankCacheKeyTest`/`SwipeRankCacheKeyTest`, and client round-trip tests.
+- [x] "Has private album" (Media, L195-201) is an opt-in, free `hasPrivateAlbumOnly` filter on Grid + Swipe: a hard `EXISTS` gate to owning at least one visible private album (`kind = 'private'`) with an approved (image/ready/approved) photo. Discovery signal only — it does NOT grant album access (albums are still request/granted, L199-201). Threaded through `DiscoveryFilters` (free), the grid rank SQL + all three swipe deck SQL files (incl. both forced-target functions), both rank-cache keys, both cursor/token scopes, both request DTOs + parsers + saved-filter services, and client Grid/Swipe filter sheets ("Has private album" chip). Covered by `GridAndSwipeRepositoryIntegrationTest` "grid and swipe query with hasPrivateAlbumOnly excludes profiles without a private album" + client `GridStateHolderTest.hasPrivateAlbumFilterSerializesAndRoundTrips` + `SwipeFiltersTest.hasPrivateAlbumSerializesAndRoundTrips`.
 - [x] "Active today" (Presence) is a grid-only hard filter (`activeTodayOnly`): only surface profiles whose owner was active in the last 24h. Since G2-1 (2026-11-26) it is `GridActivitySql.activeToday` (`user_last_active` or account creation, the same source as the activeAgo caption and Fresh), no longer a `user_sessions` EXISTS. It is in `gridRankCacheKey` and the grid cursor scope; "Online now" stays Redis-live. Grid-only per the Presence group; Swipe ignores it (like Grid ignores `verifiedPreferred`). Also closed a latent gap: `withPhotosOnly`/`genders`/`orientations` were missing from the grid cursor scope hash, so a cursor could cross those filter values — all hard filters are now in the scope. Covered by `GridAndSwipeRepositoryIntegrationTest` `GridFilterDiscoveryTest` "grid query with activeTodayOnly matches exactly the cards whose caption says active today or sooner" + client `GridStateHolderTest.activeTodayFilterSerializesAndRoundTrips`.
 - [x] Fresh (2026-11-24, plan G4) replaced "Recently joined": `freshOnly` (and `recentlyJoinedOnly` from older clients, read as `freshOnly`) = `GridActivitySql.fresh`, the same rule as the card's `fresh` flag (`GridFilterDiscoveryTest`). History of the replaced filter follows.
 - [x] "Recently joined" + "Traveling here" (Presence, grid-only): `recentlyJoinedOnly` = the account (`users.created_at`) was created within the last 7 days (superseded by Fresh, above); `travelingHereOnly` = the candidate is near the viewer via an active `travel_locations` row (the card's `visiting` state, not their home GPS). Both are hard SQL gates in the grid rank query (also in `gridRankCacheKey` + the grid cursor scope); Swipe ignores them. Covered by `GridAndSwipeRepositoryIntegrationTest` "grid query with recentlyJoinedOnly excludes older accounts" + "grid query with travelingHereOnly returns only travel-mode visitors" + client `GridStateHolderTest.recentlyJoinedAndTravelingHereFiltersSerializeAndRoundTrip`.
-- [x] Client 2026-11-24 (plan G4/G9): the Grid shows a **Fresh** chip (`freshOnly`, the server Fresh rule) in place of "Recently joined"; the client no longer sends `recentlyJoinedOnly`, and a saved preset carrying it restores as Fresh. Paid filters (Lifestyle; Logistics except "Public meet first") show a lock for Free viewers and clear only themselves on apply (`GridPaidFiltersAndPersistenceTest`).
+- [x] Client 2026-11-24 (plan G4/G9): the Grid shows a **Fresh** chip (`freshOnly`, the server Fresh rule) in place of "Recently joined"; the client no longer sends `recentlyJoinedOnly`, and a saved preset carrying it restores as Fresh. (The 2026-11-24 paid-filter locks were removed on 2026-11-27: every filter is free, see "Filter Paywall Rules".)
 - [x] **Filter-scope invariant (both surfaces):** a new hard filter must be added to BOTH the rank-cache class key (`gridRankCacheKey` / swipe `rankCacheKey`) AND the cursor/token scope (`DiscoveryCursorCodec.gridScopeHash` / `SwipeDeckTokenCodec.deckScopeHash`), or a cursor/deck token can carry across a filter change and misalign or replay a stale page. Both scopes now cover every set/order-defining filter (`genders`/`orientations`/`withPhotosOnly` on grid + swipe; `verifiedPreferred` on the swipe deck token; `activeTodayOnly` on grid). Guarded by `GridRankCacheKeyTest`/`SwipeRankCacheKeyTest` and `SwipeDeckTokenCodecTest.deckScopeHashDistinguishesEverySetOrOrderDefiningFilter`.
-- [x] Swinger filters (Round 4): `LifestyleFilterSql` is the one predicate set for Grid rank, Swipe deck rank and the Playing Tonight feed (any-of within Swap / Room / Experience / other, all-of across; experience vs `profiles.experience_level`; `boundaryItems` hides `<item>:not_for_me`). `boundaryItems` is in both rank-cache keys, both cursor/deck-token scopes, `DiscoveryFiltersJson`, both saved-filter services and Psync. Swipe dealbreakers `swap` / `room` / `experience` / `boundaries` survive relaxation. Tonight feed takes `orientations` / `lifestyleTags` / `boundaryItems` in the body of `POST /v1/tonight/feed/query` (never the query string) with the Grid age-verification + advanced-filter gates; Swipe card tags include the experience level. Travel mode uses the same SQL. Covered by `SwingerFilterDiscoveryTest` (Grid + Swipe, home + Travel), `TonightFeedServiceIntegrationTest`, `SwipeDeckLifestyleRelaxationTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `SwingerFiltersClientTest`.
-- [x] "Verified couples only" (2026-11-18, Grid + Swipe + Psync decks): `verifiedCouplesOnly` on `GridQueryRequestDto` / `SwipeDeckRequestDto` (default false, so older clients and saved filters behave as before) means exactly the couple-verified badge for the viewer (`CoupleVerifiedFilterSql`, shared by `JdbcGridRankSql` and `JdbcSwipeDeckRankSql`, also on the linked-only forced-id Swipe path). Never served from the shared rank cache (like `linkedOnly`), in both rank-cache keys, the Grid cursor scope and the Swipe deck-token scope (appended only when on), `DiscoveryFiltersJson` (only when on), both saved-filter services and Psync validation and summaries. Free (in `hasAdvancedFilters`, not `requiresAdvancedEntitlement`). Never relaxes (founder decision 2026-11-18): `SwipeDeckRelaxation` neither counts it as relaxable nor drops it, locked or not, on the normal, linked-only and Psync paths, and the Grid's widen-on-empty keeps it; the Swipe empty deck then reads "No verified couples nearby yet" (`emptyDeckCopy`, `SwipeEmptyDeckCopyTest`); `verifiedOnly` relaxes as before (`VerifiedCouplesFilterIntegrationTest` thin-deck and widening cases). Client: a "Verified couples only" chip in the Grid Trust row and under the Swipe Verified choice; counts as active, clears with Clear all, round-trips through saved presets. Covered by `VerifiedCouplesFilterIntegrationTest` (filtered ids equal the ids whose badge shows, across pending links, hidden/verified-only/matches partner visibility, blocks, viewer hides, incognito, terminated and deleted partners, with `linkedOnly` and `verifiedOnly`, and shared-cache cross-viewer cases), `VerifiedCouplesFilterContractTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `GridStateHolderTest` and `SwipeFiltersTest`. Playing Tonight's feed has its own three-field filter set and does not take it.
+- [x] Swinger filters (Round 4): `LifestyleFilterSql` is the one predicate set for Grid rank, Swipe deck rank and the Playing Tonight feed (any-of within Swap / Room / Experience / other, all-of across; experience vs `profiles.experience_level`; `boundaryItems` hides `<item>:not_for_me`). `boundaryItems` is in both rank-cache keys, both cursor/deck-token scopes, `DiscoveryFiltersJson`, both saved-filter services and Psync. Swipe dealbreakers `swap` / `room` / `experience` / `boundaries` survive relaxation. Tonight feed takes `orientations` / `lifestyleTags` / `boundaryItems` in the body of `POST /v1/tonight/feed/query` (never the query string) with the Grid age-verification gate (no plan gate since founder decision 2); Swipe card tags include the experience level. Travel mode uses the same SQL. Covered by `SwingerFilterDiscoveryTest` (Grid + Swipe, home + Travel), `TonightFeedServiceIntegrationTest`, `SwipeDeckLifestyleRelaxationTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `SwingerFiltersClientTest`.
+- [x] "Verified couples only" (2026-11-18, Grid + Swipe + Psync decks): `verifiedCouplesOnly` on `GridQueryRequestDto` / `SwipeDeckRequestDto` (default false, so older clients and saved filters behave as before) means exactly the couple-verified badge for the viewer (`CoupleVerifiedFilterSql`, shared by `JdbcGridRankSql` and `JdbcSwipeDeckRankSql`, also on the linked-only forced-id Swipe path). Never served from the shared rank cache (like `linkedOnly`), in both rank-cache keys, the Grid cursor scope and the Swipe deck-token scope (appended only when on), `DiscoveryFiltersJson` (only when on), both saved-filter services and Psync validation and summaries. Free, like every filter. Never relaxes (founder decision 2026-11-18): `SwipeDeckRelaxation` neither counts it as relaxable nor drops it, locked or not, on the normal, linked-only and Psync paths, and the Grid's widen-on-empty keeps it; the Swipe empty deck then reads "No verified couples nearby yet" (`emptyDeckCopy`, `SwipeEmptyDeckCopyTest`); `verifiedOnly` relaxes as before (`VerifiedCouplesFilterIntegrationTest` thin-deck and widening cases). Client: a "Verified couples only" chip in the Grid Trust row and under the Swipe Verified choice; counts as active, clears with Clear all, round-trips through saved presets. Covered by `VerifiedCouplesFilterIntegrationTest` (filtered ids equal the ids whose badge shows, across pending links, hidden/verified-only/matches partner visibility, blocks, viewer hides, incognito, terminated and deleted partners, with `linkedOnly` and `verifiedOnly`, and shared-cache cross-viewer cases), `VerifiedCouplesFilterContractTest`, `GridRankCacheKeyTest` / `SwipeRankCacheKeyTest` / `DiscoveryCursorCodecTest` / `SwipeDeckTokenCodecTest`, `GridStateHolderTest` and `SwipeFiltersTest`. Playing Tonight's feed has its own three-field filter set and does not take it.
 - [x] G2-1 (2026-11-26; written, not yet built or run): **Linked privacy fix.** `linkedOnly` on the Grid rank, the Swipe deck rank and `listLinkedCandidateUserIdsNear` now uses `LinkedPartnerFilterSql`, which is `partnerShownToViewer` plus the people hiding from the viewer (contact blocks, passed in by GridService and SwipeDeckQueryAction, and empty for Psync). Before, a member who hid their partner (partner_visibility, viewer hide, contact block) still matched "Linked". The proof is `LinkedFilterPartnerVisibilityIntegrationTest`: on Grid and Swipe, Linked == the ids whose tile shows a partner mini, and not-linked == the rest. It covers public, verified only (viewer verified and not), matches only (matched and not), hidden, viewer-hid-partner, contact-blocked partner, blocks both ways, incognito partner and pending link. Also in G2-1: Who from the visible link (`DiscoveryFiltersWhoTest`); distance steps (`GridRadiusStepsTest`); Visiting soon (`VisitingSoonDiscoveryTest`); one Active-today source (`GridFilterDiscoveryTest`). The Grid filter predicates now live in `GridFilterSql`, shared by the nearby rank and Visiting soon.
 
 - [x] G2-3 (2026-11-26; written, not yet built or run): **Partner filters + "No single men"** (see
@@ -696,7 +740,7 @@ Do not rely on bios for filtering.
 - Do not infer couple composition too aggressively from gender alone.
 - Do not force users to declare explicit lifestyle preferences at signup.
 - Do not show people outside swipe dealbreakers to fill inventory.
-- Do not hide basic intent filters behind premium.
+- Do not hide any filter behind premium (founder decision 2, 2026-11-26: every filter is free; only lifestyle tags are age-gated, for safety).
 - Do not paywall safety-critical controls.
 - Do not make grid cards carry filter complexity.
 - Do not make swipe feel like a database query.

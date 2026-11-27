@@ -42,6 +42,8 @@ class PsyncSessionService(
     json: Json = Json,
     // "Hide from people you know": anyone hiding from EITHER partner is left out of the shared deck.
     contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // Lifestyle tags in session filters need an age-verified suggester (FILTERS_SPEC).
+    viewerTrustRepository: com.pynapli.server.grid.GridViewerTrustRepository? = null,
 ) {
     private val events = PsyncSessionEvents(activityService, notificationPublisher, broadcaster, clock)
     private val pineappleRefunds = PsyncPineappleRefunds(repository, pineappleInventory)
@@ -86,6 +88,7 @@ class PsyncSessionService(
             travelLocationRepository = travelLocationRepository,
             clock = clock,
             json = json,
+            viewerTrustRepository = viewerTrustRepository,
         )
 
     suspend fun create(

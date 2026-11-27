@@ -7,6 +7,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -100,25 +101,23 @@ class SwipeFiltersSheetInteractionTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun advancedPaywallBannerShowsOnlyWhenGatedTagSelected() =
+    fun lifestyleTagsAreFreeAndHiddenOnlyForAViewerWhoIsNotAgeVerified() =
         runComposeUiTest {
-            // Spec L373-391: advanced lifestyle filters are gated. The pre-emptive paywall
-            // banner (C5) appears the moment the draft enters the gated surface, so the
-            // user can subscribe before paying an ENTITLEMENT_REQUIRED round-trip.
+            // Founder decision 2 (2026-11-26): every Swipe filter is free, so choosing a lifestyle tag
+            // never brings up a paywall. Age verification still hides the tags (safety, not payment).
             setSheetBodyContent(initial = SwipeFilters.defaults)
-
-            // With defaults, the banner is not part of the composition at all.
-            assertEquals(
-                0,
-                onAllNodesWithTag(SwipeFilterTags.ADVANCED_PAYWALL).fetchSemanticsNodes().size,
-                "Paywall banner must not render until a gated tag is selected",
-            )
-
             onNodeWithText("Soft swap").performScrollTo().performClick()
             waitForIdle()
+            assertEquals(0, onAllNodesWithTag(SwipeFilterTags.LIFESTYLE_AGE_GATE).fetchSemanticsNodes().size)
+        }
 
-            onNodeWithTag(SwipeFilterTags.ADVANCED_PAYWALL).performScrollTo().assertIsDisplayed()
-            onNodeWithTag(SwipeFilterTags.ADVANCED_PAYWALL_SUBSCRIBE).assertIsDisplayed()
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun anUnverifiedViewerSeesTheAgeGateInsteadOfTheLifestyleTags() =
+        runComposeUiTest {
+            setSheetBodyContent(initial = SwipeFilters.defaults, lifestyleFiltersAllowed = false)
+            onNodeWithTag(SwipeFilterTags.LIFESTYLE_AGE_GATE).performScrollTo().assertIsDisplayed()
+            assertEquals(0, onAllNodesWithText("Soft swap").fetchSemanticsNodes().size)
         }
 }
 
@@ -128,7 +127,7 @@ private fun ComposeUiTest.setSheetBodyContent(
     onApply: (SwipeFilters) -> Unit = {},
     onClearAll: () -> Unit = {},
     onDismiss: () -> Unit = {},
-    onOpenStore: () -> Unit = {},
+    lifestyleFiltersAllowed: Boolean = true,
 ) {
     setContent {
         PynapliTheme(themeMode = "dark") {
@@ -142,7 +141,7 @@ private fun ComposeUiTest.setSheetBodyContent(
                     onDismiss = onDismiss,
                     onApply = onApply,
                     onClearAll = onClearAll,
-                    onOpenStore = onOpenStore,
+                    lifestyleFiltersAllowed = lifestyleFiltersAllowed,
                 )
             }
         }

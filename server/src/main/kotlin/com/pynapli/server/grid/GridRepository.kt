@@ -16,6 +16,19 @@ interface GridRepository {
     ): GridQueryResult
 
     /**
+     * The result count's window (plan G2-4): exactly [queryNearby]'s first page of [limit] under the
+     * same filters, but ranked for this viewer and never read from or written to a shared rank cache.
+     * The default (test fakes) is the first page itself.
+     */
+    suspend fun queryNearbyForCount(
+        viewerUserId: UUID,
+        radiusMeters: Int,
+        limit: Int,
+        filters: DiscoveryFilters = DiscoveryFilters(),
+        hiddenFromViewerIds: Set<UUID> = emptySet(),
+    ): GridQueryResult = queryNearby(viewerUserId, radiusMeters, limit, filters, null, hiddenFromViewerIds)
+
+    /**
      * People whose announced planned trip reaches the viewer's area within two weeks and who pass every
      * Grid filter: soonest arrival first, then distance bucket, then id, paged by [cursor]
      * (JdbcGridVisitingSoonSql).
