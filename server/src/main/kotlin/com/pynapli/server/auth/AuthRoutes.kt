@@ -53,20 +53,21 @@ fun Application.configureAuthRoutes(
             signedInDevicesService?.let { devices ->
                 get("/sessions") {
                     val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
-                    val user = authService.authenticate(token)
+                    val user = authService.authenticateWithoutActivity(token)
                     call.respond(devices.list(user.id, token))
                 }
 
+                // Signing sessions out is not activity (privacy review F3): no presence refresh.
                 delete("/sessions/{sessionId}") {
                     val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
-                    val user = authService.authenticate(token)
+                    val user = authService.authenticateWithoutActivity(token)
                     devices.signOut(user.id, token, call.parameters["sessionId"].orEmpty())
                     call.respond(SignedOutDevicesDto(signedOut = 1))
                 }
 
                 post("/sessions/sign-out-others") {
                     val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
-                    val user = authService.authenticate(token)
+                    val user = authService.authenticateWithoutActivity(token)
                     call.respond(SignedOutDevicesDto(signedOut = devices.signOutOthers(user.id, token)))
                 }
             }
@@ -87,7 +88,7 @@ fun Application.configureAuthRoutes(
 
                 post("/password/change") {
                     val token = call.bearerTokenOrNull() ?: throw AuthException("UNAUTHENTICATED")
-                    val user = authService.authenticate(token)
+                    val user = authService.authenticateWithoutActivity(token)
                     val request = call.receive<PasswordChangeDto>()
                     recovery.changePassword(user.id, token, request.currentPassword, request.newPassword)
                     call.respond(PasswordChangedDto(changed = true))
@@ -120,6 +121,12 @@ fun authStatusFor(code: String): HttpStatusCode =
         "SESSION_NOT_FOUND" -> HttpStatusCode.NotFound
         "CANNOT_SIGN_OUT_CURRENT_SESSION" -> HttpStatusCode.Conflict
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
+        // Continue with Google / Apple (API_CONTRACT_SPEC "Section 5 contract").
+        "INVALID_SOCIAL_TOKEN" -> HttpStatusCode.Unauthorized
+        "SOCIAL_SIGN_IN_UNAVAILABLE", "SOCIAL_IDENTITY_NOT_LINKED", "SOCIAL_ACCOUNT_NOT_FOUND" -> HttpStatusCode.NotFound
+        "SOCIAL_SIGNUP_NEEDS_AGE_GATE" -> HttpStatusCode.UnprocessableEntity
+        "SOCIAL_EMAIL_HAS_ACCOUNT", "SOCIAL_IDENTITY_IN_USE", "SOCIAL_PROVIDER_ALREADY_LINKED", "LAST_SIGN_IN_METHOD" -> HttpStatusCode.Conflict
+        "SOCIAL_SIGN_IN_TEMPORARILY_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
         "INVALID_EMAIL",
         "PASSWORD_TOO_SHORT",
         "PASSWORD_TOO_COMMON",

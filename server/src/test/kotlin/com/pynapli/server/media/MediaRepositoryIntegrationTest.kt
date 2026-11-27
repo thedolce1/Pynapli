@@ -143,6 +143,7 @@ class MediaRepositoryIntegrationTest {
                             byteSize = 1_024,
                             pixelWidth = 800,
                             pixelHeight = 600,
+                            intendedAlbumKind = "private",
                         ),
                     assetIdFactory = { UUID.fromString("20000000-0000-0000-0000-000000000001") },
                 )
@@ -198,20 +199,20 @@ class MediaRepositoryIntegrationTest {
                     albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000501") },
                 )
             val pending =
-                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "pending-visible-owner"), {
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "pending-visible-owner", intendedAlbumKind = "private"), {
                     UUID.fromString("20000000-0000-0000-0000-000000000501")
                 })
             repository.markAssetUploaded(ownerId, pending.mediaAssetId)
             repository.addAssetToAlbum(ownerId, album.albumId, pending.mediaAssetId, sortOrder = 0)
             val approved =
-                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "approved-visible-grantee"), {
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "approved-visible-grantee", intendedAlbumKind = "private"), {
                     UUID.fromString("20000000-0000-0000-0000-000000000502")
                 })
             repository.markAssetUploaded(ownerId, approved.mediaAssetId)
             repository.markAssetReadyApproved(ownerId, approved.mediaAssetId)
             repository.addAssetToAlbum(ownerId, album.albumId, approved.mediaAssetId, sortOrder = 1)
             val removed =
-                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "removed-hidden"), {
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "removed-hidden", intendedAlbumKind = "private"), {
                     UUID.fromString("20000000-0000-0000-0000-000000000503")
                 })
             repository.markAssetUploaded(ownerId, removed.mediaAssetId)
@@ -304,7 +305,7 @@ class MediaRepositoryIntegrationTest {
                     albumIdFactory = { UUID.fromString("10000000-0000-0000-0000-000000000601") },
                 )
             val asset =
-                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "grid-photo"), {
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "grid-photo", intendedAlbumKind = "profile"), {
                     UUID.fromString("20000000-0000-0000-0000-000000000601")
                 })
             repository.markAssetUploaded(ownerId, asset.mediaAssetId)
@@ -400,7 +401,7 @@ class MediaRepositoryIntegrationTest {
                 )
 
             val held =
-                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "held"), {
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "held", intendedAlbumKind = "private"), {
                     UUID.fromString("20000000-0000-0000-0000-000000000621")
                 })
             repository.markAssetUploaded(ownerId, held.mediaAssetId)
@@ -408,7 +409,7 @@ class MediaRepositoryIntegrationTest {
             repository.addAssetToAlbum(ownerId, album.albumId, held.mediaAssetId, sortOrder = 0)
 
             val removed =
-                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "removed"), {
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "removed", intendedAlbumKind = "private"), {
                     UUID.fromString("20000000-0000-0000-0000-000000000622")
                 })
             repository.markAssetUploaded(ownerId, removed.mediaAssetId)
@@ -416,14 +417,14 @@ class MediaRepositoryIntegrationTest {
             repository.addAssetToAlbum(ownerId, album.albumId, removed.mediaAssetId, sortOrder = 1)
 
             val failed =
-                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "failed"), {
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "failed", intendedAlbumKind = "private"), {
                     UUID.fromString("20000000-0000-0000-0000-000000000623")
                 })
             dataSource.setAssetProcessingStatus(failed.mediaAssetId, "failed")
             repository.addAssetToAlbum(ownerId, album.albumId, failed.mediaAssetId, sortOrder = 2)
 
             val approved =
-                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "approved"), {
+                repository.createAsset(ownerId, sampleAssetCreate(ownerId, "approved", intendedAlbumKind = "private"), {
                     UUID.fromString("20000000-0000-0000-0000-000000000624")
                 })
             repository.markAssetUploaded(ownerId, approved.mediaAssetId)

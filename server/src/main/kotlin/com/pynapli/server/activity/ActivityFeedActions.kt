@@ -1,6 +1,7 @@
 package com.pynapli.server.activity
 
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.forAssetsOrOriginals
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.RiskPolicyService
 import com.pynapli.server.subscriptions.EntitlementPolicy
@@ -16,6 +17,7 @@ internal class ActivityFeedActions(
     private val subscriptionService: SubscriptionService?,
     private val cursorCodec: ActivityCursorCodec,
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    private val mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
 ) {
     suspend fun listActivity(
         recipientUserId: UUID,
@@ -102,8 +104,10 @@ internal class ActivityFeedActions(
                 0
             }
         // The pair name on a "liked you together" row never names someone hiding from the recipient.
+        val rows = revealed.foldPairLikes(blockedRelatedIds + hiddenFromRecipient)
+        val images = mediaImages.forAssetsOrOriginals(mediaAssetUrlResolver, rows.map { it.actorProfilePhotoMediaAssetId })
         return ActivityFeedResponseDto(
-            items = revealed.foldPairLikes(blockedRelatedIds + hiddenFromRecipient).map { it.toDto(mediaAssetUrlResolver) },
+            items = rows.map { it.toDto(mediaAssetUrlResolver, images) },
             nextCursor = nextCursor,
             entitlementTier = policy.tier,
             revealLimit = if (policy.fullActivityReveal) null else policy.activityRevealLimit,

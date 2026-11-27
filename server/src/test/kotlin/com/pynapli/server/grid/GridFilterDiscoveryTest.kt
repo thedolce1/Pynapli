@@ -1,6 +1,7 @@
 package com.pynapli.server.grid
 
 import com.pynapli.server.discovery.DiscoveryFilters
+import com.pynapli.server.presence.GridActiveAgo
 import com.pynapli.server.swipe.JdbcSwipeRepository
 import com.pynapli.server.testsupport.PynapliTestDatabase
 import io.kotest.core.spec.style.StringSpec
@@ -49,59 +50,129 @@ class GridFilterDiscoveryTest :
             }
         }
 
-        "grid query with recentlyJoinedOnly excludes older accounts" {
+        "grid query with freshOnly keeps new accounts and new photos that were active today, and the card says so" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000d01")
-                val freshTarget = UUID.fromString("00000000-0000-0000-0000-000000000d02")
+                val newAccount = UUID.fromString("00000000-0000-0000-0000-000000000d02")
                 val staleTarget = UUID.fromString("00000000-0000-0000-0000-000000000d03")
+                val newPhoto = UUID.fromString("00000000-0000-0000-0000-000000000d04")
+                val oldPhoto = UUID.fromString("00000000-0000-0000-0000-000000000d05")
+                val newButIdle = UUID.fromString("00000000-0000-0000-0000-000000000d06")
+                val now = Instant.now()
                 dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
-                dataSource.insertDiscoverableUser(freshTarget, "Fern", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(newAccount, "Fern", age = 30, longitude = -122.0836, latitude = 37.4226)
                 dataSource.insertDiscoverableUser(staleTarget, "Otto", age = 41, longitude = -122.0838, latitude = 37.4228)
-                // Accounts are created "now" by default; push the stale one past the 7-day window.
+                dataSource.insertDiscoverableUser(newPhoto, "Pia", age = 33, longitude = -122.0839, latitude = 37.4227)
+                dataSource.insertDiscoverableUser(oldPhoto, "Quin", age = 34, longitude = -122.0837, latitude = 37.4225)
+                dataSource.insertDiscoverableUser(newButIdle, "Rae", age = 35, longitude = -122.0835, latitude = 37.4224)
+                // Accounts are created "now" by default. Fern: brand new (and so active today).
+                // Otto: 30-day-old account, active an hour ago, no new photo -> not fresh.
                 dataSource.setUserCreatedDaysAgo(staleTarget, days = 30)
+                dataSource.setLastActive(staleTarget, now.minus(Duration.ofHours(1)))
+                // Pia: old account, photo added 2 h ago, active 1 h ago -> fresh.
+                dataSource.setUserCreatedDaysAgo(newPhoto, days = 30)
+                dataSource.insertApprovedProfilePhoto(newPhoto)
+                dataSource.setProfilePhotosAddedHoursAgo(newPhoto, hours = 2)
+                dataSource.setLastActive(newPhoto, now.minus(Duration.ofHours(1)))
+                // Quin: old account, photo added 30 h ago, active now -> not fresh.
+                dataSource.setUserCreatedDaysAgo(oldPhoto, days = 30)
+                dataSource.insertApprovedProfilePhoto(oldPhoto)
+                dataSource.setProfilePhotosAddedHoursAgo(oldPhoto, hours = 30)
+                dataSource.setLastActive(oldPhoto, now)
+                // Rae: 2-day-old account (inside 72 h) but last active 30 h ago -> not fresh.
+                dataSource.setUserCreatedDaysAgo(newButIdle, days = 2)
+                dataSource.setLastActive(newButIdle, now.minus(Duration.ofHours(30)))
 
                 val repository = JdbcGridRepository(dataSource)
-                val recentlyJoined =
+                val fresh =
                     repository
                         .queryNearby(
                             viewerUserId = viewer,
                             radiusMeters = 100_000,
-                            limit = 10,
-                            filters = DiscoveryFilters(recentlyJoinedOnly = true),
+                            limit = 12,
+                            filters = DiscoveryFilters(freshOnly = true),
                         ).cards
 
-                assertEquals(listOf(freshTarget), recentlyJoined.map { it.userId })
+                assertEquals(setOf(newAccount, newPhoto), fresh.map { it.userId }.toSet())
+                assertTrue(fresh.all { it.fresh })
+
+                // Without the filter, the card flag follows the same rule.
+                val everyone = repository.queryNearby(viewerUserId = viewer, radiusMeters = 100_000, limit = 12).cards
+                assertEquals(setOf(newAccount, newPhoto), everyone.filter { it.fresh }.map { it.userId }.toSet())
+                assertEquals(5, everyone.size)
             }
         }
 
-        "grid query with activeTodayOnly excludes profiles with no recent session" {
+        "an old client's recentlyJoinedOnly means Fresh" {
+            runBlocking {
+                val viewer = UUID.fromString("00000000-0000-0000-0000-000000000d11")
+                val newAccount = UUID.fromString("00000000-0000-0000-0000-000000000d12")
+                val oldAccount = UUID.fromString("00000000-0000-0000-0000-000000000d13")
+                dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
+                dataSource.insertDiscoverableUser(newAccount, "Fern", age = 30, longitude = -122.0836, latitude = 37.4226)
+                dataSource.insertDiscoverableUser(oldAccount, "Otto", age = 41, longitude = -122.0838, latitude = 37.4228)
+                dataSource.setUserCreatedDaysAgo(oldAccount, days = 5)
+                dataSource.setLastActive(oldAccount, Instant.now())
+
+                val cards =
+                    GridService(JdbcGridRepository(dataSource))
+                        .queryGrid(
+                            viewer,
+                            com.pynapli.shared.network.dto
+                                .GridQueryRequestDto(radiusMeters = 100_000, recentlyJoinedOnly = true),
+                        ).items
+
+                // 5 days old was "recently joined" (7 days) but is not Fresh (72 h).
+                assertEquals(listOf(newAccount.toString()), cards.map { it.userId })
+                assertTrue(cards.single().fresh)
+            }
+        }
+
+        // One "active" source (GridActivitySql.lastActiveAt): the filter, the card's activeAgo caption
+        // and Fresh all read user_last_active. Before, the filter read user_sessions.last_seen_at, so a
+        // member with a fresh session row but an old last-active row (or the reverse) disagreed.
+        "grid query with activeTodayOnly matches exactly the cards whose caption says active today or sooner" {
             runBlocking {
                 val viewer = UUID.fromString("00000000-0000-0000-0000-000000000c01")
                 val activeTarget = UUID.fromString("00000000-0000-0000-0000-000000000c02")
                 val staleTarget = UUID.fromString("00000000-0000-0000-0000-000000000c03")
-                val noSessionTarget = UUID.fromString("00000000-0000-0000-0000-000000000c04")
+                val sessionOnlyTarget = UUID.fromString("00000000-0000-0000-0000-000000000c04")
+                val newAccount = UUID.fromString("00000000-0000-0000-0000-000000000c05")
                 dataSource.insertDiscoverableUser(viewer, "Viewer", age = 38, longitude = -122.0841, latitude = 37.4220)
                 dataSource.insertDiscoverableUser(activeTarget, "Ada", age = 35, longitude = -122.0836, latitude = 37.4226)
                 dataSource.insertDiscoverableUser(staleTarget, "Stan", age = 33, longitude = -122.0838, latitude = 37.4228)
-                dataSource.insertDiscoverableUser(noSessionTarget, "Nora", age = 31, longitude = -122.0839, latitude = 37.4229)
-                val now = java.time.Instant.now()
-                dataSource.insertSession(activeTarget, lastSeenAt = now.minusSeconds(3_600)) // active ~1h ago
-                dataSource.insertSession(staleTarget, lastSeenAt = now.minusSeconds(3L * 86_400)) // last seen 3 days ago
-                // A recently-seen but REVOKED session must not count as active.
-                dataSource.insertSession(activeTarget, lastSeenAt = now, revoked = true)
-                // noSessionTarget has no session row at all.
+                dataSource.insertDiscoverableUser(sessionOnlyTarget, "Sid", age = 31, longitude = -122.0839, latitude = 37.4229)
+                dataSource.insertDiscoverableUser(newAccount, "Nell", age = 29, longitude = -122.0837, latitude = 37.4227)
+                // Old accounts, so account creation doesn't count as recent activity.
+                listOf(activeTarget, staleTarget, sessionOnlyTarget).forEach { dataSource.setUserCreatedDaysAgo(it, days = 60) }
+                val now = Instant.now()
+                dataSource.setLastActive(activeTarget, now.minusSeconds(3_600)) // ~1h ago
+                dataSource.setLastActive(staleTarget, now.minusSeconds(3L * 86_400)) // 3 days ago
+                // A session seen just now but last-active 3 days ago: the old filter said "active today".
+                dataSource.setLastActive(sessionOnlyTarget, now.minusSeconds(3L * 86_400))
+                dataSource.insertSession(sessionOnlyTarget, lastSeenAt = now)
+                // newAccount: created just now, no last-active row; counts as active, like the caption.
 
                 val repository = JdbcGridRepository(dataSource)
                 val activeToday =
                     repository
-                        .queryNearby(
-                            viewerUserId = viewer,
-                            radiusMeters = 100_000,
-                            limit = 10,
-                            filters = DiscoveryFilters(activeTodayOnly = true),
-                        ).cards
+                        .queryNearby(viewerUserId = viewer, radiusMeters = 100_000, limit = 10, filters = DiscoveryFilters(activeTodayOnly = true))
+                        .cards
+                assertEquals(setOf(activeTarget, newAccount), activeToday.map { it.userId }.toSet())
 
-                assertEquals(listOf(activeTarget), activeToday.map { it.userId })
+                // Oracle: the captions GridService builds for the unfiltered page.
+                val todayOrSooner = setOf(GridActiveAgo.ONLINE, GridActiveAgo.WITHIN_15_MINUTES, GridActiveAgo.WITHIN_1_HOUR, GridActiveAgo.WITHIN_3_HOURS, GridActiveAgo.TODAY)
+                val captions =
+                    GridService(JdbcGridRepository(dataSource))
+                        .queryGrid(
+                            viewer,
+                            com.pynapli.shared.network.dto
+                                .GridQueryRequestDto(radiusMeters = 100_000, limit = 60),
+                        ).items
+                        .filter { it.activeAgo in todayOrSooner }
+                        .map { UUID.fromString(it.userId) }
+                        .toSet()
+                assertEquals(captions, activeToday.map { it.userId }.toSet())
             }
         }
 

@@ -32,9 +32,9 @@ internal const val WELCOME_VALUE_LINE = "Where lifestyle couples and curious adu
  * the onboarding stepper) and **Sign in** (secondary, opens the sign-in form). Nothing here takes
  * an email, so nothing here can say anything about one.
  *
- * [socialSignIn] is the slot reserved for "Continue with Google / Apple" (onboarding + first grid
- * plan, Section 5). It is empty until those exist, so the layout does not move when they arrive:
- * they go above Create account, the way the other apps stack them.
+ * [socialSignIn] holds "Continue with Google / Apple" (onboarding + first grid plan, Section 5;
+ * [SocialSignInButtons]) above Create account, the way the other apps stack them. It draws nothing
+ * until the server switches a provider on, so with the feature off this screen is unchanged.
  */
 @Composable
 fun WelcomeScreen(
@@ -89,9 +89,12 @@ fun WelcomeScreen(
         socialSignIn()
 
         onCreateAccount?.let { create ->
+            // Off while a Google / Apple attempt (or the dev login) is in flight: a known identity
+            // signing in must not land under a freshly opened email stepper.
             Button(
                 onClick = create,
-                modifier = Modifier.fillMaxWidth().handCursor(),
+                enabled = !isSubmitting,
+                modifier = Modifier.fillMaxWidth().handCursor(enabled = !isSubmitting),
             ) {
                 Text("Create account")
             }
@@ -99,7 +102,8 @@ fun WelcomeScreen(
         }
         OutlinedButton(
             onClick = onSignIn,
-            modifier = Modifier.fillMaxWidth().handCursor(),
+            enabled = !isSubmitting,
+            modifier = Modifier.fillMaxWidth().handCursor(enabled = !isSubmitting),
         ) {
             Text("Sign in")
         }

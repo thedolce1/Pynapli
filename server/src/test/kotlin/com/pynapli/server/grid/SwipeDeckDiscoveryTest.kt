@@ -383,7 +383,6 @@ class SwipeDeckDiscoveryTest :
                 val filters =
                     DiscoveryFilters(
                         minimumAge = 35,
-                        relationshipContexts = setOf("linked"),
                         linkedOnly = true,
                     )
 

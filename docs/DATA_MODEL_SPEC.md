@@ -87,6 +87,12 @@ every change must keep.
   the exemption after a retention purge), `conversations.updated_by_user_id` (who caused the last
   bump, so a hidden person's acts don't reorder a viewer's inbox) and
   `contact_block_job_state.last_success_at` (a failed sweep is retried within the hour).
+- **Last activity** (`user_last_active(user_id PK, last_active_at)`, V106): written at most once a
+  minute per user from every authenticated request, realtime socket open and presence heartbeat
+  (plan G2); read only server-side, never returned. V127 backfills it from each account's newest live
+  `user_sessions.last_seen_at` (only where later), so the Grid's rank tier, Fresh rule and card
+  `activeAgo` (GRID_IMPLEMENTATION_SPEC "Presence States") read this one primary-key row instead of
+  scanning sessions. No schema change.
 - **Account deletion** soft-deletes `users` (`status='deleted'`, `deleted_at`) and keeps the row for
   the integrity of retained safety/legal records. In the same transaction, GDPR/CCPA erasure nulls
   identity hashes (`email_hash`, `phone_hash`, `firebase_uid`), clears `auth_identities` credentials
@@ -102,6 +108,13 @@ every change must keep.
 - **Bio is never a filter source.** Everything filterable is a structured, indexed column or tag.
 - Saved filter presets may be JSON; live filterable profile data may not.
 - Public photos need moderation approval before public visibility. The Grid uses thumbnails only.
+- Grid thumbnails (V130, G2-2): `media_assets.thumbnail_variant` (only `v1-thumb-480`; set as a claim
+  before the object at `media/{id}/v1-thumb-480.jpg` is written, so a crash leaves a row to clean),
+  `thumbnail_ready_at` (set only after the write, in a statement that re-checks the photo is still an
+  approved, live profile photo; the only column read paths trust), `thumbnail_claimed_at` (a 5-minute
+  generation lease), `thumbnail_attempts` and `thumbnail_failed_at` (terminal: keep the original).
+  Partial indexes serve the backfill scan and the reconciler walk. The media purge skips rows whose
+  `thumbnail_variant` is still set. Never set for private, chat or verification media.
 - `profiles.verified_at` / `face_photo_verified_at` are written only by an admin approving a selfie
   photo verification (`photo_verifications`, V103) and cleared by an admin revoke. Filters, badges and
   `partner_visibility = 'verified_only'` read them. `age_verified_at` is written by age verification.
@@ -155,6 +168,20 @@ every change must keep.
 - One open or under-review appeal per user/action/target. User-facing appeal history **never exposes
   `admin_reason` or audit metadata**. Severe legal/CSAM decisions are non-appealable by policy above
   the table.
+- "Met in person" (V122): `vouches` holds no user, conversation or link id: the unique directed
+  `pair_token` and `subject_token`, `partner_token`, `link_token` are HMAC-SHA256 values under K3
+  (`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`), one domain prefix per kind; dates are whole UTC days;
+  `voided_at` is an admin void. `met_in_person_key` holds the key check value (writes and the batch refuse
+  a different key). `vouch_badges` (by user id: published booleans and a freeze only, deleted when both are
+  off), `vouch_badge_states` (pending crossings, by subject token), `vouch_link_ends`, and
+  `vouch_batch_schedule` (with the pass in progress and its cursor, V125, and failures at that cursor, V126). V123 adds
+  `vouches.voided_with_voucher` (which void voided a row). Deletion removes the person's rows by
+  recomputed tokens and, like export, refuses under a key that does not match. Any database that ran this
+  feature's earlier V120 must be reset. Details: TRUST_AND_SAFETY_SPEC "Met in person".
+- `profile_link_history` (V124): per directed `user_profile_links` pair, the first invite sent and the
+  first acceptance, kept by a trigger and cleared only by account deletion (both directions; the
+  data export lists the person's own rows by the partnerLinks hide rule), so a re-invite (which resets `accepted_at`) or a
+  decline cannot erase that two people were linked. Read by the Met in person evaluator.
 - Age verification never stores raw ID or biometric data unless legally required and reviewed. A
   successful verification sets `profiles.age_verified_at`; discovery reads that timestamp, not
   provider data.

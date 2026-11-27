@@ -112,10 +112,19 @@ internal class MessagingConversationGuard(
 internal fun ConversationRecord.isHiddenConversationFor(
     viewerUserId: UUID,
     hiddenFromViewer: Set<UUID>,
+): Boolean = isConversationHiddenFor(participants.map { it.userId }.filter { it != viewerUserId }, hiddenFromViewer)
+
+/**
+ * The rule behind [isHiddenConversationFor] for callers that hold only participant ids ("Met in
+ * person"): [otherParticipantIds] are the viewer's current co-participants (active or invited, not
+ * left: the rows [loadConversation] holds) without the viewer.
+ */
+internal fun isConversationHiddenFor(
+    otherParticipantIds: Collection<UUID>,
+    hiddenFromViewer: Set<UUID>,
 ): Boolean {
     if (hiddenFromViewer.isEmpty()) return false
-    val others = participants.filter { it.userId != viewerUserId }
-    return others.isNotEmpty() && others.all { it.userId in hiddenFromViewer }
+    return otherParticipantIds.isNotEmpty() && otherParticipantIds.all { it in hiddenFromViewer }
 }
 
 /**

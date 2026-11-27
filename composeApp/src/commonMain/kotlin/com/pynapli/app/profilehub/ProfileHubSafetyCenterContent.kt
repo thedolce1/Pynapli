@@ -24,9 +24,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliShape
 import com.pynapli.app.design.handCursor
@@ -40,6 +42,7 @@ import com.pynapli.app.design.icons.filled.PhotoLibrary
 import com.pynapli.app.design.icons.filled.Security
 import com.pynapli.app.design.icons.filled.VerifiedUser
 import com.pynapli.app.design.icons.filled.VisibilityOff
+import com.pynapli.app.media.rememberCachedImageModel
 import com.pynapli.shared.network.dto.BlockSummaryDto
 import com.pynapli.shared.network.dto.HiddenProfileSummaryDto
 import com.pynapli.shared.network.dto.SupportContactDto
@@ -322,7 +325,19 @@ private fun HiddenProfileRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        SafetyIcon(icon = Icons.Filled.VisibilityOff)
+        // Plan G2-4: a small avatar so the viewer knows who they are unhiding (the server sends none
+        // when a block stands either way or the person is gone); the hidden icon otherwise.
+        val avatarUrl = hiddenProfile.thumbnailUrl
+        if (avatarUrl != null) {
+            AsyncImage(
+                model = rememberCachedImageModel(url = avatarUrl, cacheKey = hiddenProfile.thumbnailCacheKey),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(34.dp).clip(PynapliShape.PhotoShape),
+            )
+        } else {
+            SafetyIcon(icon = Icons.Filled.VisibilityOff)
+        }
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(3.dp),

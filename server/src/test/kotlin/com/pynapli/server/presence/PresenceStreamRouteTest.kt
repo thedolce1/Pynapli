@@ -227,7 +227,7 @@ class PresenceStreamRouteTest {
     }
 }
 
-private class NoopBlockRepository : BlockRepository {
+internal class NoopBlockRepository : BlockRepository {
     override suspend fun block(
         blockerUserId: UUID,
         blockedUserId: UUID,

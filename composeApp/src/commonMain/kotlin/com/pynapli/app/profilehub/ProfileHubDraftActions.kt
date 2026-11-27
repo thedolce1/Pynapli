@@ -59,6 +59,8 @@ internal class ProfileHubDraftActions(
 
     fun updateSharePsyncSoloMatches(value: Boolean) = updatePrivacyDraft { it.copy(sharePsyncSoloMatches = value) }
 
+    fun updateShowMetInPersonBadge(value: Boolean) = updatePrivacyDraft { it.copy(showMetInPersonBadge = value) }
+
     fun updateShowInViewedLists(value: Boolean) = updateActivityDraft { it.copy(showInViewedLists = value) }
 
     fun updateAllowGridMessages(value: Boolean) =

@@ -23,6 +23,8 @@ internal fun Connection.hydrateGridCards(
                linked_partner.linked_partner_user_id,
                linked_partner.linked_partner_display_name,
                linked_partner.linked_partner_thumbnail_media_asset_id,
+               linked_partner.linked_partner_age,
+               linked_partner.linked_partner_gender,
                COALESCE(linked_partner.linked_partner_verified, false) AS linked_partner_verified,
                -- Photo verification (TRUST_AND_SAFETY_SPEC): the owner's badge, and with a verified
                -- visible partner, the couple badge.
@@ -39,8 +41,16 @@ internal fun Connection.hydrateGridCards(
                      AND ts.status = 'active'
                      AND ts.paused_at IS NULL
                      AND ts.expires_at > now()
-               ) AS tonight_active
+               ) AS tonight_active,
+               -- Plan G4 "New" marker: the same Fresh rule as the freshOnly filter.
+               COALESCE(${GridActivitySql.fresh(user = "hu", tag = "hfresh")}, false) AS fresh,
+               -- Plan G11: only ever bucketed in Kotlin (GridActiveAgo); never returned as a time.
+               ${GridActivitySql.lastActiveAt(user = "hu", tag = "hlast")} AS last_active_at,
+               -- The member hides their activity (incognito, the only such setting today): no key.
+               COALESCE(hds.incognito, true) AS activity_hidden
         FROM unnest(?::uuid[]) AS pc(user_id)
+        LEFT JOIN users hu ON hu.id = pc.user_id
+        LEFT JOIN discovery_settings hds ON hds.user_id = pc.user_id
         LEFT JOIN LATERAL (
             SELECT mai.media_asset_id
             FROM media_albums ma
@@ -58,14 +68,18 @@ internal fun Connection.hydrateGridCards(
               AND m.media_type = 'image'
               AND m.processing_status = 'ready'
               AND m.moderation_status = 'approved'
+              AND m.intended_album_kind = 'profile'
             ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
             LIMIT 1
         ) profile_photo ON true
         LEFT JOIN LATERAL (
             SELECT upl.linked_user_id AS linked_partner_user_id,
-                   COALESCE(NULLIF(linked_profile.display_name, ''), 'Pynapli User') AS linked_partner_display_name,
+                   COALESCE(NULLIF(linked_profile.display_name, ''), 'New member') AS linked_partner_display_name,
                    linked_partner_photo.media_asset_id AS linked_partner_thumbnail_media_asset_id,
-                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified
+                   (linked_profile.verified_at IS NOT NULL) AS linked_partner_verified,
+                   -- Plan G2-3: the partner's own declared age and gender, only with this gated row.
+                   linked_profile.display_age AS linked_partner_age,
+                   linked_profile.gender AS linked_partner_gender
             FROM user_profile_links upl
             JOIN users linked_user
               ON linked_user.id = upl.linked_user_id
@@ -96,6 +110,7 @@ internal fun Connection.hydrateGridCards(
                   AND m.media_type = 'image'
                   AND m.processing_status = 'ready'
                   AND m.moderation_status = 'approved'
+                  AND m.intended_album_kind = 'profile'
                 ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
                 LIMIT 1
             ) linked_partner_photo ON true
@@ -161,9 +176,14 @@ internal fun Connection.hydrateGridCards(
                                     "linked_partner_thumbnail_media_asset_id",
                                     UUID::class.java,
                                 ),
+                            linkedPartnerAge = rs.getObject("linked_partner_age") as? Int,
+                            linkedPartnerGender = rs.getString("linked_partner_gender"),
                             tonightActive = rs.getBoolean("tonight_active"),
                             verified = rs.getBoolean("verified"),
                             linkedPartnerVerified = rs.getBoolean("linked_partner_verified"),
+                            fresh = rs.getBoolean("fresh"),
+                            lastActiveAt = rs.getTimestamp("last_active_at")?.toInstant(),
+                            activityHidden = rs.getBoolean("activity_hidden"),
                         ),
                     )
                 }

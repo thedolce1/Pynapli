@@ -91,6 +91,10 @@ object PynapliColors {
     // dot). Replaces the cool slate/grey literals that clashed with the warm palette on the Tonight
     // map dots + halos; aliased as [PynapliSemantic.Offline].
     val Offline = Color(0xFF8A8580)
+
+    // "Met in person" badge (members confirmed meeting them; not checked by Pynapli). A muted sage so
+    // it never reads as the blue verified tick or the gold premium accent.
+    val MetInPerson = Color(0xFF8FBF9F)
 }
 
 /**

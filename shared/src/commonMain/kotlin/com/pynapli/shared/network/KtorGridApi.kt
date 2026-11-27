@@ -4,6 +4,7 @@ import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.network.dto.CreateSavedGridFilterRequestDto
 import com.pynapli.shared.network.dto.CreateSavedSwipeFilterRequestDto
 import com.pynapli.shared.network.dto.FavoriteStatusDto
+import com.pynapli.shared.network.dto.GridCountResponseDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.SavedGridFilterDto
@@ -24,6 +25,8 @@ internal class KtorGridApi(
     private val support: KtorApiSupport,
 ) : GridApi {
     override suspend fun queryGrid(request: GridQueryRequestDto): AppResult<GridQueryResponseDto> = support.authSend(HttpMethod.Post, "/v1/grid/query", request)
+
+    override suspend fun countGrid(request: GridQueryRequestDto): AppResult<GridCountResponseDto> = support.authSend(HttpMethod.Post, "/v1/grid/count", request)
 
     override suspend fun listFavorites(cursor: String?): AppResult<GridQueryResponseDto> =
         support.authGet("/v1/favorites") {

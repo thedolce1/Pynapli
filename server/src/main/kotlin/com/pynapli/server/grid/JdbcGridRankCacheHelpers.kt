@@ -86,9 +86,12 @@ internal fun Connection.viewerHasActiveTravelLocation(viewerUserId: UUID): Boole
  * Grid is cache-eligible unless `linkedOnly` or `verifiedCouplesOnly` is set. Mirrors Swipe's
  * `DiscoveryFilters.isRankCacheEligible()`: both bake per-viewer state (blocks; for verified
  * couples also the owner's partner visibility toward this viewer and the viewer's hidden list)
- * into the linked-partner test, so the window is not shareable cross-viewer.
+ * into the linked-partner test, so the window is not shareable cross-viewer. The partner filters
+ * and "No single men" (PartnerFilterSql) run the same per-viewer partner gate as linkedOnly, so
+ * they never share a window either (plan G2-3). "Haven't chatted" tests this viewer's own messages, so
+ * it is per viewer too (plan G2-4).
  */
-internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly
+internal fun DiscoveryFilters.isGridRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly && !hasPartnerFilters && !excludeSingleMen && !haventChattedOnly
 
 /**
  * Stable cache-class key for the FILTER properties that define the ranked
@@ -126,7 +129,7 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         append(';')
         append(activeTodayOnly)
         append(';')
-        append(recentlyJoinedOnly)
+        append(freshOnly)
         append(';')
         append(travelingHereOnly)
         append(';')
@@ -143,4 +146,10 @@ internal fun DiscoveryFilters.gridRankCacheKey(): String =
         // Never cached (see isGridRankCacheEligible); keyed anyway so a future eligibility change
         // cannot let filtered and unfiltered viewers share a window.
         append(verifiedCouplesOnly)
+        // Never cached either; keyed for the same reason. Empty when unset.
+        append(partnerScopeKey)
+        // Never cached either (per viewer); appended only when on.
+        if (haventChattedOnly) append(";haventChatted")
+        // Any-of and all-of rank different sets: never one window. Appended only when on.
+        if (lifestyleMatchAll) append(";lifestyleAllOf")
     }

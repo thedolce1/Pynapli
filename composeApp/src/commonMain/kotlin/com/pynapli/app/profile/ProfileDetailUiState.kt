@@ -3,6 +3,7 @@ package com.pynapli.app.profile
 import androidx.compose.runtime.Immutable
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.app.media.MediaAlbumItemUi
+import com.pynapli.app.media.OwnPreviewPhoto
 import com.pynapli.shared.network.dto.PublicProfileDto
 
 @Immutable
@@ -32,6 +33,9 @@ data class ProfileDetailUiState(
     // True when the viewer opened their OWN public profile from the Hub "Preview profile" row:
     // the sheet renders read-only (no block/hide/report, no message/spark/album actions).
     val isOwnProfile: Boolean = false,
+    // Own preview only: the owner's profile photos from their own album listing, including ones
+    // still being reviewed (labelled in the hero). Empty for everyone else's profile.
+    val ownPreviewPhotos: List<OwnPreviewPhoto> = emptyList(),
     // Opened from a like in Likes You: the Activity event the sheet's "Like back" answers.
     val likeBackEventId: String? = null,
     val isTogglingFavorite: Boolean = false,

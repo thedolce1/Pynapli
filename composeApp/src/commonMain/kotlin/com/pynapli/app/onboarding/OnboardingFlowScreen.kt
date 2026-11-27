@@ -69,7 +69,9 @@ import com.pynapli.app.design.icons.filled.Person
 import com.pynapli.app.location.LOCATION_SKIP_COST_COPY
 import com.pynapli.app.location.LocationAccessHelp
 import com.pynapli.app.location.LocationUiState
+import com.pynapli.app.media.BEING_REVIEWED_LABEL
 import com.pynapli.app.media.MediaAlbumsUiState
+import com.pynapli.app.media.ownPreviewPhotos
 import com.pynapli.app.media.primaryOwnerProfilePhotoUrl
 import com.pynapli.shared.core.config.LegalLinks
 import kotlinx.coroutines.delay
@@ -158,7 +160,7 @@ fun OnboardingFlowScreen(
         }
         Spacer(modifier = Modifier.height(12.dp))
         if (state.step != OnboardingStep.UnderageStop) {
-            StepProgressDots(step = state.step)
+            StepProgressDots(step = state.step, social = state.socialProvider != null)
         }
         Spacer(modifier = Modifier.height(28.dp))
 
@@ -185,6 +187,7 @@ fun OnboardingFlowScreen(
 
             OnboardingStep.Policies ->
                 PoliciesStep(
+                    state = state,
                     onAcceptPolicies = onAcceptPolicies,
                     onBackToDob = onBackToDob,
                 )
@@ -425,6 +428,7 @@ private fun UnderageStopStep(
 
 @Composable
 private fun PoliciesStep(
+    state: OnboardingUiState,
     onAcceptPolicies: () -> Unit,
     onBackToDob: () -> Unit,
 ) {
@@ -453,15 +457,17 @@ private fun PoliciesStep(
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
+    // A Google / Apple sign-up finishes on this Accept (the provider asks once more), so it can be
+    // in flight and can fail here; an email sign-up just moves on.
+    StepError(state.errorMessage)
     Spacer(modifier = Modifier.height(12.dp))
-    Button(
+    SubmittingButton(
+        text = "Accept",
+        isSubmitting = state.isSubmitting,
         onClick = onAcceptPolicies,
-        modifier = Modifier.fillMaxWidth().handCursor(),
-    ) {
-        Text("Accept")
-    }
+    )
     Spacer(modifier = Modifier.height(10.dp))
-    TextButton(onClick = onBackToDob, modifier = Modifier.handCursor()) {
+    TextButton(onClick = onBackToDob, enabled = !state.isSubmitting, modifier = Modifier.handCursor(enabled = !state.isSubmitting)) {
         Text("Back")
     }
 }
@@ -751,7 +757,13 @@ private fun ProfileStep(
     Spacer(modifier = Modifier.height(12.dp))
     if (hasPhoto) {
         Text(
-            text = "Photo added! It will appear once it's approved.",
+            // Pre-screening approves most photos within seconds; a held one waits for a person.
+            text =
+                if (mediaState.ownPreviewPhotos().firstOrNull()?.beingReviewed == true) {
+                    "Photo added. $BEING_REVIEWED_LABEL until it's approved."
+                } else {
+                    "Photo added."
+                },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
@@ -805,10 +817,15 @@ private fun ProfileStep(
 }
 
 @Composable
-private fun StepProgressDots(step: OnboardingStep) {
-    val currentIndex = progressSteps.indexOf(step).coerceAtLeast(0)
+private fun StepProgressDots(
+    step: OnboardingStep,
+    social: Boolean,
+) {
+    // A Google / Apple sign-up has no email, password or code steps, so fewer dots.
+    val steps = if (social) socialProgressSteps else progressSteps
+    val currentIndex = steps.indexOf(step).coerceAtLeast(0)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        progressSteps.forEachIndexed { index, _ ->
+        steps.forEachIndexed { index, _ ->
             // Reached steps fill with the accent; the current step stretches into a short
             // pill so "you are here" reads at a glance. Both animate through the shared
             // motion tokens, giving the stepper the same restrained life as the core loop.
@@ -917,6 +934,14 @@ private val progressSteps =
         OnboardingStep.Policies,
         OnboardingStep.Account,
         OnboardingStep.VerifyEmail,
+        OnboardingStep.Location,
+        OnboardingStep.Profile,
+    )
+
+private val socialProgressSteps =
+    listOf(
+        OnboardingStep.Dob,
+        OnboardingStep.Policies,
         OnboardingStep.Location,
         OnboardingStep.Profile,
     )

@@ -86,6 +86,8 @@ data class ActivityEventDto(
     val actorUserId: String,
     val actorDisplayName: String,
     val actorPhotoUrl: String? = null,
+    // G2-2: stable cache key for [actorPhotoUrl] (names the bytes; the URL still guards access).
+    val actorPhotoCacheKey: String? = null,
     val count: Int = 1,
     val occurredAt: String,
     val seen: Boolean = false,

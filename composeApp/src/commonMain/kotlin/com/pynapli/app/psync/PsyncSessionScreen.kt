@@ -105,7 +105,6 @@ private const val PSYNC_NO_LINKED_PARTNER = "PSYNC_NO_LINKED_PARTNER"
 private val PSYNC_UPGRADE_CODES =
     setOf(
         "PSYNC_DECK_SIZE_NOT_ALLOWED",
-        "PSYNC_ADVANCED_FILTERS_NOT_ALLOWED",
         "PSYNC_SESSION_LIMIT_REACHED",
         "PINEAPPLE_LIKE_INVENTORY_REQUIRED",
         "PSYNC_TRAVEL_NOT_ALLOWED",
@@ -660,7 +659,7 @@ private fun RecapPhase(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = match.displayName ?: "Pynapli User",
+                            text = match.displayName ?: "New member",
                             color = PynapliColors.TextPrimary,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),

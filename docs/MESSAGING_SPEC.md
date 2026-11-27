@@ -29,6 +29,21 @@ existing thread keeps working from the inbox. Swipe and Psync match chats (`swip
 it. The public profile's `allowGridMessages` applies the same rule for the viewer, so the Message
 button matches what the server allows.
 
+### Starting from a profile (2026-11-24, Section 2, plan G6)
+
+On a Grid profile that allows grid messages, the first message is typed in the profile's
+"Say something…" composer instead of behind a Message button. Sending calls the same two endpoints
+the conversation screen uses: get-or-create the Grid direct conversation (`POST
+/v1/messages/threads`, origin `grid`, so the recipient's first-message setting still decides),
+then the normal message send with a client idempotency key. The key is made once per (recipient,
+body) and reused when the viewer taps send again after a failure; nothing retries on its own. On
+success the profile closes and the conversation opens by id, refetched over HTTP. The draft belongs
+to the person it was typed for: paging to the next profile clears it, and the pager does not move
+while a send is in flight. Message bodies are never logged. When the profile carries
+`messagingUnavailableReason = "VERIFY_TO_MESSAGE"` the profile shows "Verify to message" (opens
+photo verification) instead; other refusals keep the disabled Message button and the server's
+uniform `MESSAGING_NOT_ALLOWED`.
+
 ## Thread Types
 
 - Solo thread: two individual users.

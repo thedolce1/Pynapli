@@ -8,6 +8,7 @@ import com.pynapli.server.grid.GridException
 import com.pynapli.server.grid.GridHydration
 import com.pynapli.server.grid.toGridCardDto
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.forAssetsOrOriginals
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.RateLimitService
@@ -33,6 +34,11 @@ class FavoriteService internal constructor(
     // "Hide from people you know": someone hiding from the viewer can't be starred (same answer as a
     // missing account) and never shows in the viewer's list, nor as a partner mini on a card there.
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // G2-2: tiles use the Grid thumbnail when ready, with stable cache keys (as on the Grid).
+    private val mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
+    // The viewer's own hides: a hidden person never shows as a partner mini on a card here either, as
+    // on the Grid (the list itself already leaves hidden people out in SQL).
+    private val hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
 ) {
     suspend fun add(
         viewerUserId: UUID,
@@ -95,9 +101,16 @@ class FavoriteService internal constructor(
         val remaining = if (cursor == null) ordered else ordered.filter { (_, anchor) -> anchor.compareTo(cursor) > 0 }
         val page = remaining.take(limit)
         val hydration = repository.hydrate(viewerUserId, page.map { it.first.userId })
+        val images =
+            mediaImages.forAssetsOrOriginals(
+                mediaAssetUrlResolver,
+                hydration.values.flatMap { listOf(it.thumbnailMediaAssetId, it.linkedPartnerThumbnailMediaAssetId) },
+            )
+        // Partners never shown on a card: people hiding from the viewer and people the viewer hid.
+        val partnerHidden = hiddenFromViewer + hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
         val cards =
             page.map { (row, _) ->
-                val h = hydration[row.userId]?.let { hydrated -> if (hydrated.linkedPartnerUserId in hiddenFromViewer) hydrated.withoutPartner() else hydrated }
+                val h = hydration[row.userId]?.let { hydrated -> if (hydrated.linkedPartnerUserId in partnerHidden) hydrated.withoutPartner() else hydrated }
                 GridCardRecord(
                     userId = row.userId,
                     displayName = row.displayName,
@@ -111,7 +124,10 @@ class FavoriteService internal constructor(
                     tonightActive = h?.tonightActive ?: false,
                     verified = h?.verified ?: false,
                     coupleVerified = h?.coupleVerified ?: false,
-                ).toGridCardDto(online, mediaAssetUrlResolver)
+                    fresh = h?.fresh ?: false,
+                    lastActiveAt = h?.lastActiveAt,
+                    activityHidden = h?.activityHidden ?: true,
+                ).toGridCardDto(online, mediaAssetUrlResolver, images = images)
             }
         val nextCursor =
             if (remaining.size > limit) {

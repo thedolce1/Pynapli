@@ -28,12 +28,40 @@ class GridLocationPrivacyTest :
 
         fun service(cacheTtl: Duration = Duration.ZERO): GridService = GridService(JdbcGridRepository(dataSource, rankCacheTtl = cacheTtl))
 
-        // Requests a radius and returns every card (unrestricted tier; widen-on-empty can only add
-        // max-radius cards when nothing matched, which these fixtures never trigger at >= 5 km).
+        // Requests a radius and returns every card the service shows (unrestricted tier). Since plan G10
+        // a first page of fewer than 12 people widens to the 100 km step, which these small fixtures
+        // trigger: service answers are then the 100 km answer, so radius MEMBERSHIP is also checked
+        // straight from the repository (`ranked`), which never widens.
         suspend fun GridService.all(
             viewer: UUID,
             radius: Int,
         ): List<GridCardDto> = queryGrid(viewer, GridQueryRequestDto(radiusMeters = radius, limit = 120)).items
+
+        suspend fun ranked(
+            viewer: UUID,
+            radius: Int,
+        ): List<UUID> =
+            JdbcGridRepository(dataSource, rankCacheTtl = Duration.ZERO)
+                .queryNearby(viewer, CoarseLocation.snapRadiusMeters(radius), 120)
+                .cards
+                .map { it.userId }
+
+        // Twelve people in the attacker's own cell, so every radius step shows at least 12 and the
+        // service never widens: its answers then differ by step, as the snapping test needs.
+        fun seedFillersAt(
+            longitude: Double,
+            latitude: Double,
+        ) {
+            (0 until GridService.SPARSE_FIRST_PAGE).forEach { i ->
+                dataSource.insertDiscoverableUser(
+                    UUID.fromString("00000000-0000-0000-0000-00000000f%03d".format(i)),
+                    "Filler $i",
+                    age = 30,
+                    longitude = longitude + i * 0.0002,
+                    latitude = latitude,
+                )
+            }
+        }
 
         val attacker = UUID.fromString("00000000-0000-0000-0000-00000000a001")
         val hiddenOne = UUID.fromString("00000000-0000-0000-0000-00000000a002")
@@ -71,6 +99,9 @@ class GridLocationPrivacyTest :
                         val one = cards.firstOrNull { it.userId == hiddenOne.toString() }
                         val two = cards.firstOrNull { it.userId == hiddenTwo.toString() }
                         assertEquals(one == null, two == null, "membership differs at $lon,$lat r=$radius")
+                        // The same at the rank itself, which never widens (plan G10).
+                        val rankedIds = ranked(attacker, radius)
+                        assertEquals(hiddenOne in rankedIds, hiddenTwo in rankedIds, "ranked membership differs at $lon,$lat r=$radius")
                         if (one != null && two != null) {
                             fun GridCardDto.observable() = copy(userId = "", displayName = "", rankToken = "")
                             assertEquals(one.observable(), two.observable(), "fields differ at $lon,$lat r=$radius")
@@ -120,6 +151,7 @@ class GridLocationPrivacyTest :
             runBlocking {
                 seedNeighbourhood()
                 dataSource.moveUser(attacker, longitude = -122.05, latitude = 37.42)
+                seedFillersAt(longitude = -122.0502, latitude = 37.4201)
                 val grid = service()
                 val byStep = CoarseLocation.RADIUS_STEPS_METERS.associateWith { grid.all(attacker, it).map { c -> c.userId } }
                 (1_000..100_000 step 1_700).forEach { requested ->

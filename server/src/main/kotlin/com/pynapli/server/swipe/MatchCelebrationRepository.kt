@@ -65,7 +65,7 @@ class JdbcMatchCelebrationRepository(
                     SELECT un.match_id,
                            un.created_at,
                            un.other_id,
-                           COALESCE(NULLIF(p.display_name, ''), 'Pynapli User') AS display_name,
+                           COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
                            ($FIRST_PROFILE_PHOTO_SQL) AS photo_id
                     FROM unseen un
                     JOIN users u
@@ -202,6 +202,7 @@ private const val FIRST_PROFILE_PHOTO_SQL =
       AND m.media_type = 'image'
       AND m.processing_status = 'ready'
       AND m.moderation_status = 'approved'
+      AND m.intended_album_kind = 'profile'
     ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
     LIMIT 1
     """

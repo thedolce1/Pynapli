@@ -1,6 +1,7 @@
 package com.pynapli.app.grid
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,11 +29,34 @@ internal fun GridContextStrip(
     cards: List<GridProfileCardUi>,
     distanceUnit: String,
     modifier: Modifier = Modifier,
+    // The server widened a sparse first page: say so, neutrally, instead of a silent farther grid.
+    widened: Boolean = false,
 ) {
     val rangeLabel = remember(cards, distanceUnit) { gridDistanceRangeLabel(cards, distanceUnit) }
+    Column(modifier = modifier.fillMaxWidth()) {
+        GridContextCounts(cards = cards, rangeLabel = rangeLabel)
+        if (widened) {
+            Text(
+                text = GRID_WIDENED_NOTE,
+                color = PynapliColors.TextTertiary,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 6.dp).testTag(GRID_WIDENED_TAG),
+            )
+        }
+    }
+}
+
+internal const val GRID_WIDENED_NOTE: String = "Showing people farther away"
+internal const val GRID_WIDENED_TAG: String = "grid-widened-note"
+
+@Composable
+private fun GridContextCounts(
+    cards: List<GridProfileCardUi>,
+    rangeLabel: String?,
+) {
     Row(
         modifier =
-            modifier
+            Modifier
                 .fillMaxWidth()
                 .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

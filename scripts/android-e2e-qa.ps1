@@ -248,7 +248,7 @@ Save-Screen "login"
 Write-Host "[login] OK"
 
 # --- Stage 2: Grid ---
-$gridXml = Invoke-Stage -Stage "grid" -NavText "Grid" -Expect @("Filters", "Current location")
+$gridXml = Invoke-Stage -Stage "grid" -NavText "Grid" -Expect @("Filters", "Nearby")
 
 # --- Stage 3: Swipe (navigate + perform a gesture, then re-assert) ---
 $swipeXml = Invoke-Stage -Stage "swipe" -NavText "Swipe" -Expect @("For You", "Linked", "Filters")

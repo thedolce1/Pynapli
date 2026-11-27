@@ -2,7 +2,10 @@ package com.pynapli.app.onboarding
 
 import androidx.compose.runtime.Immutable
 import com.pynapli.app.auth.AuthStateHolder
+import com.pynapli.app.auth.SocialSignInOutcome
 import com.pynapli.shared.auth.PasswordRules
+import com.pynapli.shared.auth.SocialAgeGate
+import com.pynapli.shared.auth.SocialProvider
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
@@ -39,6 +42,13 @@ import kotlin.time.ExperimentalTime
  * whether or not the address already has an account, so the copy here never says which).
  * Everything after VerifyEmail is skippable — "do it all later" lands on the grid in seconds.
  * Sign-in mode bypasses the stepper entirely.
+ *
+ * Continue with Google / Apple ([continueWithSocial]): a known identity signs straight in. An
+ * unknown one runs Dob -> (UnderageStop) -> Policies, and Accept finishes the sign-up with the
+ * provider ([acceptPoliciesAndContinue]: fresh nonce, fresh token) -> Location -> Profile -> grid.
+ * No email, password or code step. Only the provider is kept ([OnboardingUiState.socialProvider],
+ * in memory; never a token or nonce), so back, cancel, sign-out and the 18+ stop reset it like
+ * every other answer.
  *
  * Resume (spec "app closed mid-signup"): before the code, [resumePendingSignupIfNeeded]
  * reopens the code step for the address that started, shown masked (the [PendingSignupStore]
@@ -86,6 +96,9 @@ class OnboardingStateHolder(
 
     /** A new sign-up always starts empty: nothing a previous person typed on this device carries over. */
     fun startCreateAccount() {
+        // A Google / Apple attempt is in flight: it may sign a known identity in at any moment, which
+        // must not happen under a freshly opened email stepper. (The welcome buttons are off too.)
+        if (authStateHolder.state.value.socialInProgress != null) return
         pendingSignupToken = null
         failedCodeSubmissions = 0
         // A sticky 18+ stop on this device sends Create account straight back to it.
@@ -147,9 +160,105 @@ class OnboardingStateHolder(
                 signupAttemptsSpent = false,
                 signupNotice = null,
                 accountNotice = null,
+                socialProvider = null,
                 isSubmitting = false,
                 errorMessage = null,
             )
+        }
+    }
+
+    /**
+     * "Continue with Google / Apple" from the welcome landing or the sign-in form. A known identity
+     * signs in (the shell moves on as for any sign-in). An unknown one opens the stepper on the
+     * birthday with the provider remembered, unless this device's 18+ stop is live, which opens on
+     * the stop as Create account does. Every other outcome (cancelled, an error, the "already has an
+     * account" notice) is on the auth screen already.
+     */
+    suspend fun continueWithSocial(provider: SocialProvider) {
+        if (_state.value.active) return
+        val outcome = authStateHolder.continueWithSocial(provider)
+        if (outcome != SocialSignInOutcome.NeedsAgeGate) return
+        // Something else took over meanwhile (a sign-in in another tab, a resumed stepper).
+        if (_state.value.active || authStateHolder.state.value.session != null) return
+        pendingSignupToken = null
+        failedCodeSubmissions = 0
+        if (underageStopActive()) {
+            _state.update { freshState(it).copy(active = true, step = OnboardingStep.UnderageStop) }
+            return
+        }
+        _state.update { freshState(it).copy(active = true, step = OnboardingStep.Dob, socialProvider = provider) }
+    }
+
+    /**
+     * The Policies step's Accept. An email sign-up moves on to email + password ([acceptPolicies]).
+     * A Google / Apple sign-up finishes here: a new provider attempt carrying the birthday and both
+     * acceptances, then Location. The account exists only once the server answers.
+     */
+    suspend fun acceptPoliciesAndContinue() {
+        val current = _state.value
+        val provider = current.socialProvider
+        if (provider == null) {
+            acceptPolicies()
+            return
+        }
+        if (current.isSubmitting) return
+        val dob = current.dob
+        if (dob == null) {
+            _state.update { it.copy(step = OnboardingStep.Dob, errorMessage = "Enter your date of birth.") }
+            return
+        }
+        _state.update { it.copy(acceptedTerms = true, acceptedPrivacy = true, isSubmitting = true, errorMessage = null) }
+        // Before the session can exist (continueWithSocial publishes it): see evaluatePhotoNudge.
+        signupRanThisSession = true
+        try {
+            val outcome =
+                authStateHolder.continueWithSocial(
+                    provider = provider,
+                    ageGate =
+                        SocialAgeGate(
+                            birthdate = dob.toString(),
+                            // The Dob step gated 18+; sent explicitly, as the email sign-up does.
+                            confirmedAdult = true,
+                            acceptedTerms = true,
+                            acceptedPrivacy = true,
+                        ),
+                )
+            when (outcome) {
+                SocialSignInOutcome.SignedIn -> {
+                    markOnboardingInProgress(
+                        authStateHolder.state.value.session
+                            ?.userId,
+                    )
+                    _state.update { it.copy(isSubmitting = false, errorMessage = null, step = OnboardingStep.Location) }
+                }
+
+                // The auth screen is already on the sign-in form with the neutral notice.
+                SocialSignInOutcome.EmailHasAccount -> leaveStepper()
+
+                SocialSignInOutcome.Cancelled, SocialSignInOutcome.Busy ->
+                    _state.update { it.copy(isSubmitting = false) }
+
+                // The provider can't run here after all: carry on with email, answers kept.
+                SocialSignInOutcome.ProviderUnavailable ->
+                    _state.update {
+                        it.copy(
+                            isSubmitting = false,
+                            socialProvider = null,
+                            step = OnboardingStep.Account,
+                            accountNotice = "${provider.displayName} sign-in isn't available right now. Use your email instead.",
+                        )
+                    }
+
+                // The server asked for the birthday again: it already has it, so this is a failure.
+                SocialSignInOutcome.NeedsAgeGate ->
+                    _state.update { it.copy(isSubmitting = false, errorMessage = AuthStateHolder.SOCIAL_TRY_AGAIN) }
+
+                is SocialSignInOutcome.Failed ->
+                    _state.update { it.copy(isSubmitting = false, errorMessage = outcome.message) }
+            }
+        } finally {
+            // A cancelled scope while the provider UI was up must not leave Accept spinning.
+            _state.update { if (it.isSubmitting) it.copy(isSubmitting = false) else it }
         }
     }
 
@@ -912,6 +1021,8 @@ data class OnboardingUiState(
     val accountNotice: String? = null,
     val acceptedTerms: Boolean = false,
     val acceptedPrivacy: Boolean = false,
+    // A Google / Apple sign-up in progress: which provider finishes it at Policies. Null for email.
+    val socialProvider: SocialProvider? = null,
     val displayName: String = "",
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,

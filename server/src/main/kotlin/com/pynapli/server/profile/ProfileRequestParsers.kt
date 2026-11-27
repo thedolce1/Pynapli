@@ -32,6 +32,7 @@ internal fun UpdateDiscoverySettingsRequestDto.toDiscoverySettingsUpdate(): Disc
         visibleWhileTraveling = visibleWhileTraveling,
         sharePsyncSoloMatches = sharePsyncSoloMatches,
         partnerVisibility = normalizedPartnerVisibility,
+        showMetInPersonBadge = showMetInPersonBadge,
     )
 }
 
@@ -66,6 +67,9 @@ internal fun UpdateProfileRequestDto.toProfileUpdate(clock: Clock): ProfileUpdat
     val trimmedName = displayName?.trim()?.takeIf { it.isNotEmpty() }
     if (trimmedName != null && trimmedName.length !in 2..32) {
         throw ProfileException("INVALID_DISPLAY_NAME")
+    }
+    if (trimmedName != null && trimmedName.isReservedDisplayName()) {
+        throw ProfileException("DISPLAY_NAME_RESERVED")
     }
 
     val parsedBirthdate =

@@ -26,6 +26,7 @@ interface MediaByteUploader {
 
 private const val UPLOAD_REQUEST_TIMEOUT_MILLIS = 180_000L
 private const val UPLOAD_SOCKET_TIMEOUT_MILLIS = 60_000L
+private const val CREATE_ONLY_HEADER = "x-goog-if-generation-match"
 
 class KtorMediaByteUploader(
     private val httpClient: HttpClient = createPynapliHttpClient(),
@@ -57,7 +58,13 @@ class KtorMediaByteUploader(
                     setBody(bytes)
                 }
 
-            if (response.status.value in 200..299) {
+            // The server signs uploads create-only (x-goog-if-generation-match: 0, so screened bytes
+            // can't be overwritten). 412 then means an earlier attempt of this same upload already
+            // stored the object (a retry after a lost response): the upload is done.
+            val createOnlyAlreadyStored =
+                response.status.value == 412 &&
+                    uploadHeaders.any { (name, value) -> name.equals(CREATE_ONLY_HEADER, ignoreCase = true) && value == "0" }
+            if (response.status.value in 200..299 || createOnlyAlreadyStored) {
                 AppResult.Success(Unit)
             } else {
                 AppResult.Failure(

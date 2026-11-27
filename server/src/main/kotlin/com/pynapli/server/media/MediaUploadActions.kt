@@ -15,6 +15,9 @@ internal class MediaUploadActions(
     private val moderationScanner: MediaModerationScanner,
     private val moderationEscalationPublisher: MediaModerationEscalationPublisher,
     private val rateLimitService: RateLimitService?,
+    private val scanScope: MediaScanScope = MediaScanScope(),
+    // Grid thumbnails (G2-2): told about each profile photo approved on upload. Best effort.
+    private val profilePhotoApproved: ProfilePhotoApprovedListener? = null,
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
@@ -111,20 +114,40 @@ internal class MediaUploadActions(
         if (activeCount >= album.kind.mediaAlbumPhotoCap()) {
             throw MediaException("MEDIA_ALBUM_PHOTO_CAP_EXCEEDED")
         }
+        // Once per asset, atomically, and only into the album kind the slot was opened for: a held
+        // profile photo can't be re-completed into the (unscanned) private album to get approved.
         val item =
-            repository.addAssetToAlbum(
-                ownerUserId = ownerUserId,
-                albumId = albumId,
-                mediaAssetId = mediaAssetId,
-                sortOrder = request.sortOrder,
-            ) ?: throw MediaException("MEDIA_ALBUM_NOT_FOUND")
+            when (
+                val completion =
+                    repository.completeAlbumUpload(
+                        ownerUserId = ownerUserId,
+                        albumId = albumId,
+                        mediaAssetId = mediaAssetId,
+                        sortOrder = request.sortOrder,
+                    )
+            ) {
+                is AlbumUploadCompletion.Refused -> throw MediaException(completion.code)
+                is AlbumUploadCompletion.AlreadyCompleted -> {
+                    // A retried complete into the same album returns the existing state: a held or
+                    // decided photo is never scanned again. Only an asset no decision was ever
+                    // recorded for (a crash between attach and moderation) is moderated now.
+                    val asset = completion.item.mediaAsset
+                    if (completion.scanned || asset.processingStatus != "uploaded" || asset.moderationStatus != "pending") {
+                        return completion.item.toDto(mediaAssetUrlResolver)
+                    }
+                    completion.item
+                }
 
-        val uploadedAsset =
-            repository.markAssetUploaded(ownerUserId, mediaAssetId)
-                ?: throw MediaException("MEDIA_ASSET_NOT_FOUND")
-        // Moderation hook: public photos are held/removed before discovery; private albums remain
-        // consent-gated unless a scanner returns a severe safety/legal rejection.
-        val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, uploadedAsset)
+                is AlbumUploadCompletion.Attached -> completion.item
+            }
+
+        // Moderation hook: a profile photo is approved or held for a person before discovery (never
+        // auto-removed); private albums remain consent-gated, are scanned only when the scan scope
+        // says so, and then change only on a severe safety/legal rejection.
+        val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, item.mediaAsset)
+        // Recorded after the decision is applied, so a crash before it leaves the asset re-scannable.
+        repository.markModerationScanned(ownerUserId, mediaAssetId)
+        if (album.kind == "profile" && visibleAsset.isApprovedReady()) notifyProfilePhotoApproved(mediaAssetId)
 
         return item.copy(mediaAsset = visibleAsset).toDto(mediaAssetUrlResolver)
     }
@@ -135,6 +158,17 @@ internal class MediaUploadActions(
         albumKind: String,
         uploadedAsset: MediaAssetRecord,
     ): MediaAssetRecord {
+        val target =
+            when (albumKind) {
+                "profile" -> MediaModerationTarget.PROFILE_PHOTO
+                "private" -> MediaModerationTarget.PRIVATE_ALBUM
+                else -> throw MediaException("INVALID_MEDIA_ALBUM_KIND")
+            }
+        // Unscanned private-album photos (the default: no third-party scanner sees them) are approved
+        // on upload, which is what the manual and dev scanners always did for private albums.
+        if (!scanScope.scans(target)) {
+            return repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+        }
         val decision = moderationScanner.scan(uploadedAsset)
         return when (decision) {
             MediaModerationDecision.Approved ->
@@ -148,25 +182,48 @@ internal class MediaUploadActions(
                 }
 
             is MediaModerationDecision.Rejected ->
-                if (albumKind == "private" && decision.severity != MediaModerationSeverity.SEVERE) {
-                    repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
-                } else {
-                    val removed = repository.markAssetModerationRejected(ownerUserId, mediaAssetId) ?: uploadedAsset
-                    if (decision.severity == MediaModerationSeverity.SEVERE) {
-                        runCatching {
-                            moderationEscalationPublisher.recordSevereMediaDecision(
-                                ownerUserId = ownerUserId,
-                                mediaAssetId = mediaAssetId,
-                                albumKind = albumKind,
-                                reason = decision.reason,
-                                reportCategory = decision.reportCategory,
-                            )
-                        }.onFailure { error ->
-                            logger.warn("Failed to create severe media moderation escalation for asset {}", mediaAssetId, error)
-                        }
+                when {
+                    // A profile photo is only ever approved or held (TRUST_AND_SAFETY_SPEC "Photo
+                    // pre-screening"): it stays hidden in the human queue (uploaded/pending). No removal,
+                    // no automatic report or risk points; the moderator's decision is the enforcement.
+                    albumKind == "profile" -> uploadedAsset
+
+                    albumKind == "private" && decision.severity != MediaModerationSeverity.SEVERE ->
+                        repository.markAssetReadyApproved(ownerUserId, mediaAssetId) ?: uploadedAsset
+
+                    else -> {
+                        val removed = repository.markAssetModerationRejected(ownerUserId, mediaAssetId) ?: uploadedAsset
+                        if (decision.severity == MediaModerationSeverity.SEVERE) escalate(ownerUserId, mediaAssetId, albumKind, decision)
+                        removed
                     }
-                    removed
                 }
+        }
+    }
+
+    private fun notifyProfilePhotoApproved(mediaAssetId: UUID) {
+        val listener = profilePhotoApproved ?: return
+        runCatching { listener.profilePhotoApproved(mediaAssetId) }
+            .onFailure { logger.warn("Thumbnail scheduling failed for asset {} ({})", mediaAssetId, it.javaClass.simpleName) }
+    }
+
+    private fun MediaAssetRecord.isApprovedReady(): Boolean = processingStatus == "ready" && moderationStatus == "approved"
+
+    private suspend fun escalate(
+        ownerUserId: UUID,
+        mediaAssetId: UUID,
+        albumKind: String,
+        decision: MediaModerationDecision.Rejected,
+    ) {
+        runCatching {
+            moderationEscalationPublisher.recordSevereMediaDecision(
+                ownerUserId = ownerUserId,
+                mediaAssetId = mediaAssetId,
+                albumKind = albumKind,
+                reason = decision.reason,
+                reportCategory = decision.reportCategory,
+            )
+        }.onFailure { error ->
+            logger.warn("Failed to create severe media moderation escalation for asset {}", mediaAssetId, error)
         }
     }
 

@@ -56,7 +56,10 @@ class GridPaginationAndScaleTest :
                     (firstPage.cards + secondPage.cards).map { it.userId }.toSet(),
                 )
                 val last = firstPage.cards.last()
-                assertEquals(GridCursorAnchor(1, last.orderBucket, last.userId, orderTiebreak = last.orderTiebreak), firstPage.nextCursorAnchor)
+                // These seeded people have no approved photo, so they sit in the demoted rank tier (2) that
+                // Section 2 added after boosted (0) and normal (1); the cursor anchor carries that tier.
+                assertEquals(2, last.boostBucket)
+                assertEquals(GridCursorAnchor(2, last.orderBucket, last.userId, orderTiebreak = last.orderTiebreak), firstPage.nextCursorAnchor)
                 assertEquals(null, secondPage.nextCursorAnchor)
             }
         }
@@ -120,8 +123,8 @@ class GridPaginationAndScaleTest :
                 val filterSet =
                     listOf(
                         DiscoveryFilters(),
-                        DiscoveryFilters(relationshipContexts = setOf("single")),
-                        DiscoveryFilters(relationshipContexts = setOf("linked")),
+                        DiscoveryFilters(linkedOnly = false),
+                        DiscoveryFilters(maximumAge = 40),
                         DiscoveryFilters(minimumAge = 35, maximumAge = 45),
                     )
                 val timingsMillis =

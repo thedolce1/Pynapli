@@ -1,6 +1,6 @@
 # Pynapli Onboarding And Auth Spec
 
-Last updated: 2026-11-24
+Last updated: 2026-11-26
 
 ## Purpose
 
@@ -15,8 +15,8 @@ Core rule:
 Launch:
 
 - Email/password.
-- Apple Sign In.
-- Google Sign In.
+- Apple Sign In (server built behind a flag; see "Social Sign-in").
+- Google Sign In (same).
 
 Optional later:
 
@@ -74,8 +74,9 @@ Shipped ordering (founder Grindr-reference capture 2026-06-10, refining the
 data is collected):
 
 0. Welcome landing (2026-11-24): the value line, **Create account** (primary, opens this
-   stepper) and **Sign in** (secondary, opens the sign-in form), with a slot reserved above
-   them for Continue with Google / Apple. The screen takes no email. There is no other
+   stepper) and **Sign in** (secondary, opens the sign-in form), with Continue with Google /
+   Apple above them when switched on (see "Continue with Google / Apple: client"). The screen
+   takes no email. There is no other
    create-account form: sign-out and leaving the stepper land on sign-in mode.
 1. Date of birth: on phones (compact width) a day / month / year scroll wheel that starts on a
    neutral date (1 January, 25 years back, never "exactly 18 years ago"); the start is not an
@@ -117,6 +118,101 @@ hardware keyboard does the same, and each step's first field takes focus.
 Gender/orientation basics, lifestyle tags, and looking-for are deferred entirely to
 profile edit — the stepper collects only what the first grid needs. Notifications
 permission is requested after the first grid (see Permissions), never inside the stepper.
+
+## Continue with Google / Apple: client
+
+Section 5 of the onboarding + first grid plan. The server half (verifier, routes, migration,
+error codes) is specified by the server's own subsection; this one is what the apps do.
+
+**When the buttons show.** Off by default. A button shows only when the server's
+`GET /v1/auth/social/config` says that provider is on **and** the platform can run it
+(`SocialSignInProvider.supports`, which includes "this build or page carries the client id"). A
+failed or missing config, or `404 SOCIAL_SIGN_IN_UNAVAILABLE` from any call, hides them all. A
+platform with no provider never asks the server. Where:
+
+| Platform | Google | Apple |
+|---|---|---|
+| Android | Credential Manager, button flow (`GetSignInWithGoogleOption`) | hidden (a web flow inside the app is out of scope) |
+| Web | Google Identity Services, popup | Sign in with Apple JS, popup |
+
+On every platform a provider's button also waits for its official logo file: no file in, no button
+(`GOOGLE_MARK_IS_OFFICIAL_ARTWORK` / `APPLE_MARK_IS_OFFICIAL_ARTWORK`, both shipped false; DESIGN_SPEC
+"Sign-in provider buttons").
+| iOS | hidden until the Xcode project (D1) | hidden until D1 (`ASAuthorizationController`) |
+| Desktop (dev) | hidden | hidden |
+
+The welcome landing shows them above Create account, followed by an "or" rule; the sign-in form
+offers them under its Sign in button. The app never signs anyone in on its own: there is no One
+Tap or automatic sign-in prompt, only the button.
+
+**One attempt.** Tap -> `POST /v1/auth/social/nonce` (a fresh single-use nonce, every attempt) ->
+the provider's own UI with that nonce -> `POST /v1/auth/social/{google|apple}` with the ID token,
+the nonce, Apple's authorization code, and the same device/platform/app-version fields as an
+email login. A known identity gets the same session as an email login. The nonce handed to the
+provider is decided in one place, `SocialProviderNonce` (API_CONTRACT_SPEC "Section 5 contract"):
+Google gets the raw server nonce, Apple (Sign in with Apple JS, and later iOS) its lowercase hex
+SHA-256 (a small common `Sha256`); Pynapli always gets the raw nonce. The server spends the nonce on
+every answer once the token checks pass (422 included), so every call, retries and the appeal
+included, starts with a fresh nonce and a fresh provider sign-in (and Apple's fresh code). Tokens,
+codes and nonces are never stored or logged; there is no display-name field, and the provider's
+name is never used.
+
+**Unknown identity (`422 SOCIAL_SIGNUP_NEEDS_AGE_GATE`).** The stepper opens on the birthday with
+the provider remembered (in memory only), then Policies. Accept starts a second attempt (a new
+nonce and a new provider token: the first nonce is spent) carrying `birthdate`, `confirmedAdult`,
+`acceptedTerms` and `acceptedPrivacy` under the email sign-up's field names. Success lands on
+Location -> Your profile -> grid, with the resume flag set exactly as after an emailed code. No
+email, password or code step, so the progress dots show four steps. The 18+ stop works as for
+email (sticky for a day; a provider tap during a live stop opens the stop), back steps Policies
+-> Birthday -> welcome, and leaving, cancelling, signing out or the stop forget the provider with
+every other answer. If the provider turns out to be unavailable at Accept, the stepper carries on
+at the email account step with the answers kept.
+
+**Answers.**
+
+| Server answer | App |
+|---|---|
+| `404 SOCIAL_SIGN_IN_UNAVAILABLE` | every button hidden |
+| `401 INVALID_SOCIAL_TOKEN` | "We couldn't confirm that sign-in. Try again." |
+| `503 SOCIAL_SIGN_IN_TEMPORARILY_UNAVAILABLE` | "Google sign-in isn't available right now. Try again in a few minutes." |
+| `403 ACCOUNT_NOT_ACTIVE` | the sign-in form with the server's message and the appeal form; "Continue with Google to send" proves the account with a fresh nonce + provider sign-in to `POST /v1/auth/account-appeal/social/{provider}` `{idToken, nonce, reason}` (same `AppealDto` as the email appeal; `409 ACCOUNT_NOT_RESTRICTED` and `404 SOCIAL_ACCOUNT_NOT_FOUND` are worded). Typing an email or password switches back to the email appeal. |
+| `409 SOCIAL_EMAIL_HAS_ACCOUNT` (either call) | the sign-in form, with "An account already uses this email. Sign in the way you usually do, then add Google in Settings." (Apple likewise). Nothing is linked. |
+| age-gate answers (`AGE_RESTRICTED` and the rest) | the server's message on the Policies step |
+| provider cancelled | nothing shown; the step stays as it was |
+| provider unavailable on this device | that button is removed |
+
+**Settings > Sign-in methods** (Profile hub, Account section). Shown only when a provider is
+offered or linked. Lists the password (from `hasPassword`; the `email` method in the list is that
+line, never a provider row) and each provider (added, with the server's masked `emailHint`, or
+not), with Add and Remove. Add runs the same nonce + provider attempt against
+`POST /v1/auth/identities/{provider}`, whose `200 LinkedIdentitiesDto` replaces the list (`409
+SOCIAL_IDENTITY_IN_USE`: "That Google account is already used to sign in to another Pynapli
+account."; `409 SOCIAL_PROVIDER_ALREADY_LINKED`: "This account already has a Google account added.
+Remove it first to add a different one."; `400 INVALID_SOCIAL_TOKEN`, a 400 so the session refresh
+never replays a spent nonce). Remove calls `DELETE /v1/auth/identities/{provider}` and refetches the
+list (`409 LAST_SIGN_IN_METHOD`: "This is your only way to sign in. Add another sign-in method
+before removing it."; `404 SOCIAL_IDENTITY_NOT_LINKED` just refreshes). Reset on sign-out. Linking
+from here is the only way a provider joins an existing account.
+
+**Change password** shows only when `GET /v1/auth/identities` says `hasPassword: true`. The hub
+fetches that list on every open, whatever the providers (so email-only accounts keep the row); until
+it has answered (or if the call fails) the flag is unknown, and unknown hides the row. An account that signs in
+with Google / Apple alone is offered no way to set a password for now (out of scope).
+
+**Sign-out** also clears the provider's own "signed in" memory (Credential Manager
+`clearCredentialState`, GIS `disableAutoSelect`).
+
+**Web specifics.** Client ids live in `index.html` (`__PYNAPLI_GOOGLE_CLIENT_ID__`,
+`__PYNAPLI_APPLE_SERVICES_ID__`, `__PYNAPLI_APPLE_REDIRECT_URI__`), so a deploy sets them without a
+rebuild. No third-party script loads until the config switches a provider on. Because GIS only
+issues ID tokens from its own rendered button and Apple's popup needs a live click, the Compose
+button fetches the nonce and then opens a small layer holding the provider's official button: one
+extra click on the web. Esc, Cancel or a backdrop click cancels. Hosting headers (CSP origins,
+`Cross-Origin-Opener-Policy: same-origin-allow-popups`) are in WEB_PWA_GAMEPLAN.
+
+**Privacy notes.** An Apple "Hide my email" relay address can't be matched by "Hide from people
+you know"; the privacy copy must say so (plan decision). The provider address is shown only in
+Sign-in methods.
 
 ## Email Sign-up (Membership Privacy)
 
@@ -301,6 +397,111 @@ run the scripts; they check first and stop with that instruction when the routes
 restart the server without it, then run `scripts/start-demo-tunnel.ps1`, which refuses to start
 while the server still serves the dev routes.
 
+## Social Sign-in (Continue with Google / Apple)
+
+Founder decisions (2026-11-24, plan Section 5): Google and Apple sign-in are in scope; **no automatic
+linking by email**; members link Google/Apple from Settings after signing in; a suspended account that
+only signs in with Google/Apple appeals through a fresh provider sign-in; Apple's hidden (relay)
+address is accepted, and its effect on "Hide from people you know" is stated below and in the privacy
+copy. Server built 2026-11-26 (`auth/social/`, V129), behind `PYNAPLI_SOCIAL_SIGN_IN_ENABLED` (off
+until the founder's Google/Apple credentials exist). Wire contract: API_CONTRACT_SPEC "Section 5
+contract".
+
+New member's path: Continue with Google → Birthday → Policies (Accept) → Location → Done → grid. No
+password, no email code.
+
+### Rules
+
+- **Tokens are verified by the server**, never trusted from the client: signature against the
+  provider's JWKS (Google `https://www.googleapis.com/oauth2/v3/certs`, Apple
+  `https://appleid.apple.com/auth/keys`), `iss` (Google `https://accounts.google.com` or
+  `accounts.google.com`; Apple `https://appleid.apple.com`), exactly one `aud` from the configured
+  client ids, `exp` present and future, `iat` at most 5 minutes ahead, `sub` present, and the `nonce`
+  claim equal to a server-issued, single-use, 10-minute nonce (Apple: its SHA-256 hex, or raw). The
+  nonce is spent atomically right after the token checks pass, so a token gets exactly one answer.
+  Library: google-auth-library `TokenVerifier` (already on the classpath for App Check); the key set
+  is cached an hour per server instance and refreshed when a token names an unknown key (at most once per 30 s; a kid still unknown after a refresh is ignored for 10 minutes).
+- **Accounts are keyed by the provider `sub`**, never by email (Google: "Always use the sub field").
+  One identity per provider per account; one account per identity (`UNIQUE (provider,
+  provider_subject)`, `UNIQUE (user_id, provider)`).
+- **When an address counts as the person's** ("authoritative"): Google: `email_verified` AND
+  (`@gmail.com` OR an `hd` claim); Google's own guidance says it is not authoritative otherwise, since
+  the address may have changed hands. Apple: `email_verified` (string or boolean) AND not a relay
+  address (`is_private_email`, string or boolean, or an `@privaterelay.appleid.com` address; the claim
+  is sometimes missing). Only an authoritative address is ever used: its hash goes to
+  `users.email_hash` with `users.email_verified_at`, it can produce `SOCIAL_EMAIL_HAS_ACCOUNT`, and it
+  binds "Hide from people you know" rows (`onAccountVerified` before the first session; at later
+  sign-ins only when it is still the account's own address). Otherwise the account has no address.
+- **Stored:** in `auth_identities` the provider, `sub`, a masked hint (`j•••@gmail.com`), the
+  provider's `email_verified`, `linked_at`, `last_used_at`, and for Apple the refresh token sealed with
+  AES-256-GCM under `PYNAPLI_SOCIAL_TOKEN_KEY` (identity id as associated data) plus its client id. No
+  full address, no ID token, no provider name. Logs carry exception classes and HTTP statuses only.
+- **Sign-up** for an unknown identity uses the same age gate as email sign-up
+  (`validateSignupAgeGate`, same codes and underage answer) and the same account rows
+  (`insertAccount`, which `insertEmailAccount` now shares). Without the birthday it answers
+  `SOCIAL_SIGNUP_NEEDS_AGE_GATE` and creates nothing. The display name is never taken from the
+  provider: a swinger app must not put someone's real name on a profile.
+- **Linking** is signed-in only (Settings) and never changes `users.email_hash` or the contact token.
+  Unlinking refuses the last sign-in method under a lock on the account row. Unlinking Apple revokes
+  its grant.
+- **Status:** a suspended/banned/paused account gets `ACCOUNT_NOT_ACTIVE` after the token proved the
+  identity (as email sign-in checks the password first). It appeals through
+  `/v1/auth/account-appeal/social/{provider}` with a fresh provider sign-in.
+- **Deletion** reads the Apple tokens in the deleting transaction, scrubs every identity (subject
+  `deleted:<id>`, hint, flags, sealed token), and revokes with Apple after the commit (`POST
+  https://appleid.apple.com/auth/revoke`, ES256 client secret). After deletion the same Google/Apple
+  identity is a stranger and can create a new account. The data export lists sign-in methods only.
+
+### Membership privacy analysis
+
+- `SOCIAL_EMAIL_HAS_ACCOUNT` tells the caller "this address has an account". It is only ever answered
+  to someone the provider vouches owns the address (authoritative rule above), which is the same
+  person email sign-up's notice email reaches. An unverified address, a Google address Google isn't
+  authoritative for, and every Apple relay address are treated as having no account.
+- `SOCIAL_IDENTITY_IN_USE` (linking) says that Google/Apple identity already signs in somewhere; the
+  caller just proved it is theirs.
+- Email sign-up stays membership-private: an address held by a Google/Apple account gets the same 202
+  and, off the request path, the neutral notice (now worded for every sign-in method), never a code
+  (`EmailSignupRepository.addressHasAccount`). Before this, such an address would have been sent a
+  code that could never finish.
+- The social endpoints themselves take no email, so they are no oracle for third parties: without a
+  valid ID token for the identity, every answer is `401 INVALID_SOCIAL_TOKEN`.
+- **Apple relay weakens "Hide from people you know".** A member who joins with Hide My Email has only a
+  relay address, which nobody knows, so contact blocks naming their real address never match them,
+  and they can't be found by it. Accepted (founder decision); say so in the privacy copy. Same for a
+  Google account whose address Google isn't authoritative for.
+- **Ban evasion through an address-less account.** An Apple relay address or a Google address Google
+  isn't authoritative for gives an account with no `users.email_hash`, so it escapes the
+  one-account-per-address guard, and bans or contact blocks that key on a real address don't follow
+  it. The same person can hold a second account this way (also an existing member signing in with
+  such an identity, who gets a new account instead of `SOCIAL_EMAIL_HAS_ACCOUNT`). Mitigations
+  outside this flow: device-farm signals at sign-up, moderation by device and behaviour, photo
+  verification. Accepted with the relay decision.
+- **Apple "stale address".** Apple marks an address verified when the Apple ID was set up with it.
+  If that third-party address later changes hands, the Apple ID holder (no longer its owner) still
+  presents it as verified and can learn whether that address now has an account
+  (`SOCIAL_EMAIL_HAS_ACCOUNT`). Google's authoritative rule avoids this for Google; Apple offers no
+  equivalent signal. Small and accepted: it needs control of an Apple ID set up with that address.
+- **The JWKS key cache is per server instance**: each replica fetches and refreshes Google's and
+  Apple's keys on its own (one fetch per hour, plus at most one refresh per 30 s on an unknown key;
+  kids still unknown after a refresh are ignored for 10 minutes). A rotation can therefore reach the
+  replicas at slightly different times; a token rejected for an unknown key on one replica is accepted
+  once that replica refreshes.
+- Residuals: the answers for an unknown identity (`422` vs `409`) differ, but only to the identity's
+  proven owner. Apple revocation is best-effort and not retried (the token is already scrubbed when it
+  runs); a failure is logged by status only. The Apple code exchange runs off the request path; if it
+  fails, that Apple identity has no stored grant until a later sign-in supplies a new code, and
+  deletion can't revoke it. If it finishes after the identity was unlinked or the account deleted,
+  the fresh grant is revoked at once instead of stored.
+
+### Not built / founder track
+
+- Client: buttons, Credential Manager (Android), Google Identity Services + Sign in with Apple JS (web,
+  plus the CSP), iOS (waits for the Xcode project and Keychain).
+- Credentials: Google OAuth web + Android clients, Apple Services ID with return URL, the .p8 key, the
+  relay email sender; then a live verification run.
+- Apple server-to-server notifications (consent revoked, account deleted at Apple) are not handled.
+
 ## Deferred Until Profile Edit
 
 - Bio.
@@ -410,14 +611,18 @@ Do not:
 
 - App closed mid-signup: before the emailed code, reopen the code step for that address (expired
   after 24 hours: start over); after it, resume last completed step.
-- Social account reused: log into existing account.
+- Social account reused: log into existing account (keyed by provider `sub`). A new Google/Apple
+  identity whose verified address already has an account is told to sign in the usual way and link it
+  in Settings; it is never linked automatically.
 - Photo upload fails: retry or skip.
 - Verification fails in required market: retry/support.
 - Location denied: first grid empty/location-required state.
 
 ## Implementation Checklist
 
-- [ ] Partial: email auth is implemented; social auth and full onboarding auth set are not complete.
+- [ ] Partial: email auth is implemented; social auth (server and client) is built behind a flag, not yet live.
+- [x] Social sign-in server (2026-11-26, Section 5; written, not yet built or run): V129, verified Google/Apple ID tokens with single-use server nonces, age-gated sign-up through the shared account insert, `SOCIAL_EMAIL_HAS_ACCOUNT` only for a provider-verified owner, Settings linking/unlinking with a last-method guard, social appeal, Apple code exchange and revocation on unlink and deletion, sign-in methods in the export, neutral notice for social-only addresses on email sign-up, rate limits, flag off by default. Tests: `SocialIdentityVerifierTest`, `SocialSignInIntegrationTest`, `ServerConfigValidationTest`. Open: client, credentials, live run, adversarial review.
+- [x] Continue with Google / Apple, client (2026-11-26, behind the server flag; see "Continue with Google / Apple: client"): `:shared` DTOs, `AuthApi`/`AuthRepository`/`SocialIdentityRepository`; the `SocialSignInProvider` seam in every shell graph (Android Credential Manager for Google; web GIS + Apple JS; iOS and desktop unavailable); welcome and sign-in buttons; the social sign-up path through Birthday and Policies; Settings > Sign-in methods; `SocialSignInTest` (composeApp) and `KtorSocialAuthApiTest` (shared). Open: live runs need the founder's OAuth clients (PATH_TO_TESTERS A10); iOS waits for D1/D2; no provider button shows until the founder drops in Google's and Apple's official logo files and flips their guards; social-only appeals go through a fresh provider sign-in (`POST /v1/auth/account-appeal/social/{provider}`).
 - [x] Android secure token storage: the persisted session is encrypted at rest with a non-exportable AndroidKeyStore AES-256-GCM key (`SessionTokenCipher` expect/actual; `enc1:` format), legacy plaintext rows upgrade on first read, and an undecryptable value surfaces as a signed-out session. Proven on-device by `scripts/android-secure-token-qa.ps1` (ciphertext in the SQLite DB+WAL, no plaintext token JSON, session survives restart). iOS Keychain actual lands with the iOS phase (pass-through until then, per the Android production gameplan scope, now [archived](archive/ANDROID_PRODUCTION_GAMEPLAN.md)).
 - [x] Signup progress saved: signup arms a device-local resume flag pinned to the signing-up account (`OnboardingProgressStore`, deliberately separate from the server-synced `AppSettings` blob); next launch re-enters the stepper at the consolidated "Your profile" step with the saved display name prefilled. A different account signing in on the same device never inherits the stepper.
 - [x] Skippable photo (the consolidated "Your profile" step uploads to the profile album with moderation-pending honesty copy, or skips). Tags/looking-for are deferred entirely to profile edit by design — nothing to skip at signup.

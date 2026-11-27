@@ -134,6 +134,7 @@ jobs:
             SwipeDeckTokenSecretName = 'pynapli-staging-swipe-deck-token-secret'
             ContactBlockEmailKeySecretName = 'pynapli-staging-contact-block-email-key'
             ContactBlockTargetKeySecretName = 'pynapli-staging-contact-block-target-key'
+            MetInPersonTokenSecretName = 'pynapli-staging-met-in-person-token-secret'
             RedisUrl = '${{ inputs.redis_url }}'
             MaxInstances = [int]'${{ inputs.max_instances }}'
           }

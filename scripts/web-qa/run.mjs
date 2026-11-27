@@ -110,15 +110,16 @@ async function surfaces(viewport) {
 
     if (viewport === 'desktop') {
       const [width] = VIEWPORTS.desktop;
-      // Grid header actions are right-aligned: refresh, then the moon (Tonight), then filters.
-      const refresh = await browser.cursorAt(width - 160, 34);
+      // Grid header actions are right-aligned: refresh, then the moon (Tonight). Filters moved to the
+      // chip row below (2026-11-25), so both sit one button (60 px) further right than before.
+      const refresh = await browser.cursorAt(width - 100, 34);
       check('desktop: hand cursor over a header button', refresh === 'pointer', `cursor=${refresh}`);
       const label = await browser.cursorAt(Math.round(width / 2), 138);
       check('desktop: arrow over non-clickable text', label !== 'pointer', `cursor=${label}`);
 
       // Open Tonight the way a user does (this click doubles as giving the page keyboard focus).
-      await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: width - 100, y: 34, button: 'left', clickCount: 1 });
-      await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: width - 100, y: 34, button: 'left', clickCount: 1 });
+      await browser.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: width - 40, y: 34, button: 'left', clickCount: 1 });
+      await browser.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: width - 40, y: 34, button: 'left', clickCount: 1 });
       const viaClick = await browser.waitForPath('/tonight');
       check('desktop: the moon button opens Tonight', viaClick === '/tonight', `pathname=${viaClick}`);
       await sleep(1500);

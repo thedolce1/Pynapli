@@ -39,11 +39,11 @@
     "filtersSheet": {
       "requiredTexts": [
         "These shape who shows up in your deck.",
-        "Who",
-        "Gender",
-        "Orientation",
         "Age",
-        "Distance"
+        "Distance",
+        "Who",
+        "Single women",
+        "No single men"
       ],
       "_note": "Intent and Style are deliberately NOT here: the Gender/Orientation sections push them past the fold at sheet open, so this stage can only assert what is actually on screen. The script asserts them after Scroll-SheetToText instead — coverage moved, not dropped.",
       "forbiddenTexts": [

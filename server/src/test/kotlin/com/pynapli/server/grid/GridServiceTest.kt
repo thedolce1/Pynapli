@@ -245,8 +245,8 @@ class GridServiceTest {
         }
 
     @Test
-    fun queryGridRejectsAdvancedFiltersForFreeUsers() =
-        runBlocking {
+    fun queryGridAcceptsLifestyleAndLogisticsFiltersForFreeUsers() =
+        runBlocking<Unit> {
             val viewerId = UUID.randomUUID()
             val service =
                 GridService(
@@ -255,12 +255,48 @@ class GridServiceTest {
                     subscriptionService = freeSubscriptionService(),
                 )
 
-            val error =
-                assertFailsWith<GridException> {
-                    service.queryGrid(viewerId, GridQueryRequestDto(lifestyleTags = listOf("soft_swap")))
-                }
+            // Founder decision 2 (2026-11-26): every Grid filter is free; an age-verified Free viewer
+            // gets an answer, and the response never reports a paid filter.
+            val response =
+                service.queryGrid(
+                    viewerId,
+                    GridQueryRequestDto(lifestyleTags = listOf("soft_swap"), logisticsTags = listOf("hosts", "travels")),
+                )
 
-            assertEquals("ENTITLEMENT_REQUIRED", error.code)
+            assertEquals(false, response.advancedFiltersApplied)
+        }
+
+    @Test
+    fun countGridStopsAtThePlansServedDepthAndSaysMoreMatch() =
+        runBlocking<Unit> {
+            val viewerId = UUID.randomUUID()
+            val cards = (1..70).map { GridCardRecord(userId = UUID.randomUUID(), displayName = "P$it", showDistance = true, distanceMeters = 500.0) }
+            val service =
+                GridService(
+                    repository = StaticGridRepository(GridQueryResult(viewerHadLocation = true, cards = cards)),
+                    subscriptionService = freeSubscriptionService(),
+                )
+
+            // Free without the locked-card opt-in: the Grid serves at most its depth (60), so the count
+            // never says more than that, and flags that more match.
+            val plain = service.countGrid(viewerId, GridQueryRequestDto())
+            assertEquals(60, plain.count)
+            assertTrue(plain.atLeast)
+            // With the opt-in the Grid serves locked cards up to the next plan's depth: all 70 are counted.
+            val withLocked = service.countGrid(viewerId, GridQueryRequestDto(acceptLockedCards = true))
+            assertEquals(70, withLocked.count)
+        }
+
+    @Test
+    fun countGridRefusesWhenTheCountBudgetIsSpent() =
+        runBlocking<Unit> {
+            val service =
+                GridService(
+                    repository = StaticGridRepository(GridQueryResult(viewerHadLocation = true, cards = emptyList())),
+                    rateLimitService = denyingRateLimitService(),
+                )
+            val error = assertFailsWith<GridException> { service.countGrid(UUID.randomUUID(), GridQueryRequestDto()) }
+            assertEquals("RATE_LIMITED", error.code)
         }
 
     @Test
@@ -505,9 +541,10 @@ class GridServiceTest {
                 )
             val service = GridService(repository)
 
-            val firstPage = service.queryGrid(viewerId, GridQueryRequestDto(limit = 1))
+            // At the maximum radius, so the one-card first page is not widened (plan G10).
+            val firstPage = service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 100_000, limit = 1))
             val nextCursor = assertNotNull(firstPage.nextCursor)
-            service.queryGrid(viewerId, GridQueryRequestDto(limit = 1, cursor = nextCursor))
+            service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 100_000, limit = 1, cursor = nextCursor))
 
             assertEquals(listOf(null, anchor.copy(seenCount = 1)), repository.receivedCursors)
         }
@@ -612,50 +649,80 @@ class GridServiceTest {
             assertEquals(listOf(targetId.toString()), response.items.map { it.userId })
         }
 
+    // Plan G10: a widened page pages normally. Its cursor is sealed to the widened scope (max radius
+    // plus the radius asked for), the client keeps sending its own radius, and the follow-up page is
+    // ranked at the max radius again.
     @Test
-    fun queryGridDoesNotPaginateAWidenedFallbackPage() =
+    fun aWidenedPagePaginatesAtTheMaxRadius() =
         runBlocking {
-            val targetId = UUID.randomUUID()
-            val repository =
-                RadiusAwareGridRepository(
-                    cardsAtMaxRadius =
-                        listOf(
-                            GridCardRecord(
-                                targetId,
-                                "Far Alex",
-                                showDistance = true,
-                                distanceMeters = 80_000.0,
-                                orderBucket = 80_000,
-                            ),
-                        ),
-                    nextCursorAnchorAtMax =
-                        GridCursorAnchor(boostBucket = 0, orderBucket = 80_000, userId = targetId),
-                )
+            val viewerId = UUID.randomUUID()
+            val repository = LimitAwareGridRepository(totalCards = 30, minMatchRadiusMeters = 100_000)
+            val service = GridService(repository)
+
+            val first = service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 25_000, limit = 12))
+            assertEquals(listOf(25_000, 100_000), repository.receivedRadii)
+            assertEquals(12, first.items.size)
+            assertTrue(first.widened)
+            val cursor = assertNotNull(first.nextCursor, "a widened page must offer the next page")
+
+            val second = service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 25_000, limit = 12, cursor = cursor))
+            assertEquals(listOf(25_000, 100_000, 100_000), repository.receivedRadii, "the follow-up continues at the max radius")
+            assertEquals(12, second.items.size)
+            assertTrue(second.widened, "a page continuing a widened cursor is widened too")
+            assertEquals(emptySet(), first.items.map { it.userId }.toSet() intersect second.items.map { it.userId }.toSet())
+
+            // The widened cursor continues only the request that produced it.
+            val error =
+                assertFailsWith<GridException> {
+                    service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 10_000, limit = 12, cursor = cursor))
+                }
+            assertEquals("INVALID_GRID_CURSOR", error.code)
+            val otherViewer =
+                assertFailsWith<GridException> {
+                    service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(radiusMeters = 25_000, limit = 12, cursor = cursor))
+                }
+            assertEquals("INVALID_GRID_CURSOR", otherViewer.code)
+        }
+
+    // Plan G10: fewer than 12 people on the first page widens, not only zero.
+    @Test
+    fun queryGridWidensWhenTheFirstPageIsSparse() =
+        runBlocking {
+            val repository = LimitAwareGridRepository(totalCards = 11, minMatchRadiusMeters = 1_000, extraAtMaxRadius = 5)
             val service = GridService(repository)
 
             val response = service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(radiusMeters = 25_000))
 
-            assertEquals(1, response.items.size)
-            assertNull(response.nextCursor)
-            assertEquals(false, response.resultLimitReached)
+            assertEquals(listOf(25_000, 100_000), repository.receivedRadii)
+            assertEquals(16, response.items.size)
         }
 
     @Test
-    fun queryGridDoesNotWidenWhenFirstPageHasCards() =
+    fun queryGridDoesNotWidenWhenTheFirstPageHasTwelve() =
         runBlocking {
-            val targetId = UUID.randomUUID()
-            val repository =
-                RadiusAwareGridRepository(
-                    cardsAtMaxRadius =
-                        listOf(GridCardRecord(targetId, "Near Alex", showDistance = true, distanceMeters = 500.0)),
-                    minMatchRadiusMeters = 1_000,
-                )
+            val repository = LimitAwareGridRepository(totalCards = 12, minMatchRadiusMeters = 1_000, extraAtMaxRadius = 5)
             val service = GridService(repository)
 
             val response = service.queryGrid(UUID.randomUUID(), GridQueryRequestDto(radiusMeters = 25_000))
 
             assertEquals(listOf(25_000), repository.receivedRadii)
-            assertEquals(listOf(targetId.toString()), response.items.map { it.userId })
+            assertEquals(12, response.items.size)
+            assertEquals(false, response.widened)
+        }
+
+    @Test
+    fun aLaterSparsePageNeverWidens() =
+        runBlocking {
+            val viewerId = UUID.randomUUID()
+            val repository = LimitAwareGridRepository(totalCards = 15, minMatchRadiusMeters = 1_000, extraAtMaxRadius = 5)
+            val service = GridService(repository)
+
+            val first = service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 25_000, limit = 12))
+            val second = service.queryGrid(viewerId, GridQueryRequestDto(radiusMeters = 25_000, limit = 12, cursor = first.nextCursor))
+
+            assertEquals(listOf(25_000, 25_000), repository.receivedRadii)
+            assertEquals(3, second.items.size)
+            assertNull(second.nextCursor)
         }
 }
 
@@ -668,6 +735,7 @@ private class StaticGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult = result
 }
 
@@ -682,6 +750,7 @@ private class CapturingGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         receivedCursors += cursor
         return result
@@ -703,6 +772,7 @@ private class RadiusAwareGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         receivedRadii += radiusMeters
         return if (radiusMeters >= minMatchRadiusMeters) {
@@ -713,14 +783,19 @@ private class RadiusAwareGridRepository(
     }
 }
 
+// [totalCards] match below the max radius (nothing below [minMatchRadiusMeters]); the max radius
+// (100 km) adds [extraAtMaxRadius] farther cards after them, as a widened rank would.
 private class LimitAwareGridRepository(
-    totalCards: Int,
+    private val totalCards: Int,
+    private val minMatchRadiusMeters: Int = 0,
+    extraAtMaxRadius: Int = 0,
 ) : GridRepository {
     val receivedLimits = mutableListOf<Int>()
     val receivedCursors = mutableListOf<GridCursorAnchor?>()
+    val receivedRadii = mutableListOf<Int>()
 
-    private val cards =
-        List(totalCards) { index ->
+    private val allCards =
+        List(totalCards + extraAtMaxRadius) { index ->
             GridCardRecord(
                 userId = UUID.nameUUIDFromBytes("grid-limit-card-$index".toByteArray()),
                 displayName = "Grid $index",
@@ -736,9 +811,17 @@ private class LimitAwareGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         receivedLimits += limit
         receivedCursors += cursor
+        receivedRadii += radiusMeters
+        val cards =
+            when {
+                radiusMeters < minMatchRadiusMeters -> emptyList()
+                radiusMeters >= 100_000 -> allCards
+                else -> allCards.take(totalCards)
+            }
         val startIndex = cursor?.orderBucket?.plus(1) ?: 0
         val page = cards.drop(startIndex).take(limit)
         val hasMore = cards.size > startIndex + limit

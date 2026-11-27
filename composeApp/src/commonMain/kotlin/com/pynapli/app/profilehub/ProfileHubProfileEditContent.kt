@@ -34,8 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.pynapli.app.design.PynapliColors
 import com.pynapli.app.design.PynapliLayout
 import com.pynapli.app.design.PynapliPill
 import com.pynapli.app.design.PynapliShape
@@ -49,6 +51,7 @@ import com.pynapli.app.grid.Intent
 import com.pynapli.app.grid.LifestyleGroup
 import com.pynapli.app.grid.LifestyleTag
 import com.pynapli.app.grid.LogisticsTag
+import com.pynapli.app.media.BEING_REVIEWED_SHORT_LABEL
 import com.pynapli.app.media.MediaAlbumCaps
 import com.pynapli.app.media.MediaAlbumItemUi
 import com.pynapli.shared.profile.ProfileTaxonomies
@@ -460,6 +463,13 @@ private fun ProfilePhotosEditRow(
                     PhotoThumbnail(item = item, isPrimary = index == 0)
                 }
             }
+            if (visible.any { it.isBeingReviewed }) {
+                Text(
+                    text = "Photos marked \"$BEING_REVIEWED_SHORT_LABEL\" are only visible to you until they're approved.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
         TextButton(
             onClick = onManagePhotos,
@@ -510,6 +520,21 @@ private fun PhotoThumbnail(
                         .clip(PynapliShape.PillShape)
                         .background(MaterialTheme.colorScheme.primary)
                         .padding(horizontal = 6.dp, vertical = 1.dp),
+            )
+        }
+        if (item.isBeingReviewed) {
+            Text(
+                text = BEING_REVIEWED_SHORT_LABEL,
+                color = PynapliColors.OnPhotoPrimary,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(PynapliColors.OnPhotoBadgeFill)
+                        .padding(horizontal = 2.dp, vertical = 1.dp),
             )
         }
     }

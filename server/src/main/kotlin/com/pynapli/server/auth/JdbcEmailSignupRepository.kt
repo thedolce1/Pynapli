@@ -22,6 +22,11 @@ class JdbcEmailSignupRepository(
 
     override suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord? = users.findEmailIdentity(emailHash)
 
+    override suspend fun addressHasAccount(emailHash: String): Boolean =
+        dataSource.withConnection { connection ->
+            connection.addressHasAccount(emailHash)
+        }
+
     override suspend fun insertPendingSignup(
         pending: NewPendingSignup,
         now: Instant,

@@ -30,11 +30,20 @@ internal data class GridHydration(
     val linkedPartnerUserId: UUID?,
     val linkedPartnerDisplayName: String?,
     val linkedPartnerThumbnailMediaAssetId: UUID?,
+    // The partner's own declared age and gender key (plan G2-3), from the same gated LATERAL.
+    val linkedPartnerAge: Int? = null,
+    val linkedPartnerGender: String? = null,
     val tonightActive: Boolean = false,
     // The card owner is photo-verified (profiles.verified_at).
     val verified: Boolean = false,
     // The linked partner shown in the mini is photo-verified too.
     val linkedPartnerVerified: Boolean = false,
+    // Plan G4 Fresh rule (GridActivitySql.fresh): drives the card's "New" marker.
+    val fresh: Boolean = false,
+    // Plan G11: last activity (GridActivitySql.lastActiveAt) for the server-side activeAgo bucket,
+    // and whether the member hides it. Never serialized.
+    val lastActiveAt: Instant? = null,
+    val activityHidden: Boolean = false,
 ) {
     /** Couple verified: both linked partners verified, and the partner is visible to this viewer. */
     val coupleVerified: Boolean get() = verified && linkedPartnerUserId != null && linkedPartnerVerified
