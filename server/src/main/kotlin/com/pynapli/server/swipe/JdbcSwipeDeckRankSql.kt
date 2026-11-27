@@ -271,7 +271,7 @@ $candidateSource
         statement.setBoolean(index++, filters.verifiedOnly)
         statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
         statement.setBoolean(index++, filters.ageVerifiedOnly)
-        index = CoupleVerifiedFilterSql.bind(statement, index, filters.verifiedCouplesOnly, partnerViewers)
+        index = CoupleVerifiedFilterSql.bind(statement, this, index, filters.verifiedCouplesOnly, partnerViewers, hiddenFromViewerIds)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
         statement.setArray(index++, intents)

@@ -1,5 +1,6 @@
 package com.pynapli.server.discovery
 
+import java.sql.Connection
 import java.sql.PreparedStatement
 import java.util.UUID
 
@@ -58,6 +59,9 @@ object CoupleVerifiedFilterSql {
                           AND cv_upl.status = 'active'
                           AND cv_upl.unlinked_at IS NULL
                           AND cv_profile.verified_at IS NOT NULL
+                          -- Contact blocks: a partner hiding from a viewer is never shown to them, so
+                          -- never earns the badge (union of both partners' sets on a Psync deck).
+                          AND cv_user.id <> ALL(?::uuid[])
                           $everyViewer
                     )
                 )
@@ -134,23 +138,34 @@ object CoupleVerifiedFilterSql {
         )
         """.trimIndent()
 
-    /** Binds [predicate] for one viewer starting at [startIndex]; returns the next free index. */
+    /**
+     * Binds [predicate] for one viewer starting at [startIndex]; returns the next free index.
+     * [hiddenFromViewerIds] are the people hiding from the viewer (contact blocks).
+     */
     fun bind(
         statement: PreparedStatement,
+        connection: Connection,
         startIndex: Int,
         enabled: Boolean,
         viewerUserId: UUID,
-    ): Int = bind(statement, startIndex, enabled, listOf(viewerUserId))
+        hiddenFromViewerIds: Set<UUID>,
+    ): Int = bind(statement, connection, startIndex, enabled, listOf(viewerUserId), hiddenFromViewerIds)
 
-    /** Binds [predicate] built with `viewerCount = viewers.size`; returns the next free index. */
+    /**
+     * Binds [predicate] built with `viewerCount = viewers.size`; returns the next free index.
+     * [hiddenFromViewerIds] are the people hiding from any of the viewers (contact blocks).
+     */
     fun bind(
         statement: PreparedStatement,
+        connection: Connection,
         startIndex: Int,
         enabled: Boolean,
         viewers: List<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
     ): Int {
         var index = startIndex
         statement.setBoolean(index++, enabled)
+        statement.setArray(index++, connection.createArrayOf("uuid", hiddenFromViewerIds.toTypedArray()))
         // Per viewer: block check (both directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST.
         return LinkedPartnerFilterSql.bindPartnerShown(statement, index, viewers)
     }

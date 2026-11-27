@@ -133,6 +133,36 @@ class PsyncPartnerVisibilityIntegrationTest {
             assertTrue(v1 in deckIds(a, b, linkedOnly = true))
         }
 
+    /**
+     * "Verified couples only" in Psync == the couple badge shows to BOTH partners. Before: the
+     * couple-verified predicate had no contact-block exclusion, the Psync hydration dropped the hiding
+     * partner in SQL (so the service backstop saw no partner id to drop on), and C1 was dealt with no
+     * mini and no badge, revealing a hidden verified partner.
+     */
+    @Test
+    fun aVerifiedPartnerHidingFromEitherOfTheCoupleKeepsTheCandidateOutOfVerifiedCouplesOnly() =
+        runBlocking {
+            val (a, b) = person("A") to person("B")
+            // C2 hides from A; D2 hides from B; W is an ordinary verified couple.
+            val (c1, c2) = verifiedCouple("C")
+            insertContactBlock(blocker = c2, viewer = a)
+            val (d1, d2) = verifiedCouple("D")
+            insertContactBlock(blocker = d2, viewer = b)
+            val (w1, w2) = verifiedCouple("W")
+
+            listOf(a to b, b to a).forEach { (initiator, partner) ->
+                val couples = deckIds(initiator, partner, linkedOnly = null, verifiedCouplesOnly = true)
+                assertFalse(c1 in couples, "C2 hides from A")
+                assertFalse(d1 in couples, "D2 hides from B")
+                assertTrue(w1 in couples && w2 in couples)
+                // Property: the filter keeps exactly the cards whose badge shows in the unfiltered deck.
+                val badged = deck(initiator, partner, linkedOnly = null).filter { it.coupleVerified }.map { UUID.fromString(it.userId) }.toSet()
+                assertEquals(badged, couples)
+                // The hiding partners' own cards keep their badge: their partners hide from no one.
+                assertTrue(c2 in couples && d2 in couples)
+            }
+        }
+
     // --- fixtures ---------------------------------------------------------------------------------
 
     private var nextOffset = 0
@@ -151,6 +181,12 @@ class PsyncPartnerVisibilityIntegrationTest {
         dataSource.insertActiveProfileLink(second, first)
         return first to second
     }
+
+    private fun verifiedCouple(name: String): Pair<UUID, UUID> =
+        couple(name).also { (first, second) ->
+            dataSource.markProfileVerified(first)
+            dataSource.markProfileVerified(second)
+        }
 
     private fun setPartnerVisibility(
         owner: UUID,
