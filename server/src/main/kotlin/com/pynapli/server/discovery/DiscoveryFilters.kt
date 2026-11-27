@@ -72,9 +72,17 @@ data class DiscoveryFilters(
     val partnerMaximumAge: Int? = null,
     val partnerOrientations: Set<String> = emptySet(),
     val partnerVerifiedOnly: Boolean = false,
-    // "No single men" quick chip: drops people whose own declared gender is "man" and who have no
-    // linked partner shown to this viewer (the same gate). Men visibly linked to a partner still show.
+    // "No single men" quick chip: drops people whose own declared gender is "man" or "trans_man" (gender
+    // identity, founder decision 2026-11-27) and who have no linked partner shown to this viewer (the
+    // same gate). Men visibly linked to a partner still show; non-binary and other keys are untouched.
     val excludeSingleMen: Boolean = false,
+    // "Haven't chatted" (Grid only, plan G2-4): drop people this viewer exchanged a direct message with
+    // in the last 24 hours (GridFilterSql). Viewer-specific, so never served from the shared rank cache.
+    val haventChattedOnly: Boolean = false,
+    // Lifestyle "All of" (Grid, plan G2-4): every selected lifestyle tag must be on the profile, not any
+    // one per group (LifestyleFilterSql). At most [MAX_LIFESTYLE_ALL_OF_TAGS] tags and one experience
+    // level (a profile has one). Off = the usual any-of within a group, all-of across groups.
+    val lifestyleMatchAll: Boolean = false,
 ) {
     /** Any partner-derived predicate is on (PartnerFilterSql runs its EXISTS). */
     val hasPartnerFilters: Boolean
@@ -101,38 +109,6 @@ data class DiscoveryFilters(
                 }
                 if (excludeSingleMen) append("|excludeSingleMen=true")
             }
-
-    // Broad non-default filter signal used by Swipe's stricter paid gate.
-    val hasAdvancedFilters: Boolean
-        get() =
-            minimumAge != null ||
-                maximumAge != null ||
-                relationshipContexts.isNotEmpty() ||
-                linkedOnly != null ||
-                verifiedOnly ||
-                verifiedCouplesOnly ||
-                facePhotoVerifiedOnly ||
-                ageVerifiedOnly ||
-                discoveryStyles.isNotEmpty() ||
-                lifestyleTags.isNotEmpty() ||
-                boundaryItems.isNotEmpty() ||
-                logisticsTags.isNotEmpty() ||
-                tonightAvailableOnly ||
-                activeTodayOnly ||
-                freshOnly ||
-                travelingHereOnly ||
-                withPhotosOnly ||
-                hasPrivateAlbumOnly ||
-                intents.isNotEmpty() ||
-                genders.isNotEmpty() ||
-                orientations.isNotEmpty()
-
-    // Basic intent, trust, who, distance, age, online, and tonight filters stay free.
-    // Paid "advanced" status is reserved for high-specificity lifestyle/logistics controls.
-    val requiresAdvancedEntitlement: Boolean
-        get() =
-            lifestyleTags.isNotEmpty() ||
-                logisticsTags.any { it in ADVANCED_LOGISTICS_TAGS }
 }
 
 fun discoveryFiltersFrom(
@@ -164,6 +140,8 @@ fun discoveryFiltersFrom(
     partnerOrientations: List<String> = emptyList(),
     partnerVerifiedOnly: Boolean = false,
     excludeSingleMen: Boolean = false,
+    haventChattedOnly: Boolean = false,
+    lifestyleMatchAll: Boolean = false,
     errorFactory: (String) -> RuntimeException,
 ): DiscoveryFilters {
     val min =
@@ -222,6 +200,13 @@ fun discoveryFiltersFrom(
             .onEach { value ->
                 if (value !in ALLOWED_LIFESTYLE_TAGS) throw errorFactory("INVALID_DISCOVERY_FILTER")
             }.toSet()
+
+    // "All of up to 3" (plan G2-4): more tags, or two experience levels (one per profile, so nobody
+    // could match), is refused rather than silently answered with an empty Grid.
+    if (lifestyleMatchAll) {
+        if (tags.size > MAX_LIFESTYLE_ALL_OF_TAGS) throw errorFactory("INVALID_DISCOVERY_FILTER")
+        if (DiscoveryTagTaxonomies.lifestyleFilterGroups(tags).experience.size > 1) throw errorFactory("INVALID_DISCOVERY_FILTER")
+    }
 
     if (boundaryItems.size > ALLOWED_BOUNDARY_ITEMS.size) throw errorFactory("INVALID_DISCOVERY_FILTER")
     val boundaries =
@@ -314,6 +299,9 @@ fun discoveryFiltersFrom(
         partnerOrientations = partnerOrientationValues,
         partnerVerifiedOnly = partnerVerifiedOnly,
         excludeSingleMen = excludeSingleMen,
+        haventChattedOnly = haventChattedOnly,
+        // Only meaningful with tags; an empty set stays the default so scopes keep their hash.
+        lifestyleMatchAll = lifestyleMatchAll && tags.isNotEmpty(),
     )
 }
 
@@ -343,6 +331,9 @@ private val ALLOWED_DISCOVERY_STYLES = DiscoveryTagTaxonomies.discoveryStyles
 
 private const val MAX_LIFESTYLE_TAG_FILTERS = 12
 
+/** Lifestyle "All of" takes at most this many tags (Grindr's tags: up to 3, all must match). */
+const val MAX_LIFESTYLE_ALL_OF_TAGS = 3
+
 // Includes the experience levels, so saved filters holding new_to_lifestyle / experienced keep working.
 private val ALLOWED_LIFESTYLE_TAGS = DiscoveryTagTaxonomies.lifestyleFilterTags
 
@@ -351,8 +342,6 @@ private val ALLOWED_BOUNDARY_ITEMS = DiscoveryTagTaxonomies.boundaryItems.toSet(
 private const val MAX_LOGISTICS_TAG_FILTERS = 8
 
 private val ALLOWED_LOGISTICS_TAGS = DiscoveryTagTaxonomies.logisticsTags
-
-private val ADVANCED_LOGISTICS_TAGS = ALLOWED_LOGISTICS_TAGS - "public_meet_first"
 
 private const val MAX_INTENT_FILTERS = 8
 

@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.location.LocationUiState
+import com.pynapli.shared.network.dto.GridCountResponseDto
 
 @Composable
 internal fun GridScreenContent(
@@ -56,10 +57,10 @@ internal fun GridScreenContent(
     onShowNewNearby: () -> Unit = {},
     // The location pill opens Travel mode; null leaves it a plain label.
     onOpenTravel: (() -> Unit)? = null,
-    // The viewer's plan allows paid filters: true/false, or null while unknown (no locks shown).
-    advancedFiltersAllowed: Boolean? = null,
     // Section 3: the boundary banner opens the plans sheet on the server's unlockTier.
     onOpenUnlockStore: (unlockTier: String?) -> Unit = { onOpenStore() },
+    // Plan G2-4: the filter sheet's "Show N people" for a draft; a null answer leaves the button "Apply".
+    countFor: suspend (GridFilters) -> GridCountResponseDto? = { null },
 ) {
     var sheetVisible by remember { mutableStateOf(false) }
     val showingFavorites = favoritesState?.showing == true && favoritesGridState != null
@@ -135,7 +136,7 @@ internal fun GridScreenContent(
             savedState = savedFiltersState,
             tonightSessionActive = tonightSessionActive,
             lifestyleFiltersAllowed = lifestyleFiltersAllowed,
-            advancedFiltersAllowed = advancedFiltersAllowed != false,
+            countFor = countFor,
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false

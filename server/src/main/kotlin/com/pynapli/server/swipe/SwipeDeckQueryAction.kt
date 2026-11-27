@@ -4,7 +4,6 @@ import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
 import com.pynapli.server.safety.BlockRepository
-import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.SwipeDeckRequestDto
 import com.pynapli.shared.network.dto.SwipeDeckResponseDto
@@ -20,6 +19,8 @@ internal class SwipeDeckQueryAction(
     private val deckPageBuilder: SwipeDeckPageBuilder,
     private val clock: Clock,
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
+    // Lifestyle tags need an age-verified viewer (safety, not payment), as on the Grid and Tonight.
+    private val viewerTrustRepository: com.pynapli.server.grid.GridViewerTrustRepository? = null,
 ) {
     suspend fun queryDeck(
         viewerUserId: UUID,
@@ -43,12 +44,12 @@ internal class SwipeDeckQueryAction(
         val radiusMeters = CoarseLocation.snapRadiusMeters(deckRequest.radiusMeters)
         val limit = deckRequest.limit
         val filters = deckRequest.filters
-        val policy =
-            profile("swipe.deck.policy") {
-                subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
-            }
-        if (filters.requiresAdvancedEntitlement && !policy.advancedFiltersAllowed) {
-            throw SwipeException("ENTITLEMENT_REQUIRED")
+        // Founder decision 2 (2026-11-26): every Swipe filter is free. Lifestyle tags still need age
+        // verification. A Psync deck is gated when the session is created or its filters re-suggested
+        // (PsyncLifecycleActions), never mid-deal, so it skips this check.
+        if (psyncPartnerUserId == null && filters.lifestyleTags.isNotEmpty()) {
+            val ageVerified = viewerTrustRepository?.isAgeVerified(viewerUserId) ?: true
+            if (!ageVerified) throw SwipeException("AGE_VERIFICATION_REQUIRED")
         }
         val now = clock.instant()
         val scopeHash =
@@ -248,8 +249,9 @@ internal class SwipeDeckQueryAction(
             generatedAt = deckSession.generatedAt.toString(),
             items = pageItems.map { it.dto },
             nextCursor = nextCursor,
-            advancedFiltersAllowed = policy.advancedFiltersAllowed,
-            advancedFiltersApplied = filters.requiresAdvancedEntitlement,
+            // Kept on the wire for shipped clients, which lock chips when it is false: always true now.
+            advancedFiltersAllowed = true,
+            advancedFiltersApplied = false,
         )
     }
 }

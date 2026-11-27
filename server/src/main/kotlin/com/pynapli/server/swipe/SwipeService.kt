@@ -36,6 +36,10 @@ class SwipeService(
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
     // G2-2: partner minis use the Grid thumbnail when ready; photos carry stable cache keys.
     mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
+    // Lifestyle tags in deck filters need an age-verified viewer (safety, not payment).
+    viewerTrustRepository: com.pynapli.server.grid.GridViewerTrustRepository? = null,
+    // The viewer's own hides, for the rewound card's partner mini (G2-4).
+    hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
 ) {
     private val dtoMapper = SwipeDtoMapper(mediaAssetUrlResolver, mediaImages)
     private val sideEffects =
@@ -55,6 +59,7 @@ class SwipeService(
             deckPageBuilder = deckPageBuilder,
             clock = clock,
             contactBlockVisibility = contactBlockVisibility,
+            viewerTrustRepository = viewerTrustRepository,
         )
     private val submitAction =
         SwipeSubmitAction(
@@ -79,6 +84,7 @@ class SwipeService(
             deckTokenCodec = deckTokenCodec,
             clock = clock,
             contactBlockVisibility = contactBlockVisibility,
+            hiddenProfileRepository = hiddenProfileRepository,
         )
 
     suspend fun queryDeck(

@@ -41,6 +41,9 @@ internal object JdbcActivityEngagementSql {
         WHERE event_type = 'profile_view' AND deleted_at IS NULL
         DO UPDATE SET
             aggregate_count = CASE
+                -- Viewed Me is a 7-day list (plan G2-4): after a quiet week the count starts again,
+                -- so "viewed you 3x" is about the week the list shows.
+                WHEN activity_events.occurred_at < now() - interval '7 days' THEN 1
                 WHEN activity_events.last_counted_at <= now() - (?::interval)
                 THEN activity_events.aggregate_count + 1
                 ELSE activity_events.aggregate_count

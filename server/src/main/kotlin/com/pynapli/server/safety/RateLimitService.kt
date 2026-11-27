@@ -154,6 +154,9 @@ class RateLimitService(
                 // counted on top of GRID_QUERY. A whole Free window is 9 pages of 60 (Social 7 of 90), so 60
                 // an hour is several full scrolls with refreshes, and caps scripted re-ranking of the window.
                 RateLimitPolicy(action = RateLimitedAction.GRID_LOCKED_PAGE, limit = 60, windowSeconds = ONE_HOUR_SECONDS),
+                // The filter sheet's "Show N people" count (plan G2-4): asked debounced while editing, and
+                // answered from a short per-viewer cache, so a few hundred an hour is generous.
+                RateLimitPolicy(action = RateLimitedAction.GRID_COUNT, limit = 360, windowSeconds = ONE_HOUR_SECONDS),
                 RateLimitPolicy(action = RateLimitedAction.MEDIA_UPLOAD, limit = 120, windowSeconds = ONE_HOUR_SECONDS),
                 // Type-ahead: every debounced keystroke is a query, so the budget is generous.
                 RateLimitPolicy(action = RateLimitedAction.TRAVEL_SEARCH, limit = 600, windowSeconds = ONE_HOUR_SECONDS),
@@ -248,6 +251,7 @@ object RateLimitedAction {
     const val FIRST_MESSAGE = "first_message"
     const val GRID_QUERY = "grid_query"
     const val GRID_LOCKED_PAGE = "grid_locked_page"
+    const val GRID_COUNT = "grid_count"
     const val MEDIA_UPLOAD = "media_upload"
     const val TRAVEL_SEARCH = "travel_search"
     const val AGE_VERIFICATION_START = "age_verification_start"

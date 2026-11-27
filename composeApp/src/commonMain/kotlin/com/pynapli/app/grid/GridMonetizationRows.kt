@@ -38,7 +38,7 @@ internal fun paywallCtaLabel(upgradeTier: String?): String =
 internal fun GridPaywallRow(
     message: String,
     onOpenStore: () -> Unit,
-    // SubscriptionTier the row sells (from the server's result-limit tier or a paid-filter gate).
+    // SubscriptionTier the row sells (from the server's result-limit tier).
     upgradeTier: String? = null,
 ) {
     Row(

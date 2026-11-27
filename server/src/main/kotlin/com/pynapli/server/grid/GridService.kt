@@ -23,6 +23,7 @@ import com.pynapli.server.safety.RateLimitedAction
 import com.pynapli.server.subscriptions.EntitlementPolicy
 import com.pynapli.server.subscriptions.SubscriptionService
 import com.pynapli.shared.network.dto.GridCardDto
+import com.pynapli.shared.network.dto.GridCountResponseDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
@@ -62,47 +63,16 @@ class GridService(
                 CoarseLocation.snapRadiusMeters(request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS))
             }
         val filters =
-            profile("grid.filters") {
-                discoveryFiltersFrom(
-                    minimumAge = request.minimumAge,
-                    maximumAge = request.maximumAge,
-                    relationshipContexts = request.relationshipContexts,
-                    linkedOnly = request.linkedOnly,
-                    verifiedOnly = request.verifiedOnly,
-                    facePhotoVerifiedOnly = request.facePhotoVerifiedOnly,
-                    ageVerifiedOnly = request.ageVerifiedOnly,
-                    discoveryStyles = request.discoveryStyles,
-                    lifestyleTags = request.lifestyleTags,
-                    boundaryItems = request.boundaryItems,
-                    logisticsTags = request.logisticsTags,
-                    tonightAvailableOnly = request.tonightAvailableOnly,
-                    activeTodayOnly = request.activeTodayOnly,
-                    // Fresh replaced "Recently joined"; an old client's field means Fresh now.
-                    freshOnly = request.freshOnly || request.recentlyJoinedOnly,
-                    travelingHereOnly = request.travelingHereOnly,
-                    withPhotosOnly = request.withPhotosOnly,
-                    hasPrivateAlbumOnly = request.hasPrivateAlbumOnly,
-                    intents = request.intents,
-                    genders = request.genders,
-                    orientations = request.orientations,
-                    verifiedCouplesOnly = request.verifiedCouplesOnly,
-                    partnerGenders = request.partnerGenders,
-                    partnerMinimumAge = request.partnerMinimumAge,
-                    partnerMaximumAge = request.partnerMaximumAge,
-                    partnerOrientations = request.partnerOrientations,
-                    partnerVerifiedOnly = request.partnerVerifiedOnly,
-                    excludeSingleMen = request.excludeSingleMen,
-                ) { _ -> GridException("INVALID_GRID_FILTER") }
-            }
+            profile("grid.filters") { gridFiltersFrom(request) }
         profile("grid.lifestyleGate") { requireLifestyleFilterAccess(viewerUserId, filters) }
-        val advancedFiltersApplied = filters.requiresAdvancedEntitlement
+        // Founder decision 2 (2026-11-26, Grindr model): every Grid filter is free on every plan. The
+        // only filter gate is age verification for lifestyle tags (safety, above). Plans buy depth
+        // (locked cards), saved presets and Boost. advancedFiltersApplied stays on the wire, always false.
+        val advancedFiltersApplied = false
         val policy =
             profile("grid.entitlement") {
                 subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
             }
-        if (advancedFiltersApplied && !policy.advancedFiltersAllowed) {
-            throw GridException("ENTITLEMENT_REQUIRED")
-        }
         // L-07: never fewer than MIN_PAGE_SIZE cards per request (a one-card page lets a client probe
         // the ranking card by card). Only the tier depth cap below can make a final page shorter.
         val pageLimit = request.limit.coerceIn(MIN_PAGE_SIZE, maxOf(MIN_PAGE_SIZE, minOf(MAX_LIMIT, policy.gridPageLimit)))
@@ -235,47 +205,8 @@ class GridService(
                     }
                 }
             if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
-            val visibleCards =
-                profile("grid.blockFilter") {
-                    if (blockedRelatedIds.isEmpty()) {
-                        result.cards
-                    } else {
-                        result.cards.filterNot { it.userId in blockedRelatedIds }
-                    }
-                }
             val discoverableCards =
-                profile("grid.hiddenFilter") {
-                    if (hiddenProfileIds.isEmpty()) {
-                        visibleCards
-                    } else {
-                        visibleCards
-                            .filterNot { it.userId in hiddenProfileIds }
-                            // "Verified couples only" means the badge this viewer sees: a couple whose
-                            // partner is stripped below no longer qualifies.
-                            .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenProfileIds }
-                            // Partner filters (PartnerFilterSql) likewise need the partner this viewer
-                            // sees. The SQL gate already leaves out these partners; this is the backstop.
-                            // "No single men" likewise: the card has no gender here, so any card losing
-                            // its partner is dropped (stricter, never a leak).
-                            .filterNot {
-                                (filters.hasPartnerFilters || filters.excludeSingleMen) && it.linkedPartnerUserId in hiddenProfileIds
-                            }.map { card ->
-                                if (card.linkedPartnerUserId in hiddenProfileIds) {
-                                    card.copy(
-                                        linkedPartnerUserId = null,
-                                        linkedPartnerDisplayName = null,
-                                        linkedPartnerThumbnailMediaAssetId = null,
-                                        linkedPartnerAge = null,
-                                        linkedPartnerGender = null,
-                                        // The badge needs a visible partner, as on Swipe cards.
-                                        coupleVerified = false,
-                                    )
-                                } else {
-                                    card
-                                }
-                            }
-                    }
-                }
+                profile("grid.visibility") { result.cards.visibleToViewer(blockedRelatedIds, hiddenProfileIds, filters) }
             val onlineUserIds = profile("grid.presenceLookup") { onlineUserIdsFor(discoverableCards) }
             val filteredCards =
                 profile("grid.onlineFilter") {
@@ -375,6 +306,77 @@ class GridService(
         )
     }
 
+    /**
+     * The filter sheet's "Show N people" count (plan G2-4). It parses the request with the Grid's own
+     * [gridFiltersFrom], applies the same age gate, ranks with the same SQL (for this viewer, never from
+     * the shared window), and drops the same people after it ([visibleToViewer], online presence), so it
+     * never counts anyone the Grid would not show. It counts at most the Grid's served depth for this
+     * plan (locked cards included only when the client opts in, as on the Grid) and at most
+     * [GRID_COUNT_CAP]; [GridCountResponseDto.atLeast] says more match. It counts at the radius asked,
+     * so a sparse first page that the Grid widens shows more people than the count, never fewer.
+     */
+    suspend fun countGrid(
+        viewerUserId: UUID,
+        request: GridQueryRequestDto,
+    ): GridCountResponseDto {
+        val decision = rateLimitService?.check(viewerUserId, RateLimitedAction.GRID_COUNT)
+        if (decision != null && !decision.allowed) throw GridException("RATE_LIMITED")
+        val radiusMeters = CoarseLocation.snapRadiusMeters(request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS))
+        val filters = gridFiltersFrom(request)
+        requireLifestyleFilterAccess(viewerUserId, filters)
+        val policy = subscriptionService?.getPolicy(viewerUserId) ?: EntitlementPolicy.unrestricted()
+        val lockingApplies = request.acceptLockedCards && policy.gridLockedPreviewDepth > policy.gridResultDepthLimit
+        val servedDepth = if (lockingApplies) policy.gridLockedPreviewDepth else policy.gridResultDepthLimit
+        val cap = minOf(GRID_COUNT_CAP, servedDepth)
+
+        val blockedRelatedIds = blockRepository?.listBlockedRelatedUserIds(viewerUserId).orEmpty()
+        val hiddenFromViewerIds = contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+        val hiddenProfileIds = hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty() + hiddenFromViewerIds
+        // Keyed on everything that decides the answer: the sealed filter scope (viewer included), the
+        // plan's cap, and this viewer's current blocks and hides, so a hide never leaves a stale count.
+        val cacheKey =
+            buildString {
+                append(
+                    DiscoveryCursorCodec.gridScopeHash(
+                        viewerUserId = viewerUserId,
+                        radiusMeters = radiusMeters,
+                        limit = cap,
+                        filters = filters,
+                        onlineOnly = request.onlineOnly,
+                        acceptLockedCards = request.acceptLockedCards,
+                        visitingSoonOnly = request.visitingSoonOnly,
+                    ),
+                )
+                append('|').append((blockedRelatedIds.sorted() + hiddenProfileIds.sorted()).hashCode())
+            }
+        countCache.get(cacheKey, clock.instant())?.let { return it }
+
+        val ranked =
+            if (request.visitingSoonOnly) {
+                repository.queryVisitingSoon(viewerUserId, radiusMeters, cap, filters, null, hiddenFromViewerIds)
+            } else {
+                repository.queryNearbyForCount(viewerUserId, radiusMeters, cap, filters, hiddenFromViewerIds)
+            }
+        if (!ranked.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
+        val visible = ranked.cards.visibleToViewer(blockedRelatedIds, hiddenProfileIds, filters)
+        val kept =
+            if (request.onlineOnly) {
+                val online = onlineUserIdsFor(visible)
+                visible.filter { it.userId in online }
+            } else {
+                visible
+            }
+        val response =
+            GridCountResponseDto(
+                count = kept.size.coerceAtMost(cap),
+                atLeast = ranked.nextCursorAnchor != null || kept.size > cap,
+            )
+        countCache.put(cacheKey, response, clock.instant())
+        return response
+    }
+
+    private val countCache = GridCountCache()
+
     private suspend fun requireGridQueryRateLimit(viewerUserId: UUID) {
         val decision = rateLimitService?.check(viewerUserId, RateLimitedAction.GRID_QUERY) ?: return
         if (!decision.allowed) throw GridException("RATE_LIMITED")
@@ -416,6 +418,9 @@ class GridService(
 
         // Plan G10: a first page showing fewer people than this widens to MAX_RADIUS_METERS.
         const val SPARSE_FIRST_PAGE = 12
+
+        // Plan G2-4: the filter sheet count stops here ("500+").
+        const val GRID_COUNT_CAP = 500
 
         // Online-only over-fetch: presence is filtered after SQL, so fetch this many times the page
         // size (bounded) to fill the page from the online subset without unbounded DB work.
@@ -493,4 +498,82 @@ internal fun GridCardRecord.toGridCardDto(
                 sinceLastActive = lastActiveAt?.let { Duration.between(it, now) },
             ),
     )
+}
+
+/**
+ * The one parse of a Grid request's filters, shared by the Grid query and the result count (plan G2-4:
+ * the count never uses a looser filter set than the Grid it counts).
+ */
+internal fun gridFiltersFrom(request: GridQueryRequestDto): DiscoveryFilters =
+    discoveryFiltersFrom(
+        minimumAge = request.minimumAge,
+        maximumAge = request.maximumAge,
+        relationshipContexts = request.relationshipContexts,
+        linkedOnly = request.linkedOnly,
+        verifiedOnly = request.verifiedOnly,
+        facePhotoVerifiedOnly = request.facePhotoVerifiedOnly,
+        ageVerifiedOnly = request.ageVerifiedOnly,
+        discoveryStyles = request.discoveryStyles,
+        lifestyleTags = request.lifestyleTags,
+        boundaryItems = request.boundaryItems,
+        logisticsTags = request.logisticsTags,
+        tonightAvailableOnly = request.tonightAvailableOnly,
+        activeTodayOnly = request.activeTodayOnly,
+        // Fresh replaced "Recently joined"; an old client's field means Fresh now.
+        freshOnly = request.freshOnly || request.recentlyJoinedOnly,
+        travelingHereOnly = request.travelingHereOnly,
+        withPhotosOnly = request.withPhotosOnly,
+        hasPrivateAlbumOnly = request.hasPrivateAlbumOnly,
+        intents = request.intents,
+        genders = request.genders,
+        orientations = request.orientations,
+        verifiedCouplesOnly = request.verifiedCouplesOnly,
+        partnerGenders = request.partnerGenders,
+        partnerMinimumAge = request.partnerMinimumAge,
+        partnerMaximumAge = request.partnerMaximumAge,
+        partnerOrientations = request.partnerOrientations,
+        partnerVerifiedOnly = request.partnerVerifiedOnly,
+        excludeSingleMen = request.excludeSingleMen,
+        haventChattedOnly = request.haventChattedOnly,
+        lifestyleMatchAll = request.lifestyleMatchAll,
+    ) { _ -> GridException("INVALID_GRID_FILTER") }
+
+/**
+ * The per-viewer exclusions applied after the SQL rank, shared by the Grid page and the result count
+ * (plan G2-4), so both drop exactly the same people: blocks either way ([blockedRelatedIds]), the
+ * viewer's hides and people hiding from the viewer ([hiddenProfileIds]), and the partner backstop.
+ */
+internal fun List<GridCardRecord>.visibleToViewer(
+    blockedRelatedIds: Set<UUID>,
+    hiddenProfileIds: Set<UUID>,
+    filters: DiscoveryFilters,
+): List<GridCardRecord> {
+    val unblocked = if (blockedRelatedIds.isEmpty()) this else filterNot { it.userId in blockedRelatedIds }
+    if (hiddenProfileIds.isEmpty()) return unblocked
+    return unblocked
+        .filterNot { it.userId in hiddenProfileIds }
+        // "Verified couples only" means the badge this viewer sees: a couple whose
+        // partner is stripped below no longer qualifies.
+        .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenProfileIds }
+        // Partner filters (PartnerFilterSql) likewise need the partner this viewer
+        // sees. The SQL gate already leaves out these partners; this is the backstop.
+        // "No single men" likewise: the card has no gender here, so any card losing
+        // its partner is dropped (stricter, never a leak).
+        .filterNot {
+            (filters.hasPartnerFilters || filters.excludeSingleMen) && it.linkedPartnerUserId in hiddenProfileIds
+        }.map { card ->
+            if (card.linkedPartnerUserId in hiddenProfileIds) {
+                card.copy(
+                    linkedPartnerUserId = null,
+                    linkedPartnerDisplayName = null,
+                    linkedPartnerThumbnailMediaAssetId = null,
+                    linkedPartnerAge = null,
+                    linkedPartnerGender = null,
+                    // The badge needs a visible partner, as on Swipe cards.
+                    coupleVerified = false,
+                )
+            } else {
+                card
+            }
+        }
 }

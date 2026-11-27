@@ -10,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
@@ -54,9 +53,6 @@ fun GridScreen(
     onOpenPhotoVerification: (() -> Unit)? = null,
     // Travel mode is a Select perk, so its paywall opens on Select rather than the plan list.
     onOpenTravelStore: () -> Unit = onOpenStore,
-    // From the viewer's plan (Social/Select true, Free false, null until it loads). Display only:
-    // it puts locks on paid chips; the server decides what a query may use.
-    advancedFiltersAllowed: Boolean? = null,
     // Section 3: a locked tile, the boundary banner and a locked pager page open the plans sheet on
     // the server's unlockTier ("social" or "select").
     onOpenUnlockStore: (unlockTier: String?) -> Unit = { onOpenStore() },
@@ -93,13 +89,10 @@ fun GridScreen(
         onDispose { stateHolder.setOnScreen(false) }
     }
 
-    // A paid filter was taken out (only that one): show the plans. A plan change reloaded the order
-    // from page one: show it from the top.
-    val openStore by rememberUpdatedState(onOpenStore)
+    // A plan change reloaded the order from page one: show it from the top.
     LaunchedEffect(stateHolder, gridState) {
         stateHolder.events.collect { event ->
             when (event) {
-                GridEvent.OpenPaywall -> openStore()
                 GridEvent.ScrollToTop -> gridState.scrollToItem(0)
             }
         }
@@ -147,6 +140,7 @@ fun GridScreen(
 
     GridScreenContent(
         state = state,
+        countFor = { draft -> stateHolder.countFor(draft) },
         savedFiltersState = savedFiltersState,
         tonightSessionActive = tonightState.currentSession != null,
         lifestyleFiltersAllowed = lifestyleFiltersAllowed,
@@ -176,7 +170,6 @@ fun GridScreen(
             scope.launch { if (stateHolder.applyNewNearby()) gridState.scrollToItem(0) }
         },
         onOpenTravel = travelLocationStateHolder?.let { { travelSheetVisible = true } },
-        advancedFiltersAllowed = advancedFiltersAllowed,
         travelCityName = travelState.current?.city,
         onTurnOffTravel = {
             travelLocationStateHolder?.let { holder ->
@@ -281,8 +274,9 @@ fun GridScreen(
             }
         },
         onRemoveCard = { userId ->
-            stateHolder.removeCardById(userId)
+            // Favorites first: the Grid's removal may wait on a backfill page (plan G2-4).
             favoritesStateHolder?.removeCardById(userId)
+            stateHolder.removeCardById(userId)
         },
         viewerUserId = viewerUserId,
         profileLinkActionFor = { targetUserId ->

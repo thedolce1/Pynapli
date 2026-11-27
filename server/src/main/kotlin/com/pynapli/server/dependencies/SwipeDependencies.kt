@@ -3,6 +3,7 @@ package com.pynapli.server.dependencies
 import com.pynapli.server.activity.ActivityService
 import com.pynapli.server.config.ServerConfig
 import com.pynapli.server.db.PostgresJobLock
+import com.pynapli.server.grid.JdbcGridViewerTrustRepository
 import com.pynapli.server.location.TravelLocationRepository
 import com.pynapli.server.media.MediaAssetUrlResolver
 import com.pynapli.server.notifications.NotificationService
@@ -77,6 +78,8 @@ internal fun buildSwipeDependencies(
             matchConversationOpener = matchConversationOpener,
             contactBlockVisibility = contactBlockVisibility,
             mediaImages = mediaImageResolver,
+            viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
+            hiddenProfileRepository = hiddenProfileRepository,
         )
     val psyncSessionService =
         PsyncSessionService(
@@ -95,6 +98,7 @@ internal fun buildSwipeDependencies(
             riskPolicyService = riskPolicyService,
             subscriptionService = subscriptionService,
             contactBlockVisibility = contactBlockVisibility,
+            viewerTrustRepository = JdbcGridViewerTrustRepository(dataSource),
         )
     return SwipeDependencies(
         swipeService = swipeService,

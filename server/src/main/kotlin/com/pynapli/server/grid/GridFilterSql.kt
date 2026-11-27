@@ -118,6 +118,24 @@ internal object GridFilterSql {
                   AND has_private_m.moderation_status = 'approved'
             )
         )
+        -- "Haven't chatted" (plan G2-4, Grid only): no direct message exchanged with this viewer in the last
+        -- 24 hours. Every message the viewer sent counts; one they received counts only once it is
+        -- visible to them (a held message never makes a card vanish). Deleted messages never count.
+        -- One lookup on idx_direct_conversations_pair, then idx_messages_conversation_created.
+        AND (
+            ?::boolean = false
+            OR NOT EXISTS (
+                SELECT 1
+                FROM direct_conversations hc_dc
+                JOIN messages hc_m
+                  ON hc_m.conversation_id = hc_dc.conversation_id
+                 AND hc_m.deleted_at IS NULL
+                 AND hc_m.created_at > now() - interval '24 hours'
+                 AND (hc_m.sender_user_id = ?::uuid OR hc_m.moderation_status = 'visible')
+                WHERE LEAST(hc_dc.user_a_id, hc_dc.user_b_id) = LEAST(?::uuid, $user.id)
+                  AND GREATEST(hc_dc.user_a_id, hc_dc.user_b_id) = GREATEST(?::uuid, $user.id)
+            )
+        )
         """.trimIndent()
 
     /** Binds [predicates] starting at [startIndex], in SQL order; returns the next free index. */
@@ -147,7 +165,7 @@ internal object GridFilterSql {
         index = PartnerFilterSql.bind(statement, connection, index, filters, viewerUserId, hiddenFromViewerIds)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
-        index = LifestyleFilterSql.bind(statement, connection, index, filters.lifestyleTags, filters.boundaryItems)
+        index = LifestyleFilterSql.bind(statement, connection, index, filters.lifestyleTags, filters.boundaryItems, filters.lifestyleMatchAll)
         statement.setArray(index++, logisticsTags)
         statement.setArray(index++, logisticsTags)
         statement.setBoolean(index++, filters.tonightAvailableOnly)
@@ -166,6 +184,11 @@ internal object GridFilterSql {
         statement.setBoolean(index++, filters.travelingHereOnly)
         // FILTERS_SPEC "Has private album" gate.
         statement.setBoolean(index++, filters.hasPrivateAlbumOnly)
+        // "Haven't chatted": the flag, then the viewer three times (sender, pair low, pair high).
+        statement.setBoolean(index++, filters.haventChattedOnly)
+        statement.setObject(index++, viewerUserId)
+        statement.setObject(index++, viewerUserId)
+        statement.setObject(index++, viewerUserId)
         return index
     }
 }

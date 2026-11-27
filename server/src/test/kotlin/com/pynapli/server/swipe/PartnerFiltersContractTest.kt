@@ -104,11 +104,6 @@ class PartnerFiltersContractTest {
     }
 
     @Test
-    fun allFree() {
-        each.forEach { assertFalse(it.requiresAdvancedEntitlement, "$it") }
-    }
-
-    @Test
     fun parsingValidatesLikeTheOwnersFilters() {
         fun parse(
             genders: List<String> = emptyList(),
