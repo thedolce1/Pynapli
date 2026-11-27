@@ -1746,6 +1746,8 @@ private class InMemorySwipeRepository(
         limit: Int,
         filters: DiscoveryFilters,
         excludedTargetUserIds: Set<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
+        coViewerUserId: UUID?,
     ): SwipeDeckResult {
         recordedQueryDeckFilters += filters
         recordedQueryDeckRadii += radiusMeters

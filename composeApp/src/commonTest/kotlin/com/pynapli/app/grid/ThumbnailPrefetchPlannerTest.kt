@@ -132,6 +132,5 @@ class ThumbnailPrefetchPlannerTest {
             thumbnailUrl = thumbnail,
             online = false,
             distanceLabel = null,
-            tone = GridCardTone.Warm,
         )
 }

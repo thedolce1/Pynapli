@@ -326,6 +326,7 @@ class ServerDependencies(
                     rateLimitService = core.rateLimitService,
                     contactBlockVisibility = core.contactBlockVisibility,
                     mediaImages = media.mediaImageResolver,
+                    hiddenProfileRepository = core.hiddenProfileRepository,
                 )
             val profileService =
                 ProfileService(

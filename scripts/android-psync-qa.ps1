@@ -162,6 +162,8 @@ function Start-DeviceSession {
     }
     Invoke-Adb @("shell", "am", "start", "-n", "$PackageName/$LaunchActivity") | Out-Null
 
+    # A fresh launch opens on the welcome screen (Section 1); "Sign in" leads to the email form.
+    Tap-ExactText "Sign in" 60
     Tap-ExactText "Email" 60
     Invoke-Adb @("shell", "input", "keyevent", "111") | Out-Null
     Invoke-Adb @("shell", "input", "text", $DeviceUser) | Out-Null

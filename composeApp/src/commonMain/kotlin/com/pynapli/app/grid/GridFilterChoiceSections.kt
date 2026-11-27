@@ -17,28 +17,44 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.handCursor
+import com.pynapli.shared.distance.DiscoveryRadiusSteps
 import com.pynapli.shared.profile.ProfileTaxonomies
+import kotlin.math.roundToInt
 
+/**
+ * The Grid radius slider moves between the server's radius steps only (DiscoveryRadiusSteps: 2, 5,
+ * 10, 25, 50, 100 km), and the label names the step, which is exactly the radius the server searches.
+ */
 @Composable
 internal fun DistanceSection(
     radiusMeters: Int,
     onChange: (Int) -> Unit,
 ) {
-    val km = (radiusMeters + 500) / 1_000
+    val steps = DiscoveryRadiusSteps.METERS
     Column {
         Text(
-            text = "Within $km km",
+            text = distanceRadiusLabel(radiusMeters),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Slider(
-            value = radiusMeters.toFloat(),
-            onValueChange = { value -> onChange(value.toInt()) },
-            valueRange = GridFilters.MIN_RADIUS_METERS.toFloat()..GridFilters.MAX_RADIUS_METERS.toFloat(),
-            steps = 0,
+            value = DiscoveryRadiusSteps.indexOf(GridFilters.snapRadius(radiusMeters)).toFloat(),
+            onValueChange = { value -> onChange(radiusForSliderPosition(value)) },
+            valueRange = 0f..(steps.size - 1).toFloat(),
+            // Material counts the stops between the two ends.
+            steps = steps.size - 2,
             modifier = Modifier.handCursor(),
         )
     }
+}
+
+/** "Within 25 km": the server's step for [radiusMeters] (whole km; every step is a whole km). */
+internal fun distanceRadiusLabel(radiusMeters: Int): String = "Within ${GridFilters.snapRadius(radiusMeters) / 1_000} km"
+
+/** The step at a slider position (an index into DiscoveryRadiusSteps.METERS). */
+internal fun radiusForSliderPosition(position: Float): Int {
+    val steps = DiscoveryRadiusSteps.METERS
+    return steps[position.roundToInt().coerceIn(0, steps.lastIndex)]
 }
 
 @Composable
@@ -321,22 +337,23 @@ internal fun TrustSection(
 /** Shared label for the Grid and Swipe "Verified couples only" chips. */
 internal const val VERIFIED_COUPLES_ONLY_LABEL = "Verified couples only"
 
+/**
+ * FILTERS_SPEC "Who", from the visible partner link (server-decided): Singles = no partner shown to
+ * the viewer, Linked = a partner shown. "Partnered" merged into Linked: the free-text relationship
+ * context it used to match was never reliable. Both on is the union, everyone.
+ */
 @Composable
 internal fun WhoSection(
     singles: Boolean,
     linked: Boolean,
-    partnered: Boolean,
-    onTogglesChanged: (Boolean, Boolean, Boolean) -> Unit,
+    onTogglesChanged: (Boolean, Boolean) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SheetToggleChip(label = "Singles", active = singles) {
-            onTogglesChanged(!singles, linked, partnered)
+            onTogglesChanged(!singles, linked)
         }
         SheetToggleChip(label = "Linked", active = linked) {
-            onTogglesChanged(singles, !linked, partnered)
-        }
-        SheetToggleChip(label = "Partnered", active = partnered) {
-            onTogglesChanged(singles, linked, !partnered)
+            onTogglesChanged(singles, !linked)
         }
     }
 }

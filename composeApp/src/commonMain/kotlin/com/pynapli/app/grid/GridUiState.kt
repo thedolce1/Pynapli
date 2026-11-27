@@ -1,6 +1,7 @@
 package com.pynapli.app.grid
 
 import androidx.compose.runtime.Immutable
+import com.pynapli.shared.distance.DiscoveryRadiusSteps
 import com.pynapli.shared.network.dto.GridCardDto
 import com.pynapli.shared.network.dto.GridQueryRequestDto
 import com.pynapli.shared.network.dto.LinkedPartnerMiniDto
@@ -45,8 +46,9 @@ data class GridUiState(
 @Immutable
 data class GridFilters(
     val online: Boolean = false,
+    // FILTERS_SPEC "Who", from the visible partner link (server-decided): Singles = no partner shown
+    // to the viewer, Linked = a partner shown. Exclusive states, so both on is the union (everyone).
     val singles: Boolean = false,
-    val partnered: Boolean = false,
     val linked: Boolean = false,
     val verified: Boolean = false,
     val facePhotoVerified: Boolean = false,
@@ -86,7 +88,6 @@ data class GridFilters(
             if (online) count += 1
             if (verifiedCouples) count += 1
             if (singles) count += 1
-            if (partnered) count += 1
             if (linked) count += 1
             if (verified) count += 1
             if (facePhotoVerified) count += 1
@@ -134,13 +135,11 @@ data class GridFilters(
     fun toGridFeedRequest(cursor: String?): GridQueryRequestDto = toGridQueryRequest(cursor).copy(acceptLockedCards = true, limit = MAX_FEED_PAGE_REQUEST)
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
-        val contexts =
-            buildList {
-                if (singles) add(SINGLES_CONTEXT)
-                if (partnered) add(PARTNERED_CONTEXT)
-            }
+        // Singles travels as the "single" Who token, Linked as linkedOnly; the server folds both onto
+        // the visible link (both on = everyone), so a saved preset with both restores both.
+        val contexts = if (singles) listOf(SINGLES_CONTEXT) else emptyList()
         return GridQueryRequestDto(
-            radiusMeters = radiusMeters,
+            radiusMeters = snapRadius(radiusMeters),
             limit = PAGE_SIZE,
             cursor = cursor,
             minimumAge = minimumAge,
@@ -171,7 +170,9 @@ data class GridFilters(
 
     companion object {
         const val DEFAULT_RADIUS_METERS: Int = 50_000
-        const val MIN_RADIUS_METERS: Int = 1_000
+
+        // The server tests only DiscoveryRadiusSteps (2, 5, 10, 25, 50, 100 km); these are its ends.
+        const val MIN_RADIUS_METERS: Int = 2_000
         const val MAX_RADIUS_METERS: Int = 100_000
         const val MIN_FILTER_AGE: Int = 18
         const val MAX_FILTER_AGE: Int = 99
@@ -180,8 +181,16 @@ data class GridFilters(
         /** The live Grid asks for this many; the server answers with the plan's page size (G2-2). */
         const val MAX_FEED_PAGE_REQUEST: Int = 120
         const val SINGLES_CONTEXT: String = "single"
+
+        // The retired "Partnered" token: a preset that carries it restores as Linked.
         const val PARTNERED_CONTEXT: String = "partnered"
         val defaults: GridFilters = GridFilters()
+
+        /**
+         * The radius the server searches for [meters]: clamped to the slider ends, then snapped UP to
+         * the next DiscoveryRadiusSteps step, exactly as the server snaps it (L-09).
+         */
+        fun snapRadius(meters: Int): Int = DiscoveryRadiusSteps.snapUp(meters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS))
 
         /**
          * Whether the viewer's plan unlocks paid Grid filters, from the client's view of the plan:
@@ -211,9 +220,8 @@ data class GridFilters(
             val intentByValue = Intent.entries.associateBy { it.serverValue }
             return GridFilters(
                 online = request.onlineOnly,
-                singles = SINGLES_CONTEXT in contexts,
-                partnered = PARTNERED_CONTEXT in contexts,
-                linked = request.linkedOnly == true,
+                singles = SINGLES_CONTEXT in contexts || request.linkedOnly == false,
+                linked = request.linkedOnly == true || PARTNERED_CONTEXT in contexts,
                 verified = request.verifiedOnly,
                 facePhotoVerified = request.facePhotoVerifiedOnly,
                 ageVerified = request.ageVerifiedOnly,
@@ -232,7 +240,9 @@ data class GridFilters(
                 fresh = request.freshOnly || request.recentlyJoinedOnly,
                 travelingHere = request.travelingHereOnly,
                 visitingSoon = request.visitingSoonOnly,
-                radiusMeters = request.radiusMeters.coerceIn(MIN_RADIUS_METERS, MAX_RADIUS_METERS),
+                // A stored or saved off-step radius (from the old continuous slider) maps up exactly as the
+                // server maps it, so the sheet shows the radius actually searched.
+                radiusMeters = snapRadius(request.radiusMeters),
                 minimumAge = request.minimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 maximumAge = request.maximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
                 verifiedCouples = request.verifiedCouplesOnly,
@@ -243,13 +253,11 @@ data class GridFilters(
 
 /**
  * A one-tap filter the Grid can toggle. The header row shows Online, Fresh, Tonight and Verified
- * (plus the Favorites view chip, which is not a filter); Singles and Linked stay toggles in the
- * filter sheet's Who section.
+ * (plus the Favorites view chip, which is not a filter); Singles and Linked are toggles in the
+ * filter sheet's Who section, not quick filters.
  */
 enum class QuickFilterId {
     Online,
-    Singles,
-    Linked,
     Verified,
     Tonight,
     Fresh,
@@ -406,7 +414,6 @@ data class GridProfileCardUi(
     val thumbnailUrl: String? = null,
     val online: Boolean,
     val distanceLabel: String?,
-    val tone: GridCardTone,
     val linkedPartner: GridLinkedPartnerUi? = null,
     val linkedPartnerTone: LinkedPartnerTone? = null,
     val distanceMeters: Int? = null,
@@ -473,22 +480,6 @@ data class GridLinkedPartnerUi(
 )
 
 @Serializable
-enum class GridCardTone {
-    Warm,
-    Slate,
-    Rust,
-    DeepGreen,
-    Bronze,
-    Graphite,
-    Teal,
-    Rose,
-    Cocoa,
-    Moss,
-    Stone,
-    Midnight,
-}
-
-@Serializable
 enum class LinkedPartnerTone {
     Violet,
     Gold,
@@ -509,7 +500,6 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi {
         thumbnailUrl = thumbnailUrl,
         online = online,
         distanceLabel = distanceLabel,
-        tone = GridCardTone.entries[index % GridCardTone.entries.size],
         linkedPartner = partner?.toUi(),
         linkedPartnerTone = partner?.let { LinkedPartnerTone.entries[index % LinkedPartnerTone.entries.size] },
         distanceMeters = distanceMeters,

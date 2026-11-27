@@ -36,6 +36,9 @@ class FavoriteService internal constructor(
     private val contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
     // G2-2: tiles use the Grid thumbnail when ready, with stable cache keys (as on the Grid).
     private val mediaImages: com.pynapli.server.media.MediaImageResolver? = null,
+    // The viewer's own hides: a hidden person never shows as a partner mini on a card here either, as
+    // on the Grid (the list itself already leaves hidden people out in SQL).
+    private val hiddenProfileRepository: com.pynapli.server.safety.HiddenProfileRepository? = null,
 ) {
     suspend fun add(
         viewerUserId: UUID,
@@ -103,9 +106,11 @@ class FavoriteService internal constructor(
                 mediaAssetUrlResolver,
                 hydration.values.flatMap { listOf(it.thumbnailMediaAssetId, it.linkedPartnerThumbnailMediaAssetId) },
             )
+        // Partners never shown on a card: people hiding from the viewer and people the viewer hid.
+        val partnerHidden = hiddenFromViewer + hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty()
         val cards =
             page.map { (row, _) ->
-                val h = hydration[row.userId]?.let { hydrated -> if (hydrated.linkedPartnerUserId in hiddenFromViewer) hydrated.withoutPartner() else hydrated }
+                val h = hydration[row.userId]?.let { hydrated -> if (hydrated.linkedPartnerUserId in partnerHidden) hydrated.withoutPartner() else hydrated }
                 GridCardRecord(
                     userId = row.userId,
                     displayName = row.displayName,

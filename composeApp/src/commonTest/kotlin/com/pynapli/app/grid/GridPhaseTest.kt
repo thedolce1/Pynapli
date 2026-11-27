@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 
 /** Which body the Grid shows; the "No one nearby yet" state only when it is really true. */
 class GridPhaseTest {
-    private val someone = GridProfileCardUi(id = "a", displayName = "A", online = false, distanceLabel = null, tone = GridCardTone.Warm)
+    private val someone = GridProfileCardUi(id = "a", displayName = "A", online = false, distanceLabel = null)
 
     @Test
     fun noCardsNoFiltersNoErrorIsTheTrueEmptyState() {

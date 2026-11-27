@@ -168,6 +168,7 @@ private class NumberedGridRepository(
         limit: Int,
         filters: DiscoveryFilters,
         cursor: GridCursorAnchor?,
+        hiddenFromViewerIds: Set<UUID>,
     ): GridQueryResult {
         val start = cursor?.orderBucket?.plus(1) ?: 0
         val page = cards.drop(start).take(limit)

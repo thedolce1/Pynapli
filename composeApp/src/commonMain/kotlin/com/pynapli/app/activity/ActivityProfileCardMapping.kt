@@ -1,6 +1,5 @@
 package com.pynapli.app.activity
 
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.shared.network.dto.ActivityEventDto
 
@@ -18,10 +17,7 @@ internal fun ActivityEventDto.toActivityProfileCardUi(): GridProfileCardUi =
         online = false,
         distanceLabel = distanceLabel,
         distanceMeters = distanceMeters,
-        tone = GridCardTone.entries[actorUserId.stableIndex(GridCardTone.entries.size)],
     )
 
 /** The event a profile opened from this tile can answer with "Like back" (likes only), else null. */
 internal fun ActivityEventDto.likeBackEventIdOrNull(): String? = eventId.takeIf { type == "swipe_like" || type == "pineapple_like" }
-
-private fun String.stableIndex(size: Int): Int = fold(0) { total, char -> total + char.code }.mod(size)

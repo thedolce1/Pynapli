@@ -107,7 +107,7 @@ class GridChipDebounceTest {
             assertEquals(2, repository.requests.size)
         }
 
-    private fun card(id: String): GridProfileCardUi = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null, tone = GridCardTone.Warm)
+    private fun card(id: String): GridProfileCardUi = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = null)
 }
 
 /** Records every request; with [holdAnswers] each one waits until [answerAll], so it can be cancelled on the wire. */

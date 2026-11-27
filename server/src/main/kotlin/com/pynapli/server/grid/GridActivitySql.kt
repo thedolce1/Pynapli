@@ -127,6 +127,17 @@ internal object GridActivitySql {
             "OR ${hasApprovedProfilePhoto(user, "${tag}_ph", addedWithin = FRESH_PHOTO_AGE)}) " +
             "AND ${lastActiveAt(user, "${tag}_la")} > now() - interval $FRESH_ACTIVE_WITHIN)"
 
+    /**
+     * "Active today" (FILTERS_SPEC Presence): [lastActiveAt] within [ACTIVE_TODAY_WITHIN]. The card's
+     * activeAgo caption buckets the same instant (GridActiveAgo: "today" or sooner means within 24
+     * hours), so the filter keeps exactly the cards whose caption says active today or sooner.
+     */
+    fun activeToday(
+        user: String,
+        tag: String,
+    ): String = "(${lastActiveAt(user, "${tag}_la")} >= now() - interval $ACTIVE_TODAY_WITHIN)"
+
+    const val ACTIVE_TODAY_WITHIN = "'24 hours'"
     const val DORMANT_AFTER = "'30 days'"
     const val FRESH_ACCOUNT_AGE = "'72 hours'"
     const val FRESH_PHOTO_AGE = "'24 hours'"

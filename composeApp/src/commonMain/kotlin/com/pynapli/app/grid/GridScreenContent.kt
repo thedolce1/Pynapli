@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import com.pynapli.app.design.PynapliWindowSizeClass
 import com.pynapli.app.design.currentPynapliWindowSizeClass
 import com.pynapli.app.location.LocationUiState
-import com.pynapli.shared.network.dto.SavedGridFilterDto
 
 @Composable
 internal fun GridScreenContent(
@@ -33,7 +32,6 @@ internal fun GridScreenContent(
     onApplyFilters: (GridFilters) -> Unit,
     onClearAllFilters: () -> Unit,
     onSavePreset: (String, GridFilters) -> Unit,
-    onApplySavedPreset: (SavedGridFilterDto) -> Unit,
     onDeleteSavedPreset: (String) -> Unit,
     onLoadMore: () -> Unit,
     onRefresh: () -> Unit,
@@ -141,20 +139,19 @@ internal fun GridScreenContent(
             onDismiss = { sheetVisible = false },
             onApply = { applied ->
                 sheetVisible = false
-                if (showingFavorites) onShowNearby()
-                onApplyFilters(applied)
+                changeNearbyFilters(showingFavorites, onShowNearby) { onApplyFilters(applied) }
             },
             onClearAll = {
                 sheetVisible = false
-                onClearAllFilters()
+                changeNearbyFilters(showingFavorites, onShowNearby) { onClearAllFilters() }
             },
             onSavePreset = onSavePreset,
             onApplySavedPreset = { dto ->
                 sheetVisible = false
                 val filters = GridFilters.fromGridQueryRequest(dto.payload)
-                onApplyFilters(
-                    if (lifestyleFiltersAllowed) filters else filters.copy(lifestyleTags = emptySet()),
-                )
+                changeNearbyFilters(showingFavorites, onShowNearby) {
+                    onApplyFilters(if (lifestyleFiltersAllowed) filters else filters.copy(lifestyleTags = emptySet()))
+                }
             },
             onDeleteSavedPreset = onDeleteSavedPreset,
             onOpenTonight = {
@@ -163,6 +160,19 @@ internal fun GridScreenContent(
             },
         )
     }
+}
+
+/**
+ * Every filter change from the sheet (Apply, Clear all, a saved preset), like a quick chip, goes back
+ * to Nearby first: the filters describe Nearby only, so staying on Favorites would hide the change.
+ */
+internal inline fun changeNearbyFilters(
+    showingFavorites: Boolean,
+    onShowNearby: () -> Unit,
+    change: () -> Unit,
+) {
+    if (showingFavorites) onShowNearby()
+    change()
 }
 
 /** The Nearby view: travel and plan rows, and the ranked Grid (the chip row sits above both views). */

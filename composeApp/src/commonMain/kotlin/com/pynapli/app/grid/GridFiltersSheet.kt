@@ -98,9 +98,8 @@ internal fun GridFiltersSheet(
             WhoSection(
                 singles = draft.singles,
                 linked = draft.linked,
-                partnered = draft.partnered,
-                onTogglesChanged = { singles, linked, partnered ->
-                    draft = draft.copy(singles = singles, linked = linked, partnered = partnered)
+                onTogglesChanged = { singles, linked ->
+                    draft = draft.copy(singles = singles, linked = linked)
                 },
             )
 

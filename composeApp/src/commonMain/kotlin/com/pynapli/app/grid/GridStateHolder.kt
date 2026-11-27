@@ -344,7 +344,7 @@ class GridStateHolder(
                             val fresh = freshById[shown.id]
                             when {
                                 // Same slot, newer facts; the tile colours stay put so nothing flickers.
-                                fresh != null -> fresh.copy(tone = shown.tone, linkedPartnerTone = shown.linkedPartnerTone)
+                                fresh != null -> fresh.copy(linkedPartnerTone = shown.linkedPartnerTone)
                                 // Gone from the answer that covers this slot (hidden, incognito, moved
                                 // away): never keep a stale green dot. The card stays put (no reorder
                                 // under the finger) with its presence unknown until the order is applied.
@@ -551,8 +551,8 @@ class GridStateHolder(
     }
 
     suspend fun setRadiusMeters(meters: Int) {
-        val clamped = meters.coerceIn(GridFilters.MIN_RADIUS_METERS, GridFilters.MAX_RADIUS_METERS)
-        applyFilters(_state.value.filters.copy(radiusMeters = clamped))
+        // Clamped and snapped to the server's step, so the state holds the radius actually searched.
+        applyFilters(_state.value.filters.copy(radiusMeters = GridFilters.snapRadius(meters)))
     }
 
     suspend fun setAgeRange(
@@ -764,8 +764,6 @@ class GridStateHolder(
     private fun GridFilters.toggle(id: QuickFilterId): GridFilters =
         when (id) {
             QuickFilterId.Online -> copy(online = !online)
-            QuickFilterId.Singles -> copy(singles = !singles)
-            QuickFilterId.Linked -> copy(linked = !linked)
             QuickFilterId.Verified -> copy(verified = !verified)
             QuickFilterId.Tonight -> copy(tonightAvailable = !tonightAvailable)
             QuickFilterId.Fresh -> copy(fresh = !fresh)
@@ -907,64 +905,3 @@ internal class GridFeedException(
     val code: String,
     override val message: String,
 ) : RuntimeException(message)
-
-private val sampleGridCards =
-    listOf(
-        GridProfileCardUi(
-            "1",
-            "Maya",
-            online = true,
-            distanceLabel = "800 m",
-            tone = GridCardTone.Warm,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-1", displayName = "Noa"),
-            linkedPartnerTone = LinkedPartnerTone.Violet,
-            distanceMeters = 800,
-        ),
-        GridProfileCardUi("2", "Alex", online = true, distanceLabel = "1.2 km", tone = GridCardTone.Slate, distanceMeters = 1_200),
-        GridProfileCardUi(
-            "3",
-            "Nico",
-            online = false,
-            distanceLabel = "2 km",
-            tone = GridCardTone.Rust,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-3", displayName = "Lane"),
-            linkedPartnerTone = LinkedPartnerTone.Gold,
-            distanceMeters = 2_000,
-        ),
-        GridProfileCardUi("4", "Sam", online = true, distanceLabel = null, tone = GridCardTone.DeepGreen),
-        GridProfileCardUi("5", "Ari", online = false, distanceLabel = "4.6 km", tone = GridCardTone.Bronze, distanceMeters = 4_600),
-        GridProfileCardUi(
-            "6",
-            "Drew",
-            online = true,
-            distanceLabel = "6 km",
-            tone = GridCardTone.Graphite,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-6", displayName = "Rae"),
-            linkedPartnerTone = LinkedPartnerTone.Pink,
-            distanceMeters = 6_000,
-        ),
-        GridProfileCardUi("7", "Jules", online = false, distanceLabel = "7 km", tone = GridCardTone.Teal, distanceMeters = 7_000),
-        GridProfileCardUi(
-            "8",
-            "Kai",
-            online = true,
-            distanceLabel = "8.5 km",
-            tone = GridCardTone.Rose,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-8", displayName = "Theo"),
-            linkedPartnerTone = LinkedPartnerTone.Teal,
-            distanceMeters = 8_500,
-        ),
-        GridProfileCardUi("9", "Rae", online = false, distanceLabel = "9 km", tone = GridCardTone.Cocoa, distanceMeters = 9_000),
-        GridProfileCardUi("10", "Theo", online = true, distanceLabel = "10 km", tone = GridCardTone.Moss, distanceMeters = 10_000),
-        GridProfileCardUi(
-            "11",
-            "Noa",
-            online = false,
-            distanceLabel = "12 km",
-            tone = GridCardTone.Stone,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-11", displayName = "Maya"),
-            linkedPartnerTone = LinkedPartnerTone.Sun,
-            distanceMeters = 12_000,
-        ),
-        GridProfileCardUi("12", "Lane", online = true, distanceLabel = "14 km", tone = GridCardTone.Midnight, distanceMeters = 14_000),
-    )

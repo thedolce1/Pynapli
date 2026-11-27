@@ -122,6 +122,9 @@ class GridService(
                 onlineOnly = request.onlineOnly,
                 widenedFromRadiusMeters = if (widened) radiusMeters else null,
                 acceptLockedCards = request.acceptLockedCards,
+                // G2-1: Visiting soon has its own keyset order (arrival day first), so its cursors never
+                // continue Nearby. Part of every scope, the page-size fallbacks included.
+                visitingSoonOnly = request.visitingSoonOnly,
             )
         val cursorScopeHash = profile("grid.cursorScope") { gridScope(pageLimit, widened = false) }
         // Sparse-area widening (plan G10) pages under its own scope: the widened radius plus the radius
@@ -198,10 +201,13 @@ class GridService(
             }
         // Profiles the viewer hid, plus anyone hiding from the viewer (contact blocks): both drop the
         // card and strip the partner mini, the same way.
+        val hiddenFromViewerIds =
+            profile("grid.contactBlocks") {
+                contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+            }
         val hiddenProfileIds =
             profile("grid.hiddenProfiles") {
-                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty() +
-                    contactBlockVisibility?.hiddenFrom(viewerUserId).orEmpty()
+                hiddenProfileRepository?.listHiddenProfileIds(viewerUserId).orEmpty() + hiddenFromViewerIds
             }
         profile("grid.presenceRefresh") { refreshViewerPresence(viewerUserId) }
 
@@ -212,10 +218,13 @@ class GridService(
             val result =
                 profile("grid.repository") {
                     if (request.visitingSoonOnly) {
-                        // One page, soonest trips first; blocks, hides and presence apply below as usual.
-                        repository.queryVisitingSoon(viewerUserId, queryRadius, fetchLimit)
+                        // Every Grid filter, soonest arrival first, paged by its own cursor. Blocks, hides
+                        // and contact blocks are applied in SQL (so pages fill) and again below.
+                        repository.queryVisitingSoon(viewerUserId, queryRadius, fetchLimit, filters, cursor, hiddenFromViewerIds)
                     } else {
-                        repository.queryNearby(viewerUserId, queryRadius, fetchLimit, filters, cursor)
+                        // The contact-block set goes in too: "Linked" must treat a partner hiding from
+                        // the viewer as not shown, exactly as the card below strips their mini.
+                        repository.queryNearby(viewerUserId, queryRadius, fetchLimit, filters, cursor, hiddenFromViewerIds)
                     }
                 }
             if (!result.viewerHadLocation) throw GridException("LOCATION_REQUIRED")
