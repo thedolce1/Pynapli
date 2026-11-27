@@ -87,12 +87,15 @@ class SwipeService(
     /**
      * The ranked deck a Psync session is dealt from. Unlike [queryDeck] it does not leave out people
      * hiding from [viewerUserId] ("Hide from people you know"): the deck is shared with the partner, and
-     * each partner's view of it leaves out the people hiding from them (PsyncDeckCoordinator).
+     * each partner's view of it leaves out the people hiding from them (PsyncDeckCoordinator). A
+     * candidate's partner mini, and the Linked / verified-couples filters, hold only when the partner is
+     * shown to BOTH [viewerUserId] and [partnerUserId] (PSYNC_SPEC, the strictest of the two views).
      */
     internal suspend fun queryDeckForPsync(
         viewerUserId: UUID,
+        partnerUserId: UUID,
         request: SwipeDeckRequestDto,
-    ): SwipeDeckResponseDto = deckQuery.queryDeck(viewerUserId, request, applyContactBlocks = false)
+    ): SwipeDeckResponseDto = deckQuery.queryDeck(viewerUserId, request, psyncPartnerUserId = partnerUserId)
 
     suspend fun submitAction(
         viewerUserId: UUID,

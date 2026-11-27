@@ -164,8 +164,15 @@ Assert-NoAppErrorText $loginXml "Login"
 $loginShot = Save-Screen "00_login"
 Tap-Text "Dev login"
 
-Wait-ForAnyText @("Allow Pynapli", "Don", "Nearby", "Filters", "Grid Load", "Dense") 45 | Out-Null
+Wait-ForAnyText @("Allow Pynapli", "Don", "Nearby", "Filters", "Grid Load", "Dense", "Keep swiping") 45 | Out-Null
 Start-Sleep -Milliseconds 1200
+# A fresh database shows the dev account's seeded match moment once, before the Grid; dismiss it
+# the way a person would.
+if ($null -ne (Find-NodeByText (Dump-Ui "after_login_match_check") "Keep swiping")) {
+    Tap-Text "Keep swiping" 5
+    Wait-ForAnyText @("Allow Pynapli", "Don", "Nearby", "Filters", "Grid Load", "Dense") 45 | Out-Null
+    Start-Sleep -Milliseconds 1200
+}
 $afterLoginXml = Dump-Ui "after_login"
 if ($null -ne (Find-NodeByText $afterLoginXml "Don")) {
     $promptXml = Dump-Ui "01_notification_prompt" -Keep
@@ -176,7 +183,8 @@ if ($null -ne (Find-NodeByText $afterLoginXml "Don")) {
     $promptShot = $null
 }
 
-Wait-ForAnyText @("Grid Load", "Dense") 45 | Out-Null
+# Real cards: load-test accounts on a long-lived dev database, or the seeded members on a fresh one.
+Wait-ForAnyText @("Grid Load", "Dense", "Maya", "Alex", "Nico", "Jules", "Kai", "Rae", "Theo", "Noa") 45 | Out-Null
 $gridXml = Dump-Ui "02_grid_initial" -Keep
 Assert-NoAppErrorText $gridXml "Initial Grid"
 Assert-TextPresent $gridXml "Filters" "Initial Grid"

@@ -135,11 +135,19 @@ Rules:
 - `Unlinked partnered` is not offered: without a structured relationship field it can't be told
   apart from Singles.
 - These filters apply to individual users, not couple cards.
-- Psync residual: a Psync deck is dealt once for both partners from the initiator's view. It uses the
-  initiator's partner_visibility, hides and blocks, and no contact blocks (as for Psync candidates).
-  Each partner's read then strips minis of people hiding from them. With Linked on, a card dealt to
-  both may show one partner no mini. (The Partner filters and "No single men" are re-checked for both
-  partners since G2-3; see "Partner". Linked and Singles are not.)
+- Psync (closed 2026-11-26): a Psync deck is shown to both partners, so Linked, Singles and
+  Verified couples, like the partner mini itself, follow the strictest of the two views. The
+  candidate's partner must be shown to BOTH session partners (each one's blocks, hides and the
+  owner's partner_visibility) and hide from neither (the union of both partners' contact blocks).
+  PSYNC_SPEC "Psync Filters" has the rule; the proof is `PsyncPartnerVisibilityIntegrationTest`.
+- Verified couples only carries the same contact-block exclusion as Linked
+  (`CoupleVerifiedFilterSql`, `cv_user.id <> ALL(?)`) on every surface: Grid nearby, Visiting soon,
+  Swipe, the linked-only Swipe path, and Psync with both partners' sets. So matching it equals the
+  badge showing even when the verified partner hides from the viewer.
+- Favorites cards strip a partner the viewer hid, as well as one hiding from the viewer, the same
+  as the Grid (`FavoriteServiceIntegrationTest`).
+- Visiting soon applies Linked through the same gate
+  (`VisitingSoonDiscoveryTest` "Visiting soon Linked keeps a shown partner …").
 - Quick shortcuts in the Grid sheet: **Single women** / **Single men** set Singles plus that gender
   (the person's own declared gender, and no partner shown to the viewer). They add nothing on the
   server. A **No single men** chip sits beside them, the sheet twin of the quick-row chip.
@@ -171,9 +179,11 @@ Rules:
   candidate behaves as "no visible partner" and a partner filter never matches through a hidden
   partner. Results always agree with what the tile shows. Fragment: `PartnerFilterSql`, used by
   `GridFilterSql` (nearby and Visiting soon), the Swipe deck rank (including the linked-only
-  forced-id path) and Psync: the deck is ranked from the initiator's view, then the partner filters
-  and "No single men" are re-run for both session partners, each with their own hides, blocks and
-  contact blocks (`PartnerFilterSql.matchingCandidateIds`), and only cards passing for both are dealt.
+  forced-id path) and Psync. On a Psync deck the gate runs once per session partner and the
+  hidden-from set is the union of both partners' contact blocks, exactly like Linked and Verified
+  couples (strictest of both views): a card passes only when its partner is shown to BOTH partners and
+  satisfies the filter. The Psync coordinator re-checks the dealt deck with the same two-viewer
+  predicate (`PartnerFilterSql.matchingCandidateIds`) as defence in depth.
 - Partner filters imply Linked. With Singles alone they cannot match anyone, so the sheet's Partner
   section says "Partner filters need a visible partner" instead of offering chips, and the client
   drops them on apply, on save and in the request. With Linked, or no Who choice, they apply. The

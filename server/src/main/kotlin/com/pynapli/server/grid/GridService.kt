@@ -242,7 +242,11 @@ class GridService(
                             .filterNot { filters.verifiedCouplesOnly && it.linkedPartnerUserId in hiddenProfileIds }
                             // Partner filters (PartnerFilterSql) likewise need the partner this viewer
                             // sees. The SQL gate already leaves out these partners; this is the backstop.
-                            .filterNot { filters.hasPartnerFilters && it.linkedPartnerUserId in hiddenProfileIds }
+                            // "No single men" likewise: the card has no gender here, so any card losing
+                            // its partner is dropped (stricter, never a leak).
+                            .filterNot {
+                                (filters.hasPartnerFilters || filters.excludeSingleMen) && it.linkedPartnerUserId in hiddenProfileIds
+                            }
                             .map { card ->
                                 if (card.linkedPartnerUserId in hiddenProfileIds) {
                                     card.copy(

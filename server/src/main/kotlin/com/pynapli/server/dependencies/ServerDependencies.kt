@@ -320,6 +320,7 @@ class ServerDependencies(
                     blockRepository = core.blockRepository,
                     rateLimitService = core.rateLimitService,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    hiddenProfileRepository = core.hiddenProfileRepository,
                 )
             val profileService =
                 ProfileService(

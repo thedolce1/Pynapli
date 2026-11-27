@@ -1,5 +1,6 @@
 package com.pynapli.server.discovery
 
+import java.sql.Connection
 import java.sql.PreparedStatement
 import java.util.UUID
 
@@ -28,7 +29,10 @@ object CoupleVerifiedFilterSql {
         user: String,
         profile: String,
         settings: String,
+        // A Psync deck has two viewers (LinkedPartnerFilterSql): the partner must be shown to each.
+        viewerCount: Int = 1,
     ): String {
+        require(viewerCount >= 1)
         val partnerShown =
             partnerShownToViewer(
                 partnerUser = "cv_user",
@@ -38,6 +42,7 @@ object CoupleVerifiedFilterSql {
                 ownerSettings = settings,
                 owner = "$user.id",
             )
+        val everyViewer = List(viewerCount) { "AND $partnerShown" }.joinToString("\n")
         return """
             AND (
                 ?::boolean = false
@@ -54,7 +59,10 @@ object CoupleVerifiedFilterSql {
                           AND cv_upl.status = 'active'
                           AND cv_upl.unlinked_at IS NULL
                           AND cv_profile.verified_at IS NOT NULL
-                          AND $partnerShown
+                          -- Contact blocks: a partner hiding from a viewer is never shown to them, so
+                          -- never earns the badge (union of both partners' sets on a Psync deck).
+                          AND cv_user.id <> ALL(?::uuid[])
+                          $everyViewer
                     )
                 )
             )
@@ -130,19 +138,35 @@ object CoupleVerifiedFilterSql {
         )
         """.trimIndent()
 
-    /** Binds [predicate] starting at [startIndex]; returns the next free index. */
+    /**
+     * Binds [predicate] for one viewer starting at [startIndex]; returns the next free index.
+     * [hiddenFromViewerIds] are the people hiding from the viewer (contact blocks).
+     */
     fun bind(
         statement: PreparedStatement,
+        connection: Connection,
         startIndex: Int,
         enabled: Boolean,
         viewerUserId: UUID,
+        hiddenFromViewerIds: Set<UUID>,
+    ): Int = bind(statement, connection, startIndex, enabled, listOf(viewerUserId), hiddenFromViewerIds)
+
+    /**
+     * Binds [predicate] built with `viewerCount = viewers.size`; returns the next free index.
+     * [hiddenFromViewerIds] are the people hiding from any of the viewers (contact blocks).
+     */
+    fun bind(
+        statement: PreparedStatement,
+        connection: Connection,
+        startIndex: Int,
+        enabled: Boolean,
+        viewers: List<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
     ): Int {
         var index = startIndex
         statement.setBoolean(index++, enabled)
-        // Block check (both directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST.
-        repeat(VIEWER_PLACEHOLDERS) { statement.setObject(index++, viewerUserId) }
-        return index
+        statement.setArray(index++, connection.createArrayOf("uuid", hiddenFromViewerIds.toTypedArray()))
+        // Per viewer: block check (both directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST.
+        return LinkedPartnerFilterSql.bindPartnerShown(statement, index, viewers)
     }
-
-    private const val VIEWER_PLACEHOLDERS = 6
 }

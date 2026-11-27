@@ -148,18 +148,17 @@ interface PsyncSessionRepository {
     ): Set<UUID> = emptySet()
 
     /**
-     * Of [candidateIds], those that pass the partner filters and "No single men" from
-     * [viewerUserId]'s own view of each candidate's linked partner
-     * (PartnerFilterSql.matchingCandidateIds), [hiddenFromViewerIds] being the people hiding from that
-     * viewer. Psync calls it for both session partners and keeps the intersection. The default (test
-     * fakes only) passes everyone; the Jdbc repository runs the real gate.
+     * Of [candidateIds], those that pass the partner filters and "No single men" for every one of
+     * [viewers] (PartnerFilterSql.matchingCandidateIds: the partner gate repeated per viewer),
+     * [hiddenFromViewerIds] being the union of the people hiding from any of them. Psync passes both
+     * session partners. Abstract on purpose, with no allow-all default, so nothing can fail open.
      */
     suspend fun partnerFilterMatches(
-        viewerUserId: UUID,
+        viewers: List<UUID>,
         candidateIds: List<UUID>,
         filters: com.pynapli.server.discovery.DiscoveryFilters,
         hiddenFromViewerIds: Set<UUID>,
-    ): Set<UUID> = candidateIds.toSet()
+    ): Set<UUID>
 
     /** The shared ordered deck cards for a session (position ascending). */
     suspend fun listDeckCards(sessionId: UUID): List<PsyncSessionCard>

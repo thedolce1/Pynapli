@@ -17,25 +17,33 @@ import java.util.UUID
  * couple-verified badge filter uses. A user has at most one active link (V16/V17 unique indexes), so
  * EXISTS here and the mini's `LIMIT 1` LATERAL look at the same partner.
  *
+ * A Psync deck is shown to BOTH partners of the session, so it has two viewers: the partner must be
+ * shown to every one of them (the strictest of the views, PSYNC_SPEC), and the hidden-from set is the
+ * union of both partners' contact blocks. [viewerCount] repeats the per-viewer rule; bind the same
+ * number of viewers.
+ *
  * Viewer-specific, so a filter carrying it is never served from a shared rank cache
  * (`isGridRankCacheEligible` / `isRankCacheEligible`).
  */
 object LinkedPartnerFilterSql {
     /**
-     * `EXISTS (...)`: [user]'s active link points at a partner shown to this viewer. [user] is the
+     * `EXISTS (...)`: [user]'s active link points at a partner shown to every viewer. [user] is the
      * candidate's `users` alias and [settings] their `discovery_settings` alias (the owner's
      * partner_visibility). Placeholders, in order: the hidden-from-viewer id array, then
-     * [CoupleVerifiedFilterSql.partnerShownToViewer]'s six viewer ids. Bind with [bindVisiblePartner].
+     * [CoupleVerifiedFilterSql.partnerShownToViewer]'s six viewer ids once per viewer. Bind with
+     * [bindVisiblePartner].
      *
-     * [partnerCondition] (PartnerFilterSql) is ANDed inside the same EXISTS, after the gate, against
-     * the partner's `lp_profile` row, so a partner filter only ever tests a partner this gate shows.
-     * Its placeholders follow the gate's.
+     * [partnerCondition] (PartnerFilterSql) is ANDed inside the same EXISTS, after every viewer's gate,
+     * against the partner's `lp_profile` row, so a partner filter only ever tests a partner the gate
+     * shows. Its placeholders follow the gate's.
      */
     fun visiblePartnerExists(
         user: String,
         settings: String,
+        viewerCount: Int = 1,
         partnerCondition: String = "",
     ): String {
+        require(viewerCount >= 1)
         val partnerShown =
             CoupleVerifiedFilterSql.partnerShownToViewer(
                 partnerUser = "lp_user",
@@ -45,6 +53,7 @@ object LinkedPartnerFilterSql {
                 ownerSettings = settings,
                 owner = "$user.id",
             )
+        val everyViewer = List(viewerCount) { "AND $partnerShown" }.joinToString("\n")
         return """
             EXISTS (
                 SELECT 1
@@ -56,9 +65,9 @@ object LinkedPartnerFilterSql {
                 WHERE lp_upl.user_id = $user.id
                   AND lp_upl.status = 'active'
                   AND lp_upl.unlinked_at IS NULL
-                  -- Contact blocks: a partner hiding from the viewer is never shown to them.
+                  -- Contact blocks: a partner hiding from a viewer is never shown to them.
                   AND lp_user.id <> ALL(?::uuid[])
-                  AND $partnerShown
+                  $everyViewer
                   $partnerCondition
             )
             """.trimIndent()
@@ -71,15 +80,16 @@ object LinkedPartnerFilterSql {
     fun predicate(
         user: String,
         settings: String,
+        viewerCount: Int = 1,
     ): String =
         """
         AND (
             ?::boolean IS NULL
-            OR ?::boolean = ${visiblePartnerExists(user = user, settings = settings)}
+            OR ?::boolean = ${visiblePartnerExists(user = user, settings = settings, viewerCount = viewerCount)}
         )
         """.trimIndent()
 
-    /** Binds [predicate] starting at [startIndex]; returns the next free index. */
+    /** Binds [predicate] for one viewer starting at [startIndex]; returns the next free index. */
     fun bind(
         statement: PreparedStatement,
         connection: Connection,
@@ -87,26 +97,48 @@ object LinkedPartnerFilterSql {
         linkedOnly: Boolean?,
         viewerUserId: UUID,
         hiddenFromViewerIds: Set<UUID>,
+    ): Int = bind(statement, connection, startIndex, linkedOnly, listOf(viewerUserId), hiddenFromViewerIds)
+
+    /** Binds [predicate] built with `viewerCount = viewers.size`; returns the next free index. */
+    fun bind(
+        statement: PreparedStatement,
+        connection: Connection,
+        startIndex: Int,
+        linkedOnly: Boolean?,
+        viewers: List<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
     ): Int {
         var index = startIndex
         statement.setObject(index++, linkedOnly, java.sql.Types.BOOLEAN)
         statement.setObject(index++, linkedOnly, java.sql.Types.BOOLEAN)
-        return bindVisiblePartner(statement, connection, index, viewerUserId, hiddenFromViewerIds)
+        return bindVisiblePartner(statement, connection, index, viewers, hiddenFromViewerIds)
     }
 
-    /** Binds [visiblePartnerExists] starting at [startIndex]; returns the next free index. */
+    /** Binds [visiblePartnerExists] built with `viewerCount = viewers.size`; returns the next free index. */
     fun bindVisiblePartner(
         statement: PreparedStatement,
         connection: Connection,
         startIndex: Int,
-        viewerUserId: UUID,
+        viewers: List<UUID>,
         hiddenFromViewerIds: Set<UUID>,
     ): Int {
         var index = startIndex
         statement.setArray(index++, connection.createArrayOf("uuid", hiddenFromViewerIds.toTypedArray()))
-        // partnerShownToViewer: block check (both directions), hidden-by-viewer, verified_only gate,
-        // matches_only LEAST/GREATEST.
-        repeat(PARTNER_SHOWN_VIEWER_PLACEHOLDERS) { statement.setObject(index++, viewerUserId) }
+        index = bindPartnerShown(statement, index, viewers)
+        return index
+    }
+
+    /**
+     * Binds [CoupleVerifiedFilterSql.partnerShownToViewer] repeated once per viewer: block check (both
+     * directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST, for each viewer.
+     */
+    fun bindPartnerShown(
+        statement: PreparedStatement,
+        startIndex: Int,
+        viewers: List<UUID>,
+    ): Int {
+        var index = startIndex
+        viewers.forEach { viewer -> repeat(PARTNER_SHOWN_VIEWER_PLACEHOLDERS) { statement.setObject(index++, viewer) } }
         return index
     }
 

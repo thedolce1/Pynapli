@@ -32,13 +32,13 @@ internal class PsyncDeckCoordinator(
         val generator = deckGenerator ?: throw PsyncException("PSYNC_DECK_EMPTY")
 
         val oversample = (session.deckSize * 2).coerceAtMost(PSYNC_MAX_RANK_LIMIT)
-        val ranked = generator.rankCandidates(session.initiatorUserId, session.filters, oversample)
+        // Partner minis and the Linked / verified-couples filters hold for BOTH partners (PSYNC_SPEC).
+        val ranked = generator.rankCandidatesForCouple(session.initiatorUserId, partnerId, session.filters, oversample)
 
         val rankedIds = ranked.mapNotNull { runCatching { UUID.fromString(it.userId) }.getOrNull() }
-        // The partner filters and "No single men" depend on whose view of each candidate's linked
-        // partner is used. The ranker saw the initiator's only (without their contact blocks), so
-        // re-run the same gate for BOTH partners with their own contact blocks and keep a card only
-        // when it passes for each: the strictest of both views (plan G2-3).
+        // Defense in depth for the partner filters and "No single men" (plan G2-3): the couple rank
+        // above already applies them for both partners; this re-check makes the deck hold that rule
+        // even if a generator ranked from one view only.
         val partnerFilterFails = partnerFilterFailures(session, partnerId, rankedIds)
         val excluded =
             buildSet {
@@ -93,12 +93,15 @@ internal class PsyncDeckCoordinator(
                     .filters
             }.getOrElse { throw PsyncException("INVALID_PSYNC_FILTER") }
         if (!PartnerFilterSql.appliesTo(filters)) return emptySet()
-        val passing =
-            listOf(session.initiatorUserId, partnerId)
-                .map { viewer ->
-                    val hiddenFromViewer = contactBlockVisibility?.hiddenFrom(viewer).orEmpty()
-                    repository.partnerFilterMatches(viewer, rankedIds, filters, hiddenFromViewer)
-                }.reduce { a, b -> a intersect b }
+        // Both partners as viewers, and the union of the people hiding from either: the same predicate
+        // and binding the Psync rank uses (SwipeDeckQueryAction partnerHiddenIds, coViewerUserId), so
+        // a card passes only when its partner is shown to BOTH and satisfies the filter.
+        val viewers = listOf(session.initiatorUserId, partnerId)
+        val hiddenFromEither =
+            contactBlockVisibility
+                ?.let { it.hiddenFrom(session.initiatorUserId) + it.hiddenFrom(partnerId) }
+                .orEmpty()
+        val passing = repository.partnerFilterMatches(viewers, rankedIds, filters, hiddenFromEither)
         return rankedIds.filterNot { it in passing }.toSet()
     }
 

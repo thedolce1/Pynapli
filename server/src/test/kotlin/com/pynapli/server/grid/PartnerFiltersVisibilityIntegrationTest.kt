@@ -160,19 +160,18 @@ class PartnerFiltersVisibilityIntegrationTest {
             dataSource.markProfileVerified(verifiedViewer)
             val filters = DiscoveryFilters(partnerGenders = setOf("woman"))
             val candidates = listOf(world.a1, world.vo1)
-            val forUnverified =
-                dataSource.connection.use { PartnerFilterSql.matchingCandidateIds(it, world.viewer, candidates, filters, emptySet()) }
-            val forVerified =
-                dataSource.connection.use { PartnerFilterSql.matchingCandidateIds(it, verifiedViewer, candidates, filters, emptySet()) }
-            assertEquals(setOf(world.a1), forUnverified, "VO1 shows their partner to verified members only")
-            assertEquals(setOf(world.a1, world.vo1), forVerified)
-            assertEquals(setOf(world.a1), forUnverified intersect forVerified, "the stricter view wins")
-            // A contact block of the partner only counts for the person it hides from.
-            val hidingFromVerified =
-                dataSource.connection.use {
-                    PartnerFilterSql.matchingCandidateIds(it, verifiedViewer, candidates, filters, setOf(world.vo2))
-                }
-            assertEquals(setOf(world.a1), hidingFromVerified)
+            fun matching(
+                viewers: List<UUID>,
+                hidden: Set<UUID> = emptySet(),
+            ) = dataSource.connection.use { PartnerFilterSql.matchingCandidateIds(it, viewers, candidates, filters, hidden) }
+
+            assertEquals(setOf(world.a1), matching(listOf(world.viewer)), "VO1 shows their partner to verified members only")
+            assertEquals(setOf(world.a1, world.vo1), matching(listOf(verifiedViewer)))
+            // Both partners as viewers: the gate is repeated per viewer, so the stricter view wins.
+            assertEquals(setOf(world.a1), matching(listOf(world.viewer, verifiedViewer)))
+            assertEquals(setOf(world.a1), matching(listOf(verifiedViewer, world.viewer)))
+            // A partner hiding from one of them takes the candidate out.
+            assertEquals(setOf(world.a1), matching(listOf(verifiedViewer), hidden = setOf(world.vo2)))
         }
 
     private suspend fun assertGridCases(world: World) {
@@ -259,6 +258,18 @@ class PartnerFiltersVisibilityIntegrationTest {
         dataSource.insertBlock(hb2, viewer)
         val (i1, i2) = couple("I")
         runSql("UPDATE discovery_settings SET incognito = true WHERE user_id = ?", i2)
+        // Moderation and account states of the partner: quarantined, terminated, suspended, banned,
+        // and a partner whose own profile is hidden. None of them is ever shown, so none counts.
+        val (q1, q2) = couple("Q")
+        dataSource.setRiskState(q2, score = 90, tier = "quarantine")
+        val (t1, t2) = couple("T")
+        dataSource.setRiskState(t2, score = 100, tier = "terminate")
+        val (s1, s2) = couple("S")
+        runSql("UPDATE users SET status = 'suspended' WHERE id = ?", s2)
+        val (bn1, bn2) = couple("BN")
+        runSql("UPDATE users SET status = 'banned' WHERE id = ?", bn2)
+        val (ph1, ph2) = couple("PH")
+        runSql("UPDATE profiles SET visibility_status = 'hidden' WHERE user_id = ?", ph2)
         val p1 = first("P1")
         val p2 = second("P2")
         runSql("INSERT INTO user_profile_links (id, user_id, linked_user_id, status) VALUES (?, ?, ?, 'pending')", UUID.randomUUID(), p1, p2)
@@ -272,7 +283,7 @@ class PartnerFiltersVisibilityIntegrationTest {
             vo2 = vo2,
             singleMan = singleMan,
             singleWoman = singleWoman,
-            hiddenPartnerOwners = listOf(n1, e1, g1, cb1, h1, hb1, i1, p1),
+            hiddenPartnerOwners = listOf(n1, e1, g1, cb1, h1, hb1, i1, q1, t1, s1, bn1, ph1, p1),
         )
     }
 

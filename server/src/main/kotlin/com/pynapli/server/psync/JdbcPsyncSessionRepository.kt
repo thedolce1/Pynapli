@@ -95,7 +95,7 @@ class JdbcPsyncSessionRepository(
     ): Set<UUID> = dataSource.psyncAlreadySettledTargets(partnerUserIds, targetUserIds)
 
     override suspend fun partnerFilterMatches(
-        viewerUserId: UUID,
+        viewers: List<UUID>,
         candidateIds: List<UUID>,
         filters: com.pynapli.server.discovery.DiscoveryFilters,
         hiddenFromViewerIds: Set<UUID>,
@@ -103,7 +103,7 @@ class JdbcPsyncSessionRepository(
         dataSource.withConnection { connection ->
             com.pynapli.server.discovery.PartnerFilterSql.matchingCandidateIds(
                 connection = connection,
-                viewerUserId = viewerUserId,
+                viewers = viewers,
                 candidateIds = candidateIds,
                 filters = filters,
                 hiddenFromViewerIds = hiddenFromViewerIds,

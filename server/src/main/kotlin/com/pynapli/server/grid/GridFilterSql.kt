@@ -142,7 +142,7 @@ internal object GridFilterSql {
         statement.setBoolean(index++, filters.verifiedOnly)
         statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
         statement.setBoolean(index++, filters.ageVerifiedOnly)
-        index = CoupleVerifiedFilterSql.bind(statement, index, filters.verifiedCouplesOnly, viewerUserId)
+        index = CoupleVerifiedFilterSql.bind(statement, connection, index, filters.verifiedCouplesOnly, viewerUserId, hiddenFromViewerIds)
         index = LinkedPartnerFilterSql.bind(statement, connection, index, filters.linkedOnly, viewerUserId, hiddenFromViewerIds)
         index = PartnerFilterSql.bind(statement, connection, index, filters, viewerUserId, hiddenFromViewerIds)
         statement.setArray(index++, styles)

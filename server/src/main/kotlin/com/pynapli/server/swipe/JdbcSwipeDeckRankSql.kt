@@ -42,8 +42,11 @@ internal fun Connection.queryDeckRank(
     boostedWindow: Int = limit,
     // People hiding from the viewer (contact blocks): never counted as a shown partner (linkedOnly).
     hiddenFromViewerIds: Set<UUID> = emptySet(),
+    // A Psync deck's other partner: the partner rules (Linked, verified couples) must hold for both.
+    coViewerUserId: UUID? = null,
 ): List<DeckRankRow> {
     val paddedRadius = radiusMeters + CoarseLocation.CELL_PAD_METERS
+    val partnerViewers = listOfNotNull(viewerUserId, coViewerUserId)
     val candidateSource =
         if (forcedTargetUserIds == null) {
             """
@@ -138,7 +141,7 @@ $candidateSource
               AND (?::boolean = false OR p.age_verified_at IS NOT NULL)
               -- "Verified couples only": exactly the couple-verified badge for this viewer. Also runs
               -- on the linked-only forced-id path, which reaches this query with linkedOnly cleared.
-              ${CoupleVerifiedFilterSql.predicate(user = "u", profile = "p", settings = "ds")}
+              ${CoupleVerifiedFilterSql.predicate(user = "u", profile = "p", settings = "ds", viewerCount = partnerViewers.size)}
               AND (cardinality(?::text[]) = 0 OR p.discovery_style = ANY(?::text[]))
               AND (cardinality(?::text[]) = 0 OR (p.intents IS NOT NULL AND p.intents && ?::text[]))
               -- Lifestyle groups + boundaries (LifestyleFilterSql): same predicate on every surface.
@@ -195,10 +198,11 @@ $candidateSource
               )
               -- "Linked" (linkedOnly): exactly whether the card shows this viewer a partner mini
               -- (LinkedPartnerFilterSql), the same rule as the Grid's.
-              ${LinkedPartnerFilterSql.predicate(user = "u", settings = "ds")}
-              -- Partner filters + "No single men" (PartnerFilterSql): the same partner gate as Linked.
-              -- Kept on the linked-only forced-id path too (only linkedOnly is cleared there).
-              ${PartnerFilterSql.predicates(user = "u", profile = "p", settings = "ds")}
+              ${LinkedPartnerFilterSql.predicate(user = "u", settings = "ds", viewerCount = partnerViewers.size)}
+              -- Partner filters + "No single men" (PartnerFilterSql): the same partner gate as Linked,
+              -- for every viewer (both session partners on a Psync deck). Kept on the linked-only
+              -- forced-id path too (only linkedOnly is cleared there).
+              ${PartnerFilterSql.predicates(user = "u", profile = "p", settings = "ds", viewerCount = partnerViewers.size)}
               -- Already swiped (live decisions only); skipped on the shared cached window.
               AND (
                   ?::uuid IS NULL
@@ -272,7 +276,7 @@ $candidateSource
         statement.setBoolean(index++, filters.verifiedOnly)
         statement.setBoolean(index++, filters.facePhotoVerifiedOnly)
         statement.setBoolean(index++, filters.ageVerifiedOnly)
-        index = CoupleVerifiedFilterSql.bind(statement, index, filters.verifiedCouplesOnly, viewerUserId)
+        index = CoupleVerifiedFilterSql.bind(statement, this, index, filters.verifiedCouplesOnly, partnerViewers, hiddenFromViewerIds)
         statement.setArray(index++, styles)
         statement.setArray(index++, styles)
         statement.setArray(index++, intents)
@@ -286,8 +290,8 @@ $candidateSource
         statement.setArray(index++, orientations)
         statement.setBoolean(index++, filters.withPhotosOnly)
         statement.setBoolean(index++, filters.hasPrivateAlbumOnly)
-        index = LinkedPartnerFilterSql.bind(statement, this, index, filters.linkedOnly, viewerUserId, hiddenFromViewerIds)
-        index = PartnerFilterSql.bind(statement, this, index, filters, viewerUserId, hiddenFromViewerIds)
+        index = LinkedPartnerFilterSql.bind(statement, this, index, filters.linkedOnly, partnerViewers, hiddenFromViewerIds)
+        index = PartnerFilterSql.bind(statement, this, index, filters, partnerViewers, hiddenFromViewerIds)
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setNullableUuid(index++, userSpecificViewerId)
         statement.setBoolean(index++, excludedTargetUserIds.isNotEmpty())
