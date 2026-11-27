@@ -70,6 +70,18 @@ internal fun Connection.queryGridRank(
              AND near_travel.active_until IS NULL
              AND ST_DWithin(v.geom, near_travel.geom, ?)
         ),
+        -- Rank tier inputs (plan G3) for the nearby candidates only: one set each, which the planner
+        -- builds once and hash-joins (G2-2 ticket 6). No bind parameters.
+        tier_boosted AS (
+            SELECT DISTINCT tier_ba.user_id
+            FROM boost_activations tier_ba
+            WHERE tier_ba.status = 'active'
+              AND tier_ba.ends_at > now()
+              AND tier_ba.user_id IN (SELECT tier_bn.user_id FROM nearby_ids tier_bn)
+        ),
+        tier_photo_owners AS (
+            ${GridActivitySql.approvedProfilePhotoOwners(candidates = "nearby_ids", tag = "tier_po")}
+        ),
         base_candidates AS (
             SELECT u.id AS user_id,
                    COALESCE(NULLIF(p.display_name, ''), 'New member') AS display_name,
@@ -78,15 +90,12 @@ internal fun Connection.queryGridRank(
                    -- 2 demoted (dormant 30+ days, or no approved public photo) so a thin member base
                    -- shows real, active, pictured people first. A boost outranks demotion. It depends
                    -- only on the candidate, never the viewer, so the shared window stays shareable.
+                   -- G2-2: the tier reads three set lookups joined below (tier_boosted, tier_photo_owners,
+                   -- user_last_active), not correlated subqueries per candidate before the LIMIT. Same
+                   -- rule as GridActivitySql.demoted, so the order is unchanged (GridRankOrderPinTest).
                    CASE
-                       WHEN EXISTS (
-                           SELECT 1
-                           FROM boost_activations ba
-                           WHERE ba.user_id = u.id
-                             AND ba.status = 'active'
-                             AND ba.ends_at > now()
-                       ) THEN 0
-                       WHEN ${GridActivitySql.demoted(user = "u", tag = "tier")} THEN 2
+                       WHEN tier_boost.user_id IS NOT NULL THEN 0
+                       WHEN ${GridActivitySql.demotedJoined(user = "u", lastActive = "tier_ula", photoOwner = "tier_photo")} THEN 2
                        ELSE 1
                    END AS boost_bucket,
                    -- Cell-to-cell distance from the target's EFFECTIVE location (travel point when
@@ -104,6 +113,9 @@ internal fun Connection.queryGridRank(
               ON target_travel.user_id = u.id
              AND target_travel.status = 'active'
              AND target_travel.active_until IS NULL
+            LEFT JOIN tier_boosted tier_boost ON tier_boost.user_id = u.id
+            LEFT JOIN tier_photo_owners tier_photo ON tier_photo.user_id = u.id
+            LEFT JOIN user_last_active tier_ula ON tier_ula.user_id = u.id
             WHERE (?::uuid IS NULL OR u.id <> ?::uuid)
               AND u.status = 'active'
               AND u.deleted_at IS NULL

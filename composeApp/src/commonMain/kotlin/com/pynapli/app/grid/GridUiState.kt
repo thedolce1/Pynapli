@@ -178,7 +178,9 @@ data class GridFilters(
      * past the plan limit with locked cards instead of stopping. Kept apart from [toGridQueryRequest],
      * which also writes saved presets and the stored filters, where the opt-in has no meaning.
      */
-    fun toGridFeedRequest(cursor: String?): GridQueryRequestDto = toGridQueryRequest(cursor).copy(acceptLockedCards = true)
+    // G2-2: asks for the largest page; the server clamps it to the viewer's plan (Free 60, Social 90,
+    // Select 120) and seals that size into the cursor. Presets keep [PAGE_SIZE].
+    fun toGridFeedRequest(cursor: String?): GridQueryRequestDto = toGridQueryRequest(cursor).copy(acceptLockedCards = true, limit = MAX_FEED_PAGE_REQUEST)
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {
         // Singles travels as the "single" Who token, Linked as linkedOnly; the server folds both onto
@@ -230,6 +232,9 @@ data class GridFilters(
         const val MIN_FILTER_AGE: Int = 18
         const val MAX_FILTER_AGE: Int = 99
         const val PAGE_SIZE: Int = 60
+
+        /** The live Grid asks for this many; the server answers with the plan's page size (G2-2). */
+        const val MAX_FEED_PAGE_REQUEST: Int = 120
         const val SINGLES_CONTEXT: String = "single"
 
         // The retired "Partnered" token: a preset that carries it restores as Linked.
@@ -492,6 +497,9 @@ data class GridProfileCardUi(
     // Section 3: past the viewer's plan limit (server-decided). [id] is then an opaque "locked_"
     // token, [displayName] is empty, and the tile shows only photo, dot, distance and badges.
     val locked: Boolean = false,
+    // G2-2: the server's stable key for [thumbnailUrl]'s bytes (Coil memory + disk cache key), so a
+    // re-signed URL is a cache hit. Names bytes only; the URL still guards access. Null when locked.
+    val thumbnailCacheKey: String? = null,
 )
 
 /**
@@ -534,6 +542,7 @@ data class GridLinkedPartnerUi(
     // mini it shows this viewer; the tile draws [partnerMiniCaption] under the mini.
     val age: Int? = null,
     val gender: String? = null,
+    val thumbnailCacheKey: String? = null,
 )
 
 /**
@@ -608,6 +617,8 @@ internal fun GridCardDto.toGridProfileCardUi(index: Int): GridProfileCardUi {
         fresh = fresh,
         activeAgo = if (isLocked) null else activeAgo,
         locked = isLocked,
+        // A locked tile is cached by URL only: no stable identifier reaches it (Section 3).
+        thumbnailCacheKey = if (isLocked) null else thumbnailCacheKey,
     )
 }
 
@@ -618,4 +629,5 @@ internal fun LinkedPartnerMiniDto.toUi(): GridLinkedPartnerUi =
         thumbnailUrl = thumbnailUrl,
         age = age,
         gender = gender,
+        thumbnailCacheKey = thumbnailCacheKey,
     )

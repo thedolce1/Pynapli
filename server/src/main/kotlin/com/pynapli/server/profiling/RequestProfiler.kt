@@ -39,6 +39,9 @@ class RequestProfilerFactory(
         const val PROFILE_TIMINGS_HEADER = "X-Pynapli-Profile"
         const val PROFILE_SLOW_HEADER = "X-Pynapli-Profile-Slow"
         const val PROFILE_POOL_HEADER = "X-Pynapli-Pool"
+        // G2-2 ticket 7: event counts (e.g. grid.rank.cacheHit=1,grid.rank.widenPass=1), separate from
+        // the millisecond timings so that header keeps its format.
+        const val PROFILE_COUNTS_HEADER = "X-Pynapli-Profile-Counts"
 
         fun disabled(): RequestProfilerFactory =
             RequestProfilerFactory(
@@ -56,6 +59,13 @@ class RequestProfiler(
     private val poolSnapshotProvider: () -> DatabasePoolSnapshot?,
 ) {
     private val spans = Collections.synchronizedList(mutableListOf<RequestProfileSpan>())
+    private val counts = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    /** Counts one [name] event for this request (no-op when profiling is off). */
+    fun count(name: String) {
+        if (!enabled) return
+        counts.merge(name, 1) { a, b -> a + b }
+    }
 
     suspend fun <T> measure(
         name: String,
@@ -88,6 +98,7 @@ class RequestProfiler(
         call.response.headers.append(RequestProfilerFactory.PROFILE_TIMINGS_HEADER, timingsHeaderValue())
         slowHeaderValue()?.let { call.response.headers.append(RequestProfilerFactory.PROFILE_SLOW_HEADER, it) }
         poolHeaderValue()?.let { call.response.headers.append(RequestProfilerFactory.PROFILE_POOL_HEADER, it) }
+        countsHeaderValue()?.let { call.response.headers.append(RequestProfilerFactory.PROFILE_COUNTS_HEADER, it) }
     }
 
     private fun record(
@@ -116,6 +127,12 @@ class RequestProfiler(
             "${span.name}=${formatMillis(span.millis)}"
         }
     }
+
+    private fun countsHeaderValue(): String? =
+        counts.entries
+            .sortedBy { it.key }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(",") { (name, value) -> "$name=$value" }
 
     private fun poolHeaderValue(): String? {
         val snapshot = poolSnapshotProvider() ?: return null
@@ -148,6 +165,11 @@ fun <T> profileBlocking(
     name: String,
     block: () -> T,
 ): T = currentProfiler.get()?.measureBlocking(name, block) ?: block()
+
+/** Counts one [name] event on the current request's profiler (no-op outside a profiled request). */
+fun profileCount(name: String) {
+    currentProfiler.get()?.count(name)
+}
 
 fun profilerContextElement(profiler: RequestProfiler): ThreadContextElement<RequestProfiler?> = currentProfiler.asContextElement(profiler.takeIf { it.enabled })
 

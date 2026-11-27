@@ -70,6 +70,51 @@ internal object GridActivitySql {
             "OR NOT ${hasApprovedProfilePhoto(user, "${tag}_ph")})"
 
     /**
+     * The same demotion rule as [demoted], over joined rows instead of correlated subqueries (G2-2
+     * ticket 6): [lastActive] is a LEFT JOIN of `user_last_active` on the candidate, [photoOwner] a
+     * LEFT JOIN of [approvedProfilePhotoOwners] (null = no approved public photo). GREATEST ignores the
+     * NULL of a missing last-active row exactly as it ignored the subquery's NULL, so the tier and the
+     * order are unchanged.
+     */
+    fun demotedJoined(
+        user: String,
+        lastActive: String,
+        photoOwner: String,
+    ): String =
+        "(GREATEST($user.created_at, $lastActive.last_active_at) < now() - interval $DORMANT_AFTER " +
+            "OR $photoOwner.user_id IS NULL)"
+
+    /**
+     * `SELECT DISTINCT user_id` of the owners, among the ids in the CTE/table [candidates] (a
+     * `user_id` column), who have an approved, ready, visible public photo: [hasApprovedProfilePhoto]
+     * as one set the planner builds once and hash-joins, instead of an EXISTS per candidate.
+     */
+    fun approvedProfilePhotoOwners(
+        candidates: String,
+        tag: String,
+    ): String =
+        """
+        SELECT DISTINCT ${tag}_ma.owner_user_id AS user_id
+        FROM $candidates ${tag}_c
+        JOIN media_albums ${tag}_ma
+          ON ${tag}_ma.owner_user_id = ${tag}_c.user_id
+         AND ${tag}_ma.kind = 'profile'
+         AND ${tag}_ma.visibility_status = 'visible'
+         AND ${tag}_ma.deleted_at IS NULL
+        JOIN media_album_items ${tag}_mai
+          ON ${tag}_mai.album_id = ${tag}_ma.id
+         AND ${tag}_mai.removed_at IS NULL
+        JOIN media_assets ${tag}_m
+          ON ${tag}_m.id = ${tag}_mai.media_asset_id
+         AND ${tag}_m.owner_user_id = ${tag}_ma.owner_user_id
+         AND ${tag}_m.deleted_at IS NULL
+        WHERE ${tag}_m.media_type = 'image'
+          AND ${tag}_m.processing_status = 'ready'
+          AND ${tag}_m.moderation_status = 'approved'
+          AND ${tag}_m.intended_album_kind = 'profile'
+        """.trimIndent()
+
+    /**
      * Fresh (plan G4, adapted from Grindr's rule, looser because we're sparser): the account is under
      * 72 hours old or added an approved public photo in the last 24 hours, AND was active in the last
      * 24 hours.

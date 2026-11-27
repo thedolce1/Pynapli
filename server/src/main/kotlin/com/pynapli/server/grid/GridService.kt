@@ -9,9 +9,13 @@ import com.pynapli.server.distance.CoarseLocation
 import com.pynapli.server.distance.toPublicDistanceLabel
 import com.pynapli.server.distance.toPublicDistanceMeters
 import com.pynapli.server.media.MediaAssetUrlResolver
+import com.pynapli.server.media.MediaImageResolver
+import com.pynapli.server.media.MediaImageSet
+import com.pynapli.server.media.forAssetsOrOriginals
 import com.pynapli.server.presence.GridActiveAgo
 import com.pynapli.server.presence.PresenceService
 import com.pynapli.server.profiling.profile
+import com.pynapli.server.profiling.profileCount
 import com.pynapli.server.safety.BlockRepository
 import com.pynapli.server.safety.HiddenProfileRepository
 import com.pynapli.server.safety.RateLimitService
@@ -44,6 +48,8 @@ class GridService(
     private val clock: Clock = Clock.systemUTC(),
     // Section 3: opaque per-viewer ids for locked cards. Production derives it from the cursor secret.
     private val lockedCardTokens: LockedGridCardTokens = LockedGridCardTokens("pynapli-local-dev-discovery-cursor-secret"),
+    // G2-2: tile photos use the server-made thumbnail when ready, with stable cache keys.
+    private val mediaImages: MediaImageResolver? = null,
 ) {
     suspend fun queryGrid(
         viewerUserId: UUID,
@@ -109,52 +115,56 @@ class GridService(
         val servedDepth = if (lockingApplies) policy.gridLockedPreviewDepth else lockedFrom
         val depthLimited = servedDepth != Int.MAX_VALUE
 
-        val cursorScopeHash =
-            profile("grid.cursorScope") {
-                DiscoveryCursorCodec.gridScopeHash(
-                    viewerUserId = viewerUserId,
-                    radiusMeters = radiusMeters,
-                    limit = pageLimit,
-                    filters = filters,
-                    onlineOnly = request.onlineOnly,
-                    acceptLockedCards = request.acceptLockedCards,
-                    // Its own keyset order (arrival day first), so its cursors never continue Nearby.
-                    visitingSoonOnly = request.visitingSoonOnly,
-                )
-            }
+        // The one cursor scope recipe: [scopeLimit] is the page size, [widened] the sparse-area scope.
+        fun gridScope(
+            scopeLimit: Int,
+            widened: Boolean,
+        ): String =
+            DiscoveryCursorCodec.gridScopeHash(
+                viewerUserId = viewerUserId,
+                radiusMeters = if (widened) MAX_RADIUS_METERS else radiusMeters,
+                limit = scopeLimit,
+                filters = filters,
+                onlineOnly = request.onlineOnly,
+                widenedFromRadiusMeters = if (widened) radiusMeters else null,
+                acceptLockedCards = request.acceptLockedCards,
+                // G2-1: Visiting soon has its own keyset order (arrival day first), so its cursors never
+                // continue Nearby. Part of every scope, the page-size fallbacks included.
+                visitingSoonOnly = request.visitingSoonOnly,
+            )
+        val cursorScopeHash = profile("grid.cursorScope") { gridScope(pageLimit, widened = false) }
         // Sparse-area widening (plan G10) pages under its own scope: the widened radius plus the radius
         // the viewer asked for. The client keeps sending its own radius, so a follow-up cursor that does
         // not decode under the normal scope is tried under the widened one. Both are sealed, so neither
         // can be forged, and a widened cursor continues only the request that produced it.
         val canWiden = !request.visitingSoonOnly && radiusMeters < MAX_RADIUS_METERS
-        val widenedScopeHash =
-            if (canWiden) {
-                DiscoveryCursorCodec.gridScopeHash(
-                    viewerUserId = viewerUserId,
-                    radiusMeters = MAX_RADIUS_METERS,
-                    limit = pageLimit,
-                    filters = filters,
-                    onlineOnly = request.onlineOnly,
-                    widenedFromRadiusMeters = radiusMeters,
-                    acceptLockedCards = request.acceptLockedCards,
-                )
-            } else {
+        val widenedScopeHash = if (canWiden) gridScope(pageLimit, widened = true) else null
+        var continuingWidened = false
+        fun decodeOrNull(
+            token: String,
+            scope: String,
+        ): GridCursorAnchor? =
+            try {
+                cursorCodec.decodeGridCursor(token, scope)
+            } catch (_: DiscoveryCursorException) {
                 null
             }
-        var continuingWidened = false
+        // G2-2 ticket 4: page size follows the plan, and a plan change between two pages (an upgrade, a
+        // lapse) changes it. A cursor sealed under another plan's page size still continues: it is the
+        // same sealed position (keyset anchor + seen count), only the page length differs, so the next
+        // page uses this plan's size and is re-sealed under it. Old clients keep sending 60 and match first.
+        val otherPageSizes = GRID_TIER_PAGE_SIZES.filter { it != pageLimit }
         val cursor =
             profile("grid.cursorDecode") {
                 request.cursor?.let { token ->
-                    try {
-                        cursorCodec.decodeGridCursor(token, cursorScopeHash)
-                    } catch (_: DiscoveryCursorException) {
-                        val widenedScope = widenedScopeHash ?: throw GridException("INVALID_GRID_CURSOR")
-                        try {
-                            cursorCodec.decodeGridCursor(token, widenedScope).also { continuingWidened = true }
-                        } catch (_: DiscoveryCursorException) {
-                            throw GridException("INVALID_GRID_CURSOR")
-                        }
-                    }
+                    decodeOrNull(token, cursorScopeHash)
+                        ?: widenedScopeHash?.let { decodeOrNull(token, it) }?.also { continuingWidened = true }
+                        ?: otherPageSizes.firstNotNullOfOrNull { size -> decodeOrNull(token, gridScope(size, widened = false)) }
+                        ?: otherPageSizes
+                            .takeIf { canWiden }
+                            ?.firstNotNullOfOrNull { size -> decodeOrNull(token, gridScope(size, widened = true)) }
+                            ?.also { continuingWidened = true }
+                        ?: throw GridException("INVALID_GRID_CURSOR")
                 }
             }
         val seenBefore = cursor?.seenCount ?: 0
@@ -169,6 +179,7 @@ class GridService(
                 resultLimitTier = policy.tier.takeIf { depthLimited },
                 lockedFromIndex = lockedFrom.takeIf { lockingApplies },
                 unlockTier = policy.gridUnlockTier.takeIf { lockingApplies },
+                pageSize = pageLimit,
             )
         }
 
@@ -209,6 +220,7 @@ class GridService(
         // One ranked page at [queryRadius] with every per-viewer exclusion applied: what the viewer
         // would actually see. Run once, or twice when a sparse first page widens.
         suspend fun visiblePage(queryRadius: Int): VisiblePage {
+            profileCount("grid.rank.pass")
             val result =
                 profile("grid.repository") {
                     if (request.visitingSoonOnly) {
@@ -286,6 +298,7 @@ class GridService(
         val widenNow = canWiden && cursor == null && first.filteredCards.size < minOf(SPARSE_FIRST_PAGE, limit)
         val page =
             if (widenNow) {
+                profileCount("grid.rank.widenPass")
                 profile("grid.repositoryWiden") { visiblePage(MAX_RADIUS_METERS) }
             } else {
                 first
@@ -301,6 +314,13 @@ class GridService(
         val pageCards = filteredCards.take(limit)
         val moreInFetchedWindow = filteredCards.size > limit
         val now = clock.instant()
+        val images =
+            profile("grid.images") {
+                mediaImages.forAssetsOrOriginals(
+                    mediaAssetUrlResolver,
+                    pageCards.flatMap { listOf(it.thumbnailMediaAssetId, it.linkedPartnerThumbnailMediaAssetId) },
+                )
+            }
         val dtoCards =
             profile("grid.dto") {
                 pageCards.mapIndexed { index, card ->
@@ -311,9 +331,10 @@ class GridService(
                             token = lockedCardTokens.tokenFor(viewerUserId, card.userId),
                             onlineUserIds = onlineUserIds,
                             mediaAssetUrlResolver = mediaAssetUrlResolver,
+                            images = images,
                         )
                     } else {
-                        card.toGridCardDto(onlineUserIds, mediaAssetUrlResolver, now)
+                        card.toGridCardDto(onlineUserIds, mediaAssetUrlResolver, now, images)
                     }
                 }
             }
@@ -349,6 +370,7 @@ class GridService(
             widened = widened,
             lockedFromIndex = lockedFrom.takeIf { lockSignal },
             unlockTier = policy.gridUnlockTier.takeIf { lockSignal },
+            pageSize = pageLimit,
         )
     }
 
@@ -386,6 +408,10 @@ class GridService(
         private const val MAX_RADIUS_METERS = 100_000
         private const val MAX_LIMIT = 120
         const val MIN_PAGE_SIZE = 12
+
+        // G2-2 ticket 4: the page sizes the plans use (SubscriptionPolicy: Free 60, Social 90, Select 120).
+        // A cursor sealed under any of them continues under the viewer's current plan.
+        internal val GRID_TIER_PAGE_SIZES: List<Int> = listOf(60, 90, MAX_LIMIT)
 
         // Plan G10: a first page showing fewer people than this widens to MAX_RADIUS_METERS.
         const val SPARSE_FIRST_PAGE = 12
@@ -426,13 +452,18 @@ internal fun GridCardRecord.toGridCardDto(
     onlineUserIds: Set<UUID>,
     mediaAssetUrlResolver: MediaAssetUrlResolver?,
     now: Instant = Instant.now(),
-): GridCardDto =
-    GridCardDto(
+    // G2-2: thumbnail-or-original per photo with its stable cache key (one lookup per page).
+    images: MediaImageSet = MediaImageSet.originalsOnly(mediaAssetUrlResolver),
+): GridCardDto {
+    val tile = images.tile(thumbnailMediaAssetId)
+    val partnerTile = images.tile(linkedPartnerThumbnailMediaAssetId)
+    return GridCardDto(
         userId = userId.toString(),
         displayName = displayName,
         visitingFrom = visitingFrom?.toString(),
         visitingUntil = visitingUntil?.toString(),
-        thumbnailUrl = thumbnailMediaAssetId?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+        thumbnailUrl = tile?.url,
+        thumbnailCacheKey = tile?.cacheKey,
         online = userId in onlineUserIds,
         distanceLabel = if (showDistance) distanceMeters.toPublicDistanceLabel() else null,
         distanceMeters = if (showDistance) distanceMeters.toPublicDistanceMeters() else null,
@@ -441,9 +472,8 @@ internal fun GridCardRecord.toGridCardDto(
                 LinkedPartnerMiniDto(
                     userId = partnerUserId.toString(),
                     displayName = linkedPartnerDisplayName,
-                    thumbnailUrl =
-                        linkedPartnerThumbnailMediaAssetId
-                            ?.let { mediaAssetUrlResolver?.publicContentUrl(it) },
+                    thumbnailUrl = partnerTile?.url,
+                    thumbnailCacheKey = partnerTile?.cacheKey,
                     // Only inside the shown mini: a stripped partner takes these with it.
                     age = linkedPartnerAge,
                     gender = linkedPartnerGender,
@@ -462,3 +492,4 @@ internal fun GridCardRecord.toGridCardDto(
                 sinceLastActive = lastActiveAt?.let { Duration.between(it, now) },
             ),
     )
+}

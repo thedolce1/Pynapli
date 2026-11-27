@@ -11,17 +11,23 @@ import com.pynapli.shared.network.dto.SwipeCardDto
 @Composable
 internal fun SwipeImagePrefetchEffect(cards: List<SwipeCardDto>) {
     val platformContext = LocalPlatformContext.current
-    val swipeImagePrefetchUrls = remember(cards) { planSwipeImagePrefetch(cards) }
+    val swipeImagePrefetch = remember(cards) { planSwipeImagePrefetchImages(cards) }
 
-    LaunchedEffect(swipeImagePrefetchUrls) {
-        if (swipeImagePrefetchUrls.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(swipeImagePrefetch) {
+        if (swipeImagePrefetch.isEmpty()) return@LaunchedEffect
         val imageLoader = runCatching { SingletonImageLoader.get(platformContext) }.getOrNull() ?: return@LaunchedEffect
-        swipeImagePrefetchUrls.forEach { url ->
+        swipeImagePrefetch.forEach { image ->
+            // The card's own stable key (G2-2): the prefetch fills the entry the card reads.
             imageLoader.enqueue(
                 ImageRequest
                     .Builder(platformContext)
-                    .data(url)
-                    .build(),
+                    .data(image.url)
+                    .apply {
+                        image.cacheKey?.let { key ->
+                            memoryCacheKey(key)
+                            diskCacheKey(key)
+                        }
+                    }.build(),
             )
         }
     }

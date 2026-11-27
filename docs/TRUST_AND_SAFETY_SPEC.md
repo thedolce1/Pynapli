@@ -156,6 +156,18 @@ seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaMo
     timeout. **Fail closed:** a scan we can't trust never approves.
   - **Never auto-rejected.** No SafeSearch result removes a profile photo or files a report or risk
     points against its owner; a moderator approves or rejects it.
+- **Grid thumbnails only from approved photos (G2-2, 2026-11-26):** the server makes a 480 px
+  thumbnail (GRID_IMPLEMENTATION_SPEC "Server-made thumbnails") only from the stored, screened
+  original of an approved, live public profile photo in a visible profile album. Held, pending,
+  rejected, removed, deleted, hidden-album or
+  out-of-album photos, private-album, chat and verification media never get one: eligibility is
+  re-checked when the job claims the photo and again, in the same statement, when it marks the
+  thumbnail ready; if the photo stopped being eligible meanwhile the written object is deleted. A
+  reconciler deletes the thumbnail object of any row that is no longer eligible (every removal path,
+  without hooking each), and the media purge keeps a row until its thumbnail is gone. Read paths serve
+  a thumbnail URL only while the photo is approved and live, from the first moment a removal lands.
+  The thumbnail is EXIF-stripped. A Cloud CDN edge copy can outlive a deletion only for holders of a
+  still-valid signed URL (15 minutes), exactly as for originals.
 - **What Vision sees (founder/legal decision, 2026-11-25):** only **public profile photos** (this
   scanner) and **verification selfies** (the separate face-count check above). Private-album and
   chat photos are intimate, consent-gated content and are **not** sent to Vision by default. The

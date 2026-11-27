@@ -128,6 +128,8 @@ class ServerDependencies(
     val dataRetentionWorker: DataRetentionWorker? = null,
     val rateLimitService: RateLimitService? = null,
     val mediaCleanupWorker: MediaCleanupWorker?,
+    val mediaThumbnailWorker: com.pynapli.server.media.MediaThumbnailWorker? = null,
+    val mediaThumbnailScheduler: com.pynapli.server.media.MediaThumbnailScheduler? = null,
     val accountDataExportWorker: AccountDataExportWorker?,
     val notificationService: NotificationService,
     val notificationDispatchWorker: NotificationDispatchWorker?,
@@ -180,6 +182,8 @@ class ServerDependencies(
         runCatching { activityRetentionWorker?.close() }
         runCatching { dataRetentionWorker?.close() }
         runCatching { mediaCleanupWorker?.close() }
+        runCatching { mediaThumbnailWorker?.close() }
+        runCatching { mediaThumbnailScheduler?.close() }
         runCatching { photoVerificationRetentionWorker?.close() }
         runCatching { metInPersonBadgeWorker.close() }
         runCatching { accountDataExportWorker?.close() }
@@ -269,6 +273,7 @@ class ServerDependencies(
                     activityBroadcaster = core.activityBroadcaster,
                     cursorCodec = ActivityCursorCodec(config.activityCursorSecret),
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
                 )
             val activityRetentionWorker =
                 if (config.activityRetentionEnabled) {
@@ -320,6 +325,7 @@ class ServerDependencies(
                     blockRepository = core.blockRepository,
                     rateLimitService = core.rateLimitService,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
                     hiddenProfileRepository = core.hiddenProfileRepository,
                 )
             val profileService =
@@ -339,6 +345,7 @@ class ServerDependencies(
                     profileViewRecordScope = profileActivityScope,
                     profileViewRecordConcurrency = 4,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImages = media.mediaImageResolver,
                 )
             val profileLinkService =
                 ProfileLinkService(
@@ -375,6 +382,7 @@ class ServerDependencies(
                     mediaRepository = JdbcMediaRepository(database.dataSource),
                     mediaAssetUrlResolver = media.mediaAssetUrlResolver,
                     notificationPublisher = core.notificationService,
+                    profilePhotoApproved = media.thumbnailScheduler,
                 )
             val adminRequestAuditRecorder =
                 config.adminApiToken?.let { JdbcAdminRequestAuditRecorder(database.dataSource) }
@@ -390,6 +398,7 @@ class ServerDependencies(
                     subscriptionService = commerceTravel.subscriptionService,
                     rateLimitService = core.rateLimitService,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImageResolver = media.mediaImageResolver,
                 )
             val tonight =
                 buildTonightDependencies(
@@ -484,6 +493,7 @@ class ServerDependencies(
                     productMetrics = core.productMetrics,
                     matchConversationOpener = messaging.messagingService.matchConversationOpener,
                     contactBlockVisibility = core.contactBlockVisibility,
+                    mediaImageResolver = media.mediaImageResolver,
                 )
             return ServerDependencies(
                 config = config,
@@ -538,6 +548,8 @@ class ServerDependencies(
                 dataRetentionWorker = dataRetentionWorker,
                 rateLimitService = core.rateLimitService,
                 mediaCleanupWorker = mediaCleanupWorker,
+                mediaThumbnailWorker = media.thumbnailWorker,
+                mediaThumbnailScheduler = media.thumbnailScheduler,
                 accountDataExportWorker = core.accountDataExportWorker,
                 notificationService = core.notificationService,
                 notificationDispatchWorker = core.notificationDispatchWorker,

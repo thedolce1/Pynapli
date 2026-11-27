@@ -54,6 +54,8 @@ import com.pynapli.app.design.icons.Icons
 import com.pynapli.app.design.icons.filled.DarkMode
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.Person
+import com.pynapli.app.media.ImageLoadStats
+import com.pynapli.app.media.rememberCachedImageModel
 import com.pynapli.shared.distance.formatDistanceForUnit
 
 // Pure black on purpose: a shadow is an occlusion effect, not a palette value, so it does not
@@ -112,7 +114,8 @@ internal fun GridProfileTile(
         val thumbnailUrl = card.thumbnailUrl
         if (thumbnailUrl != null) {
             AsyncImage(
-                model = thumbnailUrl,
+                // G2-2: cached by the server's stable key, so a re-signed URL is a cache hit.
+                model = rememberCachedImageModel(thumbnailUrl, card.thumbnailCacheKey, stats = ImageLoadStats.grid),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -154,6 +157,7 @@ internal fun GridProfileTile(
         } else if (card.linkedPartner != null) {
             LinkedPartnerBadge(
                 thumbnailUrl = card.linkedPartner.thumbnailUrl,
+                thumbnailCacheKey = card.linkedPartner.thumbnailCacheKey,
                 coupleVerified = card.coupleVerified,
                 color = card.linkedPartnerTone.badgeColor(),
                 // Plan G2-3: the partner's own age and gender mark, only on a mini the server shows.
@@ -373,6 +377,7 @@ private fun TonightIndicator(modifier: Modifier = Modifier) {
 @Composable
 private fun LinkedPartnerBadge(
     thumbnailUrl: String?,
+    thumbnailCacheKey: String?,
     coupleVerified: Boolean,
     color: Color,
     caption: String?,
@@ -387,7 +392,7 @@ private fun LinkedPartnerBadge(
     ) {
         // The couple badge rides on the partner mini: both partners verified (TRUST_AND_SAFETY_SPEC).
         Box {
-            PartnerMiniCircle(thumbnailUrl = thumbnailUrl, color = color, description = description)
+            PartnerMiniCircle(thumbnailUrl = thumbnailUrl, thumbnailCacheKey = thumbnailCacheKey, color = color, description = description)
             if (coupleVerified) {
                 VerifiedBadge(
                     size = 12.dp,
@@ -426,6 +431,7 @@ private fun LinkedPartnerBadge(
 @Composable
 private fun PartnerMiniCircle(
     thumbnailUrl: String?,
+    thumbnailCacheKey: String?,
     color: Color,
     description: String,
 ) {
@@ -440,7 +446,7 @@ private fun PartnerMiniCircle(
     ) {
         if (thumbnailUrl != null) {
             AsyncImage(
-                model = thumbnailUrl,
+                model = rememberCachedImageModel(thumbnailUrl, thumbnailCacheKey, stats = ImageLoadStats.grid),
                 contentDescription = description,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

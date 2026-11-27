@@ -34,7 +34,13 @@ class GridLockedCardsTest {
 
         assertTrue(filters.toGridFeedRequest(cursor = "c1").acceptLockedCards)
         assertEquals("c1", filters.toGridFeedRequest(cursor = "c1").cursor)
-        assertEquals(filters.toGridQueryRequest(cursor = "c1"), filters.toGridFeedRequest(cursor = "c1").copy(acceptLockedCards = false))
+        assertEquals(
+            filters.toGridQueryRequest(cursor = "c1"),
+            filters.toGridFeedRequest(cursor = "c1").copy(acceptLockedCards = false, limit = GridFilters.PAGE_SIZE),
+        )
+        // G2-2 ticket 4: the live Grid asks for the largest page and the server clamps it to the plan.
+        assertEquals(GridFilters.MAX_FEED_PAGE_REQUEST, filters.toGridFeedRequest(cursor = null).limit)
+        assertEquals(GridFilters.PAGE_SIZE, filters.toGridQueryRequest(cursor = null).limit, "presets keep the old page size")
         assertFalse(filters.toGridQueryRequest(cursor = null).acceptLockedCards, "presets and the filter store keep the plain payload")
 
         // On the wire, with the client's own JSON settings.

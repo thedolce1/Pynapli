@@ -8,7 +8,7 @@ internal class SwipeDeckPageBuilder(
     private val deckTokenCodec: SwipeDeckTokenCodec,
     private val dtoMapper: SwipeDtoMapper,
 ) {
-    fun buildPageItems(
+    suspend fun buildPageItems(
         pageCards: List<SwipeCardRecord>,
         deckSession: IssuedSwipeDeckSession,
         viewerUserId: UUID,
@@ -16,8 +16,9 @@ internal class SwipeDeckPageBuilder(
         startPosition: Int,
         onlineUserIds: Set<UUID>,
         dealtAt: Instant,
-    ): List<SwipeDeckPageItem> =
-        pageCards.mapIndexed { index, card ->
+    ): List<SwipeDeckPageItem> {
+        val images = dtoMapper.imagesFor(pageCards)
+        return pageCards.mapIndexed { index, card ->
             val position = startPosition + index
             val cardToken =
                 deckTokenCodec.issueCardToken(
@@ -36,6 +37,7 @@ internal class SwipeDeckPageBuilder(
                         rankToken = cardToken,
                         online = card.userId in onlineUserIds,
                         onlineUserIds = onlineUserIds,
+                        images = images,
                     ),
                 persistedCard =
                     SwipeDeckSessionCardRecord(
@@ -49,6 +51,7 @@ internal class SwipeDeckPageBuilder(
                     ),
             )
         }
+    }
 }
 
 internal data class SwipeDeckPageItem(

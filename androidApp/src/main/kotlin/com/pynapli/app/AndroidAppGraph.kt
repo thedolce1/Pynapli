@@ -106,6 +106,14 @@ class AndroidAppGraph(
             playBillingPurchaseGateway
         }
 
+    init {
+        // G2-2 ticket 7: debug builds log one line per settled Grid refresh with how its tile images
+        // were served (memory / disk / network counts only; no URL, id or key). Release builds never set it.
+        if (DebugQaFlags.isDebuggable(appContext)) {
+            com.pynapli.app.media.ImageLoadStats.grid.sink = { line -> android.util.Log.d("PynapliGridImages", line) }
+        }
+    }
+
     val deepLinkStateHolder = AppDeepLinkStateHolder()
 
     val pushRegistrationCoordinator =
