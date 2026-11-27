@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
@@ -678,6 +680,7 @@ class GridStateHolder(
         if (previous == null || previous == tier) return
         invalidate()
         scrollAnchor = GridScrollAnchor()
+        visibleCardRange.value = null
         if (!_onScreen.value) return
         load(quiet = true)
         _events.tryEmit(GridEvent.ScrollToTop)
@@ -722,6 +725,7 @@ class GridStateHolder(
         // After any write already under way (the lock), so the clear is the last word.
         filterStoreLock.withLock { runCatchingCancellable { filterStore.clear() } }
         scrollAnchor = GridScrollAnchor()
+        visibleCardRange.value = null
         travelKeyWhenLeft = null
         // The next account's first plan observation is a baseline, not a change.
         knownPlanTier = null
@@ -745,12 +749,39 @@ class GridStateHolder(
     }
 
     /**
-     * The people on the Grid, for the presence subscription. Locked cards never subscribe: their
+     * The cards (card indices, not grid items) the Nearby grid last showed, or null before it laid
+     * out. Its own flow, never part of [GridUiState]: where the viewer looks only steers the presence
+     * subscription, so it can never recompose, refetch or reorder the Grid.
+     */
+    private val visibleCardRange = MutableStateFlow<IntRange?>(null)
+
+    /**
+     * The Nearby grid laid out lazy-grid items [firstItemIndex]..[lastItemIndex] (the locked banner
+     * and the loading row are items too; they are mapped back to cards here). Cheap to call on every
+     * scroll frame: the subscription only follows once the range has settled.
+     */
+    fun onGridItemsVisible(
+        firstItemIndex: Int,
+        lastItemIndex: Int,
+    ) {
+        if (firstItemIndex < 0 || lastItemIndex < firstItemIndex) return
+        val bannerAt = _state.value.lockedBannerIndex
+        visibleCardRange.value = cardIndexForGridItem(firstItemIndex, bannerAt)..cardIndexForGridItem(lastItemIndex, bannerAt)
+    }
+
+    /**
+     * The people on the Grid, for the presence subscription: the cards on screen plus
+     * [PRESENCE_WINDOW_MARGIN] either side (G3-A), so a viewer far down the list still sees live
+     * dots. Before the grid reports what it shows, the cards from the top. A new range is followed
+     * only after it held still for [PRESENCE_WINDOW_SETTLE], so a fling never thrashes the socket;
+     * a card change (a page, a presence delta) applies at once. Locked cards never subscribe: their
      * "locked_" token names nobody, and following a locked person's presence would leak who they are.
      */
     val visibleUserIds: kotlinx.coroutines.flow.Flow<Set<String>> =
-        state
-            .map { ui -> ui.cards.mapNotNullTo(LinkedHashSet(ui.cards.size)) { card -> card.id.takeUnless { card.isLockedCard } } }
+        combine(
+            state.map { ui -> ui.cards }.distinctUntilChanged(),
+            visibleCardRange.settledFor(PRESENCE_WINDOW_SETTLE),
+        ) { cards, range -> presenceWindowIds(cards, range) }
             .distinctUntilChanged()
 
     private fun GridFilters.toggle(id: QuickFilterId): GridFilters =
@@ -788,8 +819,23 @@ class GridStateHolder(
 
         /** Quiet in-place presence refresh cadence while the Grid is visible, and the resume threshold. */
         val LIVE_REFRESH_INTERVAL: Duration = 60.seconds
+
+        /** How long the visible range must hold still before the presence subscription follows it. */
+        val PRESENCE_WINDOW_SETTLE: Duration = 300.milliseconds
     }
 }
+
+/**
+ * This flow, with each non-null value passed on only once no newer one arrived for [quiet] (a
+ * debounce without the FlowPreview opt-in). Null, "nothing reported", passes at once.
+ */
+private fun <T> kotlinx.coroutines.flow.Flow<T?>.settledFor(quiet: Duration): kotlinx.coroutines.flow.Flow<T?> =
+    channelFlow {
+        collectLatest { value ->
+            if (value != null) delay(quiet)
+            send(value)
+        }
+    }
 
 /** One-off Grid events for the screen (StateFlow for state, SharedFlow for these). */
 sealed interface GridEvent {
