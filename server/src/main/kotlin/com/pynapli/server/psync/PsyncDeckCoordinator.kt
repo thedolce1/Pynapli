@@ -35,10 +35,10 @@ internal class PsyncDeckCoordinator(
         val ranked = generator.rankCandidates(session.initiatorUserId, session.filters, oversample)
 
         val rankedIds = ranked.mapNotNull { runCatching { UUID.fromString(it.userId) }.getOrNull() }
-        // Partner-derived filters (Linked / Singles, partner filters, "No single men") depend on whose
-        // view of each candidate's linked partner is used. The ranker saw the initiator's only (without
-        // their contact blocks), so re-run the same gate for BOTH partners with their own contact
-        // blocks and keep a card only when it passes for each: the strictest of both views.
+        // The partner filters and "No single men" depend on whose view of each candidate's linked
+        // partner is used. The ranker saw the initiator's only (without their contact blocks), so
+        // re-run the same gate for BOTH partners with their own contact blocks and keep a card only
+        // when it passes for each: the strictest of both views (plan G2-3).
         val partnerFilterFails = partnerFilterFailures(session, partnerId, rankedIds)
         val excluded =
             buildSet {

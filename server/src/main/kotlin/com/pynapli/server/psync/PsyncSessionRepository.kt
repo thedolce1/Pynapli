@@ -148,8 +148,8 @@ interface PsyncSessionRepository {
     ): Set<UUID> = emptySet()
 
     /**
-     * Of [candidateIds], those that pass every partner-derived filter (Linked / Singles, the partner
-     * filters, "No single men") from [viewerUserId]'s own view of each candidate's linked partner
+     * Of [candidateIds], those that pass the partner filters and "No single men" from
+     * [viewerUserId]'s own view of each candidate's linked partner
      * (PartnerFilterSql.matchingCandidateIds), [hiddenFromViewerIds] being the people hiding from that
      * viewer. Psync calls it for both session partners and keeps the intersection. The default (test
      * fakes only) passes everyone; the Jdbc repository runs the real gate.

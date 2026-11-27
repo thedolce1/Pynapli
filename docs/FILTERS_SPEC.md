@@ -135,15 +135,14 @@ Rules:
 - `Unlinked partnered` is not offered: without a structured relationship field it can't be told
   apart from Singles.
 - These filters apply to individual users, not couple cards.
-- Psync: a Psync deck is ranked once from the initiator's view. Since G2-3 every partner-derived
-  filter (Linked, Singles, the Partner filters, "No single men") is then re-checked for **both**
-  session partners, each with their own hides, blocks and contact blocks
-  (`PartnerFilterSql.matchingCandidateIds`), and a card is dealt only when it passes for both: the
-  stricter view wins. Residual: the dealt card's partner mini is still the initiator's snapshot, and
-  each partner's read only strips minis of people hiding from them.
+- Psync residual: a Psync deck is dealt once for both partners from the initiator's view. It uses the
+  initiator's partner_visibility, hides and blocks, and no contact blocks (as for Psync candidates).
+  Each partner's read then strips minis of people hiding from them. With Linked on, a card dealt to
+  both may show one partner no mini. (The Partner filters and "No single men" are re-checked for both
+  partners since G2-3; see "Partner". Linked and Singles are not.)
 - Quick shortcuts in the Grid sheet: **Single women** / **Single men** set Singles plus that gender
   (the person's own declared gender, and no partner shown to the viewer). They add nothing on the
-  server.
+  server. A **No single men** chip sits beside them, the sheet twin of the quick-row chip.
 
 ### Partner
 
@@ -172,7 +171,9 @@ Rules:
   candidate behaves as "no visible partner" and a partner filter never matches through a hidden
   partner. Results always agree with what the tile shows. Fragment: `PartnerFilterSql`, used by
   `GridFilterSql` (nearby and Visiting soon), the Swipe deck rank (including the linked-only
-  forced-id path) and Psync (both partners' views).
+  forced-id path) and Psync: the deck is ranked from the initiator's view, then the partner filters
+  and "No single men" are re-run for both session partners, each with their own hides, blocks and
+  contact blocks (`PartnerFilterSql.matchingCandidateIds`), and only cards passing for both are dealt.
 - Partner filters imply Linked. With Singles alone they cannot match anyone, so the sheet's Partner
   section says "Partner filters need a visible partner" instead of offering chips, and the client
   drops them on apply, on save and in the request. With Linked, or no Who choice, they apply. The

@@ -77,14 +77,21 @@ class PartnerFiltersVisibilityIntegrationTest {
             dataSource.markProfileVerified(world.viewer)
             assertGridCases(world)
             assertTrue(world.vo1 in gridIds(world.viewer, GridQueryRequestDto(partnerGenders = listOf("woman"))))
+            // Partner filters imply Linked: with Singles ("no partner shown") nobody can match.
+            assertTrue(gridIds(world.viewer, GridQueryRequestDto(linkedOnly = false, partnerGenders = listOf("woman"))).isEmpty())
+            // With Linked they narrow it.
+            assertEquals(
+                gridIds(world.viewer, GridQueryRequestDto(partnerGenders = listOf("woman"))),
+                gridIds(world.viewer, GridQueryRequestDto(linkedOnly = true, partnerGenders = listOf("woman"))),
+            )
         }
 
+    // Smoke only: proves the Visiting soon query binds the partner predicates (GridFilterSql is shared,
+    // so the gate itself is the nearby one proven above). No trips are seeded, so nobody is listed.
     @Test
-    fun visitingSoonUsesTheSameGate() =
+    fun visitingSoonBindsThePartnerPredicates() =
         runBlocking {
             val world = seedWorld()
-            // Visiting soon applies every Grid filter through GridFilterSql; with no trips nobody is
-            // listed, and with a partner filter on it must still be empty (and not error).
             val visiting = gridIds(world.viewer, GridQueryRequestDto(visitingSoonOnly = true, partnerGenders = listOf("woman")))
             assertTrue(visiting.isEmpty())
         }

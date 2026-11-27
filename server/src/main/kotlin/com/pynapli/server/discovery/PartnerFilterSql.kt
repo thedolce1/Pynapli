@@ -90,10 +90,11 @@ object PartnerFilterSql {
     }
 
     /**
-     * Of [candidateIds], the ones that pass every partner-derived predicate ("Linked" / Singles, the
-     * partner filters and "No single men") from [viewerUserId]'s view, with [hiddenFromViewerIds] the
-     * people hiding from that viewer. Psync runs it for the session partner who did not rank the deck,
-     * so a card passes only when it passes for both partners (the strictest of both views).
+     * Of [candidateIds], the ones that pass the partner filters and "No single men" from
+     * [viewerUserId]'s view, with [hiddenFromViewerIds] the people hiding from that viewer. Psync runs
+     * it for both session partners, so a card passes only when it passes for both (the strictest of
+     * both views). "Linked" / Singles are deliberately not re-checked here: they relax on a thin Swipe
+     * deck when not a dealbreaker, and their Psync behaviour is G2-1's (dealt from the initiator).
      */
     fun matchingCandidateIds(
         connection: Connection,
@@ -111,13 +112,11 @@ object PartnerFilterSql {
             JOIN profiles p ON p.user_id = u.id
             JOIN discovery_settings ds ON ds.user_id = u.id
             WHERE true
-            ${LinkedPartnerFilterSql.predicate(user = "u", settings = "ds")}
             ${predicates(user = "u", profile = "p", settings = "ds")}
             """.trimIndent()
         return connection.prepareStatement(sql).use { statement ->
             var index = 1
             statement.setArray(index++, connection.createArrayOf("uuid", candidateIds.toTypedArray()))
-            index = LinkedPartnerFilterSql.bind(statement, connection, index, filters.linkedOnly, viewerUserId, hiddenFromViewerIds)
             bind(statement, connection, index, filters, viewerUserId, hiddenFromViewerIds)
             statement.executeQuery().use { rs ->
                 buildSet {
@@ -128,7 +127,7 @@ object PartnerFilterSql {
     }
 
     /** Whether [filters] carries any partner-derived predicate Psync must re-check for the partner. */
-    fun appliesTo(filters: DiscoveryFilters): Boolean = filters.linkedOnly != null || filters.hasPartnerFilters || filters.excludeSingleMen
+    fun appliesTo(filters: DiscoveryFilters): Boolean = filters.hasPartnerFilters || filters.excludeSingleMen
 
     // Against the gated partner's own profile row (`lp_profile`, LinkedPartnerFilterSql's alias).
     // Placeholders: genders twice, orientations twice, min age twice, max age twice, verified.

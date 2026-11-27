@@ -369,12 +369,20 @@ internal fun SinglesShortcutRow(
     filters: GridFilters,
     onChange: (GridFilters) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         SinglesShortcut.entries.forEach { shortcut ->
             val active = shortcut.isActive(filters)
             SheetToggleChip(label = shortcut.label, active = active) {
                 onChange(if (active) shortcut.cleared(filters) else shortcut.applied(filters))
             }
+        }
+        // The sheet twin of the quick-row chip, so everything the Filters count counts is here.
+        SheetToggleChip(label = NO_SINGLE_MEN_LABEL, active = filters.noSingleMen) {
+            onChange(filters.copy(noSingleMen = !filters.noSingleMen))
         }
     }
 }
@@ -417,8 +425,18 @@ internal fun PartnerSection(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            return@Column
+        } else {
+            PartnerChoices(filters = filters, onChange = onChange)
         }
+    }
+}
+
+@Composable
+private fun PartnerChoices(
+    filters: GridFilters,
+    onChange: (GridFilters) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = PARTNER_SECTION_HINT,
             style = MaterialTheme.typography.bodySmall,
