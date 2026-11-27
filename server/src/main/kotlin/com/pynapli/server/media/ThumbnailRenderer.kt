@@ -26,8 +26,8 @@ import kotlin.math.roundToInt
  *   the JFIF header ImageIO writes by default, so EXIF (GPS, camera, time) never survives.
  * - Uses in-memory ImageIO streams only, so no photo bytes touch a temp file.
  *
- * Throws [ThumbnailRenderException] when the input can't be made into a thumbnail (no reader for the
- * format, e.g. WebP/HEIC on a stock JDK; a CMYK JPEG; too many pixels; a corrupt file). That is
+ * Throws [ThumbnailRenderException] when the input can't be made into a thumbnail (anything but JPEG
+ * or PNG, e.g. WebP, HEIC, GIF, BMP, TIFF; a CMYK JPEG; more than 24 MP; a corrupt file). That is
  * terminal for the asset: surfaces keep using the original.
  */
 class ThumbnailRenderer(
@@ -59,8 +59,12 @@ class ThumbnailRenderer(
 
     private fun decodeSubsampled(original: ByteArray): BufferedImage {
         MemoryCacheImageInputStream(ByteArrayInputStream(original)).use { input ->
+            // JPEG and PNG only, chosen by the file's own signature and read with that format's reader:
+            // never whichever reader the bytes happen to select (GIF, BMP, TIFF, WBMP and any plugin on
+            // the classpath stay out, along with their decoders' attack surface).
+            val format = sourceFormat(original) ?: throw ThumbnailRenderException("UNSUPPORTED_FORMAT")
             val reader =
-                ImageIO.getImageReaders(input).asSequence().firstOrNull()
+                ImageIO.getImageReadersByFormatName(format).asSequence().firstOrNull()
                     ?: throw ThumbnailRenderException("UNSUPPORTED_FORMAT")
             try {
                 // ignoreMetadata = true: we read orientation ourselves; skipping metadata is faster.
@@ -110,8 +114,19 @@ class ThumbnailRenderer(
     }
 
     companion object {
-        // ~50 MP: far above any phone upload (the app sends ~1080 px), well below a bomb.
-        const val DEFAULT_MAX_SOURCE_PIXELS: Long = 50_000_000L
+        // 24 MP: above any phone upload the app sends (~1080 px) and most camera originals, and low
+        // enough that a progressive JPEG's full-size coefficient buffers (which subsampling does not
+        // shrink) stay bounded. Checked from the header before any pixel is decoded.
+        const val DEFAULT_MAX_SOURCE_PIXELS: Long = 24_000_000L
+
+        /** "jpeg" or "png" from the leading signature bytes, else null (refused). */
+        internal fun sourceFormat(bytes: ByteArray): String? {
+            fun at(index: Int): Int = if (index < bytes.size) bytes[index].toInt() and 0xFF else -1
+            if (at(0) == 0xFF && at(1) == 0xD8 && at(2) == 0xFF) return "jpeg"
+            val png = intArrayOf(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+            if (png.indices.all { at(it) == png[it] }) return "png"
+            return null
+        }
 
         /** Longest side <= [maxEdge], aspect kept, never upscaled; opaque RGB on white. */
         internal fun scaleToFit(

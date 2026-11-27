@@ -85,6 +85,84 @@ class ThumbnailRendererTest {
         assertEquals("UNSUPPORTED_FORMAT", error.reason)
     }
 
+    @Test
+    fun onlyJpegAndPngAreReadEvenWhenTheJdkHasAReaderForTheFormat() {
+        // The JDK reads all three; the renderer must not.
+        listOf("gif", "bmp", "tiff").forEach { format ->
+            val bytes = encoded(format, width = 40, height = 30)
+            assertTrue(bytes.isNotEmpty(), "test setup: the JDK can write $format")
+
+            val error = assertFailsWith<ThumbnailRenderException>(format) { renderer.render(bytes) }
+
+            assertEquals("UNSUPPORTED_FORMAT", error.reason, format)
+        }
+    }
+
+    @Test
+    fun theDefaultPixelCapIsTwentyFourMegapixels() {
+        assertEquals(24_000_000L, ThumbnailRenderer.DEFAULT_MAX_SOURCE_PIXELS)
+    }
+
+    @Test
+    fun anOversizedHeaderIsRefusedBeforeAnyPixelIsDecoded() {
+        // A PNG header claiming 6000 x 5000 (30 MP) with no pixel data at all: if the renderer tried to
+        // decode it would fail with DECODE_FAILED, so TOO_MANY_PIXELS proves the header-only check.
+        val error = assertFailsWith<ThumbnailRenderException> { renderer.render(pngHeaderOnly(width = 6_000, height = 5_000)) }
+
+        assertEquals("TOO_MANY_PIXELS", error.reason)
+    }
+
+    @Test
+    fun justUnderTheCapIsNotRefusedForSize() {
+        // 4800 x 5000 = 24 MP exactly: allowed past the size check (it then fails to decode: no pixels).
+        val error = assertFailsWith<ThumbnailRenderException> { renderer.render(pngHeaderOnly(width = 4_800, height = 5_000)) }
+
+        assertTrue(error.reason.startsWith("DECODE_FAILED"), error.reason)
+    }
+
+    private fun encoded(
+        format: String,
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+        return ByteArrayOutputStream().also { ImageIO.write(image, format, it) }.toByteArray()
+    }
+
+    /** PNG signature + IHDR (8-bit RGB) + IEND, no IDAT: a valid header and no pixels. */
+    private fun pngHeaderOnly(
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        fun chunk(
+            type: String,
+            data: ByteArray,
+        ): ByteArray {
+            val typeBytes = type.toByteArray(Charsets.US_ASCII)
+            val crc = java.util.zip.CRC32().apply { update(typeBytes + data) }.value
+            return java.nio.ByteBuffer
+                .allocate(12 + data.size)
+                .putInt(data.size)
+                .put(typeBytes)
+                .put(data)
+                .putInt(crc.toInt())
+                .array()
+        }
+        val ihdr =
+            java.nio.ByteBuffer
+                .allocate(13)
+                .putInt(width)
+                .putInt(height)
+                .put(8.toByte()) // bit depth
+                .put(2.toByte()) // colour type RGB
+                .put(0.toByte()) // compression
+                .put(0.toByte()) // filter
+                .put(0.toByte()) // interlace
+                .array()
+        val signature = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        return signature + chunk("IHDR", ihdr) + chunk("IEND", ByteArray(0))
+    }
+
     private fun jpeg(
         width: Int,
         height: Int,
