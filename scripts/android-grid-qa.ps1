@@ -208,7 +208,8 @@ $filterSheetSignature = Assert-GoldenStage "filtersSheet" $filterSheetXml $filte
 # the tonight/travel presence chips). So assert them by scrolling rather than off the initial dump —
 # otherwise every new filter silently invalidates this stage. Order matters: Trust sits above Intent
 # in the sheet, so reach it first, then continue down to the deepest Intent chip ("Together").
-$filterSheetTrustXml = Scroll-SheetToText "Trust"
+# "Partner's trust" (G2-3) also contains "Trust", so scroll to a chip only the main Trust section has.
+$filterSheetTrustXml = Scroll-SheetToText "Age verified"
 Assert-NoAppErrorText $filterSheetTrustXml "Filter sheet (trust)"
 Assert-TextPresent $filterSheetTrustXml "Trust" "Filter sheet (trust)"
 # The Trust chips moved off the filtersSheet golden with the section itself; assert them here so the
