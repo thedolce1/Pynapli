@@ -167,12 +167,10 @@ private data class ProfileTagChip(
 )
 
 /** The peek's tags as the shared in-common rule reads them. */
-internal fun PublicProfileDto.toProfileTagSet(): ProfileTagSet =
-    ProfileTagSet(lifestyleTags = lifestyleTags, experienceLevel = experienceLevel, logisticsTags = logisticsTags, intents = intents)
+internal fun PublicProfileDto.toProfileTagSet(): ProfileTagSet = ProfileTagSet(lifestyleTags = lifestyleTags, experienceLevel = experienceLevel, logisticsTags = logisticsTags, intents = intents)
 
 /** The viewer's own saved tags (the Profile Hub's loaded profile). */
-internal fun ProfileDto.toProfileTagSet(): ProfileTagSet =
-    ProfileTagSet(lifestyleTags = lifestyleTags, experienceLevel = experienceLevel, logisticsTags = logisticsTags, intents = intents)
+internal fun ProfileDto.toProfileTagSet(): ProfileTagSet = ProfileTagSet(lifestyleTags = lifestyleTags, experienceLevel = experienceLevel, logisticsTags = logisticsTags, intents = intents)
 
 /**
  * A profile tag pill. One the viewer shares draws brighter (the neutral text colour, never the

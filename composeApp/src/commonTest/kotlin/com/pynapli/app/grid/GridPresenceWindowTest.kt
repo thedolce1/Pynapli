@@ -127,18 +127,20 @@ class GridPresenceWindowTest {
     @Test
     fun itemsPastTheLockedBannerMapBackToTheirCards() =
         runTest {
-            val cards = presenceWindowCards(10) + presenceWindowLocked("locked_x") + presenceWindowLocked("locked_y")
+            // Past the 200 cap, so the window (not the whole list) decides who is watched; within the cap the
+            // watched set is the same people in any order and the flow rightly does not re-emit.
+            val cards = presenceWindowCards(250) + presenceWindowLocked("locked_x") + presenceWindowLocked("locked_y")
             val holder = GridStateHolder(PresenceWindowRepository(cards))
             holder.load()
             val emissions = mutableListOf<Set<String>>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { holder.visibleUserIds.collect { emissions += it } }
 
-            // Item 10 is the banner (before card 10); items 11 and 12 are the two locked cards.
-            holder.onGridItemsVisible(9, 12)
+            // Item 250 is the banner (before card 250); items 251 and 252 are the two locked cards.
+            holder.onGridItemsVisible(249, 252)
             advanceTimeBy(GridStateHolder.PRESENCE_WINDOW_SETTLE.inWholeMilliseconds + 1)
             runCurrent()
 
-            assertEquals("p9", emissions.last().first())
+            assertEquals("p249", emissions.last().first())
             assertTrue(emissions.last().none { it.startsWith(LOCKED_CARD_ID_PREFIX) })
         }
 }
