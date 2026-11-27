@@ -48,6 +48,12 @@ class UserSafeMessageCoverageTest {
                 "DEV_STORE_PURCHASE_UNAVAILABLE", // dev builds only
                 "INVALID_NOTIFICATION_KIND", // server-internal enqueue guard
                 "INVALID_RATE_LIMIT_ACTION", // server-internal programming error
+                // Thumbnail worker outcomes (G2-2): recorded on the media row, never sent to a client.
+                "EMPTY",
+                "INVALID_DIMENSIONS",
+                "NO_JPEG_WRITER",
+                "TOO_MANY_PIXELS",
+                "UNSUPPORTED_FORMAT",
             )
     }
 }
