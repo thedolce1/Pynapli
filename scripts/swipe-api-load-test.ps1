@@ -138,7 +138,7 @@ function Assert-Success {
 function Invoke-DockerPsql {
     param([string]$Sql)
 
-    $output = $Sql | docker exec -i pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 2>&1
+    $output = $Sql | docker exec -i pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -v ON_ERROR_STOP=1 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "psql failed: $output"
     }
