@@ -140,6 +140,10 @@ Rules:
   candidate's partner must be shown to BOTH session partners (each one's blocks, hides and the
   owner's partner_visibility) and hide from neither (the union of both partners' contact blocks).
   PSYNC_SPEC "Psync Filters" has the rule; the proof is `PsyncPartnerVisibilityIntegrationTest`.
+- Verified couples only carries the same contact-block exclusion as Linked
+  (`CoupleVerifiedFilterSql`, `cv_user.id <> ALL(?)`) on every surface: Grid nearby, Visiting soon,
+  Swipe, the linked-only Swipe path, and Psync with both partners' sets. So matching it equals the
+  badge showing even when the verified partner hides from the viewer.
 - Favorites cards strip a partner the viewer hid, as well as one hiding from the viewer, the same
   as the Grid (`FavoriteServiceIntegrationTest`).
 - Visiting soon applies Linked through the same gate
