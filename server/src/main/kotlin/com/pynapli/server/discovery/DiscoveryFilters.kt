@@ -72,8 +72,9 @@ data class DiscoveryFilters(
     val partnerMaximumAge: Int? = null,
     val partnerOrientations: Set<String> = emptySet(),
     val partnerVerifiedOnly: Boolean = false,
-    // "No single men" quick chip: drops people whose own declared gender is "man" and who have no
-    // linked partner shown to this viewer (the same gate). Men visibly linked to a partner still show.
+    // "No single men" quick chip: drops people whose own declared gender is "man" or "trans_man" (gender
+    // identity, founder decision 2026-11-27) and who have no linked partner shown to this viewer (the
+    // same gate). Men visibly linked to a partner still show; non-binary and other keys are untouched.
     val excludeSingleMen: Boolean = false,
     // "Haven't chatted" (Grid only, plan G2-4): drop people this viewer exchanged a direct message with
     // in the last 24 hours (GridFilterSql). Viewer-specific, so never served from the shared rank cache.

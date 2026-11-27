@@ -71,7 +71,10 @@ class PartnerFiltersClientTest {
         val applied = SinglesShortcut.SingleWomen.applied(partnerFilters)
         assertTrue(applied.singles)
         assertFalse(applied.linked)
-        assertEquals(setOf("woman"), applied.genders)
+        // Gender identity (founder decision 2026-11-27): Single women = woman + trans woman.
+        assertEquals(setOf("woman", "trans_woman"), applied.genders)
+        assertEquals(setOf("man", "trans_man"), SinglesShortcut.SingleMen.applied(GridFilters()).genders)
+        assertFalse("non_binary" in SinglesShortcut.SingleMen.genderKeys + SinglesShortcut.SingleWomen.genderKeys)
         assertFalse(applied.hasPartnerFilters, "Singles rules the partner filters out")
         assertTrue(SinglesShortcut.SingleWomen.isActive(applied))
         assertFalse(SinglesShortcut.SingleMen.isActive(applied))

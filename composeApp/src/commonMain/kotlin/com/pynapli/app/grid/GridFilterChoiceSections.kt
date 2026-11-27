@@ -407,19 +407,23 @@ internal fun SinglesShortcutRow(
     }
 }
 
-/** The Who shortcuts: Singles plus one declared gender key. */
+/**
+ * The Who shortcuts: Singles plus the declared gender keys of one gender identity (founder decision
+ * 2026-11-27): Single women = woman and trans woman, Single men = man and trans man. Non-binary and
+ * other identities are reachable through the Gender section, never through a shortcut.
+ */
 internal enum class SinglesShortcut(
     val label: String,
-    val genderKey: String,
+    val genderKeys: Set<String>,
 ) {
-    SingleWomen("Single women", "woman"),
-    SingleMen("Single men", "man"),
+    SingleWomen("Single women", setOf("woman", "trans_woman")),
+    SingleMen("Single men", setOf("man", "trans_man")),
     ;
 
-    fun isActive(filters: GridFilters): Boolean = filters.singles && !filters.linked && filters.genders == setOf(genderKey)
+    fun isActive(filters: GridFilters): Boolean = filters.singles && !filters.linked && filters.genders == genderKeys
 
     // Singles rules the partner filters out, so the applied state drops them (they could never match).
-    fun applied(filters: GridFilters): GridFilters = filters.copy(singles = true, linked = false, genders = setOf(genderKey)).withPartnerFiltersReconciled()
+    fun applied(filters: GridFilters): GridFilters = filters.copy(singles = true, linked = false, genders = genderKeys).withPartnerFiltersReconciled()
 
     fun cleared(filters: GridFilters): GridFilters = filters.copy(singles = false, genders = emptySet())
 }

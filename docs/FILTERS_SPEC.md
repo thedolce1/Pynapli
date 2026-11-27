@@ -209,11 +209,16 @@ Rules:
   server does not reject Singles plus a partner filter; that just matches nobody.
 - "Partner photo verified" needs only the partner verified. "Verified couples only" (Trust) needs
   both partners verified; the sheet says so under the chip.
-- "No single men" drops people whose **own** declared gender is `man` and who have no linked partner
-  shown to this viewer (same gate). Men visibly linked to a partner still show; people with no
-  declared gender, and every other gender key, are kept. A man whose partner is hidden from the
-  viewer reads as single on his tile, and is treated as single. Only the `man` key counts: `trans_man`
-  is not included (founder may revisit; the app only uses what members declare). Quick row placement:
+- "No single men" drops people whose **own** declared gender is `man` or `trans_man` and who have no
+  linked partner shown to this viewer (same gate). The shortcuts follow gender identity (founder
+  decision 2026-11-27): "Single men" selects `man` + `trans_man`, "Single women" selects `woman` +
+  `trans_woman`, on Grid, Swipe and Psync. Non-binary and every other gender key, and no declared
+  gender, are untouched by the shortcuts (reachable through the Gender section). Men visibly linked
+  to a partner still show. A man whose partner is hidden from the viewer reads as single on his tile,
+  and is treated as single. The partner mini's letter marks are unchanged. SQL: `gender IS NULL OR
+  gender NOT IN ('man', 'trans_man') OR` a visible partner (`PartnerFilterSql`); proof:
+  `PartnerFiltersVisibilityIntegrationTest` (single trans man out, single trans woman and
+  non-binary in), `PartnerFiltersClientTest`. Quick row placement:
   last, after Verified (Filters · Online · Favorites · Fresh · Tonight · Verified · No single men),
   scrolling sideways.
 - Per viewer: never served from the shared rank cache (like Linked); in both rank-cache keys, the

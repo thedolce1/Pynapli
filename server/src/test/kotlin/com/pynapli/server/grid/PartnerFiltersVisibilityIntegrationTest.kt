@@ -109,16 +109,24 @@ class PartnerFiltersVisibilityIntegrationTest {
     fun noSingleMenDropsMenWithNoPartnerShownAndKeepsLinkedMen() =
         runBlocking {
             val world = seedWorld()
+            // Founder decision 2026-11-27: "No single men" follows gender identity. A single trans man is
+            // left out; a single trans woman and a single non-binary person stay.
+            val singleTransMan = person("STM", gender = "trans_man", orientation = "straight", age = 33)
+            val singleTransWoman = person("STW", gender = "trans_woman", orientation = "straight", age = 34)
+            val singleNonBinary = person("SNB", gender = "non_binary", orientation = "queer", age = 35)
             val all = allGridCards(world.viewer)
             val expected =
                 all
-                    .filterNot { card -> attributes.getValue(card.id()).gender == "man" && card.linkedPartner == null }
+                    .filterNot { card -> attributes.getValue(card.id()).gender in MEN_KEYS && card.linkedPartner == null }
                     .map { it.id() }
                     .toSet()
             val actual = gridIds(world.viewer, GridQueryRequestDto(excludeSingleMen = true))
             assertEquals(expected, actual)
             assertFalse(world.singleMan in actual, "a single man")
             assertTrue(world.singleWoman in actual, "a single woman stays")
+            assertFalse(singleTransMan in actual, "a single trans man")
+            assertTrue(singleTransWoman in actual, "a single trans woman stays")
+            assertTrue(singleNonBinary in actual, "a single non-binary person stays")
             assertTrue(world.a1 in actual, "a man with a visible partner stays")
             // A man whose partner is hidden from the viewer looks single on his tile, and is treated so.
             world.hiddenPartnerOwners.forEach { owner -> assertFalse(owner in actual, "$owner shows no partner") }
@@ -127,7 +135,7 @@ class PartnerFiltersVisibilityIntegrationTest {
             val swipeAll = swipeCards(world.viewer, SwipeDeckRequestDto())
             val swipeExpected =
                 swipeAll
-                    .filterNot { attributes.getValue(UUID.fromString(it.userId)).gender == "man" && it.linkedPartner == null }
+                    .filterNot { attributes.getValue(UUID.fromString(it.userId)).gender in MEN_KEYS && it.linkedPartner == null }
                     .map { UUID.fromString(it.userId) }
                     .toSet()
             assertEquals(swipeExpected, swipe)
@@ -383,3 +391,6 @@ class PartnerFiltersVisibilityIntegrationTest {
         request: SwipeDeckRequestDto,
     ): Set<UUID> = swipeCards(viewer, request).map { UUID.fromString(it.userId) }.toSet()
 }
+
+// "No single men" follows gender identity (founder decision 2026-11-27).
+private val MEN_KEYS = setOf("man", "trans_man")

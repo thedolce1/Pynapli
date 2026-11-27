@@ -48,7 +48,8 @@ data class GridQueryRequestDto(
     val partnerMaximumAge: Int? = null,
     val partnerOrientations: List<String> = emptyList(),
     val partnerVerifiedOnly: Boolean = false,
-    // "No single men": drop people whose own gender is "man" with no linked partner shown to this viewer.
+    // "No single men": drop people whose own gender is "man" or "trans_man" with no linked partner shown
+    // to this viewer (gender identity, founder decision 2026-11-27).
     val excludeSingleMen: Boolean = false,
     // "Haven't chatted" (Grindr's "Haven't chatted today"): drop people the viewer exchanged a direct
     // message with in the last 24 hours (either direction; an inbound message counts only once it is
