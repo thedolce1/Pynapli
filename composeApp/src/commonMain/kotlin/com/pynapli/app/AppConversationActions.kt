@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import com.pynapli.app.conversation.ConversationStateHolder
+import com.pynapli.app.conversation.MetInPersonCallbacks
 import com.pynapli.app.messages.MessagesStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -29,6 +30,7 @@ internal data class ConversationActions(
     val onRevealMedia: (String) -> Unit,
     val onReportMessage: (messageId: String, category: String) -> Unit = { _, _ -> },
     val onOpenStore: () -> Unit = {},
+    val metInPerson: MetInPersonCallbacks = MetInPersonCallbacks(),
 )
 
 @Composable
@@ -100,5 +102,14 @@ internal fun rememberConversationActions(
             onRevealMedia = { messageId ->
                 scope.launch { conversationStateHolder.revealMedia(messageId) }
             },
+            metInPerson =
+                MetInPersonCallbacks(
+                    onMenuOpened = { scope.launch { conversationStateHolder.loadMetInPersonOffers() } },
+                    onOpen = conversationStateHolder::openMetInPerson,
+                    onIncludePartnerChange = conversationStateHolder::setMetInPersonIncludePartner,
+                    onConfirm = { scope.launch { conversationStateHolder.confirmMetInPerson() } },
+                    onTakeBack = { scope.launch { conversationStateHolder.takeBackMetInPerson() } },
+                    onDismiss = conversationStateHolder::dismissMetInPerson,
+                ),
         )
     }

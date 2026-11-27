@@ -22,6 +22,8 @@ class MediaServiceMessageMediaGateway(
     private val mediaAssetUrlResolver: MediaAssetUrlResolver?,
     private val moderationScanner: MediaModerationScanner = ManualReviewMediaModerationScanner(),
     private val rateLimitService: RateLimitService? = null,
+    // Chat photos reach the scanner only when private-media scanning is enabled.
+    private val scanScope: MediaScanScope = MediaScanScope(),
 ) : MessageMediaGateway {
     override suspend fun createUploadSlot(
         ownerUserId: UUID,
@@ -83,8 +85,10 @@ class MediaServiceMessageMediaGateway(
         }
 
         repository.markAssetUploaded(senderUserId, mediaAssetId)
-        // Chat photos are private 1:1 content; only a SEVERE (safety/legal) hit refuses the send.
-        val decision = moderationScanner.scan(asset)
+        // Chat photos are private 1:1 content; only a SEVERE (safety/legal) hit refuses the send. By
+        // default they are not scanned at all (no third-party scanner sees them) and send as before.
+        val decision =
+            if (scanScope.scans(MediaModerationTarget.CHAT_MEDIA)) moderationScanner.scan(asset) else MediaModerationDecision.Approved
         if (decision is MediaModerationDecision.Rejected && decision.severity == MediaModerationSeverity.SEVERE) {
             repository.markAssetModerationRejected(senderUserId, mediaAssetId)
             logger.info("Refused chat media {} for severe moderation decision", mediaAssetId)

@@ -22,6 +22,7 @@
     [string]$SwipeDeckTokenSecretName = "",
     [string]$ContactBlockEmailKeySecretName = "",
     [string]$ContactBlockTargetKeySecretName = "",
+    [string]$MetInPersonTokenSecretName = "",
     [string]$RedisUrl = "",
     [string]$VpcConnector = "",
     [string]$ServiceAccount = "",
@@ -58,6 +59,7 @@ if ($productionLike) {
         SwipeDeckTokenSecretName = $SwipeDeckTokenSecretName
         ContactBlockEmailKeySecretName = $ContactBlockEmailKeySecretName
         ContactBlockTargetKeySecretName = $ContactBlockTargetKeySecretName
+        MetInPersonTokenSecretName = $MetInPersonTokenSecretName
         RedisUrl = $RedisUrl
     }
     $missing = @($requiredValues.GetEnumerator() | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.Value) } | ForEach-Object { $_.Key })
@@ -125,6 +127,9 @@ if (-not [string]::IsNullOrWhiteSpace($ContactBlockEmailKeySecretName)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($ContactBlockTargetKeySecretName)) {
     $secretVars += "PYNAPLI_CONTACT_BLOCK_TARGET_KEY=${ContactBlockTargetKeySecretName}:latest"
+}
+if (-not [string]::IsNullOrWhiteSpace($MetInPersonTokenSecretName)) {
+    $secretVars += "PYNAPLI_MET_IN_PERSON_TOKEN_SECRET=${MetInPersonTokenSecretName}:latest"
 }
 
 $deployArgs = @(

@@ -133,7 +133,14 @@ class ContactBlockPsyncIntegrationTest :
                 )
                 assertTrue(graph.messageDeltas.none { it.recipientUserId == X && it.conversationId in conversationsWith(graph, A, X) }, "no hint about the A-X conversation")
                 assertEquals(0, graph.outboxCount(recipient = X, actor = A))
-                val export = JdbcAccountDataExportArchiver(dataSource, contactBlockTokens = graph.tokens).buildArchive(X)
+                val export =
+                    JdbcAccountDataExportArchiver(
+                        dataSource,
+                        contactBlockTokens = graph.tokens,
+                        metInPersonAccountData =
+                            com.pynapli.server.metinperson.MetInPersonAccountData
+                                .localDevelopment(),
+                    ).buildArchive(X)
                 val matches = Json.parseToJsonElement(export.bytes.decodeToString()).jsonObject["matches"] as JsonArray
                 assertTrue(matches.none { it.jsonObject["other_user_id"]?.jsonPrimitive?.content == A.toString() }, "X's export shows no match with A")
                 recorders.forEach { it.cancel() }

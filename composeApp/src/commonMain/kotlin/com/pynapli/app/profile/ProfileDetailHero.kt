@@ -58,6 +58,8 @@ import com.pynapli.app.design.icons.filled.PersonAdd
 import com.pynapli.app.design.icons.filled.Star
 import com.pynapli.app.design.icons.filled.StarBorder
 import com.pynapli.app.design.icons.filled.VisibilityOff
+import com.pynapli.app.media.BEING_REVIEWED_LABEL
+import com.pynapli.app.media.rememberCachedImageModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -85,11 +87,28 @@ internal fun ProfileHero(
     // Photos change by tapping the left or right half instead of swiping, so a horizontal swipe is
     // free for the Grid's profile pager (GRID_IMPLEMENTATION_SPEC "Profile open").
     photosByTap: Boolean = false,
+    // Own preview only: photos the owner can see that others can't yet (moderation pending).
+    beingReviewedPhotoUrls: Set<String> = emptySet(),
+    // G2-2: the server's stable cache keys for [photoUrls] (index for index) and [profilePhotoUrl];
+    // keys only name bytes, the URLs still guard access. Empty/null = cache by URL as before.
+    photoCacheKeys: List<String> = emptyList(),
+    profilePhotoCacheKey: String? = null,
+    // The key the first photo's small Grid version may already be cached under: painted while the
+    // original loads, so opening a profile from the Grid shows the face at once.
+    firstPhotoPlaceholderCacheKey: String? = null,
 ) {
     val lastSeen = lastActiveLabel?.takeUnless { online }
     val photos =
         remember(photoUrls, profilePhotoUrl) {
             photoUrls.ifEmpty { listOfNotNull(profilePhotoUrl) }
+        }
+    val photoKeys =
+        remember(photoUrls, photoCacheKeys, profilePhotoCacheKey) {
+            when {
+                photoUrls.isEmpty() -> listOf(profilePhotoCacheKey)
+                photoCacheKeys.size == photoUrls.size -> photoCacheKeys
+                else -> photoUrls.map { null }
+            }
         }
     val pagerState = rememberPagerState(pageCount = { photos.size.coerceAtLeast(1) })
     val photoScope = rememberCoroutineScope()
@@ -109,7 +128,12 @@ internal fun ProfileHero(
                 userScrollEnabled = !photosByTap,
             ) { page ->
                 AsyncImage(
-                    model = photos[page],
+                    model =
+                        rememberCachedImageModel(
+                            url = photos[page],
+                            cacheKey = photoKeys.getOrNull(page),
+                            placeholderCacheKey = firstPhotoPlaceholderCacheKey?.takeIf { page == 0 && it != photoKeys.getOrNull(0) },
+                        ),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -168,6 +192,22 @@ internal fun ProfileHero(
                     )
                 }
             }
+        }
+
+        if (photos.getOrNull(pagerState.currentPage)?.let { it in beingReviewedPhotoUrls } == true) {
+            Text(
+                text = BEING_REVIEWED_LABEL,
+                color = PynapliColors.OnPhotoPrimary,
+                style = MaterialTheme.typography.labelMedium,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 12.dp, top = 22.dp)
+                        .clip(PynapliShape.PillShape)
+                        .background(PynapliColors.OnPhotoBadgeFill)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .testTag(ProfileDetailTags.BEING_REVIEWED_BADGE),
+            )
         }
 
         Row(
@@ -351,6 +391,7 @@ internal object ProfileDetailTags {
     const val LIKE_BACK = "profile-detail-like-back"
     const val LIFESTYLE = "profile-detail-lifestyle"
     const val PARTNER_SUMMARY = "profile-detail-partner-summary"
+    const val BEING_REVIEWED_BADGE = "profile-detail-being-reviewed"
 }
 
 /** Private Favorites star (GRID_IMPLEMENTATION_SPEC "Favorites"): the other person is never told. */

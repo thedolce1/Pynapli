@@ -22,7 +22,6 @@ class GridCardTonightIndicatorTest {
                     displayName = "Maya",
                     online = true,
                     distanceLabel = "800 m",
-                    tone = GridCardTone.Warm,
                     tonightActive = true,
                 )
             val quiet =
@@ -31,7 +30,6 @@ class GridCardTonightIndicatorTest {
                     displayName = "Alex",
                     online = false,
                     distanceLabel = "1.2 km",
-                    tone = GridCardTone.Slate,
                     tonightActive = false,
                 )
 

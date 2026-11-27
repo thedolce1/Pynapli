@@ -138,6 +138,341 @@ only" filters mean. Server-owned end to end (erification/PhotoVerificationServi
   Because replacing photos keeps verification here, Pynapli has no equivalent of Tinder's ongoing
   photo matching.
 
+## Photo pre-screening
+
+New members' profile photos are screened automatically on upload so clean ones go live within
+seconds instead of waiting for a person. Server-owned (`media/CloudVisionMediaModerationScanner.kt`,
+`media/MediaUploadActions.kt`).
+
+- **Rule it serves:** public photos (Grid, Swipe, profile) may be suggestive but not explicit
+  (COMMUNITY_GUIDELINES, MODERATION_AND_AGE_VERIFICATION_SPEC "Public zone"). Private albums and chat
+  media are consent-gated and may be explicit.
+- **Flow:** upload-complete calls Google Cloud Vision SafeSearch on the photo's `gs://` object inside
+  the request (8-second budget). The result decides the photo's state at once:
+  - **Approved** (ready/approved, public immediately) only when adult ≤ `UNLIKELY`, violence ≤
+    `POSSIBLE` and racy ≤ `LIKELY`, and all three are rated.
+  - **Held for a person** (uploaded/pending, in `GET /v1/admin/media/pending`) for anything above a
+    ceiling, an `UNKNOWN` or missing rating, any scanner error, a per-image error, a non-image, or a
+    timeout. **Fail closed:** a scan we can't trust never approves.
+  - **Never auto-rejected.** No SafeSearch result removes a profile photo or files a report or risk
+    points against its owner; a moderator approves or rejects it.
+- **Grid thumbnails only from approved photos (G2-2, 2026-11-26):** the server makes a 480 px
+  thumbnail (GRID_IMPLEMENTATION_SPEC "Server-made thumbnails") only from the stored, screened
+  original of an approved, live public profile photo in a visible profile album. Held, pending,
+  rejected, removed, deleted, hidden-album or
+  out-of-album photos, private-album, chat and verification media never get one: eligibility is
+  re-checked when the job claims the photo and again, in the same statement, when it marks the
+  thumbnail ready; if the photo stopped being eligible meanwhile the written object is deleted. A
+  reconciler deletes the thumbnail object of any row that is no longer eligible (every removal path,
+  without hooking each), and the media purge keeps a row until its thumbnail is gone. Read paths serve
+  a thumbnail URL only while the photo is approved and live, from the first moment a removal lands.
+  The thumbnail is EXIF-stripped. A Cloud CDN edge copy can outlive a deletion only for holders of a
+  still-valid signed URL (15 minutes), exactly as for originals.
+- **What Vision sees (founder/legal decision, 2026-11-25):** only **public profile photos** (this
+  scanner) and **verification selfies** (the separate face-count check above). Private-album and
+  chat photos are intimate, consent-gated content and are **not** sent to Vision by default. The
+  upload path names the target (`MediaModerationTarget`: profile photo, private album, chat media)
+  and `MediaScanScope` decides; nothing is inferred from the asset.
+  - Unscanned (default), a private-album photo is approved on upload and a chat photo sends, exactly
+    what the manual and dev scanners always did for them: before this change, production ran
+    `manual`, which held only profile photos and approved private-album and chat photos on upload
+    with no scan.
+  - `PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA=true` (default `false`) sends private-album and chat
+    photos to Vision too, for the severe signal only: violence ≥ `LIKELY` removes a private-album
+    photo and files a system safety report plus risk event, and refuses a chat send (no report).
+    Adult and racy results never change private or chat media. A scanned chat send waits on the scan
+    (up to 8 s). Turning it on is a founder/legal call and needs the privacy policy updated first.
+  - The privacy policy must name Google Cloud Vision as a processor of profile photos and
+    verification selfies (PATH_TO_TESTERS A9).
+- **Decided defaults (founder deferred; the spec was silent on numbers):** the ceilings above. A
+  lifestyle app's public photos are often racy, so racy is allowed up to `LIKELY`; adult content is
+  held from `POSSIBLE`. They are config, validated at startup (a typo or `VERY_LIKELY` refuses to
+  start): `PYNAPLI_MEDIA_MODERATION_MAX_ADULT` (default `UNLIKELY`), `_MAX_VIOLENCE` (`POSSIBLE`, and
+  at most `POSSIBLE`, since `LIKELY` is the severe signal), `_MAX_RACY` (`LIKELY`). Tune only after the founder's live run on real images (PATH_TO_TESTERS A9).
+- **Environments:** staging and production default to `cloud_vision`; local/test default to `manual`
+  (and local auto-approves uploads). Production refuses `manual` at startup
+  (`MEDIA_MODERATION_MANUAL_FORBIDDEN`) unless `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION=true`
+  is set on purpose (for example during a Vision outage, accepting that every new photo waits for a
+  person). Cloud Vision without the media service account fails startup
+  (`MEDIA_SIGNING_CREDENTIALS_REQUIRED`) rather than degrading to manual: ops should notice, and a
+  silent fallback would leave new members photo-less with no alarm.
+- **Environment names are checked:** `PYNAPLI_ENV` must be `local`, `test`, `staging`, `prod` or
+  `production` (`UNKNOWN_ENVIRONMENT`), so a typo can't run production without its guards.
+- **Placeholder name:** a profile without a name reads "New member". Members can't choose it,
+  "Pynapli"/"Pynapli User", any name containing "pynapli" plus a staff word (support, team, admin,
+  moderator, staff, official), or a bare staff word: `DISPLAY_NAME_RESERVED`
+  (`profile/ReservedDisplayNames.kt`). Matching is on a letters-only skeleton: NFKC, format and
+  zero-width characters dropped, any Unicode whitespace as a space, `Locale.ROOT` lowercase,
+  diacritics stripped, common Cyrillic/Greek/Latin confusables folded to Latin. So no-break
+  spaces, zero-width characters, a Cyrillic "е", punctuation and suffixes ("New member 2") don't get
+  round it. Digit look-alikes ("Adm1n") are not folded. Members who already carry such a name are
+  not renamed; the check runs when a name is set.
+- **What the member sees:** their own pending photo, labelled "Being reviewed · only you can see it",
+  in the album manager, Edit profile, the onboarding photo step and their own profile preview. The
+  server returns a pending photo only to its owner (owner album listing); every other viewer's query
+  filters to ready+approved.
+- **Completion is once per asset** (review finding, 2026-11-25). An upload slot records the album
+  kind it was opened for (`intended_album_kind`). Upload-complete (`completeMediaAlbumUpload`, one
+  transaction with the asset row locked) refuses an album of another kind
+  (`MEDIA_UPLOAD_ALBUM_MISMATCH`), refuses an asset already in another album or already completed
+  (`MEDIA_UPLOAD_ALREADY_COMPLETED`, 409), returns the existing item and state for a retry into the
+  same album without calling Vision again (only an asset with no recorded decision,
+  `moderation_scanned_at IS NULL`, is moderated on a retry), and inserts the item and
+  moves the asset pending_upload → uploaded together. Without this, a held profile photo could be
+  completed again into the unscanned private album, turn approved, and go public through its
+  profile-album item. Defence in depth: every public photo query (Grid, Swipe, profile, peek,
+  Activity, Messages, Playing Tonight incl. the session photo, match moment, partner link) also
+  requires `intended_album_kind = 'profile'`, a Playing Tonight session photo must be a profile
+  photo, and V128 makes the database hold one live album placement per asset (partial unique
+  index on non-removed items). V128 never hard-deletes: a surplus placement is soft-removed
+  (`removed_at`, restorable by ops) and each step logs its row count. An asset in both a profile and
+  a private album keeps the album of its kind; a pre-V72 asset with no kind keeps the **profile**
+  placement (a member must not silently lose a profile photo) and, like any approved profile asset
+  that also sat in a private album, goes back to the human queue, so nothing from a private album
+  becomes public without a moderator. A single placement in the other kind's album takes that
+  album's kind; a duplicate across a deleted and a live album keeps the live one. Residual: if a
+  moderator rejects such a requeued photo it is gone from the private album too (its soft-removed
+  private placement can be restored by ops).
+- **Screened bytes can't be swapped** (review finding, 2026-11-25). The GCS upload URL lives 15
+  minutes, so it is signed create-only: `x-goog-if-generation-match: 0` is a signed header (GCS
+  requires every `x-goog-*` header a signed request uses to be in the canonical headers) and is in
+  the slot's `uploadHeaders`, which every client sends verbatim. A second PUT to the same URL gets
+  412, so the bytes Vision approved are the bytes served (GCS signed GETs and the CDN both read
+  `media/{assetId}`). The client treats a 412 on a create-only upload as "an earlier attempt already
+  stored it". Not done, by choice: pinning the object generation at complete time (an extra GCS
+  metadata call per upload) — overwriting now needs the service account itself. Local dev storage
+  still allows overwrite (local only). Web uploads need the bucket's CORS `responseHeader` list to
+  include `Content-Type` and `x-goog-if-generation-match` (PATH_TO_TESTERS A9).
+- **Object key:** Vision is given `gs://{bucket}/media/{assetId}`. Production keys carry no owner id
+  (`mediaObjectKey`); only the local/static dev signers use `users/{ownerId}/...`.
+- **Logging:** asset id and error type only; never the object path, a signed URL or the response
+  body.
+- **Not covered:** SafeSearch is not a CSAM detector (hash matching is a separate provider, still
+  open) and does not read text in images.
+## Met in person
+
+A member who has met someone in real life privately confirms it from their conversation; once enough
+independent confirmations exist, the weekly batch gives a badge the person can choose to show. Founder
+decisions: threshold 3, a couple badge in v1, opt-in display (off by default). Selfie verification says a
+person is real; "Met in person" says several members met them. Neither says what anyone did, and the badge
+is not checked by Pynapli. Code: `server/.../metinperson/`, migration V122.
+
+The promise this design keeps: nobody learns who met whom. Not the subject (whatever they do), not a
+voucher (whatever they toggle), not someone holding a copy of the database without the key K3.
+
+### Who can confirm whom (write time, `MetInPersonRules`)
+
+- Voucher and subject are both photo-verified (`profiles.verified_at`, the verified badge condition).
+- The voucher's account is active and at least 30 days old. The voucher's risk tier is NOT checked here
+  (the menu would reveal the tier to its owner); it is applied at the batch.
+- Messages between the two of them only: each sent at least one visible message (`message_type =
+  'user'`, `moderation_status = 'visible'`; held and removed do not count, a message the sender later
+  deleted does) at or after the moment both were in the conversation (the later of their
+  `COALESCE(invitation_responded_at, joined_at)`); the earliest such message is at least 24 hours old and
+  the latest at most 90 days old. In a group, other people's messages never count. Messages are checked
+  only when confirming, never at the batch.
+- Never (at write time, facts the voucher knows): any `user_profile_links` row between the two, any
+  status; a block by the voucher. A link invite the subject sends therefore stops future offers from that
+  person too. That is not an oracle: the menu shows the voucher nothing about the subject's other
+  confirmations, and the subject learns nothing from whether a given person can still confirm them.
+- Once per directed pair, ever: A confirming B and B confirming A are separate rows. A repeat of a
+  standing confirmation changes nothing, not even its date.
+- At most 10 given per voucher per rolling 30 days, counting withdrawn and voided ones: taking one back
+  never refunds its slot. A couple confirmation uses two. One voucher's writes are serialised by an
+  advisory lock (keyed by a token), so concurrent confirms cannot pass the cap.
+- Taking back: silent, within 30 days of giving, also after leaving the conversation, and also when the
+  person now hides from the voucher ("Hide from people you know"): it works by pair token, without that
+  filter, and its answer never carries a name. Only the voucher must have been in the conversation named;
+  whether the person is in it never changes the answer, so naming different groups cannot locate someone
+  hidden. A retry the same day answers the same (the voucher's own state). Nothing to take back is the
+  uniform refusal. After taking it
+  back, the same pair cannot give it again for 180 days (the same uniform refusal); after that, or after
+  the 24-month expiry, it is the same row restored with a new date (the first-given day never moves).
+- Only from the conversation overflow menu, at the voucher's initiative; the menu asks the server for
+  the viewer's own options when it opens (`POST /v1/met-in-person/offers`, the conversation in the body:
+  no id is ever in a Met in person path, since request logs record paths), never on open or refresh. The subject
+  cannot request one and is never told, in any channel. Every refusal is `MET_IN_PERSON_NOT_AVAILABLE`.
+
+### Couples
+
+The voucher may tick "and [partner]" only when the subject's active linked partner is also an active
+participant of the same conversation (a group chat, which only forms through a partner invite), the
+profile's own linked-partner rule shows that partner to the voucher in both directions
+(`CoupleVerifiedFilterSql.partnerShownToViewer`, shared with the couples filter: partner active, visible,
+not incognito, not quarantined or terminated, not blocked either way with the viewer, not hidden by the
+viewer, and each owner's partner visibility lets the viewer see the other), and the partner independently
+passes every rule above with the voucher in that conversation (their own messages between the two of
+them). Confirming each partner from separate direct chats gives two personal credits, not a couple credit.
+A couple badge needs 3 independent vouchers who each confirmed both partners together under the couple's
+current link. Unlinking records the end (`vouch_link_ends`) and turns the couple badge off at once; couple
+confirmations dated before the latest end never count again, and a couple badge published before the
+link's latest change never shows (link rows are reused on relink). Personal badges stay.
+
+### What counts at the batch, and whose act each exclusion is
+
+The rule: nothing the subject does may change which confirmations count. Every exclusion is classified:
+
+| Exclusion | Whose act |
+| --- | --- |
+| Withdrawn | the voucher |
+| The voucher blocked the subject | the voucher (a block by the subject is ignored entirely) |
+| The voucher's account inactive, deleted, or not photo-verified | the voucher, or the service (ban, verification revoked) |
+| The voucher quarantined or terminated | the service. A single person's reports are capped below quarantine (`ReportScoringPolicy`), so the subject alone cannot cause it; `friction`, which one report can reach, is deliberately not excluded |
+| A partner link between the two ever accepted, or a link invite the voucher ever sent the subject (before or after the confirmation) | the voucher: an acceptance needs the voucher to have sent or accepted the invite (founder decision 2026-11-24). An invite the subject alone sent and the voucher never accepted never counts, so the subject cannot exclude anyone. Read from `profile_link_history` (V124, trigger-kept, never edited, removed only with an account: first invite per direction, first acceptance), so a re-invite that resets `accepted_at`, or a decline, cannot erase it |
+| A device both used on or before the day given | fixed at that day (device rows created later are ignored) |
+| Voided by an admin | the service |
+| Older than 24 months | time |
+| The voucher's token matches none of the subject's conversation partners | never happens in practice: participant rows are never deleted |
+
+The subject's own state (active, photo-verified, not quarantined or terminated, read from the stored tier;
+lazy decay is not applied in the batch, so a tier can be stale until the account's next risk read) turns
+the whole badge off, never a single voucher; the profile also hides the badge at once for a quarantined or
+terminated subject.
+
+Independence (fakery):
+
+- Vouchers ever linked to each other (any acceptance on record in `profile_link_history`) or that ever shared a device count as
+  one voucher. A voucher who shared a device with the subject before confirming does not count.
+- At least one counted voucher must be "clean": not confirmed by the subject first or on the same day
+  (first-given days never move, so the subject confirming someone later cannot change it). A same-day
+  clique of four mutual confirmers cannot badge itself.
+- The couple badge needs three independent vouchers by the same rules, at least one clean for both
+  partners.
+
+### Counting, delay and display
+
+- Only `MetInPersonBadgeBatch` writes earned badges. It runs weekly at a random moment inside each UTC
+  Monday-to-Monday week (`SecureRandom`): claimed in its own transaction holding the
+  `vouch_batch_schedule` row lock (due check and move to next week's random time together, so it runs
+  once across replicas and deploys), then members in chunks of 500, each its own short transaction; it
+  never loads every confirmation. It refuses to run when the key check fails. The pass in progress, its
+  evaluation time and a cursor live on the schedule row (V125): each chunk is chosen, stepped and the
+  cursor moved in one transaction under the row lock, so a crash or deploy mid-pass resumes the same
+  pass at the next tick instead of skipping a week, and nobody is stepped twice in a pass. A chunk that
+  fails 3 times at the same cursor (V126 `pass_failures`) is then taken member by member, each in a
+  savepoint; members that fail are skipped for that week and logged at error by count only (no user id),
+  so one bad member cannot stall every future pass.
+  `recomputeNow` (an operator's look) writes nothing and never steps the hysteresis; only the weekly pass
+  advances the delay.
+- Hysteresis (`MetInPersonHysteresis`): each crossing, on or off, takes effect only after a random 1 to 4
+  further batches, chosen per subject per crossing and stored (`vouch_badge_states`, keyed by the subject
+  token); turning off also needs the count to stay below the threshold for 2 consecutive batches first; a
+  crossing that reverses before it lands is cancelled. Resulting window: from the confirmation that
+  completes a threshold to the badge appearing is the wait for the next weekly run (0 to 7 days) plus 1
+  to 4 more weekly runs, so roughly 1 to 5 weeks, never at the batch that first sees it. From the
+  confirmation (or withdrawal, void, block) that ends it to the badge going off is the wait plus 2 runs
+  plus 1 to 4, roughly 3 to 7 weeks. A voucher toggling cannot make the badge follow them: taking back
+  costs a slot and blocks giving again for 180 days, and the off delay outlasts any weekly toggle.
+- The badge is two booleans on the profile sheet (`PublicProfileDto.metInPerson`, `metInPersonAsCouple`),
+  shown only when the person turned on "Show my Met in person badge"
+  (`discovery_settings.show_met_in_person_badge`, off by default); the couple badge needs both partners'
+  opt-ins and the partner mini visible to this viewer. Never a count, not a filter, not on Grid or Swipe.
+  An admin freeze hides both at once and the batch keeps them off. The subject sees their own badge state
+  (profile preview, export) exactly when everyone else would, never earlier: only published state is ever
+  read.
+- The voucher learns nothing at once: confirm and withdraw answer with the voucher's own state only.
+- Nothing is notified: no notifier, Activity, broadcaster or outbox dependency; tests assert no
+  `notification_outbox`, `activity_events` or `match_side_effect_outbox` row appears.
+
+### Storage, the key, and what a copy of the database shows
+
+`vouches(id, pair_token UNIQUE, subject_token, partner_token, link_token, first_given_at, created_at,
+withdrawn_at, voided_at, key_version)`: no user, conversation or link id. Tokens are HMAC-SHA256 under K3
+(`PYNAPLI_MET_IN_PERSON_TOKEN_SECRET`; fixed local default; staging and production refuse to start
+without a strong value distinct from every other server secret, the contact block K1/K2 included) with
+one domain prefix per kind: pair (ordered voucher > subject),
+subject, partner, link, audit-voucher, key check. Dates are whole UTC days. `vouch_badges` is keyed by user
+id because the profile reads it, but holds only the published booleans (plus a freeze); its row is deleted
+when both are off and the member is not frozen. `vouch_badge_states` (pending crossings) is keyed by the
+subject token. `vouch_link_ends` records when a link row last ended. `met_in_person_key` holds a check
+value (an HMAC of a constant): writes, the menu, the admin view and the batch refuse to run when the
+configured key does not reproduce it, so a lost or rotated key cannot silently reset caps or turn badges
+off; account deletion and data export refuse loudly too (error log, exception, the deletion rolls back),
+rather than silently leaving or omitting the person's rows; and staging and production refuse to start
+when a stored check value does not match the configured key (`verifyMetInPersonKeyAtStartup`, read only,
+after migrations). `key_version` marks rows for a future re-tokenising rotation (not built).
+`vouches.voided_with_voucher` (V123) records that a voucher-level void voided the row, so undoing it
+restores only those rows; `voided_at` is a whole UTC day like every other date. `profile_link_history`
+(V124, not a Met in person table: user ids, kept by a trigger, removed with the account on deletion and
+exported as `partnerLinkHistory`) is the durable partner-link record the
+evaluator reads.
+
+Migration numbering: this feature's tables are V122 (V123 to V125 follow it). An earlier branch build
+shipped them as V120, which main later used for contact blocks: any database that ran the old V120 must
+be reset (Flyway cannot reconcile the two V120s), which only affects local and branch-test databases.
+
+The voucher's own rows (cap, withdraw, void-all, deletion, export) are found by recomputing their pair
+tokens over everyone they ever shared a conversation with; participant rows are never hard-deleted (no
+code deletes `conversation_participants` or `conversations`), so no extra record was needed. The batch
+and admin view recompute each member's subject token and the pair tokens over that member's partners.
+
+Someone with SQL-level access to the live database (not just a copy) sees more than a copy shows: row
+system columns (`xmin`, the writing transaction id) and the order and adjacency of writes can tie a
+`vouches` insert to other writes in the same or a neighbouring transaction (for example the voucher's own
+request touching other tables), and query logs or `pg_stat_statements` can carry bound values. Tokens
+keep the row itself anonymous; transaction-level correlation is out of scope and needs database access
+control, not this design.
+
+A copy of the database without K3 shows: the number of rows, their days (given, first given, withdrawn,
+voided), and which rows concern the same (unknown) subject, since a subject's token is stable. It shows
+who has a published badge (`vouch_badges` by user id, which is public anyway when shown). It does not show
+who any row is about, who gave it, which conversation, or that two rows are a mutual pair: in a mutual
+confirmation the two rows share no token. For a couple confirmation, the two rows (one per partner) share
+the same `link_token` and the same day, so a copy shows "one couple got a joint confirmation that day", not
+which couple or from whom; `partner_token` on each is a partner-kind token, unequal to either row's subject
+token. Correlation remains possible with outside knowledge (for example, a subject token whose row count
+rises the week a known badge appears). With K3, everything can be resolved by recomputing tokens.
+
+### Abuse and moderation
+
+Admin (`AdminMetInPersonRoutes`, new routes under the existing admin gate; the frozen admin endpoints are
+untouched): `GET /v1/admin/met-in-person/users/{userId}` (published state, setting, independent
+qualifying count now, each confirmation with its voucher resolved through K3 and reciprocal, closed-group
+and shared-device flags), `POST .../confirmations/{id}/void` (body `{subjectUserId, voided}`; false
+un-voids), `POST .../vouchers/void` (body `{voucherUserId, voided}`; the id is never in the path, which
+request audit rows store) and `POST .../users/{userId}/freeze` (`{"frozen": false}` unfreezes). All need a
+senior admin, step-up MFA and `X-Admin-Reason`, and write `met_in_person.*` audit rows. An audit row never
+holds a voucher id in clear: it carries `voucherRef` (an audit-voucher K3 token) and the confirmation ids,
+so a key holder can tell whose confirmations were voided and lower roles cannot; a subject appears as
+`subjectRef`, an audit-subject token in its own HMAC domain, so it never equals the `subject_token` stored
+in `vouches`. The view's audit row holds no counts. Undoing a voucher-level void restores only the rows
+that void voided; a row voided on its own stays voided. Unfreezing someone with no badge row writes none.
+A void is invisible to the voucher.
+
+Not closed:
+
+- A ring of three real, verified, unlinked friends on different devices who did not confirm each other
+  first can badge each other (or a fake couple). Larger collusion goes further: a clique that staggers its
+  confirmations over days (each confirms someone before being confirmed back) passes the clean-voucher
+  rule, and five or more mutual friends always can. The reciprocal and closed-group flags help a moderator
+  see it; nothing prevents it.
+- The clean-voucher rule treats a same-day confirmation by the subject as "first". A subject who happens
+  to confirm someone on the exact day that person confirmed them makes that one voucher unclean; this
+  only matters if that voucher was the only clean one, and the subject cannot see days.
+- A subject who has met few people can guess roughly who confirmed when the badge appears; the delay only
+  blurs it.
+- A voucher whose confirmation completes the threshold learns nothing at once but may notice the badge
+  weeks later.
+- The batch reads stored risk tiers (no lazy decay) and the couple badge's write re-checks the link at
+  write time; the display then also requires the badge to postdate the link's last change, which covers
+  an unlink racing the batch.
+- Disappearing messages (checked 2026-11-24): the purge hard-deletes a message only after its timer plus
+  `PYNAPLI_EXPIRED_MESSAGE_GRACE_DAYS` (default 30), and the write-time rules read the rows (hidden from
+  members) until then. So the 24-hour first-message rule is reachable with every timer (1 h, 24 h, 7 d,
+  30 d) at the default grace. What shrinks: the "last message within 90 days" and "both wrote" rules see
+  only messages younger than timer + grace, so with a timer the window to confirm is about 30 days after
+  the last message rather than 90. With the grace set below a day and a 1 h or 24 h timer, Met in person
+  becomes unreachable in that chat. No per-participant stamps were added: they would keep message
+  metadata past the timer the members chose.
+
+### Account deletion and export
+
+Deletion, inside the deletion transaction: the confirmations the person gave (their pair tokens over
+their conversation partners), the ones they received (their subject token), their pending state and their
+badge are deleted, and couple credit with them is cleared from their partner's rows. Export: a voucher's
+archive lists what they gave (the subject's display name at export time, the day, the day withdrawn, with
+partner or not); a subject's archive holds only their published badge state and setting.
+
 ## Suspicious Signals
 
 Signals that increase risk:
@@ -604,7 +939,8 @@ plaintext (sign-up verify, every successful email sign-in). It is deliberately n
 `email_token`, so the two tables can't be joined without K2. K1 = `PYNAPLI_CONTACT_BLOCK_EMAIL_KEY`,
 K2 = `PYNAPLI_CONTACT_BLOCK_TARGET_KEY`: fixed development values locally; staging and production
 refuse to start without explicit, strong values distinct from each other and from the cursor/deck
-secrets (`CONTACT_BLOCK_KEYS_REQUIRED`, `CONTACT_BLOCK_KEYS_MUST_DIFFER`). Rotating a key orphans every
+secrets (`CONTACT_BLOCK_KEYS_REQUIRED`, `CONTACT_BLOCK_KEYS_MUST_DIFFER`) and from the "Met in person"
+K3 (`MET_IN_PERSON_TOKEN_SECRET_REQUIRED`). Rotating a key orphans every
 stored code (all rows go inert); no rotation path exists.
 
 **What a leak reveals.**
@@ -730,6 +1066,7 @@ caches, which stay free of per-viewer exclusions.
 | Pushes and the notifications list | `NotificationEnqueueActions` | outbox write skipped when the actor hides from the recipient (the gate read still runs) | two-worlds, Psync |
 | Messages inbox, thread, preview, unread | `listConversationIds`, `JdbcMessagingMessageReadSql`, `MessagingConversationGuard`, `MessagingDtoMapper` | listed by the same rule as opening: a conversation where every other participant hides from X is not X's (any call `CONVERSATION_NOT_FOUND`); a group with any visible participant is listed with A stripped from participants and invites; A's messages are left out of pages, preview and unread and never make the thread visible; nothing A causes moves it up (`conversations.updated_by_user_id`, V121, records who caused the last bump: a message, a deletion, leaving, a timer change, an invite naming them; when that's A, X's sort time falls back to X's last visible message); "read" counts only participants X can see; A's timer notice is shown with the nil sender (the timer is a property everyone in the thread sees, so the change is explained, attributed to nobody); a match made while A hid never lists the conversation nor flags a new match (`MATCHED_DIRECT_CONVERSATION_FOR_VIEWER_CLAUSE`, `loadNewMatch`) | two-worlds, conversations, edges |
 | Quoting or replying to A's message | — | no quote or reply-to feature exists | — |
+| Met in person (options, confirm, take back, export) | `MetInPersonService.snapshot` (reuses `ContactBlockVisibility.hiddenFrom` and messaging's `isConversationHiddenFor`), `JdbcMetInPersonSql.conversationPartnersVisibleTo` (`ContactBlockSql.notHiddenFromViewer`) | a conversation whose every current co-participant hides from X answers `MET_IN_PERSON_NOT_AVAILABLE`, exactly like an unknown conversation (options, confirm and take back alike); in a group A is never offered, confirmable or named as a partner; X's export leaves out confirmations X gave A. The weekly badge batch is untouched: it reads only stored confirmations, which only the guarded endpoint writes, and its output (A's badge) is shown only where A's profile is, which already hides A from X | `MetInPersonContactBlockIntegrationTest` |
 | Message realtime (deltas, typing) | `MessagingRealtimePublisher` | no hint to anyone the actor, an invited partner, or a subject of the change hides from | two-worlds, Psync |
 | Partner chat invites, bring-your-partner note | `MessagingDtoMapper`, `JdbcMessagingPartnerOfferSql` | invites naming A stripped; A never named or considered in the offer | conversations |
 | Partner link invites | `ProfileLinkService` | not in X's summary (tombstones: invites sent before the release); accept/decline `PROFILE_LINK_INVITE_NOT_FOUND`; X→A `PROFILE_LINK_TARGET_NOT_FOUND`; admin view unfiltered | two-worlds |
@@ -874,6 +1211,7 @@ Important:
 - [x] Held first-message review supports audited release/remove actions.
 - [x] Reports queue supports audited triage actions.
 - [x] Severe media scanner decisions create system safety reports and media-moderation risk events.
+- [x] Photo pre-screening (2026-11-25): Cloud Vision SafeSearch on by default in staging/prod, approve-or-hold only for profile photos (ceilings adult ≤ UNLIKELY, violence ≤ POSSIBLE, racy ≤ LIKELY, configurable), fail closed on error/timeout/unknown, production refuses manual without `PYNAPLI_MEDIA_MODERATION_ALLOW_MANUAL_IN_PRODUCTION`, owner-only "Being reviewed" label; Vision sees profile photos and selfies only unless `PYNAPLI_MEDIA_MODERATION_SCAN_PRIVATE_MEDIA=true`. Tested with Vision faked. Open: the founder's live run with real images and any threshold tuning (PATH_TO_TESTERS A9).
 - [x] Media reports support audited target-media removal.
 - [x] Risk review queue supports audited clear/set-tier/review actions.
 - [x] Appeal API supports user submission/status/withdraw and audited admin decisions.
@@ -894,6 +1232,7 @@ Important:
 - [x] False-positive metrics exist.
 - [x] Severe hard-ban triggers exist.
 - [x] Fake/deceptive degradation is not implemented.
+- [x] "Met in person": private confirmations stored only as K3 tokens, a weekly randomised batch with per-subject hysteresis, independence and subject-proof exclusions, opt-in person and couple badges, admin view and actions with undo (see "Met in person").
 
 ## Do Not Implement
 

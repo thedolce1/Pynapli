@@ -24,7 +24,8 @@ internal fun SwipeFiltersSheet(
     onDismiss: () -> Unit,
     onApply: (SwipeFilters) -> Unit,
     onClearAll: () -> Unit,
-    onOpenStore: () -> Unit = {},
+    // Age verified (from the viewer's profile); false hides the Lifestyle tags, as on the Grid.
+    lifestyleFiltersAllowed: Boolean = true,
     onOpenAgeVerification: () -> Unit = {},
     savedState: SavedSwipeFiltersUiState = SavedSwipeFiltersUiState(),
     onSavePreset: (name: String, SwipeFilters) -> Unit = { _, _ -> },
@@ -40,7 +41,7 @@ internal fun SwipeFiltersSheet(
             onDismiss = onDismiss,
             onApply = onApply,
             onClearAll = onClearAll,
-            onOpenStore = onOpenStore,
+            lifestyleFiltersAllowed = lifestyleFiltersAllowed,
             onOpenAgeVerification = onOpenAgeVerification,
             savedState = savedState,
             onSavePreset = onSavePreset,
@@ -56,14 +57,17 @@ internal fun SwipeFiltersSheetBody(
     onDismiss: () -> Unit,
     onApply: (SwipeFilters) -> Unit,
     onClearAll: () -> Unit,
-    onOpenStore: () -> Unit = {},
+    // Age verified (from the viewer's profile); false hides the Lifestyle tags, as on the Grid.
+    lifestyleFiltersAllowed: Boolean = true,
     onOpenAgeVerification: () -> Unit = {},
     savedState: SavedSwipeFiltersUiState = SavedSwipeFiltersUiState(),
     onSavePreset: (name: String, SwipeFilters) -> Unit = { _, _ -> },
     onApplySavedPreset: (SavedSwipeFilterDto) -> Unit = {},
     onDeleteSavedPreset: (id: String) -> Unit = {},
 ) {
-    var draft by remember(initial) { mutableStateOf(initial) }
+    var draft by remember(initial, lifestyleFiltersAllowed) {
+        mutableStateOf(if (lifestyleFiltersAllowed) initial else initial.copy(lifestyleTags = emptySet()))
+    }
     var saveName by remember { mutableStateOf("") }
     PynapliSheetColumn {
         SectionIntro(
@@ -91,10 +95,7 @@ internal fun SwipeFiltersSheetBody(
         SwipeAdvancedFilterControls(
             draft = draft,
             onDraftChange = { draft = it },
-            onSubscribe = {
-                onDismiss()
-                onOpenStore()
-            },
+            lifestyleFiltersAllowed = lifestyleFiltersAllowed,
         )
         SwipeSaveCurrentFilters(
             savedState = savedState,

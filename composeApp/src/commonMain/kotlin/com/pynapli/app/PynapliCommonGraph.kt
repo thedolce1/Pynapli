@@ -5,6 +5,7 @@ import com.pynapli.app.activity.ActivityStateHolder
 import com.pynapli.app.activity.ApiActivityFeedRepository
 import com.pynapli.app.appsettings.AppSettingsStateHolder
 import com.pynapli.app.auth.AuthStateHolder
+import com.pynapli.app.auth.SocialSignInProvider
 import com.pynapli.app.conversation.ApiConversationRepository
 import com.pynapli.app.conversation.ConversationStateHolder
 import com.pynapli.app.grid.ApiFavoritesRepository
@@ -110,6 +111,13 @@ class PynapliCommonGraph(
     presenceStreamClient: PresenceStreamClient,
     activityStreamClient: ActivityStreamClient,
     messageStreamClient: MessageStreamClient,
+    /**
+     * "Continue with Google / Apple" for this platform (Settings > Sign-in methods links with it).
+     * Required for the same reason as the streams: a shell that forgot it would silently drop the
+     * feature. Shells without an integration pass `UnavailableSocialSignInProvider`, and must hand
+     * the same instance to their `AuthStateHolder`.
+     */
+    socialSignInProvider: SocialSignInProvider,
 ) {
     val gridStateHolder =
         GridStateHolder(
@@ -166,6 +174,15 @@ class PynapliCommonGraph(
         com.pynapli.app.contactblocks.ContactBlocksStateHolder(
             com.pynapli.app.contactblocks
                 .ApiContactBlocksRepository(apiClient),
+        )
+
+    /** Settings > Sign-in methods: linking Google / Apple to the signed-in account. */
+    val signInMethodsStateHolder =
+        com.pynapli.app.profilehub.SignInMethodsStateHolder(
+            repository =
+                com.pynapli.shared.auth
+                    .SocialIdentityRepository(apiClient),
+            socialSignInProvider = socialSignInProvider,
         )
 
     val photoVerificationStateHolder =
@@ -280,6 +297,7 @@ class PynapliCommonGraph(
             favoritesStateHolder = favoritesStateHolder,
             matchCelebrationStateHolder = matchCelebrationStateHolder,
             contactBlocksStateHolder = contactBlocksStateHolder,
+            signInMethodsStateHolder = signInMethodsStateHolder,
         )
     }
 

@@ -14,6 +14,10 @@ import com.pynapli.shared.network.dto.EmailSignupVerifyRequestDto
 import com.pynapli.shared.network.dto.PasswordResetDto
 import com.pynapli.shared.network.dto.PasswordResetRequestDto
 import com.pynapli.shared.network.dto.PasswordResetRequestedDto
+import com.pynapli.shared.network.dto.SocialAccountAppealRequestDto
+import com.pynapli.shared.network.dto.SocialNonceDto
+import com.pynapli.shared.network.dto.SocialSignInConfigDto
+import com.pynapli.shared.network.dto.SocialSignInRequestDto
 
 class AuthRepository(
     private val authApi: AuthApi,
@@ -169,6 +173,59 @@ class AuthRepository(
             is AppResult.Success -> loginEmail(email, newPassword, platform, appVersion, deviceId)
             is AppResult.Failure -> reset
         }
+
+    /** Which providers the server has switched on (ONBOARDING_AUTH_SPEC, "Continue with Google / Apple"). */
+    suspend fun socialSignInConfig(): AppResult<SocialSignInConfigDto> = authApi.socialSignInConfig()
+
+    /** A fresh single-use nonce. Fetch one per provider attempt: the server consumes it on use. */
+    suspend fun socialNonce(deviceId: String? = null): AppResult<SocialNonceDto> = authApi.socialNonce(deviceId)
+
+    /**
+     * Appeal from a suspended account that signs in with [provider] (it has no password to prove
+     * itself with): a fresh nonce + provider sign-in, the same [AppealDto] as the email appeal.
+     */
+    suspend fun submitSocialAccountAppeal(
+        provider: SocialProvider,
+        idToken: String,
+        nonce: String,
+        reason: String,
+    ): AppResult<com.pynapli.shared.network.dto.AppealDto> =
+        authApi.submitSocialAccountAppeal(
+            providerWireName = provider.wireName,
+            request = SocialAccountAppealRequestDto(idToken = idToken, nonce = nonce, reason = reason),
+        )
+
+    /**
+     * Signs in with a provider ID token; with [ageGate] it also creates the account (the server asked
+     * for it with `SOCIAL_SIGNUP_NEEDS_AGE_GATE`). The session is stored exactly like an email login.
+     */
+    suspend fun signInSocial(
+        provider: SocialProvider,
+        idToken: String,
+        nonce: String,
+        authorizationCode: String?,
+        ageGate: SocialAgeGate?,
+        platform: String,
+        appVersion: String,
+        deviceId: String? = null,
+    ): AppResult<StoredSession> =
+        authApi
+            .socialSignIn(
+                providerWireName = provider.wireName,
+                request =
+                    SocialSignInRequestDto(
+                        idToken = idToken,
+                        nonce = nonce,
+                        authorizationCode = authorizationCode,
+                        birthdate = ageGate?.birthdate,
+                        confirmedAdult = ageGate?.confirmedAdult ?: false,
+                        acceptedTerms = ageGate?.acceptedTerms ?: false,
+                        acceptedPrivacy = ageGate?.acceptedPrivacy ?: false,
+                        deviceId = deviceId,
+                        platform = platform,
+                        appVersion = appVersion,
+                    ),
+            ).persistSession()
 
     suspend fun logout() {
         // Outside the lock: the logout call is authenticated and may itself need a refresh.

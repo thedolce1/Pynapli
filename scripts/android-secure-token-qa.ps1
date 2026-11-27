@@ -166,7 +166,7 @@ $restoredShot = Save-Screen "01_session_restored"
 # returns 401. A correct client refreshes and carries on.
 Write-Host "[step] Expiring the access token server-side to prove the refresh path"
 $expireSql = "UPDATE user_sessions SET access_expires_at = now() - interval '1 minute' WHERE revoked_at IS NULL AND refresh_expires_at > now();"
-$expired = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c $expireSql
+$expired = docker exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -c $expireSql
 if ($LASTEXITCODE -ne 0) {
     throw "Could not expire user_sessions in Postgres. Is the pynapli-postgres container running?"
 }
@@ -187,7 +187,7 @@ $refreshedShot = Save-Screen "02_expired_token_refreshed"
 
 # Server-side confirmation: a refresh rotates the session, so the row must be live again. Without
 # this the UI check alone could pass on a cached screen.
-$liveSessions = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
+$liveSessions = docker exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
 if ([int]$liveSessions -lt 1) {
     throw "App stayed on screen but no session was rotated: expected a live access_expires_at row after refresh, found $liveSessions."
 }
@@ -205,7 +205,7 @@ Write-Host "[ok] Expired access token was refreshed, not treated as a sign-out (
 # inbox refresh trips the 401 -> terminal-refresh-rejection -> sign-out chain on its own.
 Write-Host "[step] Revoking the session server-side to prove mid-session sign-out (no relaunch)"
 $revokeSql = "UPDATE user_sessions SET revoked_at = now() WHERE revoked_at IS NULL;"
-$revoked = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c $revokeSql
+$revoked = docker exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -c $revokeSql
 if ($LASTEXITCODE -ne 0) {
     throw "Could not revoke user_sessions in Postgres. Is the pynapli-postgres container running?"
 }
@@ -222,7 +222,7 @@ if ($afterRevoke.Text -ne "Dev login") {
 $revokedShot = Save-Screen "03_revoked_signed_out"
 
 # Server-side confirmation: every session is revoked and the rejected refresh created no new one.
-$liveAfterRevoke = docker exec pynapli-postgres psql -U pynapli -d pynapli_dev -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
+$liveAfterRevoke = docker exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -t -A -c "SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL AND access_expires_at > now();"
 if ([int]$liveAfterRevoke -ne 0) {
     throw "Expected no live session rows after revoke, found $liveAfterRevoke (a failed refresh must not mint a new session)."
 }

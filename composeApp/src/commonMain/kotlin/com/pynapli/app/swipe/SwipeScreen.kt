@@ -35,6 +35,8 @@ fun SwipeScreen(
     // Opens the plans/store sheet on the section this paywall sells.
     onOpenStore: (StorePaywallFocus) -> Unit = {},
     onOpenAgeVerification: () -> Unit = {},
+    // Age verified: false hides the Lifestyle tags in the filter sheet.
+    lifestyleFiltersAllowed: Boolean = true,
     onOpenPsync: (() -> Unit)? = null,
     savedSwipeFilterStateHolder: SavedSwipeFilterStateHolder? = null,
     travelLocationStateHolder: com.pynapli.app.location.TravelLocationStateHolder? = null,
@@ -311,7 +313,7 @@ fun SwipeScreen(
                 filtersSheetVisible = false
                 scope.launch { stateHolder.applyFilters(SwipeFilters.defaults) }
             },
-            onOpenStore = { onOpenStore(StorePaywallFocus.Plans) },
+            lifestyleFiltersAllowed = lifestyleFiltersAllowed,
             onOpenAgeVerification = onOpenAgeVerification,
             savedState = savedSwipeFiltersState,
             onSavePreset = { name, filters ->

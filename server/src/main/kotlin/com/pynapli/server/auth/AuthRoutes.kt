@@ -121,6 +121,12 @@ fun authStatusFor(code: String): HttpStatusCode =
         "SESSION_NOT_FOUND" -> HttpStatusCode.NotFound
         "CANNOT_SIGN_OUT_CURRENT_SESSION" -> HttpStatusCode.Conflict
         "RATE_LIMITED" -> HttpStatusCode.TooManyRequests
+        // Continue with Google / Apple (API_CONTRACT_SPEC "Section 5 contract").
+        "INVALID_SOCIAL_TOKEN" -> HttpStatusCode.Unauthorized
+        "SOCIAL_SIGN_IN_UNAVAILABLE", "SOCIAL_IDENTITY_NOT_LINKED", "SOCIAL_ACCOUNT_NOT_FOUND" -> HttpStatusCode.NotFound
+        "SOCIAL_SIGNUP_NEEDS_AGE_GATE" -> HttpStatusCode.UnprocessableEntity
+        "SOCIAL_EMAIL_HAS_ACCOUNT", "SOCIAL_IDENTITY_IN_USE", "SOCIAL_PROVIDER_ALREADY_LINKED", "LAST_SIGN_IN_METHOD" -> HttpStatusCode.Conflict
+        "SOCIAL_SIGN_IN_TEMPORARILY_UNAVAILABLE" -> HttpStatusCode.ServiceUnavailable
         "INVALID_EMAIL",
         "PASSWORD_TOO_SHORT",
         "PASSWORD_TOO_COMMON",

@@ -1,5 +1,6 @@
 package com.pynapli.server.discovery
 
+import java.sql.Connection
 import java.sql.PreparedStatement
 import java.util.UUID
 
@@ -28,44 +29,81 @@ object CoupleVerifiedFilterSql {
         user: String,
         profile: String,
         settings: String,
-    ): String =
-        """
-        AND (
-            ?::boolean = false
-            OR (
-                $profile.verified_at IS NOT NULL
-                AND EXISTS (
-                    SELECT 1
-                    FROM user_profile_links cv_upl
-                    JOIN users cv_user ON cv_user.id = cv_upl.linked_user_id
-                    JOIN profiles cv_profile ON cv_profile.user_id = cv_user.id
-                    JOIN discovery_settings cv_ds ON cv_ds.user_id = cv_user.id
-                    LEFT JOIN account_risk_states cv_risk ON cv_risk.user_id = cv_user.id
-                    WHERE cv_upl.user_id = $user.id
-                      AND cv_upl.status = 'active'
-                      AND cv_upl.unlinked_at IS NULL
-                      AND cv_user.status = 'active'
-                      AND cv_user.deleted_at IS NULL
-                      AND cv_profile.visibility_status = 'visible'
-                      AND cv_profile.verified_at IS NOT NULL
-                      AND cv_ds.incognito = false
-                      AND COALESCE(cv_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM user_blocks cv_ub
-                          WHERE (cv_ub.blocker_user_id = ?::uuid AND cv_ub.blocked_user_id = cv_user.id)
-                             OR (cv_ub.blocker_user_id = cv_user.id AND cv_ub.blocked_user_id = ?::uuid)
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM user_hidden_profiles cv_hidden
-                          WHERE cv_hidden.hider_user_id = ?::uuid
-                            AND cv_hidden.hidden_user_id = cv_user.id
-                      )
-                      AND ${ownerShowsPartnerToViewer(settings = settings, owner = "$user.id")}
+        // A Psync deck has two viewers (LinkedPartnerFilterSql): the partner must be shown to each.
+        viewerCount: Int = 1,
+    ): String {
+        require(viewerCount >= 1)
+        val partnerShown =
+            partnerShownToViewer(
+                partnerUser = "cv_user",
+                partnerProfile = "cv_profile",
+                partnerSettings = "cv_ds",
+                partnerRisk = "cv_risk",
+                ownerSettings = settings,
+                owner = "$user.id",
+            )
+        val everyViewer = List(viewerCount) { "AND $partnerShown" }.joinToString("\n")
+        return """
+            AND (
+                ?::boolean = false
+                OR (
+                    $profile.verified_at IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM user_profile_links cv_upl
+                        JOIN users cv_user ON cv_user.id = cv_upl.linked_user_id
+                        JOIN profiles cv_profile ON cv_profile.user_id = cv_user.id
+                        JOIN discovery_settings cv_ds ON cv_ds.user_id = cv_user.id
+                        LEFT JOIN account_risk_states cv_risk ON cv_risk.user_id = cv_user.id
+                        WHERE cv_upl.user_id = $user.id
+                          AND cv_upl.status = 'active'
+                          AND cv_upl.unlinked_at IS NULL
+                          AND cv_profile.verified_at IS NOT NULL
+                          -- Contact blocks: a partner hiding from a viewer is never shown to them, so
+                          -- never earns the badge (union of both partners' sets on a Psync deck).
+                          AND cv_user.id <> ALL(?::uuid[])
+                          $everyViewer
+                    )
                 )
             )
+            """.trimIndent()
+    }
+
+    /**
+     * The profile's linked-partner rule: the partner the owner's card or profile shows this viewer. The
+     * partner is active, not deleted, visible, not incognito, not quarantined/terminated, not blocked
+     * either way with the viewer, not hidden by the viewer, and the owner's partner_visibility lets the
+     * viewer see them. Aliases are the calling query's; six viewer placeholders, in order: the block check
+     * (two), hidden-by-viewer, then [ownerShowsPartnerToViewer]'s three. Shared by the couples filter and
+     * the "Met in person" partner tick, so the tick never names a partner the profile would hide.
+     */
+    fun partnerShownToViewer(
+        partnerUser: String,
+        partnerProfile: String,
+        partnerSettings: String,
+        partnerRisk: String,
+        ownerSettings: String,
+        owner: String,
+    ): String =
+        """
+        $partnerUser.status = 'active'
+        AND $partnerUser.deleted_at IS NULL
+        AND $partnerProfile.visibility_status = 'visible'
+        AND $partnerSettings.incognito = false
+        AND COALESCE($partnerRisk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+        AND NOT EXISTS (
+            SELECT 1
+            FROM user_blocks cv_ub
+            WHERE (cv_ub.blocker_user_id = ?::uuid AND cv_ub.blocked_user_id = $partnerUser.id)
+               OR (cv_ub.blocker_user_id = $partnerUser.id AND cv_ub.blocked_user_id = ?::uuid)
         )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM user_hidden_profiles cv_hidden
+            WHERE cv_hidden.hider_user_id = ?::uuid
+              AND cv_hidden.hidden_user_id = $partnerUser.id
+        )
+        AND ${ownerShowsPartnerToViewer(settings = ownerSettings, owner = owner)}
         """.trimIndent()
 
     /**
@@ -93,26 +131,44 @@ object CoupleVerifiedFilterSql {
                 $settings.partner_visibility = 'matches_only'
                 AND EXISTS (
                     SELECT 1 FROM matches pv_match
-                    WHERE LEAST(pv_match.user_a, pv_match.user_b) = LEAST(?::uuid, $owner)
-                      AND GREATEST(pv_match.user_a, pv_match.user_b) = GREATEST(?::uuid, $owner)
+                    -- Rows are stored user_a < user_b (matches_canonical_order_check), so this
+                    -- reads the unique (user_a, user_b) index instead of scanning matches.
+                    WHERE pv_match.user_a = LEAST(?::uuid, $owner)
+                      AND pv_match.user_b = GREATEST(?::uuid, $owner)
                 )
             )
         )
         """.trimIndent()
 
-    /** Binds [predicate] starting at [startIndex]; returns the next free index. */
+    /**
+     * Binds [predicate] for one viewer starting at [startIndex]; returns the next free index.
+     * [hiddenFromViewerIds] are the people hiding from the viewer (contact blocks).
+     */
     fun bind(
         statement: PreparedStatement,
+        connection: Connection,
         startIndex: Int,
         enabled: Boolean,
         viewerUserId: UUID,
+        hiddenFromViewerIds: Set<UUID>,
+    ): Int = bind(statement, connection, startIndex, enabled, listOf(viewerUserId), hiddenFromViewerIds)
+
+    /**
+     * Binds [predicate] built with `viewerCount = viewers.size`; returns the next free index.
+     * [hiddenFromViewerIds] are the people hiding from any of the viewers (contact blocks).
+     */
+    fun bind(
+        statement: PreparedStatement,
+        connection: Connection,
+        startIndex: Int,
+        enabled: Boolean,
+        viewers: List<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
     ): Int {
         var index = startIndex
         statement.setBoolean(index++, enabled)
-        // Block check (both directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST.
-        repeat(VIEWER_PLACEHOLDERS) { statement.setObject(index++, viewerUserId) }
-        return index
+        statement.setArray(index++, connection.createArrayOf("uuid", hiddenFromViewerIds.toTypedArray()))
+        // Per viewer: block check (both directions), hidden-by-viewer, verified_only gate, matches_only LEAST/GREATEST.
+        return LinkedPartnerFilterSql.bindPartnerShown(statement, index, viewers)
     }
-
-    private const val VIEWER_PLACEHOLDERS = 6
 }

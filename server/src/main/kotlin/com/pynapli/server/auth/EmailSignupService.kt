@@ -242,7 +242,9 @@ class EmailSignupService(
         runLogged("sign-up") {
             // Over a silent email cap: a complete no-op.
             if (!withinSendCaps(draft.account, draft.clientIp)) return@runLogged
-            if (repository.findEmailIdentity(draft.emailHash) != null) {
+            // Any account holding the address, whatever it signs in with (a Google/Apple account whose
+            // proven address this is included): the same neutral notice, never a code that can't finish.
+            if (repository.addressHasAccount(draft.emailHash)) {
                 mailer.sendAlreadyRegisteredNotice(draft.account)
                 return@runLogged
             }
@@ -403,6 +405,12 @@ class EmailSignupService(
 interface EmailSignupRepository {
     /** The address's account, if any (deleted accounts excluded, as sign-in excludes them). */
     suspend fun findEmailIdentity(emailHash: String): EmailIdentityRecord?
+
+    /**
+     * Whether any non-deleted account holds the address: an email identity, or users.email_hash of an
+     * account that signs in with Google/Apple. Off the request path only (the sign-up work).
+     */
+    suspend fun addressHasAccount(emailHash: String): Boolean = findEmailIdentity(emailHash) != null
 
     /**
      * Under a per-address lock: deletes a batch of expired sign-ups, then inserts [pending] unless the

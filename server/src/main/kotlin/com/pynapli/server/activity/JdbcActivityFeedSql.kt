@@ -18,7 +18,7 @@ internal object JdbcActivityFeedSql {
         SELECT ae.id AS event_id,
                ae.event_type,
                ae.actor_user_id,
-               COALESCE(NULLIF(actor_profile.display_name, ''), 'Pynapli User') AS actor_display_name,
+               COALESCE(NULLIF(actor_profile.display_name, ''), 'New member') AS actor_display_name,
                actor_photo.media_asset_id AS actor_profile_photo_media_asset_id,
                ae.aggregate_count,
                ae.occurred_at,
@@ -103,6 +103,7 @@ internal object JdbcActivityFeedSql {
               AND m.media_type = 'image'
               AND m.processing_status = 'ready'
               AND m.moderation_status = 'approved'
+              AND m.intended_album_kind = 'profile'
             ORDER BY mai.sort_order ASC, mai.added_at DESC, m.id ASC
             LIMIT 1
         ) actor_photo ON true
@@ -151,6 +152,9 @@ internal object JdbcActivityFeedSql {
                   AND actor_settings.show_in_viewed_lists = true
               )
           )
+          -- Viewed Me shows the last 7 days only (plan G2-4): the list, its gated "N more" count and
+          -- the in-screen profileViewCount (JdbcActivitySummarySql) use the same window.
+          AND (ae.event_type <> 'profile_view' OR ae.occurred_at >= now() - interval '7 days')
         ORDER BY ae.occurred_at DESC, ae.id DESC
         LIMIT ?
         """.trimIndent()

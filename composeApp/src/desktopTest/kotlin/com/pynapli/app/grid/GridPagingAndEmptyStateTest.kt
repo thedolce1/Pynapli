@@ -18,7 +18,7 @@ import kotlin.test.assertEquals
 class GridPagingAndEmptyStateTest {
     private fun cards(count: Int) =
         (1..count).map { index ->
-            GridProfileCardUi(id = "c$index", displayName = "P$index", online = false, distanceLabel = "1 km", tone = GridCardTone.Warm)
+            GridProfileCardUi(id = "c$index", displayName = "P$index", online = false, distanceLabel = "1 km")
         }
 
     @OptIn(ExperimentalTestApi::class)

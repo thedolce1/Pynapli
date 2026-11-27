@@ -1,6 +1,5 @@
 package com.pynapli.app.profile
 
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridProfileCardUi
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -131,6 +130,56 @@ class ProfilePagerControllerTest {
         assertEquals("b", controller.onPageSettled(1, hasMore = false, isLoadingMore = false).open?.id)
     }
 
+    @Test
+    fun thePagerEndsOnOneLockedPageAndAsksForNoMoreLocks() {
+        // The default seam: the server's locked flag (and the "locked_" token prefix).
+        val controller = ProfilePagerController()
+        val live = cards("a", "b") + lockedCards("locked_1", "locked_2", "locked_3")
+
+        val model = assertNotNull(controller.reconcile(live, live[1]))
+
+        assertEquals(listOf("a", "b", "locked_1"), model.pages.map { it.id }, "one See plans page, not hundreds")
+        // Swiping from the last person onto the locked page: no profile, and no next page of locks.
+        val effects = controller.onPageSettled(2, hasMore = true, isLoadingMore = false)
+        assertNull(effects.open)
+        assertFalse(effects.loadMore)
+    }
+
+    @Test
+    fun beforeAnyLockIsLoadedTheLastPersonStillAsksForTheNextPage() {
+        val controller = ProfilePagerController()
+        val live = cards("a", "b")
+        controller.reconcile(live, live[0])
+
+        assertTrue(controller.onPageSettled(1, hasMore = true, isLoadingMore = false).loadMore)
+    }
+
+    @Test
+    fun blockingTheLastUnlockedPersonMovesBackNeverOntoTheLockedPage() {
+        val controller = ProfilePagerController()
+        val live = cards("a", "b") + lockedCards("locked_1")
+        controller.reconcile(live, live[1])
+
+        val model = assertNotNull(controller.reconcile(live.filterNot { it.id == "b" }, live[1], removed = setOf("b")))
+
+        assertEquals("a", model.replacement?.id, "the previous person, not a locked token to fetch")
+        assertFalse(model.closeRequested)
+    }
+
+    @Test
+    fun blockingTheOnlyUnlockedPersonClosesThePager() {
+        val controller = ProfilePagerController()
+        val live = cards("a") + lockedCards("locked_1")
+        controller.reconcile(live, live[0])
+
+        val model = assertNotNull(controller.reconcile(live.drop(1), live[0], removed = setOf("a")))
+
+        assertTrue(model.closeRequested)
+        assertNull(model.replacement)
+    }
+
+    private fun lockedCards(vararg ids: String): List<GridProfileCardUi> = ids.map { card(it).copy(displayName = "", locked = true) }
+
     private fun cards(vararg ids: String): List<GridProfileCardUi> = ids.map(::card)
 
     private fun card(id: String): GridProfileCardUi =
@@ -139,6 +188,5 @@ class ProfilePagerControllerTest {
             displayName = "User $id",
             online = false,
             distanceLabel = null,
-            tone = GridCardTone.entries.first(),
         )
 }

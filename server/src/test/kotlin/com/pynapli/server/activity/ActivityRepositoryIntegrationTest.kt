@@ -292,7 +292,8 @@ class ActivityRepositoryIntegrationTest {
             dataSource.insertPrivateAlbumAccessRequest(recipient, approvedAlbumActor, "approved")
             val eventRows =
                 listOf(
-                    Triple(viewActor, "profile_view", Instant.parse("2026-05-18T14:00:00Z")),
+                    // Viewed Me shows the last 7 days only (plan G2-4), so the view is recent.
+                    Triple(viewActor, "profile_view", Instant.now().minusSeconds(3_600)),
                     Triple(flirtActor, "flirt", Instant.parse("2026-05-18T14:01:00Z")),
                     Triple(likeActor, "swipe_like", Instant.parse("2026-05-18T14:02:00Z")),
                     Triple(introActor, "pineapple_like", Instant.parse("2026-05-18T14:03:00Z")),
@@ -330,6 +331,82 @@ class ActivityRepositoryIntegrationTest {
             // flirt + 2 likes + pending album request + partner invite; the visible match is not in it.
             assertEquals(5, summary.badgeCount)
             assertEquals(Instant.parse("2026-05-18T14:06:00Z"), summary.latestBadgeOccurredAt)
+        }
+
+    @Test
+    fun viewedMeListsAndCountsOnlyTheLastSevenDays() =
+        runBlocking<Unit> {
+            // Plan G2-4 (Grindr): Viewed Me is a 7-day list. An older row stays stored until retention
+            // removes it at 30 days, but is never listed, counted, or reported as gated.
+            val recipient = UUID.fromString("00000000-0000-0000-0000-000000001671")
+            val recentViewer = UUID.fromString("00000000-0000-0000-0000-000000001672")
+            val oldViewer = UUID.fromString("00000000-0000-0000-0000-000000001673")
+            val oldFlirter = UUID.fromString("00000000-0000-0000-0000-000000001674")
+            listOf(recipient, recentViewer, oldViewer, oldFlirter).forEach { dataSource.insertUserWithDiscovery(it) }
+            val recentViewId = UUID.fromString("00000000-0000-0000-0000-000000001675")
+            val oldFlirtId = UUID.fromString("00000000-0000-0000-0000-000000001676")
+            val now = Instant.now()
+            dataSource.insertActivityEvent(recentViewId, recipient, recentViewer, "profile_view", now.minusSeconds(2 * 86_400))
+            dataSource.insertActivityEvent(
+                UUID.fromString("00000000-0000-0000-0000-000000001677"),
+                recipient,
+                oldViewer,
+                "profile_view",
+                now.minusSeconds(8 * 86_400),
+            )
+            // Other kinds keep their own retention: an 8-day-old flirt still lists.
+            dataSource.insertActivityEvent(oldFlirtId, recipient, oldFlirter, "flirt", now.minusSeconds(8 * 86_400))
+            val repository =
+                JdbcActivityRepository(
+                    dataSource,
+                    contactBlockTokens =
+                        com.pynapli.server.contactblocks.ContactBlockTokens
+                            .localDevelopment(),
+                )
+
+            val views = repository.listActivity(ActivityFeedQuery(recipient, setOf("profile_view"), 10, null))
+            assertEquals(listOf(recentViewId), views.map { it.eventId })
+            assertEquals(1, repository.getActivitySummary(recipient).profileViewCount)
+            val everything = repository.listActivity(ActivityFeedQuery(recipient, emptySet(), 10, null))
+            assertEquals(listOf(recentViewId, oldFlirtId), everything.map { it.eventId })
+        }
+
+    @Test
+    fun aRepeatViewAfterAWeekQuietStartsTheCountAgain() =
+        runBlocking<Unit> {
+            // One row per viewer with a count ("viewed you 3x"): a view more than 7 days after the last
+            // one restarts it at 1, so the count is about the week the list shows.
+            val recipient = UUID.fromString("00000000-0000-0000-0000-000000001681")
+            val viewer = UUID.fromString("00000000-0000-0000-0000-000000001682")
+            listOf(recipient, viewer).forEach { dataSource.insertUserWithDiscovery(it) }
+            val repository =
+                JdbcActivityRepository(
+                    dataSource,
+                    contactBlockTokens =
+                        com.pynapli.server.contactblocks.ContactBlockTokens
+                            .localDevelopment(),
+                )
+            assertTrue(repository.recordProfileView(viewer, recipient))
+            dataSource.connection.use { connection ->
+                connection
+                    .prepareStatement(
+                        """
+                        UPDATE activity_events
+                        SET aggregate_count = 3,
+                            last_counted_at = now() - interval '9 days',
+                            occurred_at = now() - interval '9 days'
+                        WHERE recipient_user_id = ? AND event_type = 'profile_view'
+                        """.trimIndent(),
+                    ).use { statement ->
+                        statement.setObject(1, recipient)
+                        statement.executeUpdate()
+                    }
+            }
+
+            repository.recordProfileView(viewer, recipient)
+
+            val views = repository.listActivity(ActivityFeedQuery(recipient, setOf("profile_view"), 10, null))
+            assertEquals(listOf(1), views.map { it.count })
         }
 
     @Test
@@ -453,7 +530,8 @@ class ActivityRepositoryIntegrationTest {
             dataSource.insertActivityEvent(likeId, recipient, likeActor, "swipe_like", Instant.parse("2026-05-18T17:01:00Z"))
             dataSource.insertActivityEvent(albumId, recipient, albumActor, "album_request", Instant.parse("2026-05-18T17:02:00Z"))
             dataSource.insertActivityEvent(inviteId, recipient, inviteActor, "partner_chat_invite", Instant.parse("2026-05-18T17:03:00Z"))
-            dataSource.insertActivityEvent(viewId, recipient, viewActor, "profile_view", Instant.parse("2026-05-18T17:04:00Z"))
+            // Viewed Me counts the last 7 days (G2-4), so the view is recent.
+            dataSource.insertActivityEvent(viewId, recipient, viewActor, "profile_view", Instant.now().minusSeconds(3_600))
             dataSource.insertActivityEvent(matchId, recipient, matchActor, "match", Instant.parse("2026-05-18T17:05:00Z"))
             val repository =
                 JdbcActivityRepository(

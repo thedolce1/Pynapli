@@ -226,9 +226,9 @@ internal fun DataSource.insertApprovedProfilePhoto(userId: UUID) {
                 """
                 INSERT INTO media_assets (
                     id, owner_user_id, media_type, storage_provider, storage_bucket,
-                    storage_object_key, content_type, byte_size, processing_status, moderation_status
+                    storage_object_key, content_type, byte_size, processing_status, moderation_status, intended_album_kind
                 )
-                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved')
+                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved', 'profile')
                 """.trimIndent(),
             ).use { statement ->
                 statement.setObject(1, assetId)
@@ -266,9 +266,9 @@ internal fun DataSource.insertApprovedPrivateAlbumPhoto(userId: UUID) {
                 """
                 INSERT INTO media_assets (
                     id, owner_user_id, media_type, storage_provider, storage_bucket,
-                    storage_object_key, content_type, byte_size, processing_status, moderation_status
+                    storage_object_key, content_type, byte_size, processing_status, moderation_status, intended_album_kind
                 )
-                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved')
+                VALUES (?, ?, 'image', 'gcs', 'pynapli-local-media', ?, 'image/jpeg', 1024, 'ready', 'approved', 'private')
                 """.trimIndent(),
             ).use { statement ->
                 statement.setObject(1, assetId)

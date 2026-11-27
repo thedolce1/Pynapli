@@ -36,8 +36,8 @@ class FeatureAccessPolicyTest {
     fun monetizedFeaturesStayExplicitlyPaid() {
         val monetizedFeatures =
             setOf(
-                PynapliFeature.GridAdvancedFilters,
-                PynapliFeature.SwipeAdvancedFilters,
+                PynapliFeature.GridSavedFilterPresets,
+                PynapliFeature.SwipeSavedFilterPresets,
                 PynapliFeature.ActivityDeepReveal,
                 PynapliFeature.PineappleLike,
                 PynapliFeature.Boost,

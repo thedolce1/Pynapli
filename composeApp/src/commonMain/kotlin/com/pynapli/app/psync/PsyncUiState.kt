@@ -139,6 +139,16 @@ data class PsyncSessionUi(
             if (filters.verifiedOnly) add("Verified only")
             if (filters.verifiedCouplesOnly) add("Verified couples only")
             if (filters.linkedOnly == true) add("Linked partners only")
+            // Plan G2-3: applied from both partners' views (the stricter one wins).
+            if (filters.excludeSingleMen) add("No single men")
+            val partnerFilters =
+                listOf(
+                    filters.partnerGenders.isNotEmpty(),
+                    filters.partnerMinimumAge != null || filters.partnerMaximumAge != null,
+                    filters.partnerOrientations.isNotEmpty(),
+                    filters.partnerVerifiedOnly,
+                ).count { it }
+            if (partnerFilters > 0) add(if (partnerFilters == 1) "1 partner filter" else "$partnerFilters partner filters")
             if (filters.withPhotosOnly) add("With photos")
             val more =
                 filters.discoveryStyles.size + filters.intents.size + filters.lifestyleTags.size + filters.logisticsTags.size +

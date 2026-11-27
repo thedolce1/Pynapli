@@ -10,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.pynapli.app.conversation.ConversationStateHolder
@@ -54,9 +53,9 @@ fun GridScreen(
     onOpenPhotoVerification: (() -> Unit)? = null,
     // Travel mode is a Select perk, so its paywall opens on Select rather than the plan list.
     onOpenTravelStore: () -> Unit = onOpenStore,
-    // From the viewer's plan (Social/Select true, Free false, null until it loads). Display only:
-    // it puts locks on paid chips; the server decides what a query may use.
-    advancedFiltersAllowed: Boolean? = null,
+    // Section 3: a locked tile, the boundary banner and a locked pager page open the plans sheet on
+    // the server's unlockTier ("social" or "select").
+    onOpenUnlockStore: (unlockTier: String?) -> Unit = { onOpenStore() },
 ) {
     var travelSheetVisible by remember { mutableStateOf(false) }
     val state by stateHolder.state.collectAsState()
@@ -90,12 +89,11 @@ fun GridScreen(
         onDispose { stateHolder.setOnScreen(false) }
     }
 
-    // A paid filter was taken out (only that one): show the plans.
-    val openStore by rememberUpdatedState(onOpenStore)
-    LaunchedEffect(stateHolder) {
+    // A plan change reloaded the order from page one: show it from the top.
+    LaunchedEffect(stateHolder, gridState) {
         stateHolder.events.collect { event ->
             when (event) {
-                GridEvent.OpenPaywall -> openStore()
+                GridEvent.ScrollToTop -> gridState.scrollToItem(0)
             }
         }
     }
@@ -142,6 +140,7 @@ fun GridScreen(
 
     GridScreenContent(
         state = state,
+        countFor = { draft -> stateHolder.countFor(draft) },
         savedFiltersState = savedFiltersState,
         tonightSessionActive = tonightState.currentSession != null,
         lifestyleFiltersAllowed = lifestyleFiltersAllowed,
@@ -154,9 +153,6 @@ fun GridScreen(
         onClearAllFilters = { scope.launch { stateHolder.clearAllFilters() } },
         onSavePreset = { name, filters ->
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.save(name, filters) } }
-        },
-        onApplySavedPreset = { dto ->
-            scope.launch { stateHolder.applyFilters(GridFilters.fromGridQueryRequest(dto.payload)) }
         },
         onDeleteSavedPreset = { id ->
             savedGridFilterStateHolder?.let { holder -> scope.launch { holder.delete(id) } }
@@ -174,7 +170,6 @@ fun GridScreen(
             scope.launch { if (stateHolder.applyNewNearby()) gridState.scrollToItem(0) }
         },
         onOpenTravel = travelLocationStateHolder?.let { { travelSheetVisible = true } },
-        advancedFiltersAllowed = advancedFiltersAllowed,
         travelCityName = travelState.current?.city,
         onTurnOffTravel = {
             travelLocationStateHolder?.let { holder ->
@@ -184,8 +179,12 @@ fun GridScreen(
                 }
             }
         },
+        // A locked tile sells the plan that unlocks it; it never opens (or fetches) a profile.
         onProfileSelected = { card ->
-            scope.launch { profileDetailStateHolder.open(card) }
+            when (val tap = routeGridTileTap(card, state.unlockTier)) {
+                is GridTileTap.OpenPaywall -> onOpenUnlockStore(tap.unlockTier)
+                is GridTileTap.OpenProfile -> scope.launch { profileDetailStateHolder.open(tap.card) }
+            }
         },
         onUseCurrentLocation = onUseCurrentLocation,
         onProfileIconClick = onProfileIconClick,
@@ -199,6 +198,7 @@ fun GridScreen(
         onShowFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.show() } } },
         onRefreshFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.refresh() } } },
         onLoadMoreFavorites = { favoritesStateHolder?.let { holder -> scope.launch { holder.loadMore() } } },
+        onOpenUnlockStore = onOpenUnlockStore,
     )
 
     // Travel mode from the Grid header (plan G8): the same picker and holder Swipe uses, no new travel
@@ -274,8 +274,9 @@ fun GridScreen(
             }
         },
         onRemoveCard = { userId ->
-            stateHolder.removeCardById(userId)
+            // Favorites first: the Grid's removal may wait on a backfill page (plan G2-4).
             favoritesStateHolder?.removeCardById(userId)
+            stateHolder.removeCardById(userId)
         },
         viewerUserId = viewerUserId,
         profileLinkActionFor = { targetUserId ->
@@ -286,7 +287,8 @@ fun GridScreen(
         },
         distanceUnit = distanceUnit,
         onOpenPhotoVerification = onOpenPhotoVerification,
-        onOpenStore = onOpenStore,
+        // The pager's locked "See plans" page: the same plan the banner sells.
+        onOpenStore = { onOpenUnlockStore(state.unlockTier) },
     )
 }
 

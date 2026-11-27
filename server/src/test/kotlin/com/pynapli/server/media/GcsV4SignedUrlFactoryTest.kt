@@ -115,6 +115,58 @@ class GcsV4SignedUrlFactoryTest {
     }
 
     @Test
+    fun uploadUrlSignsTheCreateOnlyPreconditionAndHandsItToTheClient() {
+        // Review finding: a 15-minute PUT URL could overwrite screened bytes. The upload URL now
+        // signs x-goog-if-generation-match: 0 (GCS requires x-goog-* headers to be signed when sent).
+        val destination =
+            GcsV4MediaUploadSigner(storageBucket = "pynapli-prod-media", signedUrlFactory = factory())
+                .createUploadDestination(
+                    ownerUserId = java.util.UUID.randomUUID(),
+                    mediaAssetId = java.util.UUID.fromString("30000000-0000-0000-0000-000000000001"),
+                    albumKind = "profile",
+                    contentType = "image/jpeg",
+                )
+
+        assertTrue(destination.uploadUrl.contains("X-Goog-SignedHeaders=host%3Bx-goog-if-generation-match"), destination.uploadUrl)
+        assertEquals("0", destination.uploadHeaders["x-goog-if-generation-match"])
+        assertEquals("image/jpeg", destination.uploadHeaders["Content-Type"])
+        assertTrue(
+            verifies(destination.uploadUrl, canonicalHeaders = "host:storage.googleapis.com\nx-goog-if-generation-match:0\n", signedHeaders = "host;x-goog-if-generation-match"),
+            "the signature must cover the precondition header",
+        )
+        // A client that drops the header no longer matches the signature.
+        assertTrue(!verifies(destination.uploadUrl, canonicalHeaders = "host:storage.googleapis.com\n", signedHeaders = "host"))
+    }
+
+    @Test
+    fun downloadUrlsStillSignHostOnly() {
+        val signed = factory().sign(method = "GET", bucket = "b", objectKey = "media/x", ttl = Duration.ofMinutes(5))
+        assertTrue(signed.url.contains("X-Goog-SignedHeaders=host&"), signed.url)
+    }
+
+    private fun verifies(
+        url: String,
+        canonicalHeaders: String,
+        signedHeaders: String,
+    ): Boolean {
+        val (base, fullQuery) = url.removePrefix("https://storage.googleapis.com").split("?", limit = 2)
+        val canonicalQuery = fullQuery.substringBefore("&X-Goog-Signature=")
+        val signatureHex = fullQuery.substringAfter("&X-Goog-Signature=")
+        val canonicalRequest = listOf("PUT", base, canonicalQuery, canonicalHeaders, signedHeaders, "UNSIGNED-PAYLOAD").joinToString("\n")
+        val hash =
+            MessageDigest
+                .getInstance("SHA-256")
+                .digest(canonicalRequest.toByteArray(StandardCharsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+        val stringToSign = listOf("GOOG4-RSA-SHA256", "20260531T120000Z", "20260531/auto/storage/goog4_request", hash).joinToString("\n")
+        return Signature.getInstance("SHA256withRSA").run {
+            initVerify(keyPair.public)
+            update(stringToSign.toByteArray(StandardCharsets.UTF_8))
+            verify(signatureHex.hexToByteArray())
+        }
+    }
+
+    @Test
     fun expiryIsClampedToGcsMaximum() {
         val signed =
             factory().sign(

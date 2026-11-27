@@ -123,8 +123,8 @@ class GridPaginationAndScaleTest :
                 val filterSet =
                     listOf(
                         DiscoveryFilters(),
-                        DiscoveryFilters(relationshipContexts = setOf("single")),
-                        DiscoveryFilters(relationshipContexts = setOf("linked")),
+                        DiscoveryFilters(linkedOnly = false),
+                        DiscoveryFilters(maximumAge = 40),
                         DiscoveryFilters(minimumAge = 35, maximumAge = 45),
                     )
                 val timingsMillis =

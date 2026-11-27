@@ -18,6 +18,7 @@ import com.pynapli.app.design.icons.filled.ChatBubble
 import com.pynapli.app.design.icons.filled.Delete
 import com.pynapli.app.design.icons.filled.Download
 import com.pynapli.app.design.icons.filled.Edit
+import com.pynapli.app.design.icons.filled.Link
 import com.pynapli.app.design.icons.filled.LocalFireDepartment
 import com.pynapli.app.design.icons.filled.Lock
 import com.pynapli.app.design.icons.filled.Notifications
@@ -56,7 +57,12 @@ internal fun ProfileHubContent(
     onRequestDataExport: () -> Unit,
     onDeleteAccountClick: () -> Unit,
     onChangePasswordClick: () -> Unit = {},
+    // Only when the server said the account has a password (SignInMethodsUiState.showChangePassword).
+    changePasswordVisible: Boolean = false,
     onSignedInDevicesClick: () -> Unit = {},
+    // Settings > Sign-in methods (password + Google / Apple); null hides the row (feature off).
+    onSignInMethodsClick: (() -> Unit)? = null,
+    signInMethodsSummary: String = "",
     onLogoutClick: () -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier,
@@ -276,12 +282,22 @@ internal fun ProfileHubContent(
                         } ?: "Devices",
                     onClick = onSignedInDevicesClick,
                 )
-                ProfileHubRow(
-                    icon = Icons.Filled.Lock,
-                    label = "Change password",
-                    value = if (state.isChangingPassword) "Saving" else "Signs out other devices",
-                    onClick = onChangePasswordClick,
-                )
+                onSignInMethodsClick?.let { open ->
+                    ProfileHubRow(
+                        icon = Icons.Filled.Link,
+                        label = "Sign-in methods",
+                        value = signInMethodsSummary,
+                        onClick = open,
+                    )
+                }
+                if (changePasswordVisible) {
+                    ProfileHubRow(
+                        icon = Icons.Filled.Lock,
+                        label = "Change password",
+                        value = if (state.isChangingPassword) "Saving" else "Signs out other devices",
+                        onClick = onChangePasswordClick,
+                    )
+                }
                 ProfileHubRow(
                     icon = Icons.Filled.Delete,
                     label = "Delete account",

@@ -5,6 +5,7 @@ import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.shared.network.dto.ConversationDetailDto
 import com.pynapli.shared.network.dto.ConversationParticipantStatus
 import com.pynapli.shared.network.dto.MESSAGE_BODY_MAX_LENGTH
+import com.pynapli.shared.network.dto.MetInPersonOfferDto
 import com.pynapli.shared.network.dto.PartnerChatInviteDto
 
 @Immutable
@@ -38,6 +39,11 @@ data class ConversationUiState(
     val revealingMessageIds: Set<String> = emptySet(),
     val typingParticipants: List<TypingParticipantUi> = emptyList(),
     val partnerInviteFeedback: String? = null,
+    // The open "We've met in person" sheet, if any (server-decided offers; see ConversationMetInPerson).
+    val metInPersonSheet: MetInPersonSheetState? = null,
+    // The viewer's "Met in person" actions, fetched when the overflow menu opens (null: not fetched).
+    val metInPersonOffers: List<MetInPersonOfferDto>? = null,
+    val isLoadingMetInPersonOffers: Boolean = false,
     val errorMessage: String? = null,
 ) {
     val visible: Boolean

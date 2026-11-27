@@ -32,6 +32,9 @@ import com.pynapli.app.perf.PynapliPerfMarks
 import com.pynapli.app.store.StorePaywallFocus
 import com.pynapli.app.store.StorePaywallSheet
 import com.pynapli.app.store.toStorePartnerLink
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 
 /**
@@ -83,9 +86,23 @@ fun PynapliApp(
         // Blocked, hidden or reported anywhere: the Grid and Favorites (kept across tabs) drop them.
         LaunchedEffect(graph.profileDetailStateHolder) {
             graph.profileDetailStateHolder.removedProfiles.collect { userId ->
-                graph.gridStateHolder.removeCardById(userId)
+                // Favorites first: the Grid's removal may wait on a backfill page (plan G2-4).
                 graph.favoritesStateHolder?.removeCardById(userId)
+                graph.gridStateHolder.removeCardById(userId)
             }
+        }
+        // A plan change (a purchase or restore in the Store, or a lapse picked up by the Profile Hub on
+        // resume) reloads the Grid, so cards locked for the old plan unlock or lock (Section 3). Each
+        // source only emits when its own fetch answered, so the newest emission is the current plan.
+        LaunchedEffect(graph.gridStateHolder, graph.storeStateHolder, graph.profileHubStateHolder) {
+            merge(
+                graph.storeStateHolder.state
+                    .map { it.entitlement?.tier }
+                    .distinctUntilChanged(),
+                graph.profileHubStateHolder.state
+                    .map { it.entitlement?.tier }
+                    .distinctUntilChanged(),
+            ).collect { tier -> graph.gridStateHolder.onPlanTierObserved(tier) }
         }
         LaunchedEffect(authState.isCheckingSession, authState.session == null) {
             if (!authState.isCheckingSession && authState.session == null) {
@@ -118,6 +135,8 @@ fun PynapliApp(
                 storePaywallFocus = null
                 // Signed out: never show this account's verification state to the next one.
                 graph.photoVerificationStateHolder?.reset()
+                // Nor its linked sign-in methods.
+                graph.signInMethodsStateHolder?.reset()
             },
             onOpenProfileHub = { profileSurface = ProfileSurface.Hub },
             onOpenPartnerPanel = {
@@ -184,6 +203,13 @@ fun PynapliApp(
             }
         }
 
+        // Which "Continue with ..." buttons the signed-out screens show (server flag AND platform).
+        LaunchedEffect(authState.isCheckingSession, authState.authenticated) {
+            if (!authState.isCheckingSession && !authState.authenticated) {
+                graph.authStateHolder.loadSocialSignInConfig()
+            }
+        }
+
         if (authState.isCheckingSession) {
             // The same splash the boot stage drew, so nothing moves at the swap (Section 1, B5).
             PynapliSplashContent()
@@ -211,7 +237,8 @@ fun PynapliApp(
                 onConfirmDob = { scope.launch { graph.onboardingStateHolder.confirmDob() } },
                 onBackToDob = graph.onboardingStateHolder::backToDob,
                 onCancelToSignIn = { scope.launch { graph.onboardingStateHolder.cancelToSignIn() } },
-                onAcceptPolicies = graph.onboardingStateHolder::acceptPolicies,
+                // Email moves on to the account step; Google / Apple finishes the sign-up here.
+                onAcceptPolicies = { scope.launch { graph.onboardingStateHolder.acceptPoliciesAndContinue() } },
                 onBackToPolicies = graph.onboardingStateHolder::backToPolicies,
                 onEmailChanged = graph.onboardingStateHolder::updateEmail,
                 onPasswordChanged = graph.onboardingStateHolder::updatePassword,
@@ -280,6 +307,13 @@ fun PynapliApp(
                             holder.startCreateAccount()
                         }
                     },
+                // Through the stepper when there is one: an unknown identity continues there.
+                onContinueWithSocial = { provider ->
+                    scope.launch {
+                        val onboarding = graph.onboardingStateHolder
+                        if (onboarding != null) onboarding.continueWithSocial(provider) else graph.authStateHolder.continueWithSocial(provider)
+                    }
+                },
                 testerDiagnosticLabel = platform.testerDiagnosticLabel,
             )
             return@PynapliTheme
@@ -342,6 +376,7 @@ fun PynapliApp(
                 onboardingStateHolder = graph.onboardingStateHolder,
                 photoVerificationStateHolder = graph.photoVerificationStateHolder,
                 contactBlocksStateHolder = graph.contactBlocksStateHolder,
+                signInMethodsStateHolder = graph.signInMethodsStateHolder,
                 favoritesStateHolder = graph.favoritesStateHolder,
                 conversationActions = conversationActions,
                 scope = scope,

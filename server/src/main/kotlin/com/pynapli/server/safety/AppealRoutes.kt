@@ -3,8 +3,10 @@ package com.pynapli.server.safety
 import com.pynapli.server.auth.AuthException
 import com.pynapli.server.auth.AuthService
 import com.pynapli.server.auth.authenticatedUser
+import com.pynapli.server.auth.social.SocialAuthService
 import com.pynapli.shared.network.dto.AccountAppealRequestDto
 import com.pynapli.shared.network.dto.CreateAppealRequestDto
+import com.pynapli.shared.network.dto.SocialAccountAppealRequestDto
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
@@ -17,6 +19,7 @@ fun Application.configureAppealRoutes(
     authService: AuthService,
     appealService: AppealService,
     trustedProxyHops: Int = 1,
+    socialAuthService: SocialAuthService? = null,
 ) {
     routing {
         post("/v1/appeals") {
@@ -48,6 +51,27 @@ fun Application.configureAppealRoutes(
                     CreateAppealRequestDto(actionType = actionType, targetType = "account", reason = request.reason),
                 ),
             )
+        }
+
+        // The same appeal for an account that signs in with Google or Apple: a fresh provider sign-in
+        // (ID token + server nonce) proves the identity instead of a password.
+        socialAuthService?.let { social ->
+            post("/v1/auth/account-appeal/social/{provider}") {
+                val request = call.receive<SocialAccountAppealRequestDto>()
+                val identity = social.identityForAppeal(call.parameters["provider"], request.idToken, request.nonce)
+                val actionType =
+                    when (identity.userStatus) {
+                        "suspended" -> "account_suspension"
+                        "banned" -> "account_ban"
+                        else -> throw AuthException("ACCOUNT_NOT_RESTRICTED")
+                    }
+                call.respond(
+                    appealService.submitAppeal(
+                        identity.userId,
+                        CreateAppealRequestDto(actionType = actionType, targetType = "account", reason = request.reason),
+                    ),
+                )
+            }
         }
 
         post("/v1/appeals/{appealId}/withdraw") {

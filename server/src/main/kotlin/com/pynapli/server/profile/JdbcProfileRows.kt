@@ -19,6 +19,8 @@ internal fun ResultSet.toPublicProfileRecord(): PublicProfileRecord {
         profilePhotoMediaAssetIds = getUuidList("profile_photo_ids"),
         verified = getBoolean("verified"),
         coupleVerified = getBoolean("couple_verified"),
+        metInPerson = getBoolean("met_in_person"),
+        metInPersonAsCouple = getBoolean("met_in_person_couple"),
         linkedPartnerUserId = getObject("linked_partner_user_id", UUID::class.java),
         linkedPartnerDisplayName = getString("linked_partner_display_name"),
         linkedPartnerThumbnailMediaAssetId = getObject("linked_partner_thumbnail_media_asset_id", UUID::class.java),
@@ -26,6 +28,8 @@ internal fun ResultSet.toPublicProfileRecord(): PublicProfileRecord {
         linkedPartnerOrientationDetail = getString("linked_partner_orientation_detail"),
         linkedPartnerExperienceLevel = getString("linked_partner_experience_level"),
         linkedPartnerLifestyleTags = getStringList("linked_partner_lifestyle_tags"),
+        linkedPartnerAge = getInt("linked_partner_age").takeUnless { wasNull() },
+        linkedPartnerGender = getString("linked_partner_gender"),
         displayAge = getInt("display_age").takeUnless { wasNull() },
         bio = getString("bio"),
         neighborhood = getString("neighborhood"),
@@ -97,6 +101,7 @@ internal fun ResultSet.toMeRecord(): MeRecord {
                 visibleWhileTraveling = getBoolean("visible_while_traveling"),
                 sharePsyncSoloMatches = getBoolean("share_psync_solo_matches"),
                 partnerVisibility = getString("partner_visibility"),
+                showMetInPersonBadge = getBoolean("show_met_in_person_badge"),
             ),
     )
 }

@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 /** The Grid is kept across tabs, so changes made elsewhere must still reach it. */
 class GridCrossTabTest {
-    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km", tone = GridCardTone.Warm)
+    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = false, distanceLabel = "1 km")
 
     @Test
     fun anInvalidatedGridRefetchesQuietlyOnReturn() =

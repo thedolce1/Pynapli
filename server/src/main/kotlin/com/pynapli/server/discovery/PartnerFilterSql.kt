@@ -1,0 +1,171 @@
+package com.pynapli.server.discovery
+
+import java.sql.Connection
+import java.sql.PreparedStatement
+import java.util.UUID
+
+/**
+ * The partner filters (FILTERS_SPEC "Partner", plan G2-3) and the "No single men" chip, shared by the
+ * Grid (nearby and Visiting soon, through GridFilterSql, one viewer), the Swipe deck rank (one viewer;
+ * on a Psync deck both session partners) and the Psync coordinator's defensive re-check
+ * ([matchingCandidateIds], both partners).
+ *
+ * Every predicate here tests the candidate's linked partner only through
+ * [LinkedPartnerFilterSql.visiblePartnerExists], the exact gate behind the "Linked" filter and the
+ * card's partner mini: the owner's partner_visibility, the viewer's hidden list, contact blocks, a
+ * block either way, and the partner's status, visibility, incognito and moderation tier. A partner
+ * this viewer may not see contributes nothing, so a partner filter never matches through a hidden
+ * partner (the candidate behaves as "no visible partner"), and the result always agrees with the
+ * tile. The partner's attributes are the partner's OWN declared profile values (gender key, display
+ * age, orientation key, photo verification), never inferred from the candidate or from genders.
+ *
+ * Cost: when a filter is off its leading `?::boolean = false` short-circuits the OR, so the default
+ * path runs no subquery. When on, it is one EXISTS per candidate that survived the cheaper filters:
+ * a probe of the partial unique index `idx_user_profile_links_active_user` (at most one active link
+ * per user), then primary-key lookups on users / profiles / discovery_settings /
+ * account_risk_states for the partner, and the gate's own index probes (user_blocks,
+ * user_hidden_profiles, matches only for matches_only owners). Same shape as the "Linked" filter, so
+ * no new index is needed.
+ *
+ * Viewer-specific: a filter carrying any of these is never served from a shared rank cache.
+ */
+object PartnerFilterSql {
+    /**
+     * `AND (...) AND (...)`: the partner filters, then "No single men". [user], [profile] and
+     * [settings] are the candidate's `users`, `profiles` and `discovery_settings` aliases.
+     * [viewerCount] repeats the partner gate once per viewer (a Psync deck has two: the partner must be
+     * shown to both, LinkedPartnerFilterSql). Bind with [bind], passing exactly [viewerCount] viewers.
+     *
+     * Placeholders for n viewers: 13 + 12n (n = 1: 25, n = 2: 37). In order: the partner-filters
+     * switch; the gate (hidden-from array, then 6 per viewer); the 9 partner-condition values; the
+     * "No single men" switch; the gate again (hidden-from array, then 6 per viewer).
+     */
+    fun predicates(
+        user: String,
+        profile: String,
+        settings: String,
+        viewerCount: Int = 1,
+    ): String {
+        require(viewerCount >= 1)
+        val partnerMatches =
+            LinkedPartnerFilterSql.visiblePartnerExists(
+                user = user,
+                settings = settings,
+                viewerCount = viewerCount,
+                partnerCondition = PARTNER_CONDITION,
+            )
+        val anyVisiblePartner =
+            LinkedPartnerFilterSql.visiblePartnerExists(user = user, settings = settings, viewerCount = viewerCount)
+        return """
+            -- Partner filters: the visibly linked partner's own gender, age, orientation, verification.
+            AND (
+                ?::boolean = false
+                OR $partnerMatches
+            )
+            -- "No single men": not (declared man or trans man AND no partner shown to the viewer(s)).
+            -- Founder decision 2026-11-27: the shortcut follows gender identity, so trans_man counts as
+            -- a man. Non-binary and every other key, and no declared gender, are kept.
+            AND (
+                ?::boolean = false
+                OR $profile.gender IS NULL
+                OR $profile.gender NOT IN ('man', 'trans_man')
+                OR $anyVisiblePartner
+            )
+            """.trimIndent()
+    }
+
+    /** Binds [predicates] for one viewer starting at [startIndex]; returns the next free index. */
+    fun bind(
+        statement: PreparedStatement,
+        connection: Connection,
+        startIndex: Int,
+        filters: DiscoveryFilters,
+        viewerUserId: UUID,
+        hiddenFromViewerIds: Set<UUID>,
+    ): Int = bind(statement, connection, startIndex, filters, listOf(viewerUserId), hiddenFromViewerIds)
+
+    /**
+     * Binds [predicates] built with `viewerCount = viewers.size`; returns the next free index.
+     * [hiddenFromViewerIds] are the people hiding from any of the viewers (contact blocks).
+     */
+    fun bind(
+        statement: PreparedStatement,
+        connection: Connection,
+        startIndex: Int,
+        filters: DiscoveryFilters,
+        viewers: List<UUID>,
+        hiddenFromViewerIds: Set<UUID>,
+    ): Int {
+        require(viewers.isNotEmpty())
+        var index = startIndex
+        statement.setBoolean(index++, filters.hasPartnerFilters)
+        index = LinkedPartnerFilterSql.bindVisiblePartner(statement, connection, index, viewers, hiddenFromViewerIds)
+        val genders = connection.createArrayOf("text", filters.partnerGenders.toTypedArray())
+        val orientations = connection.createArrayOf("text", filters.partnerOrientations.toTypedArray())
+        statement.setArray(index++, genders)
+        statement.setArray(index++, genders)
+        statement.setArray(index++, orientations)
+        statement.setArray(index++, orientations)
+        statement.setObject(index++, filters.partnerMinimumAge, java.sql.Types.INTEGER)
+        statement.setObject(index++, filters.partnerMinimumAge, java.sql.Types.INTEGER)
+        statement.setObject(index++, filters.partnerMaximumAge, java.sql.Types.INTEGER)
+        statement.setObject(index++, filters.partnerMaximumAge, java.sql.Types.INTEGER)
+        statement.setBoolean(index++, filters.partnerVerifiedOnly)
+        statement.setBoolean(index++, filters.excludeSingleMen)
+        return LinkedPartnerFilterSql.bindVisiblePartner(statement, connection, index, viewers, hiddenFromViewerIds)
+    }
+
+    /**
+     * Of [candidateIds], the ones that pass the partner filters and "No single men" for every one of
+     * [viewers] (the partner gate repeated per viewer), with [hiddenFromViewerIds] the union of the
+     * people hiding from any of them. The Psync coordinator runs it for both session partners as a
+     * defensive re-check of the dealt deck: the Psync rank already applies the same predicates with
+     * both viewers (JdbcSwipeDeckRankSql, coViewerUserId), so this should drop nothing; it guards a
+     * generator that ranked from one view only. "Linked" / Singles are not re-checked here: they relax
+     * on a thin Swipe deck when not a dealbreaker, and the rank applies them for both partners.
+     */
+    fun matchingCandidateIds(
+        connection: Connection,
+        viewers: List<UUID>,
+        candidateIds: Collection<UUID>,
+        filters: DiscoveryFilters,
+        hiddenFromViewerIds: Set<UUID>,
+    ): Set<UUID> {
+        if (candidateIds.isEmpty()) return emptySet()
+        val sql =
+            """
+            SELECT u.id
+            FROM unnest(?::uuid[]) AS c(user_id)
+            JOIN users u ON u.id = c.user_id
+            JOIN profiles p ON p.user_id = u.id
+            JOIN discovery_settings ds ON ds.user_id = u.id
+            WHERE true
+            ${predicates(user = "u", profile = "p", settings = "ds", viewerCount = viewers.size)}
+            """.trimIndent()
+        return connection.prepareStatement(sql).use { statement ->
+            var index = 1
+            statement.setArray(index++, connection.createArrayOf("uuid", candidateIds.toTypedArray()))
+            bind(statement, connection, index, filters, viewers, hiddenFromViewerIds)
+            statement.executeQuery().use { rs ->
+                buildSet {
+                    while (rs.next()) add(rs.getObject(1, UUID::class.java))
+                }
+            }
+        }
+    }
+
+    /** Whether [filters] carries any partner-derived predicate Psync must re-check for the partner. */
+    fun appliesTo(filters: DiscoveryFilters): Boolean = filters.hasPartnerFilters || filters.excludeSingleMen
+
+    // Against the gated partner's own profile row (`lp_profile`, LinkedPartnerFilterSql's alias).
+    // Placeholders: genders twice, orientations twice, min age twice, max age twice, verified.
+    // Self-describe keys never match a structured value, as for the owner's own gender/orientation.
+    private val PARTNER_CONDITION =
+        """
+        AND (cardinality(?::text[]) = 0 OR lp_profile.gender = ANY(?::text[]))
+        AND (cardinality(?::text[]) = 0 OR lp_profile.orientation = ANY(?::text[]))
+        AND (?::integer IS NULL OR lp_profile.display_age >= ?::integer)
+        AND (?::integer IS NULL OR lp_profile.display_age <= ?::integer)
+        AND (?::boolean = false OR lp_profile.verified_at IS NOT NULL)
+        """.trimIndent()
+}

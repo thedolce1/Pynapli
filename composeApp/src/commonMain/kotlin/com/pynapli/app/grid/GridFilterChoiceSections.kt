@@ -17,28 +17,44 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.pynapli.app.design.handCursor
+import com.pynapli.shared.distance.DiscoveryRadiusSteps
 import com.pynapli.shared.profile.ProfileTaxonomies
+import kotlin.math.roundToInt
 
+/**
+ * The Grid radius slider moves between the server's radius steps only (DiscoveryRadiusSteps: 2, 5,
+ * 10, 25, 50, 100 km), and the label names the step, which is exactly the radius the server searches.
+ */
 @Composable
 internal fun DistanceSection(
     radiusMeters: Int,
     onChange: (Int) -> Unit,
 ) {
-    val km = (radiusMeters + 500) / 1_000
+    val steps = DiscoveryRadiusSteps.METERS
     Column {
         Text(
-            text = "Within $km km",
+            text = distanceRadiusLabel(radiusMeters),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Slider(
-            value = radiusMeters.toFloat(),
-            onValueChange = { value -> onChange(value.toInt()) },
-            valueRange = GridFilters.MIN_RADIUS_METERS.toFloat()..GridFilters.MAX_RADIUS_METERS.toFloat(),
-            steps = 0,
+            value = DiscoveryRadiusSteps.indexOf(GridFilters.snapRadius(radiusMeters)).toFloat(),
+            onValueChange = { value -> onChange(radiusForSliderPosition(value)) },
+            valueRange = 0f..(steps.size - 1).toFloat(),
+            // Material counts the stops between the two ends.
+            steps = steps.size - 2,
             modifier = Modifier.handCursor(),
         )
     }
+}
+
+/** "Within 25 km": the server's step for [radiusMeters] (whole km; every step is a whole km). */
+internal fun distanceRadiusLabel(radiusMeters: Int): String = "Within ${GridFilters.snapRadius(radiusMeters) / 1_000} km"
+
+/** The step at a slider position (an index into DiscoveryRadiusSteps.METERS). */
+internal fun radiusForSliderPosition(position: Float): Int {
+    val steps = DiscoveryRadiusSteps.METERS
+    return steps[position.roundToInt().coerceIn(0, steps.lastIndex)]
 }
 
 @Composable
@@ -87,6 +103,8 @@ internal fun PresenceSection(
     onTravelingHereToggle: () -> Unit,
     visitingSoon: Boolean = false,
     onVisitingSoonToggle: () -> Unit = {},
+    haventChatted: Boolean = false,
+    onHaventChattedToggle: () -> Unit = {},
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -99,6 +117,7 @@ internal fun PresenceSection(
         SheetToggleChip(label = "Traveling here", active = travelingHere, onClick = onTravelingHereToggle)
         SheetToggleChip(label = "Visiting soon", active = visitingSoon, onClick = onVisitingSoonToggle)
         SheetToggleChip(label = "Playing tonight", active = tonightAvailable, onClick = onTonightToggle)
+        SheetToggleChip(label = "Haven't chatted (24 h)", active = haventChatted, onClick = onHaventChattedToggle)
     }
 }
 
@@ -150,8 +169,6 @@ internal fun TonightSessionEntryRow(
 internal fun LogisticsSection(
     selected: Set<LogisticsTag>,
     onChange: (Set<LogisticsTag>) -> Unit,
-    // Free viewer: every paid tag (all but "Public meet first") shows a lock.
-    lockPaid: Boolean = false,
 ) {
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -160,7 +177,7 @@ internal fun LogisticsSection(
     ) {
         LogisticsTag.entries.forEach { tag ->
             val active = tag in selected
-            SheetToggleChip(label = tag.label, active = active, locked = lockPaid && tag.paid) {
+            SheetToggleChip(label = tag.label, active = active) {
                 onChange(if (active) selected - tag else selected + tag)
             }
         }
@@ -230,6 +247,25 @@ internal fun LifestyleSection(
                 }
             }
         }
+    }
+}
+
+/**
+ * Lifestyle match mode (plan G2-4, Grindr's tags): "Any" is the usual any-of within a group; "All of up
+ * to 3" means every chosen tag must be on the profile.
+ */
+@Composable
+internal fun LifestyleMatchModeRow(
+    matchAll: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SheetToggleChip(label = "Any", active = !matchAll, onClick = { onChange(false) })
+        SheetToggleChip(label = "All of (up to ${GridFilters.MAX_LIFESTYLE_ALL_OF})", active = matchAll, onClick = { onChange(true) })
     }
 }
 
@@ -310,6 +346,7 @@ internal fun TrustSection(
             onTogglesChanged(verified, facePhotoVerified, !ageVerified)
         }
         // Both linked partners selfie-verified: the couple-verified badge (independent of "Linked").
+        // "Partner photo verified" (Partner section) is the partner-only half of this.
         SheetToggleChip(
             label = VERIFIED_COUPLES_ONLY_LABEL,
             active = verifiedCouples,
@@ -321,25 +358,155 @@ internal fun TrustSection(
 /** Shared label for the Grid and Swipe "Verified couples only" chips. */
 internal const val VERIFIED_COUPLES_ONLY_LABEL = "Verified couples only"
 
+/**
+ * FILTERS_SPEC "Who", from the visible partner link (server-decided): Singles = no partner shown to
+ * the viewer, Linked = a partner shown. "Partnered" merged into Linked: the free-text relationship
+ * context it used to match was never reliable. Both on is the union, everyone.
+ */
 @Composable
 internal fun WhoSection(
     singles: Boolean,
     linked: Boolean,
-    partnered: Boolean,
-    onTogglesChanged: (Boolean, Boolean, Boolean) -> Unit,
+    onTogglesChanged: (Boolean, Boolean) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SheetToggleChip(label = "Singles", active = singles) {
-            onTogglesChanged(!singles, linked, partnered)
+            onTogglesChanged(!singles, linked)
         }
         SheetToggleChip(label = "Linked", active = linked) {
-            onTogglesChanged(singles, !linked, partnered)
-        }
-        SheetToggleChip(label = "Partnered", active = partnered) {
-            onTogglesChanged(singles, linked, !partnered)
+            onTogglesChanged(singles, !linked)
         }
     }
 }
+
+/**
+ * "Single women" / "Single men" (plan G2-3): one-tap shortcuts for Singles + that gender, i.e. the
+ * person's own declared gender and no partner shown to the viewer. Nothing new on the server: they
+ * set the same Who and Gender filters the sections below show. Tapping an active one clears it.
+ */
+@Composable
+internal fun SinglesShortcutRow(
+    filters: GridFilters,
+    onChange: (GridFilters) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SinglesShortcut.entries.forEach { shortcut ->
+            val active = shortcut.isActive(filters)
+            SheetToggleChip(label = shortcut.label, active = active) {
+                onChange(if (active) shortcut.cleared(filters) else shortcut.applied(filters))
+            }
+        }
+        // The sheet twin of the quick-row chip, so everything the Filters count counts is here.
+        SheetToggleChip(label = NO_SINGLE_MEN_LABEL, active = filters.noSingleMen) {
+            onChange(filters.copy(noSingleMen = !filters.noSingleMen))
+        }
+    }
+}
+
+/**
+ * The Who shortcuts: Singles plus the declared gender keys of one gender identity (founder decision
+ * 2026-11-27): Single women = woman and trans woman, Single men = man and trans man. Non-binary and
+ * other identities are reachable through the Gender section, never through a shortcut.
+ */
+internal enum class SinglesShortcut(
+    val label: String,
+    val genderKeys: Set<String>,
+) {
+    SingleWomen("Single women", setOf("woman", "trans_woman")),
+    SingleMen("Single men", setOf("man", "trans_man")),
+    ;
+
+    fun isActive(filters: GridFilters): Boolean = filters.singles && !filters.linked && filters.genders == genderKeys
+
+    // Singles rules the partner filters out, so the applied state drops them (they could never match).
+    fun applied(filters: GridFilters): GridFilters = filters.copy(singles = true, linked = false, genders = genderKeys).withPartnerFiltersReconciled()
+
+    fun cleared(filters: GridFilters): GridFilters = filters.copy(singles = false, genders = emptySet())
+}
+
+/**
+ * FILTERS_SPEC "Partner" (plan G2-3): the visibly linked partner's own declared gender, age,
+ * orientation and photo verification. The server only ever tests a partner it shows this viewer, so
+ * these imply Linked. With Singles alone they cannot match anyone, so the section says so instead of
+ * offering dead chips (and the filters are dropped on apply).
+ */
+@Composable
+internal fun PartnerSection(
+    filters: GridFilters,
+    onChange: (GridFilters) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag(GridFilterTags.PARTNER_SECTION),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (!filters.partnerFiltersApply) {
+            Text(
+                text = PARTNER_NEEDS_LINKED_HINT,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            PartnerChoices(filters = filters, onChange = onChange)
+        }
+    }
+}
+
+@Composable
+private fun PartnerChoices(
+    filters: GridFilters,
+    onChange: (GridFilters) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = PARTNER_SECTION_HINT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FilterGroupLabel("Partner's gender")
+        GenderSection(
+            selected = filters.partnerGenders,
+            onChange = { onChange(filters.copy(partnerGenders = it)) },
+        )
+        FilterGroupLabel("Partner's age")
+        AgeSection(
+            minimumAge = filters.partnerMinimumAge,
+            maximumAge = filters.partnerMaximumAge,
+            onChange = { lo, hi -> onChange(filters.copy(partnerMinimumAge = lo, partnerMaximumAge = hi)) },
+        )
+        FilterGroupLabel("Partner's orientation")
+        OrientationSection(
+            selected = filters.partnerOrientations,
+            onChange = { onChange(filters.copy(partnerOrientations = it)) },
+        )
+        FilterGroupLabel("Partner's trust")
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SheetToggleChip(label = PARTNER_VERIFIED_LABEL, active = filters.partnerVerified) {
+                onChange(filters.copy(partnerVerified = !filters.partnerVerified))
+            }
+        }
+        Text(
+            text = PARTNER_VERIFIED_HINT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+internal const val PARTNER_SECTION_HINT: String =
+    "Matches the partner they show you, by what that partner put on their own profile. Using any of these shows only people with a visible linked partner."
+internal const val PARTNER_NEEDS_LINKED_HINT: String =
+    "Partner filters need a visible partner. Turn on Linked, or turn off Singles, to use them."
+internal const val PARTNER_VERIFIED_LABEL: String = "Partner photo verified"
+internal const val PARTNER_VERIFIED_HINT: String =
+    "Only the partner needs to be verified. \"Verified couples only\" under Trust needs both of them."
 
 @Composable
 internal fun GenderSection(

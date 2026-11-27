@@ -50,6 +50,9 @@ class JdbcMediaCleanupRepository(
             DELETE FROM media_assets
             WHERE moderation_status = 'removed'
               AND updated_at < ?
+              -- G2-2: a row keeps its grid thumbnail's bookkeeping until the thumbnail reconciler
+              -- deleted the object, so a purge never orphans one.
+              AND thumbnail_variant IS NULL
             """.trimIndent()
 
         private val DELETE_SOFT_DELETED =
@@ -57,6 +60,7 @@ class JdbcMediaCleanupRepository(
             DELETE FROM media_assets
             WHERE deleted_at IS NOT NULL
               AND deleted_at < ?
+              AND thumbnail_variant IS NULL
             """.trimIndent()
     }
 }

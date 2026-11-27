@@ -225,6 +225,7 @@ class JdbcPhotoVerificationRepository(
                               AND ma.deleted_at IS NULL
                               AND m.processing_status = 'ready'
                               AND m.moderation_status = 'approved'
+                              AND m.intended_album_kind = 'profile'
                             ORDER BY mai.sort_order, mai.added_at DESC
                             LIMIT 6
                         ) ranked

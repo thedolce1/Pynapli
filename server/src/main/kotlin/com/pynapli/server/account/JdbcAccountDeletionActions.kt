@@ -1,9 +1,11 @@
 package com.pynapli.server.account
 
 import com.pynapli.server.auth.CLEAR_REFRESH_REPLAY_SQL
+import com.pynapli.server.auth.social.SealedAppleToken
 import com.pynapli.server.contactblocks.ContactBlockTokens
 import com.pynapli.server.db.inTransaction
 import com.pynapli.server.db.withConnection
+import com.pynapli.server.metinperson.MetInPersonAccountData
 import java.sql.Connection
 import java.util.UUID
 import javax.sql.DataSource
@@ -11,6 +13,8 @@ import javax.sql.DataSource
 internal class JdbcAccountDeletionActions(
     private val dataSource: DataSource,
     private val contactBlockTokens: ContactBlockTokens,
+    // K3-dependent: required, so a dropped wiring fails the build instead of erasing nothing.
+    private val metInPersonAccountData: MetInPersonAccountData,
 ) {
     suspend fun deleteAccount(userId: UUID): AccountDeletionResult? =
         dataSource.withConnection { connection ->
@@ -26,12 +30,18 @@ internal class JdbcAccountDeletionActions(
                 clearActiveTravelLocation(connection, userId)
                 // GDPR/CCPA erasure: scrub PII while preserving safety/legal audit rows.
                 anonymizeUserIdentity(connection, userId)
+                // Read in the same transaction that scrubs them: revoked with Apple after the commit.
+                val appleTokens = appleTokensOf(connection, userId)
                 anonymizeAuthIdentities(connection, userId)
                 anonymizeProfile(connection, userId)
                 val purgedLocationCount = purgeExactLocation(connection, userId)
                 purgeFavoritesAndLastActive(connection, userId)
                 releaseContactBlocks(connection, userId)
+                // Met in person: confirmations given (by token) and received, and the badge.
+                metInPersonAccountData.erase(connection, userId)
                 val endedPartnerLinkCount = endActivePartnerLinks(connection, userId)
+                // After the links end: ending them fires the history trigger, which would record again.
+                purgeLinkHistory(connection, userId)
                 val softDeletedMediaCount = softDeleteOwnedMedia(connection, userId)
                 val revokedSessionCount = revokeSessions(connection, userId)
                 disablePushDevices(connection, userId)
@@ -49,9 +59,39 @@ internal class JdbcAccountDeletionActions(
                     purgedLocationCount = purgedLocationCount,
                     endedPartnerLinkCount = endedPartnerLinkCount,
                     softDeletedMediaCount = softDeletedMediaCount,
+                    appleTokens = appleTokens,
                 )
             }
         }
+
+    private fun appleTokensOf(
+        connection: Connection,
+        userId: UUID,
+    ): List<SealedAppleToken> =
+        connection
+            .prepareStatement(
+                """
+                SELECT id, apple_client_id, apple_refresh_token_sealed
+                FROM auth_identities
+                WHERE user_id = ? AND provider = 'apple'
+                  AND apple_refresh_token_sealed IS NOT NULL AND apple_client_id IS NOT NULL
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setObject(1, userId)
+                statement.executeQuery().use { rs ->
+                    buildList {
+                        while (rs.next()) {
+                            add(
+                                SealedAppleToken(
+                                    identityId = rs.getObject("id", UUID::class.java),
+                                    clientId = rs.getString("apple_client_id"),
+                                    sealed = rs.getBytes("apple_refresh_token_sealed"),
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
 
     private fun endLiveSessions(
         connection: Connection,
@@ -218,7 +258,11 @@ internal class JdbcAccountDeletionActions(
                 SET provider_subject = 'deleted:' || id,
                     password_hash = NULL,
                     password_salt = NULL,
-                    password_iterations = NULL
+                    password_iterations = NULL,
+                    provider_email_hint = NULL,
+                    email_verified = false,
+                    apple_refresh_token_sealed = NULL,
+                    apple_client_id = NULL
                 WHERE user_id = ?
                 """.trimIndent(),
             ).use { statement ->
@@ -321,6 +365,18 @@ internal class JdbcAccountDeletionActions(
             }
         connection.prepareStatement("UPDATE users SET contact_token = NULL WHERE id = ?").use { statement ->
             statement.setObject(1, userId)
+            statement.executeUpdate()
+        }
+    }
+
+    /** The durable partner-link record (V124) goes with the person, in either direction. */
+    private fun purgeLinkHistory(
+        connection: Connection,
+        userId: UUID,
+    ) {
+        connection.prepareStatement("DELETE FROM profile_link_history WHERE user_id = ? OR linked_user_id = ?").use { statement ->
+            statement.setObject(1, userId)
+            statement.setObject(2, userId)
             statement.executeUpdate()
         }
     }

@@ -24,6 +24,7 @@ import com.pynapli.shared.network.SessionRefresherHolder
 import com.pynapli.shared.network.webRealtimeStreams
 import com.pynapli.shared.settings.RetiredLocationConsentKeys
 import com.pynapli.web.auth.LocalStorageSessionStore
+import com.pynapli.web.auth.WebSocialSignInProvider
 import com.pynapli.web.platform.BrowserLocalStorage
 import com.pynapli.web.platform.onOtherTabStorageChange
 import com.pynapli.web.settings.LocalStorageAppSettingsStore
@@ -90,6 +91,10 @@ class WebAppGraph {
 
     val deepLinkStateHolder = AppDeepLinkStateHolder()
 
+    // "Continue with Google / Apple": one instance for sign-in and Settings > Sign-in methods. Client
+    // ids come from index.html; the provider scripts load only once the server switches one on.
+    private val socialSignInProvider = WebSocialSignInProvider()
+
     val authStateHolder =
         AuthStateHolder(
             authRepository = authRepository,
@@ -97,6 +102,7 @@ class WebAppGraph {
             appVersion = "0.1.0",
             deviceId = stableWebInstallId(),
             sessionInvalidations = sessionInvalidationBus.events,
+            socialSignInProvider = socialSignInProvider,
         )
 
     val appSettingsStateHolder =
@@ -160,6 +166,7 @@ class WebAppGraph {
                 realtimeStreams.activity,
             messageStreamClient =
                 realtimeStreams.message,
+            socialSignInProvider = socialSignInProvider,
         )
 
     /** The object the web entry point hands to `PynapliApp`. */

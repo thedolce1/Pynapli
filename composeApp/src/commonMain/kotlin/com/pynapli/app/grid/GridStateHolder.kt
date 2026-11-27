@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import com.pynapli.shared.core.result.AppResult
 import com.pynapli.shared.core.result.runCatchingCancellable
 import com.pynapli.shared.network.PynapliApiClient
+import com.pynapli.shared.network.dto.GridCountResponseDto
+import com.pynapli.shared.network.dto.GridQueryResponseDto
 import com.pynapli.shared.network.dto.PresenceDeltaDto
 import com.pynapli.shared.network.dto.SubscriptionTier
 import kotlinx.coroutines.CompletableDeferred
@@ -59,7 +61,8 @@ class GridStateHolder(
             refreshOnReturn()
             return
         }
-        val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }
+        // Locked cards are never saved; filtering again covers a cache written by an older build.
+        val cached = runCatchingCancellable { snapshotStore.load() }.getOrElse { emptyList() }.withoutLockedCards()
         val paintedCache = cached.isNotEmpty() && _state.value.cards.isEmpty()
         if (paintedCache) {
             // Show cached cards instantly; a quiet refresh swaps in the live feed atomically
@@ -135,19 +138,16 @@ class GridStateHolder(
     }
 
     suspend fun load(quiet: Boolean = false) {
-        load(quiet = quiet, keepGatePrompt = false, openPaywallOnRefusal = false)
+        load(quiet = quiet, keepGatePrompt = false)
     }
 
     /**
-     * [keepGatePrompt]: this load re-asks with the paid (or age-gated) filters taken out, so the
-     * paywall or verification prompt that caused it stays up when the answer lands.
-     * [openPaywallOnRefusal]: the viewer just chose these filters, so an entitlement refusal opens
-     * the plans. A cold-start restore or a quiet location refresh never pops the paywall unasked.
+     * [keepGatePrompt]: this load re-asks with the age-gated lifestyle tags taken out, so the
+     * verification prompt that caused it stays up when the answer lands.
      */
     private suspend fun load(
         quiet: Boolean,
         keepGatePrompt: Boolean,
-        openPaywallOnRefusal: Boolean,
     ) {
         // The account this load serves; a sign-out meanwhile makes its filter write a no-op.
         val epoch = accountEpoch
@@ -175,7 +175,7 @@ class GridStateHolder(
         try {
             // Inside the try, so a cancellation here still releases the in-flight marker.
             persistFilters(filters, epoch)
-            reaskWithout = fetchFirstPage(filters, generation, keepCardsVisible, keepGatePrompt, openPaywallOnRefusal)
+            reaskWithout = fetchFirstPage(filters, generation, keepCardsVisible, keepGatePrompt)
             answered = true
         } finally {
             // Always released, cancellation included, so a joiner never waits on a dead request.
@@ -187,7 +187,7 @@ class GridStateHolder(
         // A gate refused a filter: the rest of the viewer's choices still deserve a Grid. Bounded:
         // the re-ask carries no gated filter, so it cannot be refused for one again.
         if (reaskWithout != null && generation == feedGeneration) {
-            load(quiet = quiet, keepGatePrompt = true, openPaywallOnRefusal = false)
+            load(quiet = quiet, keepGatePrompt = true)
         }
     }
 
@@ -200,7 +200,6 @@ class GridStateHolder(
         generation: Int,
         keepCardsVisible: Boolean,
         keepGatePrompt: Boolean,
-        openPaywallOnRefusal: Boolean,
     ): GridFilters? {
         var reaskWithout: GridFilters? = null
         runCatchingCancellable { repository.loadGrid(filters) }
@@ -217,6 +216,7 @@ class GridStateHolder(
                         cards = feed.cards,
                         nextCursor = feed.nextCursor,
                         widened = feed.widened,
+                        unlockTier = feed.unlockTier,
                         paywallMessage = feed.resultLimitPaywallMessage ?: current.paywallMessage.takeIf { keepGatePrompt },
                         paywallUpgradeTier = feed.resultLimitUpgradeTier ?: current.paywallUpgradeTier.takeIf { keepGatePrompt },
                         verificationMessage = current.verificationMessage.takeIf { keepGatePrompt },
@@ -227,7 +227,7 @@ class GridStateHolder(
                     )
                 }
                 // Persist the fresh cards for an instant first paint on next open (best-effort).
-                runCatchingCancellable { snapshotStore.save(feed.cards) }
+                saveSnapshot(feed.cards)
             }.onFailure { error ->
                 // Superseded (filter change, reload, sign-out) while on the wire: its refusal must not
                 // write old filters or prompts over the newer state, or into the next account's.
@@ -236,41 +236,22 @@ class GridStateHolder(
                     _serverHasLocation.value = false
                 }
                 val code = (error as? GridFeedException)?.code
-                val entitlementRequired = code == "ENTITLEMENT_REQUIRED"
-                val verificationRequired = code == "AGE_VERIFICATION_REQUIRED"
-                // Each gate takes out only what it refused (plan G9): the paid filters, or the
-                // age-gated lifestyle tags. Everything else the viewer chose stays.
-                val allowed =
-                    when {
-                        entitlementRequired -> filters.withoutPaidFilters()
-                        verificationRequired -> filters.copy(lifestyleTags = emptySet())
-                        else -> filters
-                    }
-                if (entitlementRequired && openPaywallOnRefusal) _events.tryEmit(GridEvent.OpenPaywall)
+                // Every filter is free (founder decision 2, 2026-11-26): the one filter gate left is
+                // age verification, which takes out only the lifestyle tags it refused (plan G9).
+                // Everything else the viewer chose stays.
+                val gated = code == "AGE_VERIFICATION_REQUIRED"
+                val allowed = if (gated) filters.copy(lifestyleTags = emptySet()) else filters
                 if (allowed != filters) reaskWithout = allowed
                 _state.update { current ->
-                    // Both gates surface a prompt instead of a raw error, keeping visible cards.
-                    val gated = entitlementRequired || verificationRequired
+                    // The gate surfaces a prompt instead of a raw error, keeping visible cards.
                     if (keepCardsVisible && !gated) {
                         current.copy(isRefreshing = false)
                     } else {
                         current.copy(
                             isRefreshing = false,
                             filters = if (gated) allowed else current.filters,
-                            paywallMessage =
-                                if (entitlementRequired) {
-                                    PAID_FILTER_PAYWALL_MESSAGE
-                                } else {
-                                    current.paywallMessage
-                                },
-                            paywallUpgradeTier =
-                                if (entitlementRequired) {
-                                    SubscriptionTier.SOCIAL
-                                } else {
-                                    current.paywallUpgradeTier
-                                },
                             verificationMessage =
-                                if (verificationRequired) {
+                                if (gated) {
                                     "Verify your age to use lifestyle filters."
                                 } else {
                                     current.verificationMessage
@@ -327,7 +308,7 @@ class GridStateHolder(
             liveAt = answeredAt
             _serverHasLocation.value = true
             val shownIds = _state.value.cards.mapTo(HashSet()) { it.id }
-            val newCount = feed.cards.count { it.id !in shownIds }
+            val newCount = newNearbyCount(feed, shownIds)
             val freshById = feed.cards.associateBy { it.id }
             // The shown cards this answer speaks for: all of them when it is the whole result (no next
             // page), otherwise the slots that came from page one. Cards from later pages are beyond
@@ -341,7 +322,7 @@ class GridStateHolder(
                             val fresh = freshById[shown.id]
                             when {
                                 // Same slot, newer facts; the tile colours stay put so nothing flickers.
-                                fresh != null -> fresh.copy(tone = shown.tone, linkedPartnerTone = shown.linkedPartnerTone)
+                                fresh != null -> fresh.copy(linkedPartnerTone = shown.linkedPartnerTone)
                                 // Gone from the answer that covers this slot (hidden, incognito, moved
                                 // away): never keep a stale green dot. The card stays put (no reorder
                                 // under the finger) with its presence unknown until the order is applied.
@@ -383,14 +364,33 @@ class GridStateHolder(
                 cards = feed.cards,
                 nextCursor = feed.nextCursor,
                 widened = feed.widened,
+                unlockTier = feed.unlockTier,
                 paywallMessage = feed.resultLimitPaywallMessage,
                 paywallUpgradeTier = feed.resultLimitUpgradeTier,
                 isLoadingMore = false,
                 newNearbyCount = 0,
             )
         }
-        runCatchingCancellable { snapshotStore.save(feed.cards) }
+        saveSnapshot(feed.cards)
         return true
+    }
+
+    /**
+     * People in [feed] not on screen yet: the "N new nearby" count. Only real people count; a locked
+     * card is a teaser for the plan, and its opaque token may differ between answers anyway.
+     */
+    private fun newNearbyCount(
+        feed: GridFeedUi,
+        shownIds: Set<String>,
+    ): Int = feed.cards.count { !it.isLockedCard && it.id !in shownIds }
+
+    /**
+     * The cold-start cache holds unlocked people only. Locked tokens are per viewer and may not
+     * outlive the answer, a cached lock would paint over a plan bought since, and a locked person's
+     * photo should not sit on the device beyond the live Grid.
+     */
+    private suspend fun saveSnapshot(cards: List<GridProfileCardUi>) {
+        runCatchingCancellable { snapshotStore.save(cards.withoutLockedCards()) }
     }
 
     /**
@@ -461,7 +461,8 @@ class GridStateHolder(
                 errorMessage = null,
             )
         }
-        load()
+        // G2-2: debounced, and a newer chip tap or apply cancels this one (LatestFilterRequest).
+        filterRequests.run(debounced = true) { load() }
     }
 
     suspend fun applyFilters(filters: GridFilters) {
@@ -476,15 +477,17 @@ class GridStateHolder(
                 errorMessage = null,
             )
         }
-        // Always asked, never pre-stripped from the client's view of the plan (which can lag a
-        // purchase): the server decides, and a refusal takes out only the paid filters, keeps the
-        // rest and, because the viewer just chose them, opens the plans (plan G9).
-        load(quiet = false, keepGatePrompt = false, openPaywallOnRefusal = true)
+        // Always asked: the server decides, and an age-verification refusal takes out only the
+        // lifestyle tags and keeps the rest (plan G9).
+        filterRequests.run(debounced = false) { load(quiet = false, keepGatePrompt = false) }
     }
+
+    /** The newest chip tap or filter apply; an older one still waiting or on the wire is cancelled. */
+    private val filterRequests = LatestFilterRequest()
 
     private val _events = MutableSharedFlow<GridEvent>(extraBufferCapacity = 1)
 
-    /** One-off events for the screen: open the paywall after a paid filter was taken out. */
+    /** One-off events for the screen: scroll to top after a plan change reloaded the order. */
     val events: SharedFlow<GridEvent> = _events.asSharedFlow()
 
     private var filtersRestored = false
@@ -525,8 +528,8 @@ class GridStateHolder(
     }
 
     suspend fun setRadiusMeters(meters: Int) {
-        val clamped = meters.coerceIn(GridFilters.MIN_RADIUS_METERS, GridFilters.MAX_RADIUS_METERS)
-        applyFilters(_state.value.filters.copy(radiusMeters = clamped))
+        // Clamped and snapped to the server's step, so the state holds the radius actually searched.
+        applyFilters(_state.value.filters.copy(radiusMeters = GridFilters.snapRadius(meters)))
     }
 
     suspend fun setAgeRange(
@@ -569,12 +572,17 @@ class GridStateHolder(
                 _state.update { existing ->
                     val existingIds = existing.cards.mapTo(mutableSetOf()) { it.id }
                     val appended = feed.cards.filterNot { it.id in existingIds }
+                    val cards = existing.cards + appended
+                    // Once the list has a lock boundary, its banner sells the rest: a later page that
+                    // reports the depth cap must not bring the old row back above the Grid.
+                    val lockBoundary = feed.hasLockBoundary || existing.unlockTier != null || cards.any { it.isLockedCard }
                     existing.copy(
-                        cards = existing.cards + appended,
+                        cards = cards,
                         nextCursor = feed.nextCursor,
                         widened = feed.widened,
-                        paywallMessage = feed.resultLimitPaywallMessage,
-                        paywallUpgradeTier = feed.resultLimitUpgradeTier,
+                        unlockTier = feed.unlockTier ?: existing.unlockTier,
+                        paywallMessage = if (lockBoundary) null else feed.resultLimitPaywallMessage,
+                        paywallUpgradeTier = if (lockBoundary) null else feed.resultLimitUpgradeTier,
                         isLoadingMore = false,
                         errorCode = null,
                         errorMessage = null,
@@ -592,6 +600,13 @@ class GridStateHolder(
             }
     }
 
+    /**
+     * The filter sheet's "Show N people" for a draft the viewer has not applied yet (plan G2-4). The
+     * server counts with the Grid's own filters and visibility rules; null when it cannot answer (the
+     * sheet then just says "Apply"). The sheet debounces the calls while the viewer edits.
+     */
+    suspend fun countFor(filters: GridFilters): GridCountResponseDto? = runCatchingCancellable { repository.countGrid(filters.withPartnerFiltersReconciled()) }.getOrNull()
+
     suspend fun removeCardById(userId: String) {
         val removedIndex = _state.value.cards.indexOfFirst { it.id == userId }
         if (removedIndex in 0 until pageOneSize) pageOneSize -= 1
@@ -602,13 +617,19 @@ class GridStateHolder(
         pendingFeed?.let { pending ->
             val kept = pending.copy(cards = pending.cards.filterNot { it.id == userId })
             val shownIds = _state.value.cards.mapTo(HashSet()) { it.id }
-            val newCount = kept.cards.count { it.id !in shownIds }
+            val newCount = newNearbyCount(kept, shownIds)
             pendingFeed = if (newCount > 0) kept else null
             if (newCount == 0) pendingAt = null
             _state.update { it.copy(newNearbyCount = newCount) }
         }
         // Keep the cold-start cache in step, so someone just blocked or hidden never paints again.
-        runCatchingCancellable { snapshotStore.save(_state.value.cards) }
+        saveSnapshot(_state.value.cards)
+        // Backfill (plan G2-4, Grindr's hide): the cards after the removed one have moved up a slot in
+        // place (no reorder, no refresh, the scroll position stays). When that leaves only a couple of
+        // screens of tiles and the server has more, the next page fills the tail now, not on scroll. It
+        // continues the same cursor, so nobody already shown moves.
+        val after = _state.value
+        if (removedIndex >= 0 && after.nextCursor != null && after.cards.size < BACKFILL_BELOW) loadMore()
     }
 
     /**
@@ -636,6 +657,32 @@ class GridStateHolder(
         _onScreen.value = visible
     }
 
+    /** The viewer's plan tier as last observed this session; null until the first observation. */
+    private var knownPlanTier: String? = null
+
+    /**
+     * The client learned the viewer's plan ([tier], a SubscriptionTier value): from the Store after a
+     * purchase or restore, or from the Profile Hub on sign-in and resume (a lapse or a partner's
+     * benefit ending shows up there). Which cards are locked is the server's call, so a change of
+     * plan only means the cards on screen were locked for another plan: the Grid reloads, and the
+     * answer unlocks them (an upgrade) or brings the locks back (a downgrade).
+     *
+     * The first observation only records the tier: the Grid that is loading was answered for it.
+     * The reload replaces the order with page one, so it lands at the top (as a refresh does); off
+     * screen, the cards are marked expired and the next return reloads them from the top.
+     */
+    suspend fun onPlanTierObserved(tier: String?) {
+        if (tier == null) return
+        val previous = knownPlanTier
+        knownPlanTier = tier
+        if (previous == null || previous == tier) return
+        invalidate()
+        scrollAnchor = GridScrollAnchor()
+        if (!_onScreen.value) return
+        load(quiet = true)
+        _events.tryEmit(GridEvent.ScrollToTop)
+    }
+
     /** Marks the cards as expired, so the next return to the Grid refetches them quietly. */
     fun invalidate() {
         loadedAt = null
@@ -660,6 +707,8 @@ class GridStateHolder(
      * cache, so the next account never sees it.
      */
     suspend fun clearForSignOut() {
+        // A chip tap still debouncing would otherwise load, and write filters, after the clear.
+        filterRequests.cancelPending()
         accountEpoch += 1
         feedGeneration += 1
         loadedAt = null
@@ -674,6 +723,8 @@ class GridStateHolder(
         filterStoreLock.withLock { runCatchingCancellable { filterStore.clear() } }
         scrollAnchor = GridScrollAnchor()
         travelKeyWhenLeft = null
+        // The next account's first plan observation is a baseline, not a change.
+        knownPlanTier = null
         _serverHasLocation.value = null
         _state.value = GridUiState(isRefreshing = true, cacheChecked = false)
         runCatchingCancellable { snapshotStore.clear() }
@@ -693,19 +744,22 @@ class GridStateHolder(
         }
     }
 
+    /**
+     * The people on the Grid, for the presence subscription. Locked cards never subscribe: their
+     * "locked_" token names nobody, and following a locked person's presence would leak who they are.
+     */
     val visibleUserIds: kotlinx.coroutines.flow.Flow<Set<String>> =
         state
-            .map { ui -> ui.cards.mapTo(LinkedHashSet(ui.cards.size)) { it.id } }
+            .map { ui -> ui.cards.mapNotNullTo(LinkedHashSet(ui.cards.size)) { card -> card.id.takeUnless { card.isLockedCard } } }
             .distinctUntilChanged()
 
     private fun GridFilters.toggle(id: QuickFilterId): GridFilters =
         when (id) {
             QuickFilterId.Online -> copy(online = !online)
-            QuickFilterId.Singles -> copy(singles = !singles)
-            QuickFilterId.Linked -> copy(linked = !linked)
             QuickFilterId.Verified -> copy(verified = !verified)
             QuickFilterId.Tonight -> copy(tonightAvailable = !tonightAvailable)
             QuickFilterId.Fresh -> copy(fresh = !fresh)
+            QuickFilterId.NoSingleMen -> copy(noSingleMen = !noSingleMen)
         }
 
     private fun normalizedAgeRange(
@@ -725,6 +779,13 @@ class GridStateHolder(
         /** A Grid order older than this is replaced (quietly, keeping scroll) on tab return or resume. */
         val RESULTS_EXPIRE_AFTER: Duration = 15.minutes
 
+        /**
+         * A hide or block that leaves fewer cards than this (about two phone screens of tiles) asks for
+         * the next page at once (backfill). Kept well under a page, so a hide on a full first page never
+         * fetches ahead, and a Free viewer never spends a locked page on it.
+         */
+        const val BACKFILL_BELOW: Int = 24
+
         /** Quiet in-place presence refresh cadence while the Grid is visible, and the resume threshold. */
         val LIVE_REFRESH_INTERVAL: Duration = 60.seconds
     }
@@ -732,11 +793,9 @@ class GridStateHolder(
 
 /** One-off Grid events for the screen (StateFlow for state, SharedFlow for these). */
 sealed interface GridEvent {
-    /** A paid filter was taken out (the client knew, or the server refused): show the plans. */
-    data object OpenPaywall : GridEvent
+    /** The order was replaced from page one (a plan change reloaded it): show it from the top. */
+    data object ScrollToTop : GridEvent
 }
-
-internal const val PAID_FILTER_PAYWALL_MESSAGE: String = "Social or Select unlocks Lifestyle and Logistics filters. Your other filters still apply."
 
 /** A saved [androidx.compose.foundation.lazy.grid.LazyGridState] position. */
 data class GridScrollAnchor(
@@ -749,6 +808,9 @@ interface GridFeedRepository {
         filters: GridFilters,
         cursor: String? = null,
     ): GridFeedUi
+
+    /** The filter sheet's "Show N people" (plan G2-4), or null when it is unavailable. */
+    suspend fun countGrid(filters: GridFilters): GridCountResponseDto? = null
 }
 
 class ApiGridFeedRepository(
@@ -758,26 +820,33 @@ class ApiGridFeedRepository(
         filters: GridFilters,
         cursor: String?,
     ): GridFeedUi =
-        when (val result = apiClient.queryGrid(filters.toGridQueryRequest(cursor))) {
-            is AppResult.Success ->
-                GridFeedUi(
-                    cards =
-                        result.value.items.mapIndexed { index, card ->
-                            card.toGridProfileCardUi(index)
-                        },
-                    nextCursor = result.value.nextCursor,
-                    advancedFiltersApplied = result.value.advancedFiltersApplied,
-                    resultLimitReached = result.value.resultLimitReached,
-                    resultLimitTier = result.value.resultLimitTier,
-                    widened = result.value.widened,
-                )
+        when (val result = apiClient.queryGrid(filters.toGridFeedRequest(cursor))) {
+            is AppResult.Success -> result.value.toGridFeedUi()
 
             is AppResult.Failure -> throw GridFeedException(
                 code = result.error.code,
                 message = result.error.message,
             )
         }
+
+    override suspend fun countGrid(filters: GridFilters): GridCountResponseDto? =
+        when (val result = apiClient.countGrid(filters.toGridFeedRequest(cursor = null))) {
+            is AppResult.Success -> result.value
+            is AppResult.Failure -> null
+        }
 }
+
+internal fun GridQueryResponseDto.toGridFeedUi(): GridFeedUi =
+    GridFeedUi(
+        cards = items.mapIndexed { index, card -> card.toGridProfileCardUi(index) },
+        nextCursor = nextCursor,
+        advancedFiltersApplied = advancedFiltersApplied,
+        resultLimitReached = resultLimitReached,
+        resultLimitTier = resultLimitTier,
+        widened = widened,
+        lockedFromIndex = lockedFromIndex,
+        unlockTier = unlockTier,
+    )
 
 /**
  * [Immutable] because `cards` is a `List`, and `List` is only an interface — the compiler cannot
@@ -798,10 +867,21 @@ data class GridFeedUi(
     val resultLimitTier: String? = null,
     // The server widened a sparse first page (and every page continuing its cursor).
     val widened: Boolean = false,
+    // Section 3: the server's 0-based overall index where locking starts, and the plan that unlocks
+    // the locked cards. Null when nothing is locked for this viewer.
+    val lockedFromIndex: Int? = null,
+    val unlockTier: String? = null,
 ) {
+    /**
+     * This answer sells the rest of the Grid with locked cards and their in-grid banner, so the old
+     * "Social unlocks more nearby profiles." row above the Grid stays away. It remains the fallback
+     * for a server that reports the depth cap without sending locked cards.
+     */
+    val hasLockBoundary: Boolean get() = lockedFromIndex != null || cards.any { it.isLockedCard }
+
     val resultLimitPaywallMessage: String?
         get() =
-            if (!resultLimitReached) {
+            if (!resultLimitReached || hasLockBoundary) {
                 null
             } else {
                 when (resultLimitTier) {
@@ -814,7 +894,7 @@ data class GridFeedUi(
     /** The plan that lifts the depth cap the viewer hit: Social from Free, Select from Social. */
     val resultLimitUpgradeTier: String?
         get() =
-            if (!resultLimitReached) {
+            if (!resultLimitReached || hasLockBoundary) {
                 null
             } else {
                 when (resultLimitTier) {
@@ -829,64 +909,3 @@ internal class GridFeedException(
     val code: String,
     override val message: String,
 ) : RuntimeException(message)
-
-private val sampleGridCards =
-    listOf(
-        GridProfileCardUi(
-            "1",
-            "Maya",
-            online = true,
-            distanceLabel = "800 m",
-            tone = GridCardTone.Warm,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-1", displayName = "Noa"),
-            linkedPartnerTone = LinkedPartnerTone.Violet,
-            distanceMeters = 800,
-        ),
-        GridProfileCardUi("2", "Alex", online = true, distanceLabel = "1.2 km", tone = GridCardTone.Slate, distanceMeters = 1_200),
-        GridProfileCardUi(
-            "3",
-            "Nico",
-            online = false,
-            distanceLabel = "2 km",
-            tone = GridCardTone.Rust,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-3", displayName = "Lane"),
-            linkedPartnerTone = LinkedPartnerTone.Gold,
-            distanceMeters = 2_000,
-        ),
-        GridProfileCardUi("4", "Sam", online = true, distanceLabel = null, tone = GridCardTone.DeepGreen),
-        GridProfileCardUi("5", "Ari", online = false, distanceLabel = "4.6 km", tone = GridCardTone.Bronze, distanceMeters = 4_600),
-        GridProfileCardUi(
-            "6",
-            "Drew",
-            online = true,
-            distanceLabel = "6 km",
-            tone = GridCardTone.Graphite,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-6", displayName = "Rae"),
-            linkedPartnerTone = LinkedPartnerTone.Pink,
-            distanceMeters = 6_000,
-        ),
-        GridProfileCardUi("7", "Jules", online = false, distanceLabel = "7 km", tone = GridCardTone.Teal, distanceMeters = 7_000),
-        GridProfileCardUi(
-            "8",
-            "Kai",
-            online = true,
-            distanceLabel = "8.5 km",
-            tone = GridCardTone.Rose,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-8", displayName = "Theo"),
-            linkedPartnerTone = LinkedPartnerTone.Teal,
-            distanceMeters = 8_500,
-        ),
-        GridProfileCardUi("9", "Rae", online = false, distanceLabel = "9 km", tone = GridCardTone.Cocoa, distanceMeters = 9_000),
-        GridProfileCardUi("10", "Theo", online = true, distanceLabel = "10 km", tone = GridCardTone.Moss, distanceMeters = 10_000),
-        GridProfileCardUi(
-            "11",
-            "Noa",
-            online = false,
-            distanceLabel = "12 km",
-            tone = GridCardTone.Stone,
-            linkedPartner = GridLinkedPartnerUi(userId = "sample-linked-11", displayName = "Maya"),
-            linkedPartnerTone = LinkedPartnerTone.Sun,
-            distanceMeters = 12_000,
-        ),
-        GridProfileCardUi("12", "Lane", online = true, distanceLabel = "14 km", tone = GridCardTone.Midnight, distanceMeters = 14_000),
-    )

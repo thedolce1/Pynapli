@@ -1,6 +1,7 @@
 package com.pynapli.app.profile
 
 import com.pynapli.app.grid.GridProfileCardUi
+import com.pynapli.app.grid.isLockedCard
 
 /**
  * What the Grid's profile pager shows right now (GRID_IMPLEMENTATION_SPEC "Profile open"): the
@@ -37,11 +38,14 @@ data class ProfilePagerSettleEffects(
  *   its place; leaving for any other reason (un-starred in Favorites, a quiet refresh) keeps it on
  *   screen until the viewer swipes away.
  *
- * [isLocked] is the seam for Section 3's locked cards: a locked page shows the paywall instead of a
- * profile and never fetches one. Nothing is locked yet.
+ * [isLocked] marks Section 3's locked cards: a locked page shows the paywall instead of a profile and
+ * never fetches one. The pages end at the first locked card: one "See plans" page after the last
+ * person the viewer can see, rather than hundreds of identical paywall pages, and settling there
+ * asks for no more pages (they would only be more locks). A block or hide moves on to an unlocked
+ * person, never onto the locked page.
  */
 class ProfilePagerController(
-    val isLocked: (GridProfileCardUi) -> Boolean = { false },
+    val isLocked: (GridProfileCardUi) -> Boolean = { it.isLockedCard },
 ) {
     private var currentId: String? = null
     private var currentCard: GridProfileCardUi? = null
@@ -63,7 +67,7 @@ class ProfilePagerController(
             reset()
             return null
         }
-        val visible = if (removed.isEmpty()) live else live.filterNot { it.id in removed }
+        val visible = (if (removed.isEmpty()) live else live.filterNot { it.id in removed }).endingAtFirstLocked()
         val liveIndex = visible.indexOfFirst { it.id == selected.id }
         if (liveIndex >= 0) {
             return track(visible, selected, liveIndex)
@@ -75,8 +79,8 @@ class ProfilePagerController(
         }
         if (selected.id in removed) {
             pages = visible
-            if (visible.isEmpty()) return ProfilePagerModel(pages = visible, currentIndex = 0, closeRequested = true)
-            val index = lastIndex.coerceIn(0, visible.lastIndex)
+            val index = replacementIndex(visible)
+            if (index < 0) return ProfilePagerModel(pages = visible, currentIndex = 0, closeRequested = true)
             return ProfilePagerModel(pages = visible, currentIndex = index, replacement = visible[index])
         }
         // Gone from the list for a non-safety reason: keep it where it was until the viewer moves on.
@@ -97,7 +101,9 @@ class ProfilePagerController(
             }
         if (open != null) requestedOpenId = open.id
         val nearEnd = index >= pages.size - LOAD_MORE_THRESHOLD
-        val loadMore = nearEnd && hasMore && !isLoadingMore && loadMoreRequestedAtSize != pages.size
+        // Ending on the locked page: more pages would only be more locks.
+        val endsLocked = pages.lastOrNull()?.let(isLocked) == true
+        val loadMore = nearEnd && !endsLocked && hasMore && !isLoadingMore && loadMoreRequestedAtSize != pages.size
         if (loadMore) loadMoreRequestedAtSize = pages.size
         return ProfilePagerSettleEffects(open = open, loadMore = loadMore)
     }
@@ -113,6 +119,23 @@ class ProfilePagerController(
         currentCard = pagesNow[index]
         lastIndex = index
         return ProfilePagerModel(pages = pagesNow, currentIndex = index)
+    }
+
+    /**
+     * Who takes a removed person's place: the next person in their slot, else the one before. Never
+     * the locked page, which has no profile to open. -1 when nobody unlocked is left.
+     */
+    private fun replacementIndex(visible: List<GridProfileCardUi>): Int {
+        if (visible.isEmpty()) return -1
+        val slot = lastIndex.coerceIn(0, visible.lastIndex)
+        if (!isLocked(visible[slot])) return slot
+        return visible.subList(0, slot).indexOfLast { !isLocked(it) }
+    }
+
+    /** Everyone up to and including the first locked card: the pager's single "See plans" page. */
+    private fun List<GridProfileCardUi>.endingAtFirstLocked(): List<GridProfileCardUi> {
+        val firstLocked = indexOfFirst(isLocked)
+        return if (firstLocked < 0) this else take(firstLocked + 1)
     }
 
     private fun reset() {

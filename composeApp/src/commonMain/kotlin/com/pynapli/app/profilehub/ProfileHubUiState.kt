@@ -93,6 +93,8 @@ data class PrivacySettingsDraft(
     val sharePsyncSoloMatches: Boolean = false,
     // PROFILE_SETTINGS_SPEC partner visibility: public | matches_only | verified_only | hidden.
     val partnerVisibility: String = "public",
+    // TRUST_AND_SAFETY_SPEC "Met in person": show the badge when the server has given one. Off by default.
+    val showMetInPersonBadge: Boolean = false,
 )
 
 @Immutable

@@ -1,5 +1,6 @@
 package com.pynapli.server.distance
 
+import com.pynapli.shared.distance.DiscoveryRadiusSteps
 import com.pynapli.shared.distance.formatDistanceForUnit
 import com.pynapli.shared.settings.AppSettings
 import kotlin.math.floor
@@ -45,11 +46,12 @@ object CoarseLocation {
      * Discovery radius steps (L-09). A requested radius is rounded UP to the next step, so moving a
      * radius slider metre by metre can never be used to binary-search someone's distance: the only
      * membership tests an attacker can run are these six circles, and membership itself is a
-     * cell-to-cell test.
+     * cell-to-cell test. One list with the clients (DiscoveryRadiusSteps in :shared), whose sliders
+     * offer and label exactly these steps.
      */
-    val RADIUS_STEPS_METERS: List<Int> = listOf(2_000, 5_000, 10_000, 25_000, 50_000, 100_000)
+    val RADIUS_STEPS_METERS: List<Int> = DiscoveryRadiusSteps.METERS
 
-    fun snapRadiusMeters(requestedMeters: Int): Int = RADIUS_STEPS_METERS.firstOrNull { it >= requestedMeters } ?: RADIUS_STEPS_METERS.last()
+    fun snapRadiusMeters(requestedMeters: Int): Int = DiscoveryRadiusSteps.snapUp(requestedMeters)
 
     /**
      * Cache / ordering key of a viewer cell: the snapped cell centre in hundredths of a degree. Built

@@ -79,11 +79,32 @@ class LocalMediaUploadStorage(
         )
     }
 
-    /** Removes a stored upload and its metadata; a missing file is not an error. */
+    /** Removes a stored upload, its metadata and its grid thumbnail; a missing file is not an error. */
     fun deleteUpload(mediaAssetId: UUID) {
         val paths = mediaAssetId.localPaths()
         Files.deleteIfExists(paths.dataPath)
         Files.deleteIfExists(paths.metadataPath)
+        Files.deleteIfExists(paths.thumbnailPath)
+    }
+
+    /** Server-made grid thumbnail (MediaThumbnailService); no client route ever writes it. */
+    fun saveThumbnail(
+        mediaAssetId: UUID,
+        bytes: ByteArray,
+    ) {
+        val paths = mediaAssetId.localPaths()
+        Files.createDirectories(paths.thumbnailPath.parent)
+        Files.write(paths.thumbnailPath, bytes, CREATE, TRUNCATE_EXISTING, WRITE)
+    }
+
+    fun loadThumbnail(mediaAssetIdText: String): ByteArray {
+        val paths = mediaAssetIdText.toUuidOrThrow().localPaths()
+        if (!Files.exists(paths.thumbnailPath)) throw MediaException("MEDIA_ASSET_NOT_FOUND")
+        return Files.readAllBytes(paths.thumbnailPath)
+    }
+
+    fun deleteThumbnail(mediaAssetId: UUID) {
+        Files.deleteIfExists(mediaAssetId.localPaths().thumbnailPath)
     }
 
     private fun UUID.localPaths(): LocalMediaUploadPaths {
@@ -91,6 +112,7 @@ class LocalMediaUploadStorage(
         return LocalMediaUploadPaths(
             dataPath = assetDirectory.resolve("$this.bin"),
             metadataPath = assetDirectory.resolve("$this.meta"),
+            thumbnailPath = assetDirectory.resolve("$this.thumb.jpg"),
         )
     }
 
@@ -126,4 +148,5 @@ data class LocalMediaUploadContent(
 private data class LocalMediaUploadPaths(
     val dataPath: Path,
     val metadataPath: Path,
+    val thumbnailPath: Path,
 )

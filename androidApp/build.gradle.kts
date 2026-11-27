@@ -47,6 +47,17 @@ android {
         // -Ppynapli.android.versionCode=42 -Ppynapli.android.versionName=1.0.0
         versionCode = stringProperty("pynapli.android.versionCode", "1").toInt()
         versionName = stringProperty("pynapli.android.versionName", "0.1.0")
+
+        // "Continue with Google": the WEB OAuth client id of the Google Cloud project (the audience
+        // the server verifies). Not a secret, but config, never source: set
+        // pynapli.android.googleServerClientId in ~/.gradle/gradle.properties, local.properties or
+        // -P. Blank (the default) hides the button. The Android OAuth client (package + release
+        // SHA-1) must also exist in the same project, or Credential Manager returns no credential.
+        buildConfigField(
+            "String",
+            "PYNAPLI_GOOGLE_SERVER_CLIENT_ID",
+            buildConfigString(stringProperty("pynapli.android.googleServerClientId", "")),
+        )
     }
 
     buildFeatures {
@@ -173,6 +184,9 @@ kotlin {
         implementation(libs.firebase.crashlytics)
         implementation(libs.firebase.appcheck)
         implementation(libs.play.billing)
+        implementation(libs.androidx.credentials)
+        implementation(libs.androidx.credentials.play.services.auth)
+        implementation(libs.googleid)
     }
 }
 
