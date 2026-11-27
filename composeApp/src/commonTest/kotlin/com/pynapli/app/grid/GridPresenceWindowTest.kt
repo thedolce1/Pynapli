@@ -22,17 +22,33 @@ class GridPresenceWindowTest {
     fun theWindowIsTheVisibleCardsThenBelowThenAboveClamped() {
         val cards = presenceWindowCards(20)
 
-        val ids = presenceWindowIds(cards, visibleCards = 5..7, margin = 3).toList()
+        val ids = presenceWindowIds(cards, visibleCards = 5..7, margin = 3, limit = 9).toList()
 
         assertEquals(listOf("p5", "p6", "p7", "p8", "p9", "p10", "p4", "p3", "p2"), ids)
-        assertEquals(listOf("p18", "p19", "p17", "p16"), presenceWindowIds(cards, visibleCards = 18..40, margin = 2).toList())
-        assertEquals(listOf("p0", "p1", "p2"), presenceWindowIds(cards, visibleCards = 0..0, margin = 2).toList())
+        assertEquals(listOf("p18", "p19", "p17", "p16"), presenceWindowIds(cards, visibleCards = 18..40, margin = 2, limit = 4).toList())
+        assertEquals(listOf("p0", "p1", "p2"), presenceWindowIds(cards, visibleCards = 0..0, margin = 2, limit = 3).toList())
+    }
+
+    @Test
+    fun pastTheMarginItFillsTheCapOutwardFromTheScreen() {
+        val ids = presenceWindowIds(presenceWindowCards(20), visibleCards = 10..10, margin = 1, limit = 6).toList()
+        assertEquals(listOf("p10", "p11", "p9", "p12", "p8", "p13"), ids)
+    }
+
+    @Test
+    fun aListWithinTheCapIsWatchedWholeWhereverTheViewerIs() {
+        val cards = presenceWindowCards(150)
+        val everyone = cards.map { it.id }.toSet()
+
+        assertEquals(everyone, presenceWindowIds(cards, visibleCards = null))
+        assertEquals(everyone, presenceWindowIds(cards, visibleCards = 0..20), "card 140 stays live with the viewer at the top")
+        assertEquals(everyone, presenceWindowIds(cards, visibleCards = 130..149))
     }
 
     @Test
     fun lockedCardsInTheWindowNeverSubscribe() {
         val cards = presenceWindowCards(4) + presenceWindowLocked("locked_a") + presenceWindowCards(4, from = 4)
-        val ids = presenceWindowIds(cards, visibleCards = 3..5, margin = 1)
+        val ids = presenceWindowIds(cards, visibleCards = 3..5, margin = 1, limit = 4)
         assertTrue(ids.none { it.startsWith(LOCKED_CARD_ID_PREFIX) })
         assertEquals(setOf("p3", "p4", "p5", "p2"), ids)
     }
@@ -58,7 +74,9 @@ class GridPresenceWindowTest {
             val watched = emissions.last()
             assertEquals((240..260).map { "p$it" }, watched.take(21), "the cards on screen come first")
             assertTrue("p210" in watched && "p290" in watched, "plus the margin either side")
-            assertFalse("p0" in watched || "p209" in watched || "p291" in watched)
+            assertEquals(PRESENCE_SUBSCRIPTION_CAP, watched.size, "then outward until the cap is spent")
+            assertTrue("p299" in watched && "p100" in watched)
+            assertFalse("p0" in watched || "p99" in watched, "the top of the list is the farthest from the screen")
             val subscription = presenceSubscription(favorites = linkedSetOf("fav"), grid = watched)
             assertEquals("fav", subscription.first(), "favourites still go first")
             assertTrue(subscription.size <= PRESENCE_SUBSCRIPTION_CAP)

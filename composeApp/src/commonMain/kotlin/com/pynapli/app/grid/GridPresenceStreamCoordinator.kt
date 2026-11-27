@@ -56,31 +56,43 @@ internal const val PRESENCE_SUBSCRIPTION_CAP: Int = 200
 internal const val PRESENCE_WINDOW_MARGIN: Int = 30
 
 /**
- * The Grid's share of the presence subscription (G3-A): the cards in [visibleCards] first, then up
- * to [margin] cards below them (where a scroll usually goes next), then up to [margin] above. With no
- * range yet (the grid has not laid out), every card from the top, which [presenceSubscription] then
- * caps. Locked cards are never included. Out-of-range indices (the loading row sits past the last
- * card) are clamped.
+ * The Grid's share of the presence subscription (G3-A), at most [limit] ids, nearest the screen
+ * first: the cards in [visibleCards], then up to [margin] cards below them (where a scroll usually
+ * goes next), then up to [margin] above, then outward from both edges until [limit] is spent. So a
+ * list within the cap is always watched whole, wherever the viewer is (no resubscribe on scroll), and
+ * a longer one follows the viewer. With no range yet (the grid has not laid out), the cards from the
+ * top. Locked cards are never included. Out-of-range indices (the loading row sits past the last
+ * card) are clamped. Capped here, not only in [presenceSubscription]: the subscription is compared as
+ * a set, so an uncapped list that only changed order would never register a scroll.
  */
 internal fun presenceWindowIds(
     cards: List<GridProfileCardUi>,
     visibleCards: IntRange?,
     margin: Int = PRESENCE_WINDOW_MARGIN,
+    limit: Int = PRESENCE_SUBSCRIPTION_CAP,
 ): Set<String> {
     val ids = LinkedHashSet<String>()
-    if (cards.isEmpty()) return ids
-    val unlockedAt: (Int) -> Unit = { index ->
+    if (cards.isEmpty() || limit <= 0) return ids
+    val watch: (Int) -> Unit = { index ->
         val card = cards[index]
-        if (!card.isLockedCard) ids += card.id
+        if (ids.size < limit && !card.isLockedCard) ids += card.id
     }
     if (visibleCards == null) {
-        for (index in cards.indices) unlockedAt(index)
+        for (index in cards.indices) watch(index)
         return ids
     }
     val first = visibleCards.first.coerceIn(0, cards.lastIndex)
     val last = visibleCards.last.coerceIn(first, cards.lastIndex)
-    for (index in first..last) unlockedAt(index)
-    for (index in (last + 1)..minOf(cards.lastIndex, last + margin)) unlockedAt(index)
-    for (index in (first - 1) downTo maxOf(0, first - margin)) unlockedAt(index)
+    for (index in first..last) watch(index)
+    for (index in (last + 1)..minOf(cards.lastIndex, last + margin)) watch(index)
+    for (index in (first - 1) downTo maxOf(0, first - margin)) watch(index)
+    var below = last + margin + 1
+    var above = first - margin - 1
+    while (ids.size < limit && (below <= cards.lastIndex || above >= 0)) {
+        if (below <= cards.lastIndex) watch(below)
+        if (above >= 0) watch(above)
+        below += 1
+        above -= 1
+    }
     return ids
 }

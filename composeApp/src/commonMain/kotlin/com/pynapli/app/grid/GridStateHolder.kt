@@ -770,9 +770,10 @@ class GridStateHolder(
     }
 
     /**
-     * The people on the Grid, for the presence subscription: the cards on screen plus
-     * [PRESENCE_WINDOW_MARGIN] either side (G3-A), so a viewer far down the list still sees live
-     * dots. Before the grid reports what it shows, the cards from the top. A new range is followed
+     * The people on the Grid, for the presence subscription ([presenceWindowIds], G3-A): up to the
+     * 200 cap nearest the screen, the cards on screen first, then [PRESENCE_WINDOW_MARGIN] either side,
+     * then outward. A list within the cap is watched whole; a viewer far down a longer one still sees
+     * live dots. Before the grid reports what it shows, the cards from the top. A new range is followed
      * only after it held still for [PRESENCE_WINDOW_SETTLE], so a fling never thrashes the socket;
      * a card change (a page, a presence delta) applies at once. Locked cards never subscribe: their
      * "locked_" token names nobody, and following a locked person's presence would leak who they are.
