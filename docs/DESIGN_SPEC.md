@@ -129,6 +129,7 @@ providers' rules, not the Pynapli palette, so their colours live in `PynapliProv
 | Swipe | Low, high focus | One person at a time, photo-first, name/age/distance, linked partner shown as context (never a couple card), one short bio line, details on expand. Physical gesture feel. No messaging unless matched (Pineapple Like with an optional note is the paid exception; Intro Notes were merged into it). |
 | Activity | Medium-high | Newest first, compact rows: avatar, action, timestamp, partner icon. Gated rows tease without feeling scammy; blur and lock states stay readable. |
 | Messages | Medium | Scannable inbox, clear sent/received alignment, timestamp and state without clutter, neutral system messages. Partner invite-to-chat states are explicit; private album interactions are consent-based; safety/report actions reachable without clutter. |
+| Profile peek tags | Medium | Tags the viewer also has come first in each row (lifestyle rows, then logistics and intents) and are marked "In common": the pill draws in the neutral text colour (`onSurface` border, label and an 8% fill) with a small check, so it never reads as the premium gold, the green online dot, the blue verified tick or the sage Met in person mark. Screen readers hear "In common" as the pill's state. Nothing is added: only the profile's own tags are reordered. No count banner. |
 | Profile and settings | Medium-low | Calm, organized, never a marketing surface. Account, privacy, subscription, partner link, safety, albums and app management easy to find. |
 | Store sheet and paywalls | Medium | Tiers understandable at a glance; linked-partner benefit prominent; add-ons clear and optional. **No fake scarcity or countdown pressure.** Same subdued visual language. |
 
@@ -138,7 +139,8 @@ Motion clarifies state; it never decorates or delays. Allowed: swipe drag/spring
 grid insert/remove/move, sheet open/close, match moment, partner invite and album request state
 changes, a subtle Playing Tonight pulse, Activity rows entering after refresh. Not allowed: tab-switch
 animation, constant decorative motion, animated backgrounds, motion that shifts layout. Respect
-reduced-motion settings where the platform exposes them.
+reduced-motion settings where the platform exposes them (`rememberReducedMotion`): Grid tiles move
+with `animateItem` on a hide's backfill and a filter answer, and jump in place under reduced motion.
 
 ## Interaction and accessibility
 
