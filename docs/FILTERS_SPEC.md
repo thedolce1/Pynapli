@@ -170,8 +170,12 @@ Rules:
 ### Partner
 
 Purpose: let couples and singles say who they want the *other half* to be, without combined couple
-cards and without the app guessing couple composition. Shipped 2026-11-26 (plan G2-3), Grid sheet
-section under Who; on the wire for Grid, Swipe and Psync.
+cards and without the app guessing couple composition. Shipped 2026-11-26 (plan G2-3) on the Grid
+and on the wire for Grid, Swipe and Psync. Since 2026-11-27 (plan G2-4) the Swipe and Psync filter
+sheets have the same section and the same Who shortcuts (Single women, Single men, No single men),
+reusing the Grid's composables (`SwipeFilters.asGridWhoAndPartner`; Swipe's Linked or Partnered read
+as Linked), and saved swipe presets keep them. In both sheets the order is Who (with its shortcuts),
+Gender, Orientation, then Partner (`SwipePartnerFiltersTest`).
 
 Filters:
 

@@ -114,10 +114,6 @@ internal fun GridFiltersSheet(
             )
             SinglesShortcutRow(filters = draft, onChange = { draft = it })
 
-            // Plan G2-3: under Who, because these narrow "Linked" by the partner's own profile.
-            SectionTitle("Partner")
-            PartnerSection(filters = draft, onChange = { draft = it })
-
             SectionTitle("Gender")
             GenderSection(
                 selected = draft.genders,
@@ -129,6 +125,11 @@ internal fun GridFiltersSheet(
                 selected = draft.orientations,
                 onChange = { draft = draft.copy(orientations = it) },
             )
+
+            // Plan G2-4: Who, then the viewer's own Gender and Orientation, then Partner (which narrows
+            // "Linked" by the partner's own profile). Swipe's sheet has the same order.
+            SectionTitle("Partner")
+            PartnerSection(filters = draft, onChange = { draft = it })
 
             SectionTitle("Trust")
             TrustSection(

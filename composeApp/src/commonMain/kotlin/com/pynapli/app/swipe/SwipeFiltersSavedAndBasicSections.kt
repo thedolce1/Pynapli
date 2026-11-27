@@ -1,6 +1,9 @@
 package com.pynapli.app.swipe
 
 import androidx.compose.runtime.Composable
+import com.pynapli.app.grid.GridFilters
+import com.pynapli.app.grid.PartnerSection
+import com.pynapli.app.grid.SinglesShortcutRow
 import com.pynapli.shared.network.dto.SavedSwipeFilterDto
 import com.pynapli.shared.network.dto.SwipeDealbreakerKey
 
@@ -69,6 +72,11 @@ internal fun SwipeWhoAgeDistanceFilters(
             )
         },
     )
+    // Plan G2-4: the Grid's one-tap shortcuts (Single women, Single men, No single men).
+    SinglesShortcutRow(
+        filters = draft.asGridWhoAndPartner(),
+        onChange = { onDraftChange(draft.withGridWhoAndPartner(it)) },
+    )
 
     SectionTitle("Gender")
     GenderSection(
@@ -80,6 +88,14 @@ internal fun SwipeWhoAgeDistanceFilters(
     OrientationSection(
         selected = draft.orientations,
         onChange = { onDraftChange(draft.copy(orientations = it)) },
+    )
+
+    // Plan G2-4: after the viewer's own Gender and Orientation (Who, Gender, Orientation, Partner), as on
+    // the Grid. The same section and rules as the Grid's (FILTERS_SPEC "Partner").
+    SectionTitle("Partner")
+    PartnerSection(
+        filters = draft.asGridWhoAndPartner(),
+        onChange = { onDraftChange(draft.withGridWhoAndPartner(it)) },
     )
 
     SectionHeader(
@@ -144,3 +160,43 @@ internal fun toggleDealbreaker(
     key: String,
     locked: Boolean,
 ): Set<String> = if (locked) current + key else current - key
+
+/**
+ * The Swipe draft as the Grid's Who + Partner model, so Swipe reuses the Grid's Partner section and
+ * shortcuts as they are. Swipe's Linked or Partnered both read as Grid "Linked" (the server folds both
+ * onto the visible link).
+ */
+internal fun SwipeFilters.asGridWhoAndPartner(): GridFilters =
+    GridFilters(
+        singles = singles,
+        linked = linked || partnered,
+        genders = genders,
+        partnerGenders = partnerGenders,
+        partnerMinimumAge = partnerMinimumAge,
+        partnerMaximumAge = partnerMaximumAge,
+        partnerOrientations = partnerOrientations,
+        partnerVerified = partnerVerified,
+        noSingleMen = noSingleMen,
+    )
+
+/** Writes the Grid model's Who + Partner choices back onto the Swipe draft. */
+internal fun SwipeFilters.withGridWhoAndPartner(grid: GridFilters): SwipeFilters {
+    val wasLinked = linked || partnered
+    val keepLinked = grid.linked == wasLinked
+    val newLinked = if (keepLinked) linked else grid.linked
+    val newPartnered = if (keepLinked) partnered else false
+    return copy(
+        singles = grid.singles,
+        linked = newLinked,
+        partnered = newPartnered,
+        genders = grid.genders,
+        partnerGenders = grid.partnerGenders,
+        partnerMinimumAge = grid.partnerMinimumAge,
+        partnerMaximumAge = grid.partnerMaximumAge,
+        partnerOrientations = grid.partnerOrientations,
+        partnerVerified = grid.partnerVerified,
+        noSingleMen = grid.noSingleMen,
+        // A Linked dealbreaker cannot outlive Linked.
+        dealbreakers = if (newLinked) dealbreakers else dealbreakers - SwipeDealbreakerKey.LINKED_ONLY,
+    ).withPartnerFiltersReconciled()
+}

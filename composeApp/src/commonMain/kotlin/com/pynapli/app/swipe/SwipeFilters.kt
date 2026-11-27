@@ -52,7 +52,35 @@ data class SwipeFilters(
     // "Verified couples only": both linked partners selfie-verified (the couple-verified badge).
     // Independent of [linked]. Always hard: the server never relaxes it, so it has no lock.
     val verifiedCouples: Boolean = false,
+    // FILTERS_SPEC "Partner" (plan G2-4, the Grid's G2-3 set): the visibly linked partner's own declared
+    // gender, age, orientation and photo verification, tested by the server only through the partner
+    // gate, so a partner hidden from this viewer never matches. They imply Linked, so with Singles alone
+    // they are off ([partnerFiltersApply]) and never sent. Always hard on Swipe (never relaxed).
+    val partnerGenders: Set<String> = emptySet(),
+    val partnerMinimumAge: Int? = null,
+    val partnerMaximumAge: Int? = null,
+    val partnerOrientations: Set<String> = emptySet(),
+    val partnerVerified: Boolean = false,
+    // "No single men": hide men with no partner shown to this viewer (linked men still show).
+    val noSingleMen: Boolean = false,
 ) {
+    /** Partner filters need Linked or an unrestricted Who: Singles alone (no partner shown) rules them out. */
+    val partnerFiltersApply: Boolean get() = !(singles && !linked && !partnered)
+
+    /** These filters with partner filters dropped when Who rules them out (what is sent and stored). */
+    fun withPartnerFiltersReconciled(): SwipeFilters =
+        if (partnerFiltersApply) {
+            this
+        } else {
+            copy(
+                partnerGenders = emptySet(),
+                partnerMinimumAge = null,
+                partnerMaximumAge = null,
+                partnerOrientations = emptySet(),
+                partnerVerified = false,
+            )
+        }
+
     val activeCount: Int
         get() {
             var count = 0
@@ -75,6 +103,13 @@ data class SwipeFilters(
             if (orientations.isNotEmpty()) count += 1
             if (withPhotos) count += 1
             if (hasPrivateAlbum) count += 1
+            if (noSingleMen) count += 1
+            if (partnerFiltersApply) {
+                if (partnerGenders.isNotEmpty()) count += 1
+                if (partnerMinimumAge != null || partnerMaximumAge != null) count += 1
+                if (partnerOrientations.isNotEmpty()) count += 1
+                if (partnerVerified) count += 1
+            }
             return count
         }
 
@@ -86,6 +121,7 @@ data class SwipeFilters(
                 if (singles) add(SINGLES_CONTEXT)
                 if (partnered) add(PARTNERED_CONTEXT)
             }
+        val partner = withPartnerFiltersReconciled()
         return SwipeDeckRequestDto(
             radiusMeters = radiusMeters,
             limit = PAGE_SIZE,
@@ -109,6 +145,12 @@ data class SwipeFilters(
             dealbreakers = dealbreakers,
             verifiedPreferred = verifiedPreferred,
             verifiedCouplesOnly = verifiedCouples,
+            partnerGenders = partner.partnerGenders.toList(),
+            partnerMinimumAge = partner.partnerMinimumAge,
+            partnerMaximumAge = partner.partnerMaximumAge,
+            partnerOrientations = partner.partnerOrientations.toList(),
+            partnerVerifiedOnly = partner.partnerVerified,
+            excludeSingleMen = noSingleMen,
         )
     }
 
@@ -168,6 +210,12 @@ data class SwipeFilters(
                 hasPrivateAlbum = request.hasPrivateAlbumOnly,
                 dealbreakers = dealbreakers,
                 verifiedCouples = request.verifiedCouplesOnly,
+                partnerGenders = request.partnerGenders.toSet(),
+                partnerMinimumAge = request.partnerMinimumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
+                partnerMaximumAge = request.partnerMaximumAge?.coerceIn(MIN_FILTER_AGE, MAX_FILTER_AGE),
+                partnerOrientations = request.partnerOrientations.toSet(),
+                partnerVerified = request.partnerVerifiedOnly,
+                noSingleMen = request.excludeSingleMen,
             )
         }
     }
