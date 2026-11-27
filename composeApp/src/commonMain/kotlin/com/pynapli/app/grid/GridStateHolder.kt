@@ -616,6 +616,12 @@ class GridStateHolder(
         }
         // Keep the cold-start cache in step, so someone just blocked or hidden never paints again.
         saveSnapshot(_state.value.cards)
+        // Backfill (plan G2-4, Grindr's hide): the cards after the removed one have moved up a slot in
+        // place (no reorder, no refresh, the scroll position stays). When that leaves less than a page
+        // on screen and the server has more, the next page fills the tail now instead of on scroll. It
+        // continues the same cursor, so nobody already shown moves.
+        val after = _state.value
+        if (removedIndex >= 0 && after.nextCursor != null && after.cards.size < BACKFILL_BELOW) loadMore()
     }
 
     /**
@@ -764,6 +770,9 @@ class GridStateHolder(
     companion object {
         /** A Grid order older than this is replaced (quietly, keeping scroll) on tab return or resume. */
         val RESULTS_EXPIRE_AFTER: Duration = 15.minutes
+
+        /** A hide or block that leaves fewer cards than this asks for the next page at once (backfill). */
+        const val BACKFILL_BELOW: Int = GridFilters.PAGE_SIZE
 
         /** Quiet in-place presence refresh cadence while the Grid is visible, and the resume threshold. */
         val LIVE_REFRESH_INTERVAL: Duration = 60.seconds

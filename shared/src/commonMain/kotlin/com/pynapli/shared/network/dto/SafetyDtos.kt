@@ -58,6 +58,11 @@ data class HiddenProfileSummaryDto(
     val hiddenUserId: String,
     val hiddenDisplayName: String? = null,
     val createdAt: String,
+    // The small avatar for the unhide list (plan G2-4): the grid thumbnail of their first approved
+    // profile photo, with its stable cache key. Null when they have none, or when they blocked the
+    // viewer, the viewer blocked them, they hide from the viewer, or their account is not active.
+    val thumbnailUrl: String? = null,
+    val thumbnailCacheKey: String? = null,
 )
 
 @Serializable

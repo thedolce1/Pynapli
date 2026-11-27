@@ -437,6 +437,16 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   swipe belongs to the pager.
 - Block or hide removes the card from the Grid, Favorites and the cold-start cache and the pager
   moves on to the next person (the previous one at the end; it closes when nobody is left).
+  Hide with backfill (plan G2-4, Grindr's hide): the cards after the hidden one move up one slot in
+  place (no reorder, no refresh, the `LazyGridState` position stays), and when that leaves less than
+  a page loaded and the server has more, the next page is asked for at once on the same cursor
+  (`GridStateHolder.removeCardById`, `GridFilterBarParityTest`). Hide is silent (the hidden person is
+  never told) and one-way (the hidden person still sees the hider; mutual hide is a founder call).
+  The unhide list is the Safety Center's "Hidden profiles": newest first, up to 500, each with a
+  name, a small avatar (the grid thumbnail of the first approved profile photo with its stable cache
+  key; none across a block either way, from someone hiding from the viewer, or for an account that
+  is gone) and Unhide (`GET` / `DELETE /v1/hidden-profiles/{userId}`;
+  `HiddenProfileUnhideListIntegrationTest`).
   Reporting then swiping on drops the reported person the same way closing does. A card leaving the
   list for any other reason (un-starred in Favorites, a quiet refresh) stays on screen until the
   viewer moves on.

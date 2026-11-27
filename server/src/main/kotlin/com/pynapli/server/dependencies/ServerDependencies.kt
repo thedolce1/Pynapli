@@ -555,7 +555,14 @@ class ServerDependencies(
                 notificationDispatchWorker = core.notificationDispatchWorker,
                 productMetrics = core.productMetrics,
                 blockService = core.blockService,
-                hiddenProfileService = core.hiddenProfileService,
+                // The unhide list shows small avatars (plan G2-4), so it needs the media resolvers.
+                hiddenProfileService =
+                    HiddenProfileService(
+                        repository = core.hiddenProfileRepository,
+                        mediaAssetUrlResolver = media.mediaAssetUrlResolver,
+                        mediaImages = media.mediaImageResolver,
+                        contactBlockVisibility = core.contactBlockVisibility,
+                    ),
                 appealService = core.appealService,
                 reportService = core.reportService,
                 swipeService = swipe.swipeService,
