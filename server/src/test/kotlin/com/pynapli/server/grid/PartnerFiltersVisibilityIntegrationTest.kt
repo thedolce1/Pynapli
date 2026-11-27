@@ -160,6 +160,7 @@ class PartnerFiltersVisibilityIntegrationTest {
             dataSource.markProfileVerified(verifiedViewer)
             val filters = DiscoveryFilters(partnerGenders = setOf("woman"))
             val candidates = listOf(world.a1, world.vo1)
+
             fun matching(
                 viewers: List<UUID>,
                 hidden: Set<UUID> = emptySet(),

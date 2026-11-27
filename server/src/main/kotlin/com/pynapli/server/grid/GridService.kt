@@ -246,8 +246,7 @@ class GridService(
                             // its partner is dropped (stricter, never a leak).
                             .filterNot {
                                 (filters.hasPartnerFilters || filters.excludeSingleMen) && it.linkedPartnerUserId in hiddenProfileIds
-                            }
-                            .map { card ->
+                            }.map { card ->
                                 if (card.linkedPartnerUserId in hiddenProfileIds) {
                                     card.copy(
                                         linkedPartnerUserId = null,

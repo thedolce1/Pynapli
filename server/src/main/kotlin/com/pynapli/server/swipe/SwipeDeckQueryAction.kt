@@ -194,8 +194,7 @@ internal class SwipeDeckQueryAction(
                     // that loses its partner here is dropped: stricter, never a leak.
                     .filterNot {
                         (filters.hasPartnerFilters || filters.excludeSingleMen) && it.linkedPartnerUserId in partnerHiddenIds
-                    }
-                    .map { it.withoutPartnerIn(partnerHiddenIds) }
+                    }.map { it.withoutPartnerIn(partnerHiddenIds) }
             }
         val pageCards = visible.take(limit)
         val presenceLookupIds =

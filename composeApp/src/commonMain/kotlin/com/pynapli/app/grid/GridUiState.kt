@@ -553,7 +553,11 @@ internal fun partnerMiniDescription(partner: GridLinkedPartnerUi): String {
     val gender =
         partner.gender
             ?.takeIf { it in PARTNER_GENDER_MARKS }
-            ?.let { com.pynapli.shared.profile.ProfileTaxonomies.genderLabel(it)?.lowercase() }
+            ?.let {
+                com.pynapli.shared.profile.ProfileTaxonomies
+                    .genderLabel(it)
+                    ?.lowercase()
+            }
     return listOfNotNull("Linked partner", partner.age?.toString(), gender).joinToString(", ")
 }
 
