@@ -39,6 +39,12 @@ internal class LatestFilterRequest(
         }
     }
 
+    /** Sign-out: a tap still waiting out its debounce, or on the wire, belongs to the old account. */
+    fun cancelPending() {
+        current?.cancel()
+        current = null
+    }
+
     private fun Job.isAncestorOf(job: Job): Boolean = children.any { it === job || it.isAncestorOf(job) }
 
     companion object {

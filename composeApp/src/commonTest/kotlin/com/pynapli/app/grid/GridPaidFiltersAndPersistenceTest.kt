@@ -93,7 +93,8 @@ class GridPaidFiltersAndPersistenceTest {
             // The viewer changes their mind before the refusal lands.
             holder.applyFilters(GridFilters(verified = true))
             gate.complete(Unit)
-            refused.await()
+            // The newer choice cancels the older request (G2-2), so join rather than await.
+            refused.join()
 
             assertEquals(GridFilters(verified = true), holder.state.value.filters, "the old refusal never writes its filters")
             assertNull(holder.state.value.paywallMessage)
@@ -113,7 +114,8 @@ class GridPaidFiltersAndPersistenceTest {
             runCurrent()
             holder.clearForSignOut()
             gate.complete(Unit)
-            refused.await()
+            // Sign-out cancels the request still on the wire (G2-2), so join rather than await.
+            refused.join()
 
             assertEquals(GridFilters.defaults, holder.state.value.filters)
             assertNull(holder.state.value.paywallMessage)
@@ -212,7 +214,8 @@ class GridPaidFiltersAndPersistenceTest {
             val signingOut = async { holder.clearForSignOut() }
             runCurrent()
             store.saveGate!!.complete(Unit)
-            choosing.await()
+            // Sign-out cancels a tap still debouncing (G2-2), so join rather than await.
+            choosing.join()
             signingOut.await()
 
             assertNull(store.saved, "the sign-out clear lands after the in-flight write")

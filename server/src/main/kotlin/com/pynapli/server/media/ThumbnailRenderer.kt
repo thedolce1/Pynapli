@@ -241,8 +241,7 @@ internal object ExifOrientation {
                 else -> return null
             }
 
-        fun u16(at: Int): Int =
-            if (littleEndian) bytes.u8(at) or (bytes.u8(at + 1) shl 8) else (bytes.u8(at) shl 8) or bytes.u8(at + 1)
+        fun u16(at: Int): Int = if (littleEndian) bytes.u8(at) or (bytes.u8(at + 1) shl 8) else (bytes.u8(at) shl 8) or bytes.u8(at + 1)
 
         fun u32(at: Int): Long =
             if (littleEndian) {

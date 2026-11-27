@@ -39,6 +39,7 @@ class RequestProfilerFactory(
         const val PROFILE_TIMINGS_HEADER = "X-Pynapli-Profile"
         const val PROFILE_SLOW_HEADER = "X-Pynapli-Profile-Slow"
         const val PROFILE_POOL_HEADER = "X-Pynapli-Pool"
+
         // G2-2 ticket 7: event counts (e.g. grid.rank.cacheHit=1,grid.rank.widenPass=1), separate from
         // the millisecond timings so that header keeps its format.
         const val PROFILE_COUNTS_HEADER = "X-Pynapli-Profile-Counts"

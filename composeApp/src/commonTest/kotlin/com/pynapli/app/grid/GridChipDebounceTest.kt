@@ -18,7 +18,7 @@ class GridChipDebounceTest {
     @Test
     fun aBurstOfChipTapsSendsOneRequestWithTheFinalFilters() =
         runTest {
-            val repository = RecordingGridFeedRepository()
+            val repository = DebounceRecordingGridFeedRepository()
             val holder = GridStateHolder(repository)
 
             launch { holder.toggleQuickFilter(QuickFilterId.Online) }
@@ -42,7 +42,7 @@ class GridChipDebounceTest {
     @Test
     fun nothingIsSentBeforeTheDebounceEnds() =
         runTest {
-            val repository = RecordingGridFeedRepository()
+            val repository = DebounceRecordingGridFeedRepository()
             val holder = GridStateHolder(repository)
 
             launch { holder.toggleQuickFilter(QuickFilterId.Online) }
@@ -58,7 +58,7 @@ class GridChipDebounceTest {
     @Test
     fun aNewerTapCancelsTheRequestAlreadyOnTheWireAndOnlyItsAnswerLands() =
         runTest {
-            val repository = RecordingGridFeedRepository(holdAnswers = true)
+            val repository = DebounceRecordingGridFeedRepository(holdAnswers = true)
             val holder = GridStateHolder(repository)
 
             launch { holder.toggleQuickFilter(QuickFilterId.Online) }
@@ -74,14 +74,18 @@ class GridChipDebounceTest {
             repository.answerAll(GridFeedUi(cards = listOf(card("fresh-answer"))))
             advanceUntilIdle()
 
-            assertEquals(listOf("fresh-answer"), holder.state.value.cards.map { it.id })
+            assertEquals(
+                listOf("fresh-answer"),
+                holder.state.value.cards
+                    .map { it.id },
+            )
             assertTrue(holder.state.value.filters.online && holder.state.value.filters.verified)
         }
 
     @Test
     fun applyingFiltersCancelsAPendingChipTapAndIsNotDebounced() =
         runTest {
-            val repository = RecordingGridFeedRepository()
+            val repository = DebounceRecordingGridFeedRepository()
             val holder = GridStateHolder(repository)
 
             launch { holder.toggleQuickFilter(QuickFilterId.Online) }
@@ -98,7 +102,7 @@ class GridChipDebounceTest {
     @Test
     fun sequentialCallsInOneCoroutineDoNotCancelEachOther() =
         runTest {
-            val repository = RecordingGridFeedRepository()
+            val repository = DebounceRecordingGridFeedRepository()
             val holder = GridStateHolder(repository)
 
             holder.toggleQuickFilter(QuickFilterId.Online)
@@ -111,7 +115,7 @@ class GridChipDebounceTest {
 }
 
 /** Records every request; with [holdAnswers] each one waits until [answerAll], so it can be cancelled on the wire. */
-private class RecordingGridFeedRepository(
+private class DebounceRecordingGridFeedRepository(
     private val holdAnswers: Boolean = false,
 ) : GridFeedRepository {
     val requests = mutableListOf<GridFilters>()

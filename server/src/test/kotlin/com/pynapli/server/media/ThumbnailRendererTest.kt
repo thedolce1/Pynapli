@@ -139,7 +139,11 @@ class ThumbnailRendererTest {
             data: ByteArray,
         ): ByteArray {
             val typeBytes = type.toByteArray(Charsets.US_ASCII)
-            val crc = java.util.zip.CRC32().apply { update(typeBytes + data) }.value
+            val crc =
+                java.util.zip
+                    .CRC32()
+                    .apply { update(typeBytes + data) }
+                    .value
             return java.nio.ByteBuffer
                 .allocate(12 + data.size)
                 .putInt(data.size)
@@ -193,14 +197,32 @@ class ThumbnailRendererTest {
     ): ByteArray {
         val tiff =
             byteArrayOf(
-                'M'.code.toByte(), 'M'.code.toByte(), 0, 42, // big-endian TIFF header
-                0, 0, 0, 8, // IFD0 at offset 8
-                0, 1, // one entry
-                0x01, 0x12, // tag 0x0112 Orientation
-                0, 3, // type SHORT
-                0, 0, 0, 1, // count 1
-                0, orientation.toByte(), 0, 0, // value
-                0, 0, 0, 0, // no next IFD
+                'M'.code.toByte(),
+                'M'.code.toByte(),
+                0,
+                42, // big-endian TIFF header
+                0,
+                0,
+                0,
+                8, // IFD0 at offset 8
+                0,
+                1, // one entry
+                0x01,
+                0x12, // tag 0x0112 Orientation
+                0,
+                3, // type SHORT
+                0,
+                0,
+                0,
+                1, // count 1
+                0,
+                orientation.toByte(),
+                0,
+                0, // value
+                0,
+                0,
+                0,
+                0, // no next IFD
             )
         val payload = "Exif".toByteArray() + byteArrayOf(0, 0) + tiff
         val length = payload.size + 2

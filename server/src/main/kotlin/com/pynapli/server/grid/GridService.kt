@@ -140,6 +140,7 @@ class GridService(
         val canWiden = !request.visitingSoonOnly && radiusMeters < MAX_RADIUS_METERS
         val widenedScopeHash = if (canWiden) gridScope(pageLimit, widened = true) else null
         var continuingWidened = false
+
         fun decodeOrNull(
             token: String,
             scope: String,

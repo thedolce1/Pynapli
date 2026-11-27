@@ -177,9 +177,9 @@ data class GridFilters(
      * The live Grid query: [toGridQueryRequest] plus the Section 3 opt-in, so the server keeps paging
      * past the plan limit with locked cards instead of stopping. Kept apart from [toGridQueryRequest],
      * which also writes saved presets and the stored filters, where the opt-in has no meaning.
+     * G2-2: asks for the largest page; the server clamps it to the viewer's plan (Free 60, Social 90,
+     * Select 120) and seals that size into the cursor. Presets keep [PAGE_SIZE].
      */
-    // G2-2: asks for the largest page; the server clamps it to the viewer's plan (Free 60, Social 90,
-    // Select 120) and seals that size into the cursor. Presets keep [PAGE_SIZE].
     fun toGridFeedRequest(cursor: String?): GridQueryRequestDto = toGridQueryRequest(cursor).copy(acceptLockedCards = true, limit = MAX_FEED_PAGE_REQUEST)
 
     fun toGridQueryRequest(cursor: String?): GridQueryRequestDto {

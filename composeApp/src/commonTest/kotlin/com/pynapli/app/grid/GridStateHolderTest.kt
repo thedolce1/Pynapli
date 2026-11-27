@@ -596,6 +596,8 @@ class GridStateHolderTest {
                         .launchIn(this)
 
                 val selectJob = async { stateHolder.toggleQuickFilter(QuickFilterId.Online) }
+                // A chip tap waits out the debounce (G2-2) before it loads.
+                testScheduler.advanceTimeBy(LatestFilterRequest.CHIP_DEBOUNCE.inWholeMilliseconds)
                 // Deterministic: run everything runnable on the test scheduler, which parks the load
                 // on the gate. (A real-thread async + yield() could assert before the load started.)
                 runCurrent()

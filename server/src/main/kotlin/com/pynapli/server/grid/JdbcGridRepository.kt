@@ -74,7 +74,11 @@ internal class JdbcGridRepository(
                     } else {
                         rankedRows.cards
                     }
-                val rankedAnchor = rankedRows.cards.lastOrNull()?.takeIf { rankedRows.hasMore }?.toCursorAnchor()
+                val rankedAnchor =
+                    rankedRows.cards
+                        .lastOrNull()
+                        ?.takeIf { rankedRows.hasMore }
+                        ?.toCursorAnchor()
                 if (pageRows.isEmpty()) {
                     return@withContext GridQueryResult(viewerHadLocation = true, cards = emptyList(), nextCursorAnchor = rankedAnchor)
                 }

@@ -232,7 +232,10 @@ internal fun buildMediaDependencies(
         selfieMediaGateway = selfieMediaGateway,
         selfieFaceDetector = selfieFaceDetector,
         mediaImageResolver =
-            mediaAssetUrlResolver?.let { com.pynapli.server.media.MediaImageResolver(it, thumbnails?.repository) },
+            mediaAssetUrlResolver?.let {
+                com.pynapli.server.media
+                    .MediaImageResolver(it, thumbnails?.repository)
+            },
         thumbnailScheduler = thumbnails?.scheduler,
         thumbnailWorker = thumbnails?.worker,
     )
@@ -255,22 +258,34 @@ private fun buildThumbnails(
     if (!config.mediaThumbnailsEnabled) return null
     val store: com.pynapli.server.media.MediaThumbnailStore =
         when {
-            gcsSignedUrlFactory != null -> com.pynapli.server.media.GcsMediaThumbnailStore(gcsSignedUrlFactory)
-            localMediaUploadStorage != null -> com.pynapli.server.media.LocalMediaThumbnailStore(localMediaUploadStorage)
+            gcsSignedUrlFactory != null ->
+                com.pynapli.server.media
+                    .GcsMediaThumbnailStore(gcsSignedUrlFactory)
+            localMediaUploadStorage != null ->
+                com.pynapli.server.media
+                    .LocalMediaThumbnailStore(localMediaUploadStorage)
             else -> return null
         }
-    val repository = com.pynapli.server.media.JdbcMediaThumbnailRepository(dataSource)
-    val service = com.pynapli.server.media.MediaThumbnailService(repository = repository, store = store)
+    val repository =
+        com.pynapli.server.media
+            .JdbcMediaThumbnailRepository(dataSource)
+    val service =
+        com.pynapli.server.media
+            .MediaThumbnailService(repository = repository, store = store)
     return ThumbnailParts(
         repository = repository,
-        scheduler = com.pynapli.server.media.MediaThumbnailScheduler(service),
+        scheduler =
+            com.pynapli.server.media
+                .MediaThumbnailScheduler(service),
         worker =
             com.pynapli.server.media.MediaThumbnailWorker(
                 service = service,
                 intervalMillis = config.mediaThumbnailIntervalMillis,
                 backfillPerTick = config.mediaThumbnailBackfillPerTick,
                 sweepPerTick = config.mediaThumbnailSweepPerTick,
-                jobLock = com.pynapli.server.db.PostgresJobLock(dataSource),
+                jobLock =
+                    com.pynapli.server.db
+                        .PostgresJobLock(dataSource),
             ),
     )
 }

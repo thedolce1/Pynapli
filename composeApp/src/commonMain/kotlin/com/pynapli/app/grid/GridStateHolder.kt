@@ -717,6 +717,8 @@ class GridStateHolder(
      * cache, so the next account never sees it.
      */
     suspend fun clearForSignOut() {
+        // A chip tap still debouncing would otherwise load, and write filters, after the clear.
+        filterRequests.cancelPending()
         accountEpoch += 1
         feedGeneration += 1
         loadedAt = null

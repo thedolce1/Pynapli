@@ -46,7 +46,7 @@ class MediaThumbnailIntegrationTest {
 
             assertEquals(ThumbnailOutcome.READY, thumbnails.generate(asset))
 
-            assertTrue(asset in store.objects)
+            assertTrue(store.objects.containsKey(asset))
             assertEquals(setOf(asset), repository.readyAmong(listOf(asset), MediaThumbnails.VARIANT))
             val images = MediaImageResolver(LocalMediaAssetUrlResolver("http://media.test"), repository).forAssets(listOf(asset))
             val tile = assertNotNull(images.tile(asset))
@@ -143,7 +143,7 @@ class MediaThumbnailIntegrationTest {
             val sweep = thumbnails.reconcile(backfillLimit = 50, sweepLimit = 50, sweepAfter = null)
 
             assertEquals(1, sweep.retired)
-            assertFalse(asset in store.objects)
+            assertFalse(store.objects.containsKey(asset))
             assertNull(variantOf(asset))
         }
 
@@ -173,7 +173,7 @@ class MediaThumbnailIntegrationTest {
             val media = mediaService(flagged = false)
             val shown = media.upload(owner, "profile")
             thumbnails.reconcile(backfillLimit = 50, sweepLimit = 50, sweepAfter = null)
-            assertTrue(shown in store.objects)
+            assertTrue(store.objects.containsKey(shown))
             // Approved but not made yet when the album is hidden.
             val later = media.upload(owner, "profile")
 
@@ -182,7 +182,7 @@ class MediaThumbnailIntegrationTest {
             assertTrue(repository.readyAmong(listOf(shown), MediaThumbnails.VARIANT).isEmpty(), "never served once hidden")
             thumbnails.reconcile(backfillLimit = 50, sweepLimit = 50, sweepAfter = null)
 
-            assertFalse(shown in store.objects)
+            assertFalse(store.objects.containsKey(shown))
             assertNull(variantOf(shown))
             // And a photo of the hidden album that had none yet gets none (the backfill above skipped it too).
             assertEquals(ThumbnailOutcome.SKIPPED, thumbnails.generate(later))
@@ -199,7 +199,7 @@ class MediaThumbnailIntegrationTest {
 
             assertEquals(ThumbnailOutcome.RETIRED, thumbnails.generate(asset))
 
-            assertFalse(asset in store.objects)
+            assertFalse(store.objects.containsKey(asset))
             assertNull(variantOf(asset))
             assertTrue(repository.readyAmong(listOf(asset), MediaThumbnails.VARIANT).isEmpty())
         }
