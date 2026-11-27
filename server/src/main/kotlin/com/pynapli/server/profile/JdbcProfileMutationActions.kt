@@ -97,6 +97,7 @@ internal class JdbcProfileMutationActions(
                             visible_while_traveling = COALESCE(?::boolean, visible_while_traveling),
                             share_psync_solo_matches = COALESCE(?::boolean, share_psync_solo_matches),
                             partner_visibility = COALESCE(?::text, partner_visibility),
+                            show_met_in_person_badge = COALESCE(?::boolean, show_met_in_person_badge),
                             updated_at = now()
                         WHERE user_id = ?
                         """.trimIndent(),
@@ -113,7 +114,8 @@ internal class JdbcProfileMutationActions(
                         statement.setObject(10, update.visibleWhileTraveling)
                         statement.setObject(11, update.sharePsyncSoloMatches)
                         statement.setString(12, update.partnerVisibility)
-                        statement.setObject(13, userId)
+                        statement.setObject(13, update.showMetInPersonBadge)
+                        statement.setObject(14, userId)
                         if (statement.executeUpdate() == 0) return@withContext null
                     }
             }

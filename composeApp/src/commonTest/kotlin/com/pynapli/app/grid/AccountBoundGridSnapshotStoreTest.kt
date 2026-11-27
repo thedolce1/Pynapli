@@ -19,7 +19,7 @@ class AccountBoundGridSnapshotStoreTest {
             maxCards = 2,
         )
 
-    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = true, distanceLabel = "1 km", tone = GridCardTone.Moss)
+    private fun card(id: String) = GridProfileCardUi(id = id, displayName = id, online = true, distanceLabel = "1 km")
 
     @Test
     fun theSameAccountGetsItsCappedSnapshotBack() =

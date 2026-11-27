@@ -1,6 +1,5 @@
 package com.pynapli.app.profile
 
-import com.pynapli.app.grid.GridCardTone
 import com.pynapli.app.grid.GridLinkedPartnerUi
 import com.pynapli.app.grid.GridProfileCardUi
 import com.pynapli.app.grid.isLockedCard
@@ -91,7 +90,6 @@ class ProfileDetailStateHolder(
                 thumbnailUrl = partner.thumbnailUrl,
                 online = false,
                 distanceLabel = null,
-                tone = GridCardTone.entries[partner.userId.stableIndex(GridCardTone.entries.size)],
             ),
             flirtSource = flirtSource,
         )
@@ -127,7 +125,6 @@ class ProfileDetailStateHolder(
                 thumbnailUrl = profilePhotoUrl,
                 online = false,
                 distanceLabel = null,
-                tone = GridCardTone.entries[userId.stableIndex(GridCardTone.entries.size)],
             ),
             isOwnProfile = true,
             ownPreviewPhotos = ownPhotos,

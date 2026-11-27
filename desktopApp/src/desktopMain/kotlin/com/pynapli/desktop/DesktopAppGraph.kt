@@ -54,6 +54,12 @@ import kotlin.random.Random
  */
 class DesktopAppGraph {
     private val pynapliConfig = DesktopRuntimeConfig.pynapliConfig
+
+    init {
+        // Dev-only shell: always log the Grid image line (counts only, G2-2 ticket 7).
+        com.pynapli.app.media.ImageLoadStats.grid.sink = { line -> println(line) }
+    }
+
     private val sessionStore = DesktopSessionStore()
 
     // Same construction cycle as every other shell: the client needs a refresher to survive the

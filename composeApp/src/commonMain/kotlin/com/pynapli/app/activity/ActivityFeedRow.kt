@@ -85,7 +85,7 @@ internal fun ActivityRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ActivityAvatar(photoUrl = item.actorPhotoUrl)
+        ActivityAvatar(photoUrl = item.actorPhotoUrl, photoCacheKey = item.actorPhotoCacheKey)
         Column(modifier = Modifier.weight(1f)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

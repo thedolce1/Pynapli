@@ -289,6 +289,8 @@ internal val REQUEST_LIMIT_RULES =
         RequestLimitRule(HttpMethod.Post, Regex("/v1/me/contact-blocks/remove"), RateLimitedAction.BLOCK_OR_HIDE),
         RequestLimitRule(HttpMethod.Delete, Regex("/v1/me/contact-blocks"), RateLimitedAction.BLOCK_OR_HIDE),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/location/current"), RateLimitedAction.LOCATION_UPDATE),
+        // "Met in person": one budget for the menu fetch and confirm/take back (ids in the body only).
+        RequestLimitRule(HttpMethod.Post, Regex("/v1/met-in-person/(?:offers|confirmations)"), RateLimitedAction.MET_IN_PERSON),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/account/data-export"), RateLimitedAction.DATA_EXPORT),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/appeals"), RateLimitedAction.APPEAL),
         RequestLimitRule(HttpMethod.Post, Regex("/v1/notifications/devices"), RateLimitedAction.PUSH_REGISTER),

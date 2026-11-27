@@ -271,6 +271,7 @@ internal fun PynapliOverlays(
             onSetExpiry = conversationActions.onSetExpiry,
             onRevealMedia = conversationActions.onRevealMedia,
             onPickPhoto = onPickConversationPhoto,
+            metInPersonCallbacks = conversationActions.metInPerson,
             // A chat opened from Grid, Activity, Swipe or Psync is the place someone may need to
             // block or report. The tab underneath hosts the profile peek (Grid/Swipe) or this
             // overlay does (Activity), so close the chat and open their profile there; its

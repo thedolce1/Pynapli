@@ -127,6 +127,7 @@ fun ProfileHubScreen(
             onShowDistanceChanged = stateHolder::updateShowDistance,
             onVisibleWhileTravelingChanged = stateHolder::updateVisibleWhileTraveling,
             onSharePsyncSoloMatchesChanged = stateHolder::updateSharePsyncSoloMatches,
+            onShowMetInPersonBadgeChanged = stateHolder::updateShowMetInPersonBadge,
             onSave = { scope.launch { stateHolder.savePrivacySettings() } },
             onOpenHideFromPeopleYouKnow = contactBlocksStateHolder?.let { { showHideFromPeopleYouKnow = true } },
             modifier = modifier,

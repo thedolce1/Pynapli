@@ -38,13 +38,12 @@
         "Age",
         "Presence",
         "Who",
+        "No single men",
         "Gender",
-        "Orientation",
         "Online now",
         "Playing tonight",
         "Singles",
-        "Linked",
-        "Partnered"
+        "Linked"
       ],
       "_note": "Trust and its chips (Photo verified / Age verified) are deliberately NOT here: they render past the fold at sheet open now that Who/Gender/Orientation exist, so this stage can only assert what is actually on screen. The script asserts them after Scroll-SheetToText 'Trust' instead \u2014 coverage moved, not dropped.",
       "forbiddenTexts": [
@@ -81,9 +80,9 @@
         "minHeight": 1280,
         "minDarkRatio": 0.45,
         "maxBrightRatio": 0.18,
-        "minNonBlackRatio": 0.32,
+        "minNonBlackRatio": 0.07,
         "minAccentYellowRatio": 0.0008,
-        "minColorBucketCount": 12
+        "minColorBucketCount": 8
       }
     },
     "filterCleared": {

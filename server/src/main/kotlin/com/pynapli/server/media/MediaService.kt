@@ -25,6 +25,8 @@ class MediaService(
     contactBlockVisibility: com.pynapli.server.contactblocks.ContactBlockVisibility? = null,
     // Which uploads reach the scanner: profile photos always; private albums only when enabled.
     scanScope: MediaScanScope = MediaScanScope(),
+    // Grid thumbnails (G2-2): told about each profile photo approved on upload.
+    profilePhotoApproved: ProfilePhotoApprovedListener? = null,
 ) {
     private val uploadActions =
         MediaUploadActions(
@@ -35,6 +37,7 @@ class MediaService(
             moderationEscalationPublisher = moderationEscalationPublisher,
             rateLimitService = rateLimitService,
             scanScope = scanScope,
+            profilePhotoApproved = profilePhotoApproved,
         )
     private val ownAlbumActions =
         MediaOwnAlbumActions(

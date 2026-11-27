@@ -28,7 +28,7 @@ function Invoke-PostgresSql {
         throw "Docker was not found; cannot prepare denied-location server state."
     }
 
-    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d pynapli_dev -v ON_ERROR_STOP=1 -c $Sql 2>&1
+    $output = & $docker.Source exec pynapli-postgres psql -U pynapli -d $(if ($env:PYNAPLI_DATABASE_NAME) { $env:PYNAPLI_DATABASE_NAME } else { 'pynapli_dev' }) -v ON_ERROR_STOP=1 -c $Sql 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Postgres SQL failed: $output"
     }

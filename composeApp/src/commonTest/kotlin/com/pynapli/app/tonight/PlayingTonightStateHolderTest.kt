@@ -309,8 +309,9 @@ class PlayingTonightStateHolderTest {
             assertEquals(boundaries, repository.lastFilters)
             assertEquals(boundaries, holder.state.value.feedFilters)
 
-            // Age-verified but no advanced-filter plan: the server answers 403 ENTITLEMENT_REQUIRED.
-            repository.lifestyleGateCode = "ENTITLEMENT_REQUIRED"
+            // Not age verified: the server answers 403 AGE_VERIFICATION_REQUIRED (no plan gate since
+            // founder decision 2).
+            repository.lifestyleGateCode = "AGE_VERIFICATION_REQUIRED"
             holder.setFeedFilters(boundaries.copy(lifestyleTags = setOf(com.pynapli.app.grid.LifestyleTag.SoftSwap)))
 
             // The gated lifestyle part is dropped (boundaries kept), the reason is shown, and the
@@ -318,7 +319,7 @@ class PlayingTonightStateHolderTest {
             assertEquals(boundaries, holder.state.value.feedFilters)
             assertTrue(
                 holder.state.value.errorMessage
-                    ?.contains("paid plan") == true,
+                    ?.contains("Verify your age") == true,
             )
             holder.refreshSilently()
             assertEquals(boundaries, repository.lastFilters)

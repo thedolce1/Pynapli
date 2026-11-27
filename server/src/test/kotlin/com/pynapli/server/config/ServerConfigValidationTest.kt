@@ -27,6 +27,7 @@ class ServerConfigValidationTest {
         assertTrue("FIREBASE_PROJECT_ID_REQUIRED" in issueCodes)
         assertTrue("ADMIN_API_TOKEN_REQUIRED" in issueCodes)
         assertTrue("RUNTIME_CURSOR_SECRETS_REQUIRED" in issueCodes)
+        assertTrue("MET_IN_PERSON_TOKEN_SECRET_REQUIRED" in issueCodes)
         assertTrue("CONTACT_BLOCK_KEYS_REQUIRED" in issueCodes)
     }
 
@@ -52,6 +53,36 @@ class ServerConfigValidationTest {
         assertEquals(listOf("CONTACT_BLOCK_KEYS_MUST_DIFFER"), shared)
         assertEquals(listOf("CONTACT_BLOCK_KEYS_MUST_DIFFER"), reusedCursorSecret)
         assertEquals(emptyList(), localConfig().startupValidationIssues())
+    }
+
+    @Test
+    fun productionLikeEnvironmentsRefuseMissingOrSharedMetInPersonTokenSecret() {
+        val missing =
+            validStagingConfig()
+                .copy(metInPersonTokenSecret = "pynapli-local-dev-met-in-person-token-secret")
+                .startupValidationIssues()
+                .map { it.code }
+        val reusedCursorSecret =
+            validStagingConfig(environment = "production")
+                .copy(metInPersonTokenSecret = "swipedeckstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        // K3 must also stay distinct from both contact block keys, in either direction.
+        val reusedContactBlockEmailKey =
+            validStagingConfig()
+                .copy(metInPersonTokenSecret = "contactblockemailstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+        val contactBlockTargetKeyReusesK3 =
+            validStagingConfig(environment = "production")
+                .copy(contactBlockTargetKey = "metinpersonstagingruntimevalue123456789")
+                .startupValidationIssues()
+                .map { it.code }
+
+        assertEquals(listOf("MET_IN_PERSON_TOKEN_SECRET_REQUIRED"), missing)
+        assertEquals(listOf("MET_IN_PERSON_TOKEN_SECRET_REQUIRED"), reusedCursorSecret)
+        assertEquals(listOf("MET_IN_PERSON_TOKEN_SECRET_REQUIRED"), reusedContactBlockEmailKey)
+        assertEquals(listOf("MET_IN_PERSON_TOKEN_SECRET_REQUIRED"), contactBlockTargetKeyReusesK3)
     }
 
     @Test
@@ -355,6 +386,7 @@ class ServerConfigValidationTest {
             discoveryCursorSecret = "discoverystagingruntimevalue123456789",
             activityCursorSecret = "activitystagingruntimevalue123456789",
             swipeDeckTokenSecret = "swipedeckstagingruntimevalue123456789",
+            metInPersonTokenSecret = "metinpersonstagingruntimevalue123456789",
             contactBlockEmailKey = "contactblockemailstagingruntimevalue123456789",
             contactBlockTargetKey = "contactblocktargetstagingruntimevalue123456789",
             playStoreSandboxEnabled = playStoreSandboxEnabled,

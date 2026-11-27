@@ -52,6 +52,10 @@ Show only:
 - Online indicator
 - Distance, if visible
 - Tiny linked-partner avatar/icon, if linked
+- Under that mini only, a tiny caption with the partner's own declared age and a short gender mark
+  ("34 · W"; M, W, TM, TW, NB; no mark for self-describe), plan G2-3. Only where the mini already
+  shows: the server fills `LinkedPartnerMiniDto.age` / `gender` in the same gated row as the mini and
+  strips them with it. Never a couple label ("MF"/"FF"), never inferred.
 
 Do not show:
 
@@ -433,6 +437,18 @@ Do not refetch/rebuild the grid when closing a profile unless the user explicitl
   swipe belongs to the pager.
 - Block or hide removes the card from the Grid, Favorites and the cold-start cache and the pager
   moves on to the next person (the previous one at the end; it closes when nobody is left).
+  Hide with backfill (plan G2-4, Grindr's hide): the cards after the hidden one move up one slot in
+  place (no reorder, no refresh, the `LazyGridState` position stays), so the slot fills with the
+  next person at once; when that leaves fewer than 24 cards loaded (about two phone screens) and the
+  server has more, the next page is asked for at once on the same cursor (a hide on a full first page
+  never fetches ahead, so a Free viewer never spends a locked page on it)
+  (`GridStateHolder.removeCardById`, `GridFilterBarParityTest`). Hide is silent (the hidden person is
+  never told) and one-way (the hidden person still sees the hider; mutual hide is a founder call).
+  The unhide list is the Safety Center's "Hidden profiles": newest first, up to 500, each with a
+  name, a small avatar (the grid thumbnail of the first approved profile photo with its stable cache
+  key; none across a block either way, from someone hiding from the viewer, or for an account that
+  is gone) and Unhide (`GET` / `DELETE /v1/hidden-profiles/{userId}`;
+  `HiddenProfileUnhideListIntegrationTest`).
   Reporting then swiping on drops the reported person the same way closing does. A card leaving the
   list for any other reason (un-starred in Favorites, a quiet refresh) stays on screen until the
   viewer moves on.
@@ -595,6 +611,34 @@ Paid filters and persistence (2026-11-24, Section 2, plan G9):
 - Fresh (`freshOnly`) replaced "Recently joined"; a preset saved with `recentlyJoinedOnly` restores
   as Fresh.
 
+Filter correctness (2026-11-26, G2-1):
+
+- One filter fragment: every Grid filter predicate lives in `GridFilterSql`, shared by the nearby
+  rank and "Visiting soon", so the two never drift.
+- Linked / Singles mean exactly "the card shows this viewer a partner mini" / "it shows none"
+  (`LinkedPartnerFilterSql`, the couple-verified badge's partner rule plus contact blocks; same
+  predicate on the Swipe deck and the linked-only Swipe candidate lookup). The owner's
+  partner_visibility, the viewer's hides, contact blocks and blocks either way hide the partner from
+  the filter exactly as from the tile, so the filter can't reveal a hidden partner. Proof:
+  `LinkedFilterPartnerVisibilityIntegrationTest`, whose oracle is the service's own unfiltered tiles.
+  Partnered merged into Linked; free-text `relationship_context` is no longer matched
+  (FILTERS_SPEC "Who").
+- The distance slider stops only on the server's radius steps and labels the step searched
+  (`DiscoveryRadiusSteps`); off-step stored radii snap up like the server (`GridRadiusStepsTest`).
+- Visiting soon applies every filter, lists the soonest arrival first (then L-08 bucket, then id),
+  pages by keyset and is sealed into the cursor scope (`VisitingSoonDiscoveryTest`).
+- Active today, the activeAgo caption and Fresh read one source, `user_last_active`
+  (`GridActivitySql.activeToday`).
+
+Couples in the filters (2026-11-26, G2-3; written, not yet built or run):
+
+- Partner filters (partner's gender, age range, orientation, photo verified) and the "No single men"
+  quick chip, FILTERS_SPEC "Partner". `PartnerFilterSql` sits in `GridFilterSql` right after Linked,
+  so nearby and Visiting soon share it; it is per viewer, so these requests take the uncached rank.
+- The sheet's Partner section sits under Who; Single women / Single men shortcuts set Singles plus
+  that gender. Couples stay individual tiles.
+- Every sheet change (Apply, Clear all, a saved preset) switches Favorites back to Nearby.
+
 ## Default Deck / Never-Empty
 
 The Grid must never look broken because a viewer left filters at their defaults or in a sparse
@@ -685,6 +729,113 @@ Recommended card image ratio:
 - Square, 1:1.
 
 This keeps the grid stable and dense.
+
+### Server-made thumbnails (G2-2, 2026-11-26)
+
+- **Variant:** `v1-thumb-480`: longest side 480 px, aspect kept, never upscaled, baseline JPEG q0.80,
+  EXIF orientation applied then all metadata stripped, made with JDK ImageIO only
+  (`media/ThumbnailRenderer.kt`). Why 480: a tile is a ~120-145 dp square, ~360-435 px at 3x, and it
+  crops to a square, so the short side is what shows. A 3:4 portrait at 480 keeps a 360 px short side
+  (384 would leave 288, soft on 3x screens). Roughly a fifth of the 1080 px original's pixels.
+- **Key:** `media/{assetId}/v1-thumb-480.jpg`, same bucket and provider as the original
+  (`MediaThumbnails.kt`), so the same signature scheme guards it (GCS V4 or Cloud CDN signed URL;
+  locally `/v1/media/uploads/local/{assetId}/thumb`). Bump `v1` when the recipe changes.
+- **Only from approved public profile photos** (TRUST_AND_SAFETY_SPEC "Photo pre-screening"). Made
+  right after a profile photo is approved (pre-screen auto-approve in `MediaUploadActions`, a
+  moderator's approve in `AdminMediaReviewService`), off the request path, two at a time, plus a
+  rate-limited backfill and cleanup loop (`MediaThumbnailWorker`: 20 generations and 500 rows checked
+  every 30 s by default, one replica via JobLock; `PYNAPLI_MEDIA_THUMBNAILS_ENABLED`,
+  `_THUMBNAIL_INTERVAL_MS`, `_BACKFILL_PER_TICK`, `_SWEEP_PER_TICK`). Bookkeeping in V130 (DATA_MODEL_SPEC).
+- **Who sees which:** Grid and Favorites tiles, partner minis (Grid, Swipe, profile) and Activity rows
+  get the thumbnail when it is ready, else the original. Swipe cards and the profile pager keep the
+  originals (full-bleed); they carry the first photo's thumbnail key so the pager and the card paint
+  the cached Grid tile first. Locked cards (Section 3) get the thumbnail URL but no cache key.
+  One indexed readiness lookup per page (`MediaImageResolver`); if it fails, originals are served.
+- Formats ImageIO can't read (WebP, HEIC, CMYK JPEG) and >50 MP originals fail terminally and keep
+  the original. Logs carry the asset id and an outcome word, never a URL, key or byte.
+
+### Stable cache keys
+
+Production photo URLs are short-lived signatures whose query changes on every response (CDN
+`Expires`, GCS `X-Goog-Date`); a URL-keyed client cache re-downloads every tile on every refresh,
+the 60 s live refresh included. Every Grid, profile, Swipe and Activity photo DTO therefore carries a
+server-made key next to its URL (`thumbnailCacheKey`, `photoCacheKeys`, `profilePhotoCacheKey`,
+`actorPhotoCacheKey`; additive and defaulted in `:shared`): `"<assetId>:v1-thumb-480"` for the
+thumbnail, `"<assetId>:orig"` for the original, always the key of the URL actually returned. The app
+passes it as Coil's `memoryCacheKey` and `diskCacheKey` (`media/CachedImageModel.kt`; Coil 3.4 uses
+an explicit memory key as is, and the network fetcher's disk key is `diskCacheKey ?: url`), so a
+re-signed URL for the same bytes is a cache hit. The Grid and Swipe prefetchers use the same keys.
+
+**The key names bytes; it grants nothing.** The signed URL still guards access: a cache entry exists
+on a device only because the server once gave that viewer a URL, and the key fetches nothing by
+itself. Clients never build keys. Web (Wasm) has Coil's memory cache but relies on the browser's HTTP
+cache for disk, which is URL-keyed, so on web the gain is the in-session memory cache.
+
+## Page size per plan (G2-2)
+
+The live Grid asks for `limit = 120` (`GridFilters.MAX_FEED_PAGE_REQUEST`); the server clamps to the
+plan (`SubscriptionPolicy`: Free 60, Social 90, Select 120, never below 12) and reports the size it used
+as `GridQueryResponseDto.pageSize`. Saved presets and stored filters keep 60. The page size stays in
+the cursor scope, and a cursor sealed under any plan's page size (60, 90, 120) continues under the
+current plan after an upgrade or lapse (same sealed anchor and seen count, re-sealed under the new
+size); any other size is refused as before. Section 3 locking is positional, so it is unaffected.
+Tests: `GridTierPageSizeTest`.
+
+## Chip taps (G2-2)
+
+A chip tap updates the chips at once, waits 150 ms (`LatestFilterRequest.CHIP_DEBOUNCE`), then
+loads. A newer tap or filter apply cancels the older one, whether still waiting (it never sends) or
+on the wire (its HTTP call is cancelled); applying from the sheet is not debounced. The feed
+generation guard still drops any late answer. Tests on virtual time: `GridChipDebounceTest`.
+
+## Rank cache and visibility (G2-2, checked 2026-11-26)
+
+The shared rank window (`JdbcGridRepository.queryGridRankCached`, `candidateRankCache.load`
+~line 225) is cross-viewer. Where each visibility rule is applied:
+
+| Rule | Where | After the cache? |
+| --- | --- | --- |
+| Self | `JdbcGridRepository.kt` ~246 (`filterNot { it.userId == viewerUserId }`) | Yes |
+| Blocks (both ways) | `visibleToViewer` in `GridService.kt` (profile key `grid.visibility`), shared with the G2-4 count | Yes |
+| Hides and contact blocks | `GridService.kt` (lists), `visibleToViewer` (`grid.visibility`) | Yes |
+| Account status, profile visibility, `grid_visible`, incognito, visible-while-travelling, risk tier | Rank SQL `JdbcGridRankSql.kt` ~119-126, re-read for a window page by `GridOwnerRecheckSql.stillDiscoverableOnGrid` (`JdbcGridRepository.kt` ~71) | Yes, since G2-2 |
+| Photo moderation (thumbnail, partner mini) | Page hydration (`JdbcGridHydrationSql`), never cached | Yes |
+| linkedOnly, verified couples, partner filters, No single men, Haven't chatted (G2-4), travelling viewer, the G2-4 count | Never use the window (`isGridRankCacheEligible`, `JdbcGridRepository.kt` ~206) | n/a |
+| Visiting soon | Its own per-viewer query with every owner rule live (`queryVisitingSoonRank`), never cached, so no re-read is needed | n/a |
+
+Before G2-2 the owner row of the table was applied only inside the window, so someone who went
+incognito stayed for up to one TTL. A page served from the window now re-reads exactly those
+predicates for its ids and drops anyone who no longer passes; the next cursor anchors on the last
+ranked row, so a dropped row skips nobody. Filter-class predicates (age, tags, verified) are not
+re-read: a profile edit may take one TTL to move someone in or out of a filtered window, which hides
+no one. Test: `GridRankCacheVisibilityTest` (5-minute window; incognito, off-grid, hidden, suspended,
+quarantined, blocked either way and hidden members all vanish on the next query).
+
+With that in place the TTL and window are config (`PYNAPLI_GRID_RANK_CACHE_TTL_MS`, default 5000,
+0 = off; `PYNAPLI_GRID_RANK_CACHE_WINDOW`, default 128). Defaults are unchanged: raise the TTL only on
+a measured hit rate. Swipe's deck rank cache has the same shape and was not changed here.
+
+The rank tier (boosted / normal / demoted) no longer runs correlated subqueries per candidate before
+the LIMIT: it joins three sets built once over the nearby candidates (`tier_boosted`,
+`tier_photo_owners`, `user_last_active`), same rule, same order (`GridRankOrderPinTest` unchanged,
+`GridRankTierJoinTest`).
+
+## Measuring on a laptop (G2-2)
+
+- **Rank passes per request:** send `X-Pynapli-Profile: 1` (with profiling enabled); the response's
+  `X-Pynapli-Profile-Counts` lists `grid.rank.pass` (ranked pages this request ran, 2 when a sparse page
+  widened), `grid.rank.widenPass`, `grid.rank.cacheHit` / `grid.rank.cacheMiss` (shared window),
+  `grid.rank.uncached` (bypass: linked, verified couples, travelling viewer, TTL 0) and
+  `grid.rank.windowFallback` (the window could not settle the page, so it ranked again for the
+  viewer). `X-Pynapli-Profile` keeps the millisecond spans (`grid.images`, `grid.db.ownerRecheck` are new).
+- **Image cache hits per refresh:** debug builds (Android debuggable, the dev desktop shell) log one
+  line per settled Grid refresh, tag `PynapliGridImages` on Android: `grid images: memory=36 disk=0
+  network=0 errors=0`. Counts only, never a URL, id or key; release builds never log it.
+- **Make local URLs behave like production:** local media URLs are stable, so a laptop shows no cache
+  problem. `PYNAPLI_MEDIA_LOCAL_URL_CHURN=true` (local storage only) appends a per-second query, like
+  a signed URL, for the A/B.
+- **Bytes per page:** the thumbnail/original split is visible in the URLs (`/thumb` locally); sum the
+  responses in the browser's network panel or the emulator's network inspector.
 
 ## Subscription Gating
 
@@ -796,6 +947,10 @@ updates when the app pauses, prefer event deltas over polling.
   physical-device battery profiling (`scripts/android-grid-battery-profile.ps1`) and store policy
   review remain.
 - [x] Thumbnail prefetch of the next 12 cards into Coil's cache.
+- [x] Server-made grid thumbnails from approved photos only, stable cache keys, chip debounce and
+  cancel, page size per plan, owner visibility re-read after the shared rank window, joined rank tier,
+  rank-pass and image-source measurement hooks (G2-2, 2026-11-26; see "Image Loading" through
+  "Measuring on a laptop"). Not yet built or run.
 - [x] Message rate limiting; ranking does not reward spam volume.
 - [x] Never-empty: with no filters the Grid is a plain proximity query, and a **first page** showing
   fewer than 12 people widens once to `MAX_RADIUS_METERS` and pages normally under a widened cursor
@@ -855,6 +1010,17 @@ updates when the app pauses, prefer event deltas over polling.
   on wider windows; fetch on settle only; next page at the end; block/hide moves on; tap-to-change photos;
   inline first-message composer and "Verify to message" (`ProfilePagerControllerTest`,
   `ProfileComposerStateHolderTest`, `ProfileDetailPagingTest`). Emulator and browser walk still owed.
+- [x] G2-1 (2026-11-26, written, not yet built or run here): Linked uses the partner mini's visibility
+  gate (privacy fix, Grid + Swipe), Singles / Partnered from the visible link, the distance slider on
+  the server's steps, Visiting soon filtered + ordered + paged, one Active-today source, and dead code
+  plus the Favorites reset removed (see "Filter correctness" under Filter Application).
+- [ ] G2-1: build, full test run, independent privacy review of the Linked fix, emulator + browser walk
+  (sheet Who and Distance, Visiting soon paging, Clear all from Favorites).
+- [x] G2-3 (2026-11-26, written, not yet built or run here): Partner filters and "No single men" behind
+  the Linked gate (Grid, Swipe, Psync), the Partner section and Single women / Single men in the sheet,
+  the partner's age and gender mark under the tile's partner mini.
+- [ ] G2-3: build, full test run, independent privacy review, emulator + browser walk (quick row
+  scrolls with the new chip, Partner section disabled under Singles, mini caption legible on photos).
 ## Do Not Implement
 
 - Do not use offset pagination for live grid pages.

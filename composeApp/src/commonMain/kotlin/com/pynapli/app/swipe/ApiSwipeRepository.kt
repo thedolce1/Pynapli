@@ -16,7 +16,6 @@ class ApiSwipeRepository(
                 deckSessionId = value.deckSessionId,
                 cards = value.items,
                 nextCursor = value.nextCursor,
-                advancedFiltersAllowed = value.advancedFiltersAllowed,
                 advancedFiltersApplied = value.advancedFiltersApplied,
             )
         }

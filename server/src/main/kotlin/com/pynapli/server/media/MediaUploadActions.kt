@@ -16,6 +16,8 @@ internal class MediaUploadActions(
     private val moderationEscalationPublisher: MediaModerationEscalationPublisher,
     private val rateLimitService: RateLimitService?,
     private val scanScope: MediaScanScope = MediaScanScope(),
+    // Grid thumbnails (G2-2): told about each profile photo approved on upload. Best effort.
+    private val profilePhotoApproved: ProfilePhotoApprovedListener? = null,
 ) {
     suspend fun createUploadSlot(
         ownerUserId: UUID,
@@ -145,6 +147,7 @@ internal class MediaUploadActions(
         val visibleAsset = applyModerationDecision(ownerUserId, mediaAssetId, album.kind, item.mediaAsset)
         // Recorded after the decision is applied, so a crash before it leaves the asset re-scannable.
         repository.markModerationScanned(ownerUserId, mediaAssetId)
+        if (album.kind == "profile" && visibleAsset.isApprovedReady()) notifyProfilePhotoApproved(mediaAssetId)
 
         return item.copy(mediaAsset = visibleAsset).toDto(mediaAssetUrlResolver)
     }
@@ -196,6 +199,14 @@ internal class MediaUploadActions(
                 }
         }
     }
+
+    private fun notifyProfilePhotoApproved(mediaAssetId: UUID) {
+        val listener = profilePhotoApproved ?: return
+        runCatching { listener.profilePhotoApproved(mediaAssetId) }
+            .onFailure { logger.warn("Thumbnail scheduling failed for asset {} ({})", mediaAssetId, it.javaClass.simpleName) }
+    }
+
+    private fun MediaAssetRecord.isApprovedReady(): Boolean = processingStatus == "ready" && moderationStatus == "approved"
 
     private suspend fun escalate(
         ownerUserId: UUID,

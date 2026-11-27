@@ -41,7 +41,8 @@ internal object JdbcProfileSql {
                ds.social_enabled,
                ds.visible_while_traveling,
                ds.share_psync_solo_matches,
-               ds.partner_visibility
+               ds.partner_visibility,
+               ds.show_met_in_person_badge
         FROM users u
         JOIN profiles p ON p.user_id = u.id
         JOIN discovery_settings ds ON ds.user_id = u.id
@@ -62,10 +63,68 @@ internal object JdbcProfileSql {
                linked_partner.linked_partner_orientation_detail,
                linked_partner.linked_partner_experience_level,
                linked_partner.linked_partner_lifestyle_tags,
+               linked_partner.linked_partner_age,
+               linked_partner.linked_partner_gender,
                p.display_age,
                (p.verified_at IS NOT NULL) AS verified,
                -- Couple verified: this profile and its visible linked partner are both photo-verified.
                (p.verified_at IS NOT NULL AND COALESCE(linked_partner.linked_partner_verified, false)) AS couple_verified,
+               -- "Met in person" (TRUST_AND_SAFETY_SPEC): read only from the weekly batch's vouch_badges,
+               -- so nothing here changes when a confirmation is given. Shown only with the owner's
+               -- opt-in; never while frozen. No placeholders added (bind order unchanged).
+               COALESCE((
+                   SELECT vb.person_badge
+                          AND vb.frozen_at IS NULL
+                          AND ds.show_met_in_person_badge
+                          AND p.verified_at IS NOT NULL
+                          AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                   FROM vouch_badges vb
+                   WHERE vb.subject_user_id = u.id
+               ), false) AS met_in_person,
+               -- The couple badge needs the partner mini to be visible to this viewer (so it never
+               -- reveals a hidden link), the same active link on both sides, and both opt-ins.
+               COALESCE((
+                   SELECT vb.couple_badge
+                          AND vb.frozen_at IS NULL
+                          AND ds.show_met_in_person_badge
+                          AND COALESCE(target_risk.tier, 'clean') NOT IN ('quarantine', 'terminate')
+                          AND linked_partner.linked_partner_user_id IS NOT NULL
+                          -- Published after the link's last change: an unlink and relink (which reuse the
+                          -- link rows and update them) can never bring back an older couple badge.
+                          AND vb.couple_since IS NOT NULL
+                          AND vb.couple_since >= (
+                              SELECT max(lu.updated_at)
+                              FROM user_profile_links lu
+                              WHERE (lu.user_id = u.id AND lu.linked_user_id = linked_partner.linked_partner_user_id)
+                                 OR (lu.user_id = linked_partner.linked_partner_user_id AND lu.linked_user_id = u.id)
+                          )
+                          AND EXISTS (
+                              SELECT 1
+                              FROM vouch_badges pvb
+                              JOIN discovery_settings pds ON pds.user_id = pvb.subject_user_id
+                              JOIN user_profile_links cl ON cl.id = vb.couple_link_id
+                              WHERE pvb.subject_user_id = linked_partner.linked_partner_user_id
+                                AND pvb.couple_badge
+                                AND pvb.frozen_at IS NULL
+                                AND pvb.couple_link_id = vb.couple_link_id
+                                AND pvb.couple_since IS NOT NULL
+                                AND pvb.couple_since >= (
+                                    SELECT max(lp.updated_at)
+                                    FROM user_profile_links lp
+                                    WHERE (lp.user_id = u.id AND lp.linked_user_id = pvb.subject_user_id)
+                                       OR (lp.user_id = pvb.subject_user_id AND lp.linked_user_id = u.id)
+                                )
+                                AND pds.show_met_in_person_badge
+                                AND cl.status = 'active'
+                                AND cl.unlinked_at IS NULL
+                                AND (
+                                    (cl.user_id = u.id AND cl.linked_user_id = pvb.subject_user_id)
+                                    OR (cl.user_id = pvb.subject_user_id AND cl.linked_user_id = u.id)
+                                )
+                          )
+                   FROM vouch_badges vb
+                   WHERE vb.subject_user_id = u.id
+               ), false) AS met_in_person_couple,
                p.bio,
                p.neighborhood,
                p.gender,
@@ -203,6 +262,9 @@ internal object JdbcProfileSql {
                    linked_profile.orientation AS linked_partner_orientation,
                    linked_profile.orientation_detail AS linked_partner_orientation_detail,
                    linked_profile.experience_level AS linked_partner_experience_level,
+                   -- Plan G2-3: the partner's own declared age and gender key, with this gated row only.
+                   linked_profile.display_age AS linked_partner_age,
+                   linked_profile.gender AS linked_partner_gender,
                    ARRAY(
                        SELECT t FROM unnest(COALESCE(linked_profile.lifestyle_tags, '{}'::text[])) AS t
                        WHERE t IN ('soft_swap', 'full_swap', 'same_room', 'separate_room')

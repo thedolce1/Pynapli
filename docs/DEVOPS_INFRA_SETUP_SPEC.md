@@ -159,6 +159,11 @@ GitHub Actions secrets for CI, Google Secret Manager at runtime, a local `.env` 
   start without them; `scripts/gcp-cloud-run-deploy.ps1 -ContactBlockEmailKeySecretName ...
   -ContactBlockTargetKeySecretName ...`), admin token and MFA secrets. (Auth tokens are opaque and hashed;
   there is no JWT signing key.)
+- `PYNAPLI_MET_IN_PERSON_TOKEN_SECRET` (K3): keys every "Met in person" token, so a database copy
+  without it shows only counts and days. Required (strong, distinct) in staging and production; Secret
+  Manager name `pynapli-staging-met-in-person-token-secret`. Never rotate or delete it once confirmations
+  exist: the server stores a check value and refuses to run the feature with any other key (rotation
+  would mean re-tokenising every row in a batch; not built).
 - Store API credentials, Apple/Google billing keys, age-verification provider keys.
 
 ## Cost controls

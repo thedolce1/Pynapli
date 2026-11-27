@@ -200,6 +200,11 @@ internal fun SwipeCard(
         remember(card.userId, card.photoUrls, card.photoUrl) {
             card.photoUrls.ifEmpty { listOfNotNull(card.photoUrl) }
         }
+    // G2-2: the server's stable keys, index for index (absent from an older server: cache by URL).
+    val resolvedPhotoKeys =
+        remember(card.userId, card.photoUrls, card.photoCacheKeys) {
+            card.photoCacheKeys.takeIf { it.size == resolvedPhotos.size }.orEmpty()
+        }
     var photoIndex by remember(card.userId) { mutableIntStateOf(0) }
     val tapModifier =
         if (isTop && enabled) {
@@ -262,11 +267,14 @@ internal fun SwipeCard(
                 resolvedPhotos = resolvedPhotos,
                 photoIndex = photoIndex,
                 displayName = card.displayName,
+                photoCacheKeys = resolvedPhotoKeys,
+                firstPhotoPlaceholderCacheKey = card.photoThumbnailCacheKey,
             )
             val linkedPartner = card.linkedPartner
             if (linkedPartner != null) {
                 SwipeLinkedPartnerBadge(
                     thumbnailUrl = linkedPartner.thumbnailUrl,
+                    thumbnailCacheKey = linkedPartner.thumbnailCacheKey,
                     modifier =
                         Modifier
                             .align(Alignment.TopEnd)

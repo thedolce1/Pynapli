@@ -305,6 +305,23 @@ private fun MutableList<ServerConfigIssue>.validateProductionLikeSettings(config
         code = "CONTACT_BLOCK_KEYS_MUST_DIFFER",
         message = "The two contact block keys must differ from each other and from every cursor/deck secret.",
     )
+    // K3 must differ from every other secret, including both contact block keys (which keeps those keys
+    // distinct from K3 too: distinctness is symmetric, so one check covers both directions).
+    require(
+        condition =
+            config.metInPersonTokenSecret.isStrongRuntimeSecret() &&
+                config.metInPersonTokenSecret !in
+                setOf(
+                    config.discoveryCursorSecret,
+                    config.activityCursorSecret,
+                    config.swipeDeckTokenSecret,
+                    config.contactBlockEmailKey,
+                    config.contactBlockTargetKey,
+                    config.adminApiToken,
+                ),
+        code = "MET_IN_PERSON_TOKEN_SECRET_REQUIRED",
+        message = "Production-like environments need a strong, distinct PYNAPLI_MET_IN_PERSON_TOKEN_SECRET.",
+    )
     require(
         condition = !config.apiProfilingEnabled || config.apiProfilingHeaderRequired,
         code = "API_PROFILING_HEADER_REQUIRED",
@@ -384,7 +401,7 @@ private fun MutableList<ServerConfigIssue>.requireNonBlank(
     require(!value.isNullOrBlank(), code, message)
 }
 
-private fun ServerConfig.isProductionLikeEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_LIKE_ENVIRONMENTS
+internal fun ServerConfig.isProductionLikeEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_LIKE_ENVIRONMENTS
 
 private fun ServerConfig.isProductionEnvironment(): Boolean = environment.trim().lowercase() in PRODUCTION_ENVIRONMENTS
 

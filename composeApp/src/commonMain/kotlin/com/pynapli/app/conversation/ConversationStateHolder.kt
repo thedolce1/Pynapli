@@ -47,6 +47,11 @@ class ConversationStateHolder(
             refreshOpenConversation = { refreshOpenConversation() },
             dismissConversation = { dismiss() },
         )
+    private val metInPersonActions =
+        ConversationMetInPersonActions(
+            repository = repository,
+            state = stateAccess,
+        )
 
     suspend fun openDirect(
         card: GridProfileCardUi,
@@ -243,6 +248,22 @@ class ConversationStateHolder(
     suspend fun leaveConversation() = partnerActions.leaveConversation()
 
     suspend fun setExpiry(expirySeconds: Int?) = partnerActions.setExpiry(expirySeconds)
+
+    /**
+     * "We've met in person" sheet: open for one person the server offered, tick their partner, act.
+     * Called when the overflow menu opens; a failure only leaves the menu empty.
+     */
+    suspend fun loadMetInPersonOffers() = metInPersonActions.load()
+
+    fun openMetInPerson(subjectUserId: String) = metInPersonActions.open(subjectUserId)
+
+    fun setMetInPersonIncludePartner(include: Boolean) = metInPersonActions.setIncludePartner(include)
+
+    fun dismissMetInPerson() = metInPersonActions.dismiss()
+
+    suspend fun confirmMetInPerson() = metInPersonActions.confirm()
+
+    suspend fun takeBackMetInPerson() = metInPersonActions.takeBack()
 
     suspend fun sendDraft() = messageActions.sendDraft()
 

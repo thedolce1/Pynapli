@@ -46,7 +46,9 @@ internal fun ResultSet.readDeckRankRow(): DeckRankRow =
 
 // linkedOnly and verifiedCouplesOnly test the linked partner against this viewer (blocks, partner
 // visibility, hidden list), so their windows are never shared across viewers.
-internal fun DiscoveryFilters.isRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly
+// The partner filters and "No single men" (PartnerFilterSql) run the same per-viewer partner gate
+// as linkedOnly, so they never share a window either (plan G2-3).
+internal fun DiscoveryFilters.isRankCacheEligible(): Boolean = linkedOnly == null && !verifiedCouplesOnly && !hasPartnerFilters && !excludeSingleMen
 
 internal fun DiscoveryFilters.rankCacheKey(): String =
     buildString {
@@ -92,6 +94,8 @@ internal fun DiscoveryFilters.rankCacheKey(): String =
         // Never cached (see isRankCacheEligible); keyed anyway so a future eligibility change cannot
         // let filtered and unfiltered viewers share a window.
         append(verifiedCouplesOnly)
+        // Never cached either; keyed for the same reason. Empty when unset.
+        append(partnerScopeKey)
     }
 
 internal fun ResultSet.readStringArray(column: String): List<String> {

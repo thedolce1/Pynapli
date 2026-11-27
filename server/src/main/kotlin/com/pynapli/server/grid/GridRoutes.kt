@@ -40,5 +40,12 @@ fun Application.configureGridRoutes(
             profiler.appendHeaders(call)
             call.respond(response)
         }
+        // Plan G2-4: the filter sheet's "Show N people". The body is the Grid request, never a query
+        // string (filters can be sensitive). Same auth, filters and visibility as /v1/grid/query.
+        post("/v1/grid/count") {
+            val user = call.authenticatedUser(authService)
+            val request = call.receive<GridQueryRequestDto>()
+            call.respond(gridService.countGrid(user.id, request))
+        }
     }
 }

@@ -68,6 +68,19 @@ data class ServerConfig(
     val activityRetentionIntervalMillis: Long = 60 * 60 * 1_000L,
     val mediaCleanupEnabled: Boolean = false,
     val mediaCleanupIntervalMillis: Long = 60 * 60 * 1_000L,
+    // Grid thumbnails (G2-2, MediaThumbnailService): made on approval plus a rate-limited backfill
+    // and cleanup loop. Off in the bare constructor (tests); on by default from the environment.
+    val mediaThumbnailsEnabled: Boolean = false,
+    val mediaThumbnailIntervalMillis: Long = 30_000L,
+    val mediaThumbnailBackfillPerTick: Int = 20,
+    val mediaThumbnailSweepPerTick: Int = 500,
+    // G2-2 ticket 5: the shared Grid rank window. Safe to tune because owner visibility, blocks,
+    // hides, contact blocks and self are all applied after it on every path (GRID_IMPLEMENTATION_SPEC
+    // "Rank cache and visibility"). Defaults unchanged: 5 s, 128 rows.
+    val gridRankCacheTtlMillis: Long = 5_000L,
+    val gridRankCacheWindow: Int = 128,
+    // Local measurement only (G2-2 ticket 7): local media URLs change every second, like signed URLs.
+    val mediaLocalUrlChurn: Boolean = false,
     val accountDataExportEnabled: Boolean = false,
     val accountDataExportIntervalMillis: Long = 60_000L,
     val accountDataExportDirectory: String = ".pynapli-account-exports",
@@ -177,6 +190,9 @@ data class ServerConfig(
     // Keys the at-rest encryption of Apple refresh tokens (PYNAPLI_SOCIAL_TOKEN_KEY). Production-like
     // environments with social sign-in on refuse to start without an explicit, strong, distinct value.
     val socialTokenKey: String = "pynapli-local-dev-social-token-key",
+    // K3: keys the "Met in person" voucher/pair/conversation tokens (PYNAPLI_MET_IN_PERSON_TOKEN_SECRET).
+    // Never rotate or lose it once confirmations exist: the tokens could no longer be matched.
+    val metInPersonTokenSecret: String = "pynapli-local-dev-met-in-person-token-secret",
 ) {
     companion object {
         fun fromEnvironment(): ServerConfig {
@@ -340,6 +356,39 @@ data class ServerConfig(
                         ?.toLongOrNull()
                         ?.coerceAtLeast(60_000L)
                         ?: 60 * 60 * 1_000L,
+                mediaThumbnailsEnabled =
+                    System.getenv("PYNAPLI_MEDIA_THUMBNAILS_ENABLED")?.toBooleanStrictOrNull() ?: true,
+                mediaThumbnailIntervalMillis =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_INTERVAL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceAtLeast(5_000L)
+                        ?: 30_000L,
+                mediaThumbnailBackfillPerTick =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_BACKFILL_PER_TICK")
+                        ?.toIntOrNull()
+                        ?.coerceIn(0, 200)
+                        ?: 20,
+                mediaThumbnailSweepPerTick =
+                    System
+                        .getenv("PYNAPLI_MEDIA_THUMBNAIL_SWEEP_PER_TICK")
+                        ?.toIntOrNull()
+                        ?.coerceIn(1, 5_000)
+                        ?: 500,
+                gridRankCacheTtlMillis =
+                    System
+                        .getenv("PYNAPLI_GRID_RANK_CACHE_TTL_MS")
+                        ?.toLongOrNull()
+                        ?.coerceIn(0L, 120_000L)
+                        ?: 5_000L,
+                gridRankCacheWindow =
+                    System
+                        .getenv("PYNAPLI_GRID_RANK_CACHE_WINDOW")
+                        ?.toIntOrNull()
+                        ?.coerceIn(120, 1_000)
+                        ?: 128,
+                mediaLocalUrlChurn = System.getenv("PYNAPLI_MEDIA_LOCAL_URL_CHURN")?.toBooleanStrictOrNull() ?: false,
                 accountDataExportEnabled =
                     System.getenv("PYNAPLI_ACCOUNT_DATA_EXPORT_ENABLED")?.toBooleanStrictOrNull()
                         ?: (environment == "local"),
@@ -592,6 +641,12 @@ data class ServerConfig(
                 appleTokenUrl = nonBlankEnv("PYNAPLI_APPLE_TOKEN_URL"),
                 appleRevokeUrl = nonBlankEnv("PYNAPLI_APPLE_REVOKE_URL"),
                 socialTokenKey = nonBlankEnv("PYNAPLI_SOCIAL_TOKEN_KEY") ?: "pynapli-local-dev-social-token-key",
+                metInPersonTokenSecret =
+                    System
+                        .getenv("PYNAPLI_MET_IN_PERSON_TOKEN_SECRET")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "pynapli-local-dev-met-in-person-token-secret",
             )
         }
     }

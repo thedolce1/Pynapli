@@ -24,7 +24,11 @@ internal class PsyncLifecycleActions(
     private val travelLocationRepository: com.pynapli.server.location.TravelLocationRepository?,
     private val clock: Clock,
     private val json: Json,
+    // Lifestyle tags in Psync filters need an age-verified suggester (null in tests: allowed).
+    private val viewerTrustRepository: com.pynapli.server.grid.GridViewerTrustRepository? = null,
 ) {
+    private suspend fun ageVerified(userId: UUID): Boolean = viewerTrustRepository?.isAgeVerified(userId) ?: true
+
     suspend fun create(
         userId: UUID,
         request: CreatePsyncSessionRequestDto,
@@ -35,6 +39,7 @@ internal class PsyncLifecycleActions(
             throw PsyncException("RISK_RESTRICTED")
         }
         requirePsyncDeckSize(request.deckSize)
+        requirePsyncFiltersAllowed(request.filters) { ageVerified(userId) }
 
         // The deck is dealt around the initiator, at their Travel mode destination if one is on.
         val location = travelLocationRepository.psyncLocationFor(userId)
@@ -45,7 +50,6 @@ internal class PsyncLifecycleActions(
             if (request.deckSize > policy.psyncMaxDeckSize) {
                 throw PsyncException("PSYNC_DECK_SIZE_NOT_ALLOWED")
             }
-            requirePsyncFiltersAllowed(request.filters, policy)
             requirePsyncTravelAllowed(location, policy)
             // "Limited Psync sessions": cap how many the initiator may start per rolling 24 hours.
             if (policy.psyncDailySessionLimit != Int.MAX_VALUE) {
@@ -145,8 +149,8 @@ internal class PsyncLifecycleActions(
         userId: UUID,
         request: SuggestPsyncFiltersRequestDto,
     ): PsyncSessionDto {
-        // The re-suggested filters are gated by the suggester's tier too (Free = basic filters).
-        subscriptionService?.let { requirePsyncFiltersAllowed(request.filters, it.getPolicy(userId)) }
+        // The re-suggested filters are validated and age-gated for the suggester, like the first set.
+        requirePsyncFiltersAllowed(request.filters) { ageVerified(userId) }
         val filtersJson =
             json.encodeToString(
                 SwipeDeckRequestDto.serializer(),
